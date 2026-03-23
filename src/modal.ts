@@ -306,9 +306,11 @@ export class TikzModal extends Modal {
             const card = cardsContainer.createDiv({ cls: 'tikz-func-card' });
             card.style.borderLeftColor = CSS_COLORS[state.color];
 
-            // Delete button
-            const deleteBtn = card.createDiv({ cls: 'tikz-func-delete' });
-            new Setting(deleteBtn).addButton((btn) =>
+            // Header with label + delete
+            const header = card.createDiv({ cls: 'tikz-func-header' });
+            const label = header.createSpan({ cls: 'tikz-func-label' });
+            label.textContent = `Function ${rowStates.size}`;
+            new Setting(header).addButton((btn) =>
                 btn
                     .setIcon('trash')
                     .setTooltip('Remove function')
