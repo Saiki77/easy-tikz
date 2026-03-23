@@ -8,8 +8,9 @@
 # npm
 node_modules
 
-# Don't include the compiled main.js file 
+# Don't include build outputs
 main.js
+styles.css
 
 # Exclude sourcemaps
 *.map
