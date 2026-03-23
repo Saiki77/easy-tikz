@@ -128,6 +128,10 @@ var MathHelper = class {
     const f = new Function("x", `return ${expression.replace(/\^/g, "**")}`);
     return f(x);
   }
+  static evaluateExpression2D(expression, x, y) {
+    const f = new Function("x", "y", `return ${expression.replace(/\^/g, "**")}`);
+    return f(x, y);
+  }
 };
 
 // src/settings.ts
@@ -382,6 +386,12 @@ var SettingsManager = class {
     TIKZ_SETTINGS.forEach((setting) => {
       this.values.set(setting.id, setting.defaultValue);
     });
+    this.values.set("zmin", "-5");
+    this.values.set("zmax", "5");
+    this.values.set("axis_label_z", "z");
+    this.values.set("rotationX", 30);
+    this.values.set("rotationZ", 45);
+    this.values.set("functions3D", []);
   }
   getValue(id) {
     return this.values.get(id);
@@ -411,7 +421,7 @@ var SettingsManager = class {
     return code;
   }
   toRendererConfig() {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     return {
       width: 550,
       height: 400,
@@ -427,8 +437,58 @@ var SettingsManager = class {
       gridMajor: (_c = this.getValue("showLargeGrid")) != null ? _c : false,
       gridMinor: (_d = this.getValue("showSmallGrid")) != null ? _d : false,
       minorTickNum: (_e = this.getValue("gridSize")) != null ? _e : 5,
-      functions: this.getValue("functions") || []
+      functions: this.getValue("functions") || [],
+      is3D: (_f = this.getValue("dimension")) != null ? _f : false,
+      zmin: parseFloat(this.getValue("zmin")) || -5,
+      zmax: parseFloat(this.getValue("zmax")) || 5,
+      zLabel: this.getValue("axis_label_z") || "z",
+      rotationX: (_g = this.getValue("rotationX")) != null ? _g : 30,
+      rotationZ: (_h = this.getValue("rotationZ")) != null ? _h : 45,
+      functions3D: this.getValue("functions3D") || []
     };
+  }
+  generate3DTikzCode() {
+    const funcs = this.getValue("functions3D") || [];
+    let code = "";
+    code += "\n\\usepackage{pgfplots}";
+    code += "\n\\pgfplotsset{compat=1.16}";
+    code += "\n\\begin{document}";
+    code += "\n\\begin{tikzpicture}";
+    code += "\n\\begin{axis}[";
+    code += `
+  title={${this.getValue("title") || ""}},`;
+    code += `
+  width={${this.getValue("size_x_cm") || 10}cm},`;
+    code += `
+  height={${this.getValue("size_y_cm") || 10}cm},`;
+    if (this.getValue("show_axis_label")) {
+      code += `
+  xlabel={${this.getValue("axis_label_x") || "x"}},`;
+      code += `
+  ylabel={${this.getValue("axis_label_y") || "y"}},`;
+      code += `
+  zlabel={${this.getValue("axis_label_z") || "z"}},`;
+    }
+    code += `
+  xmin=${this.getValue("xmin")}, xmax=${this.getValue("xmax")},`;
+    code += `
+  ymin=${this.getValue("ymin")}, ymax=${this.getValue("ymax")},`;
+    code += `
+  zmin=${this.getValue("zmin")}, zmax=${this.getValue("zmax")},`;
+    code += "\n  view={" + (this.getValue("rotationZ") || 45) + "}{" + (this.getValue("rotationX") || 30) + "},";
+    code += "\n]";
+    for (const func of funcs) {
+      if (!func.expression)
+        continue;
+      const surfType = func.wireframe ? "mesh" : "surf";
+      const opacity = func.wireframe ? "" : `, opacity=${func.opacity}`;
+      code += `
+\\addplot3[${surfType}, domain=${func.xDomain}, y domain=${func.yDomain}, ${func.color}${opacity}, samples=30] {${func.expression}};`;
+    }
+    code += "\n\\end{axis}";
+    code += "\n\\end{tikzpicture}";
+    code += "\n\\end{document}";
+    return code;
   }
 };
 
@@ -1003,8 +1063,339 @@ var SVGRenderer = class {
   }
 };
 
-// _amjcqi1gy:/Users/justus/PycharmProjects/tikz-graph-help/src/styles.css
-var styles_default = '/* TikZ Graph Helper \u2014 Dashboard Styles */\n\n.tikz-modal {\n    display: flex;\n    flex-direction: column;\n    height: 80vh;\n    max-height: 80vh;\n    width: 90vw !important;\n    max-width: 1200px !important;\n}\n\n.tikz-modal .modal-content {\n    display: flex;\n    flex: 1;\n    overflow: hidden;\n    padding: 0 !important;\n}\n\n/* Split pane layout */\n.tikz-layout {\n    display: flex;\n    width: 100%;\n    height: 100%;\n    overflow: hidden;\n}\n\n.tikz-panel-left {\n    width: 42%;\n    min-width: 380px;\n    display: flex;\n    flex-direction: column;\n    border-right: 1px solid var(--background-modifier-border);\n    overflow: hidden;\n}\n\n.tikz-panel-right {\n    flex: 1;\n    display: flex;\n    flex-direction: column;\n    overflow: hidden;\n    min-width: 0;\n}\n\n/* Tab bar */\n.tikz-tab-bar {\n    display: flex;\n    gap: 2px;\n    padding: 10px 16px 0;\n    border-bottom: 1px solid var(--background-modifier-border);\n    background: var(--background-secondary);\n    flex-shrink: 0;\n}\n\n.tikz-tab-btn {\n    padding: 8px 16px;\n    border: none;\n    background: none;\n    color: var(--text-muted);\n    font-size: 13px;\n    font-weight: 500;\n    cursor: pointer;\n    border-bottom: 2px solid transparent;\n    border-radius: 4px 4px 0 0;\n    transition: all 0.15s ease;\n    white-space: nowrap;\n}\n\n.tikz-tab-btn:hover {\n    color: var(--text-normal);\n    background: var(--background-modifier-hover);\n}\n\n.tikz-tab-btn.active {\n    color: var(--interactive-accent);\n    border-bottom-color: var(--interactive-accent);\n    background: var(--background-primary);\n}\n\n/* Tab content */\n.tikz-tab-content {\n    flex: 1;\n    overflow-y: auto;\n    padding: 20px 24px;\n}\n\n/* Preview area */\n.tikz-preview-area {\n    flex: 1;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n    overflow: auto;\n    padding: 20px;\n    background: var(--background-primary);\n}\n\n.tikz-preview-area svg {\n    border-radius: 6px;\n    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);\n}\n\n.tikz-error {\n    color: var(--text-error);\n    font-size: 13px;\n    padding: 12px 16px;\n    background: var(--background-modifier-error);\n    border-radius: 6px;\n    max-width: 80%;\n    text-align: center;\n}\n\n/* Action bar */\n.tikz-action-bar {\n    display: flex;\n    gap: 8px;\n    padding: 12px 20px;\n    border-top: 1px solid var(--background-modifier-border);\n    background: var(--background-secondary);\n    flex-shrink: 0;\n    justify-content: flex-end;\n}\n\n.tikz-action-bar .setting-item {\n    border: none;\n    padding: 0;\n}\n\n.tikz-action-bar button {\n    padding: 6px 16px;\n    font-size: 13px;\n}\n\n/* \u2500\u2500\u2500 Function cards \u2500\u2500\u2500 */\n\n.tikz-func-cards {\n    display: flex;\n    flex-direction: column;\n    gap: 12px;\n}\n\n.tikz-func-card {\n    border: 1px solid var(--background-modifier-border);\n    border-left: 4px solid var(--text-muted);\n    border-radius: 8px;\n    padding: 16px;\n    background: var(--background-secondary);\n    transition: border-left-color 0.2s ease;\n}\n\n/* Row layout inside cards */\n.tikz-func-row {\n    display: flex;\n    gap: 12px;\n    margin-bottom: 12px;\n    align-items: flex-end;\n}\n\n.tikz-func-row:last-child {\n    margin-bottom: 0;\n}\n\n.tikz-func-field {\n    flex: 1;\n    min-width: 0;\n}\n\n.tikz-func-field.wide {\n    flex: 2;\n}\n\n/* Compact settings inside function cards */\n.tikz-func-card .setting-item {\n    padding: 2px 0;\n    border: none;\n}\n\n.tikz-func-card .setting-item-info {\n    flex: 0 0 auto;\n    margin-right: 8px;\n}\n\n.tikz-func-card .setting-item-name {\n    font-size: 12px;\n    color: var(--text-muted);\n    font-weight: 500;\n}\n\n.tikz-func-card .setting-item-description {\n    display: none;\n}\n\n.tikz-func-card .setting-item-control input[type="text"] {\n    width: 100%;\n}\n\n/* Header row with delete */\n.tikz-func-header {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    margin-bottom: 12px;\n    padding-bottom: 8px;\n    border-bottom: 1px solid var(--background-modifier-border);\n}\n\n.tikz-func-header .tikz-func-label {\n    font-size: 13px;\n    font-weight: 600;\n    color: var(--text-normal);\n}\n\n.tikz-func-header .setting-item {\n    padding: 0;\n    border: none;\n    flex: 0;\n}\n\n/* Toggle chips row */\n.tikz-toggle-row {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 10px 16px;\n    align-items: center;\n    padding: 4px 0;\n}\n\n.tikz-toggle-chip {\n    display: flex;\n    align-items: center;\n}\n\n.tikz-toggle-chip .setting-item {\n    padding: 0;\n    min-height: auto;\n    gap: 6px;\n}\n\n.tikz-toggle-chip .setting-item-name {\n    font-size: 12px;\n    color: var(--text-normal);\n}\n\n.tikz-toggle-chip .setting-item-control {\n    margin-left: 0;\n}\n\n/* Tangent input transition */\n.tikz-tangent-input {\n    overflow: hidden;\n    max-height: 0;\n    opacity: 0;\n    transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;\n    margin-top: 0;\n}\n\n.tikz-tangent-input.visible {\n    max-height: 60px;\n    opacity: 1;\n    margin-top: 10px;\n}\n\n/* Add function button */\n.tikz-add-func {\n    margin-top: 12px;\n}\n\n.tikz-add-func .setting-item {\n    justify-content: center;\n    border: none;\n    padding: 0;\n}\n\n/* \u2500\u2500\u2500 Code tab \u2500\u2500\u2500 */\n\n.tikz-code-textarea {\n    width: 100%;\n    min-height: 350px;\n    font-family: var(--font-monospace);\n    font-size: 12px;\n    padding: 12px;\n    border: 1px solid var(--background-modifier-border);\n    border-radius: 6px;\n    background: var(--background-primary-alt);\n    color: var(--text-normal);\n    resize: vertical;\n    line-height: 1.5;\n}\n\n.tikz-code-textarea:focus {\n    outline: 1px solid var(--interactive-accent);\n}\n\n/* \u2500\u2500\u2500 Axis tab \u2500\u2500\u2500 */\n\n.tikz-range-group {\n    display: flex;\n    gap: 8px;\n    align-items: center;\n    margin-bottom: 8px;\n}\n\n.tikz-range-group > div {\n    flex: 1;\n}\n\n.tikz-range-group .setting-item {\n    border: none;\n}\n\n.tikz-range-separator {\n    color: var(--text-muted);\n    font-size: 13px;\n    flex-shrink: 0;\n    padding-top: 8px;\n}\n\n/* \u2500\u2500\u2500 General settings sections \u2500\u2500\u2500 */\n\n.tikz-settings-section .setting-item {\n    padding: 10px 0;\n}\n';
+// src/renderer3d.ts
+var SVG_NS2 = "http://www.w3.org/2000/svg";
+var COLOR_MAP2 = {
+  black: "#888888",
+  red: "#e74c3c",
+  blue: "#3498db",
+  teal: "#1abc9c",
+  orange: "#e67e22",
+  green: "#2ecc71",
+  purple: "#9b59b6"
+};
+function hexToRgb(hex) {
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!m)
+    return null;
+  return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+}
+function shadeColor(baseHex, t) {
+  const rgb = hexToRgb(baseHex);
+  if (!rgb)
+    return baseHex;
+  const factor = 0.3 + t * 0.7;
+  const r = Math.round(rgb.r * factor + 255 * (1 - factor));
+  const g = Math.round(rgb.g * factor + 255 * (1 - factor));
+  const b = Math.round(rgb.b * factor + 255 * (1 - factor));
+  return `rgb(${r},${g},${b})`;
+}
+function niceInterval2(range, targetTicks) {
+  const rough = range / targetTicks;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  const norm = rough / mag;
+  let nice;
+  if (norm <= 1.5)
+    nice = 1;
+  else if (norm <= 3)
+    nice = 2;
+  else if (norm <= 7)
+    nice = 5;
+  else
+    nice = 10;
+  return nice * mag;
+}
+function formatTick2(value) {
+  if (Math.abs(value) < 1e-10)
+    return "0";
+  const s = value.toPrecision(3);
+  return parseFloat(s).toString();
+}
+function stripLatex2(text) {
+  return text.replace(/\\[({]/g, "").replace(/\\[)}]/g, "").replace(/\\\\/g, "").replace(/\\[a-zA-Z]+/g, (m) => m.replace("\\", ""));
+}
+var SVG3DRenderer = class {
+  constructor(config) {
+    this.padding = { top: 40, right: 40, bottom: 40, left: 40 };
+    this.config = config;
+    this.centerX = config.width / 2;
+    this.centerY = config.height / 2 + 20;
+    const availW = config.width - this.padding.left - this.padding.right;
+    const availH = config.height - this.padding.top - this.padding.bottom;
+    this.scale = Math.min(availW, availH) * 0.28;
+    const azimuth = config.rotationZ * Math.PI / 180;
+    const elevation = config.rotationX * Math.PI / 180;
+    this.cosA = Math.cos(azimuth);
+    this.sinA = Math.sin(azimuth);
+    this.cosE = Math.cos(elevation);
+    this.sinE = Math.sin(elevation);
+  }
+  project(x, y, z) {
+    const { xmin, xmax, ymin, ymax, zmin, zmax } = this.config;
+    const nx = (x - xmin) / (xmax - xmin) * 2 - 1;
+    const ny = (y - ymin) / (ymax - ymin) * 2 - 1;
+    const nz = (z - zmin) / (zmax - zmin) * 2 - 1;
+    const rx = nx * this.cosA - ny * this.sinA;
+    const ry = nx * this.sinA + ny * this.cosA;
+    const rz = nz;
+    const ry2 = ry * this.cosE - rz * this.sinE;
+    const rz2 = ry * this.sinE + rz * this.cosE;
+    const sx = this.centerX + rx * this.scale;
+    const sy = this.centerY - rz2 * this.scale;
+    const depth = ry2;
+    return { sx, sy, depth };
+  }
+  el(tag, attrs = {}) {
+    const e = document.createElementNS(SVG_NS2, tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      e.setAttribute(k, v);
+    }
+    return e;
+  }
+  render() {
+    const svg = this.el("svg", {
+      width: String(this.config.width),
+      height: String(this.config.height),
+      viewBox: `0 0 ${this.config.width} ${this.config.height}`
+    });
+    svg.appendChild(this.el("rect", {
+      width: String(this.config.width),
+      height: String(this.config.height),
+      fill: "var(--background-primary)",
+      rx: "4"
+    }));
+    const allQuads = [];
+    for (const func of this.config.functions3D) {
+      if (!func.expression)
+        continue;
+      const quads = this.sampleSurface(func);
+      allQuads.push(...quads);
+    }
+    this.drawAxes(svg, "back");
+    allQuads.sort((a, b) => a.depth - b.depth);
+    const surfaceGroup = this.el("g", { class: "tikz-3d-surface" });
+    for (const quad of allQuads) {
+      const pointsStr = quad.points.map((p) => `${p.sx.toFixed(1)},${p.sy.toFixed(1)}`).join(" ");
+      const baseColor = COLOR_MAP2[quad.color] || quad.color;
+      if (quad.wireframe) {
+        surfaceGroup.appendChild(this.el("polygon", {
+          points: pointsStr,
+          fill: "none",
+          stroke: baseColor,
+          "stroke-width": "0.5",
+          "stroke-opacity": String(quad.opacity)
+        }));
+      } else {
+        const fillColor = shadeColor(baseColor, quad.zValue);
+        surfaceGroup.appendChild(this.el("polygon", {
+          points: pointsStr,
+          fill: fillColor,
+          "fill-opacity": String(quad.opacity),
+          stroke: baseColor,
+          "stroke-width": "0.3",
+          "stroke-opacity": "0.4"
+        }));
+      }
+    }
+    svg.appendChild(surfaceGroup);
+    this.drawAxes(svg, "front");
+    this.drawTitle(svg);
+    return svg;
+  }
+  sampleSurface(func) {
+    const quads = [];
+    const [xmin, xmax] = MathHelper.parseDomain(func.xDomain);
+    const [ymin, ymax] = MathHelper.parseDomain(func.yDomain);
+    const { zmin, zmax } = this.config;
+    const zRange = zmax - zmin || 1;
+    const gridSize = 40;
+    const stepX = (xmax - xmin) / gridSize;
+    const stepY = (ymax - ymin) / gridSize;
+    const zValues = [];
+    for (let i = 0; i <= gridSize; i++) {
+      zValues[i] = [];
+      for (let j = 0; j <= gridSize; j++) {
+        const x = xmin + i * stepX;
+        const y = ymin + j * stepY;
+        try {
+          const z = MathHelper.evaluateExpression2D(func.expression, x, y);
+          zValues[i][j] = isFinite(z) ? z : null;
+        } catch (e) {
+          zValues[i][j] = null;
+        }
+      }
+    }
+    for (let i = 0; i < gridSize; i++) {
+      for (let j = 0; j < gridSize; j++) {
+        const z00 = zValues[i][j];
+        const z10 = zValues[i + 1][j];
+        const z01 = zValues[i][j + 1];
+        const z11 = zValues[i + 1][j + 1];
+        if (z00 === null || z10 === null || z01 === null || z11 === null)
+          continue;
+        const x0 = xmin + i * stepX;
+        const x1 = xmin + (i + 1) * stepX;
+        const y0 = ymin + j * stepY;
+        const y1 = ymin + (j + 1) * stepY;
+        const p00 = this.project(x0, y0, z00);
+        const p10 = this.project(x1, y0, z10);
+        const p11 = this.project(x1, y1, z11);
+        const p01 = this.project(x0, y1, z01);
+        const avgDepth = (p00.depth + p10.depth + p11.depth + p01.depth) / 4;
+        const avgZ = ((z00 + z10 + z01 + z11) / 4 - zmin) / zRange;
+        quads.push({
+          points: [
+            { sx: p00.sx, sy: p00.sy },
+            { sx: p10.sx, sy: p10.sy },
+            { sx: p11.sx, sy: p11.sy },
+            { sx: p01.sx, sy: p01.sy }
+          ],
+          depth: avgDepth,
+          zValue: Math.max(0, Math.min(1, avgZ)),
+          color: func.color,
+          wireframe: func.wireframe,
+          opacity: func.opacity
+        });
+      }
+    }
+    return quads;
+  }
+  drawAxes(svg, layer) {
+    const { xmin, xmax, ymin, ymax, zmin, zmax } = this.config;
+    const axisGroup = this.el("g", { class: `tikz-3d-axes-${layer}` });
+    const origin = this.project(xmin, ymin, zmin);
+    const xEnd = this.project(xmax, ymin, zmin);
+    const yEnd = this.project(xmin, ymax, zmin);
+    const zEnd = this.project(xmin, ymin, zmax);
+    const xMid = this.project((xmin + xmax) / 2, ymin, zmin);
+    const yMid = this.project(xmin, (ymin + ymax) / 2, zmin);
+    const isXBack = xMid.depth < origin.depth;
+    const isYBack = yMid.depth < origin.depth;
+    const drawX = layer === "back" === isXBack || layer === "front" && !isXBack;
+    const drawY = layer === "back" === isYBack || layer === "front" && !isYBack;
+    const drawZ = layer === "front";
+    const axisColor = "var(--text-muted)";
+    const axisWidth = "1.5";
+    if (drawX) {
+      axisGroup.appendChild(this.el("line", {
+        x1: String(origin.sx),
+        y1: String(origin.sy),
+        x2: String(xEnd.sx),
+        y2: String(xEnd.sy),
+        stroke: axisColor,
+        "stroke-width": axisWidth
+      }));
+      this.drawAxisTicks(axisGroup, "x", xmin, xmax, ymin, zmin);
+      if (this.config.showAxisLabels) {
+        const lp = this.project(xmax, ymin, zmin);
+        const label = this.el("text", {
+          x: String(lp.sx + 10),
+          y: String(lp.sy + 5),
+          fill: "var(--text-normal)",
+          "font-size": "13",
+          "font-weight": "500"
+        });
+        label.textContent = this.config.xLabel;
+        axisGroup.appendChild(label);
+      }
+    }
+    if (drawY) {
+      axisGroup.appendChild(this.el("line", {
+        x1: String(origin.sx),
+        y1: String(origin.sy),
+        x2: String(yEnd.sx),
+        y2: String(yEnd.sy),
+        stroke: axisColor,
+        "stroke-width": axisWidth
+      }));
+      this.drawAxisTicks(axisGroup, "y", ymin, ymax, xmin, zmin);
+      if (this.config.showAxisLabels) {
+        const lp = this.project(xmin, ymax, zmin);
+        const label = this.el("text", {
+          x: String(lp.sx - 15),
+          y: String(lp.sy + 5),
+          "text-anchor": "end",
+          fill: "var(--text-normal)",
+          "font-size": "13",
+          "font-weight": "500"
+        });
+        label.textContent = this.config.yLabel;
+        axisGroup.appendChild(label);
+      }
+    }
+    if (drawZ) {
+      axisGroup.appendChild(this.el("line", {
+        x1: String(origin.sx),
+        y1: String(origin.sy),
+        x2: String(zEnd.sx),
+        y2: String(zEnd.sy),
+        stroke: axisColor,
+        "stroke-width": axisWidth
+      }));
+      this.drawAxisTicks(axisGroup, "z", zmin, zmax, xmin, ymin);
+      if (this.config.showAxisLabels) {
+        const lp = this.project(xmin, ymin, zmax);
+        const label = this.el("text", {
+          x: String(lp.sx - 10),
+          y: String(lp.sy - 8),
+          "text-anchor": "end",
+          fill: "var(--text-normal)",
+          "font-size": "13",
+          "font-weight": "500"
+        });
+        label.textContent = this.config.zLabel;
+        axisGroup.appendChild(label);
+      }
+    }
+    svg.appendChild(axisGroup);
+  }
+  drawAxisTicks(group, axis, min, max, fixedA, fixedB) {
+    const interval = niceInterval2(max - min, 5);
+    const start = Math.ceil(min / interval) * interval;
+    for (let v = start; v <= max; v += interval) {
+      let p;
+      if (axis === "x")
+        p = this.project(v, fixedA, fixedB);
+      else if (axis === "y")
+        p = this.project(fixedA, v, fixedB);
+      else
+        p = this.project(fixedA, fixedB, v);
+      group.appendChild(this.el("circle", {
+        cx: String(p.sx),
+        cy: String(p.sy),
+        r: "2",
+        fill: "var(--text-muted)"
+      }));
+      const label = this.el("text", {
+        x: String(p.sx),
+        y: String(p.sy + (axis === "z" ? -8 : 14)),
+        "text-anchor": "middle",
+        fill: "var(--text-muted)",
+        "font-size": "10",
+        "font-family": "var(--font-monospace)"
+      });
+      label.textContent = formatTick2(v);
+      group.appendChild(label);
+    }
+  }
+  drawTitle(svg) {
+    if (!this.config.title)
+      return;
+    const titleEl = this.el("text", {
+      x: String(this.config.width / 2),
+      y: String(this.padding.top - 10),
+      "text-anchor": "middle",
+      fill: "var(--text-normal)",
+      "font-size": "15",
+      "font-weight": "600"
+    });
+    titleEl.textContent = stripLatex2(this.config.title);
+    svg.appendChild(titleEl);
+  }
+};
+
+// _bu5vauvob:/Users/justus/PycharmProjects/tikz-graph-help/src/styles.css
+var styles_default = '/* TikZ Graph Helper \u2014 Dashboard Styles */\n\n.tikz-modal {\n    display: flex;\n    flex-direction: column;\n    height: 80vh;\n    max-height: 80vh;\n    width: 90vw !important;\n    max-width: 1200px !important;\n}\n\n.tikz-modal .modal-content {\n    display: flex;\n    flex: 1;\n    overflow: hidden;\n    padding: 0 !important;\n}\n\n/* Split pane layout */\n.tikz-layout {\n    display: flex;\n    width: 100%;\n    height: 100%;\n    overflow: hidden;\n}\n\n.tikz-panel-left {\n    width: 42%;\n    min-width: 380px;\n    display: flex;\n    flex-direction: column;\n    border-right: 1px solid var(--background-modifier-border);\n    overflow: hidden;\n}\n\n.tikz-panel-right {\n    flex: 1;\n    display: flex;\n    flex-direction: column;\n    overflow: hidden;\n    min-width: 0;\n}\n\n/* Tab bar */\n.tikz-tab-bar {\n    display: flex;\n    gap: 2px;\n    padding: 10px 16px 0;\n    border-bottom: 1px solid var(--background-modifier-border);\n    background: var(--background-secondary);\n    flex-shrink: 0;\n}\n\n.tikz-tab-btn {\n    padding: 8px 16px;\n    border: none;\n    background: none;\n    color: var(--text-muted);\n    font-size: 13px;\n    font-weight: 500;\n    cursor: pointer;\n    border-bottom: 2px solid transparent;\n    border-radius: 4px 4px 0 0;\n    transition: all 0.15s ease;\n    white-space: nowrap;\n}\n\n.tikz-tab-btn:hover {\n    color: var(--text-normal);\n    background: var(--background-modifier-hover);\n}\n\n.tikz-tab-btn.active {\n    color: var(--interactive-accent);\n    border-bottom-color: var(--interactive-accent);\n    background: var(--background-primary);\n}\n\n/* Tab content */\n.tikz-tab-content {\n    flex: 1;\n    overflow-y: auto;\n    padding: 20px 24px;\n}\n\n/* Preview area */\n.tikz-preview-area {\n    flex: 1;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n    overflow: auto;\n    padding: 20px;\n    background: var(--background-primary);\n}\n\n.tikz-preview-area svg {\n    border-radius: 6px;\n    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);\n}\n\n.tikz-preview-area.is-3d {\n    cursor: grab;\n}\n\n.tikz-preview-area.is-3d:active {\n    cursor: grabbing;\n}\n\n.tikz-error {\n    color: var(--text-error);\n    font-size: 13px;\n    padding: 12px 16px;\n    background: var(--background-modifier-error);\n    border-radius: 6px;\n    max-width: 80%;\n    text-align: center;\n}\n\n/* Action bar */\n.tikz-action-bar {\n    display: flex;\n    gap: 8px;\n    padding: 12px 20px;\n    border-top: 1px solid var(--background-modifier-border);\n    background: var(--background-secondary);\n    flex-shrink: 0;\n    justify-content: flex-end;\n}\n\n.tikz-action-bar .setting-item {\n    border: none;\n    padding: 0;\n}\n\n.tikz-action-bar button {\n    padding: 6px 16px;\n    font-size: 13px;\n}\n\n/* \u2500\u2500\u2500 Function cards \u2500\u2500\u2500 */\n\n.tikz-func-cards {\n    display: flex;\n    flex-direction: column;\n    gap: 12px;\n}\n\n.tikz-func-card {\n    border: 1px solid var(--background-modifier-border);\n    border-left: 4px solid var(--text-muted);\n    border-radius: 8px;\n    padding: 16px;\n    background: var(--background-secondary);\n    transition: border-left-color 0.2s ease;\n}\n\n/* Row layout inside cards */\n.tikz-func-row {\n    display: flex;\n    gap: 12px;\n    margin-bottom: 12px;\n    align-items: flex-end;\n}\n\n.tikz-func-row:last-child {\n    margin-bottom: 0;\n}\n\n.tikz-func-field {\n    flex: 1;\n    min-width: 0;\n}\n\n.tikz-func-field.wide {\n    flex: 2;\n}\n\n/* Compact settings inside function cards */\n.tikz-func-card .setting-item {\n    padding: 2px 0;\n    border: none;\n}\n\n.tikz-func-card .setting-item-info {\n    flex: 0 0 auto;\n    margin-right: 8px;\n}\n\n.tikz-func-card .setting-item-name {\n    font-size: 12px;\n    color: var(--text-muted);\n    font-weight: 500;\n}\n\n.tikz-func-card .setting-item-description {\n    display: none;\n}\n\n.tikz-func-card .setting-item-control input[type="text"] {\n    width: 100%;\n}\n\n/* Header row with delete */\n.tikz-func-header {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    margin-bottom: 12px;\n    padding-bottom: 8px;\n    border-bottom: 1px solid var(--background-modifier-border);\n}\n\n.tikz-func-header .tikz-func-label {\n    font-size: 13px;\n    font-weight: 600;\n    color: var(--text-normal);\n}\n\n.tikz-func-header .setting-item {\n    padding: 0;\n    border: none;\n    flex: 0;\n}\n\n/* Toggle chips row */\n.tikz-toggle-row {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 10px 16px;\n    align-items: center;\n    padding: 4px 0;\n}\n\n.tikz-toggle-chip {\n    display: flex;\n    align-items: center;\n}\n\n.tikz-toggle-chip .setting-item {\n    padding: 0;\n    min-height: auto;\n    gap: 6px;\n}\n\n.tikz-toggle-chip .setting-item-name {\n    font-size: 12px;\n    color: var(--text-normal);\n}\n\n.tikz-toggle-chip .setting-item-control {\n    margin-left: 0;\n}\n\n/* Tangent input transition */\n.tikz-tangent-input {\n    overflow: hidden;\n    max-height: 0;\n    opacity: 0;\n    transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;\n    margin-top: 0;\n}\n\n.tikz-tangent-input.visible {\n    max-height: 60px;\n    opacity: 1;\n    margin-top: 10px;\n}\n\n/* Add function button */\n.tikz-add-func {\n    margin-top: 12px;\n}\n\n.tikz-add-func .setting-item {\n    justify-content: center;\n    border: none;\n    padding: 0;\n}\n\n/* \u2500\u2500\u2500 Code tab \u2500\u2500\u2500 */\n\n.tikz-code-textarea {\n    width: 100%;\n    min-height: 350px;\n    font-family: var(--font-monospace);\n    font-size: 12px;\n    padding: 12px;\n    border: 1px solid var(--background-modifier-border);\n    border-radius: 6px;\n    background: var(--background-primary-alt);\n    color: var(--text-normal);\n    resize: vertical;\n    line-height: 1.5;\n}\n\n.tikz-code-textarea:focus {\n    outline: 1px solid var(--interactive-accent);\n}\n\n/* \u2500\u2500\u2500 Axis tab \u2500\u2500\u2500 */\n\n.tikz-range-group {\n    display: flex;\n    gap: 8px;\n    align-items: center;\n    margin-bottom: 8px;\n}\n\n.tikz-range-group > div {\n    flex: 1;\n}\n\n.tikz-range-group .setting-item {\n    border: none;\n}\n\n.tikz-range-separator {\n    color: var(--text-muted);\n    font-size: 13px;\n    flex-shrink: 0;\n    padding-top: 8px;\n}\n\n/* \u2500\u2500\u2500 3D controls \u2500\u2500\u2500 */\n\n.tikz-3d-controls {\n    border-top: 1px solid var(--background-modifier-border);\n    margin-top: 8px;\n    padding-top: 8px;\n}\n\n/* \u2500\u2500\u2500 General settings sections \u2500\u2500\u2500 */\n\n.tikz-settings-section .setting-item {\n    padding: 10px 0;\n}\n';
 
 // src/modal.ts
 var COLOR_OPTIONS = {
@@ -1037,6 +1428,11 @@ var TikzModal = class extends import_obsidian.Modal {
     this.previewTimer = null;
     this.tabContents = new Map();
     this.tabButtons = new Map();
+    this.isDragging = false;
+    this.dragStartX = 0;
+    this.dragStartY = 0;
+    this.dragStartAzimuth = 0;
+    this.dragStartElevation = 0;
     this.settings = new SettingsManager();
   }
   onOpen() {
@@ -1049,17 +1445,22 @@ var TikzModal = class extends import_obsidian.Modal {
     const { modalEl } = this;
     modalEl.addClass("tikz-modal");
     const layout = modalEl.createDiv({ cls: "tikz-layout" });
-    const leftPanel = layout.createDiv({ cls: "tikz-panel-left" });
-    this.buildTabBar(leftPanel);
-    this.buildTabs(leftPanel);
+    this.leftPanel = layout.createDiv({ cls: "tikz-panel-left" });
+    this.buildTabBar(this.leftPanel);
+    this.buildTabs(this.leftPanel);
     const rightPanel = layout.createDiv({ cls: "tikz-panel-right" });
     this.previewContainer = rightPanel.createDiv({ cls: "tikz-preview-area" });
+    this.setupMouseDragRotation();
     this.buildActionBar(rightPanel);
     this.updatePreview();
   }
   onClose() {
     if (this.previewTimer)
       window.clearTimeout(this.previewTimer);
+  }
+  is3D() {
+    var _a;
+    return (_a = this.settings.getValue("dimension")) != null ? _a : false;
   }
   buildTabBar(container) {
     const bar = container.createDiv({ cls: "tikz-tab-bar" });
@@ -1079,9 +1480,8 @@ var TikzModal = class extends import_obsidian.Modal {
     this.tabContents.forEach((content, key) => {
       content.style.display = key === name ? "block" : "none";
     });
-    if (name === "Code") {
+    if (name === "Code")
       this.updateCodeArea();
-    }
   }
   buildTabs(container) {
     this.buildGraphTab(container);
@@ -1099,6 +1499,12 @@ var TikzModal = class extends import_obsidian.Modal {
   }
   buildGraphTab(container) {
     const tab = this.createTabContent(container, "Graph", true);
+    new import_obsidian.Setting(tab).setName("3D Mode").setDesc("Switch between 2D function plots and 3D surface plots").addToggle((t) => t.setValue(this.settings.getValue("dimension")).onChange((v) => {
+      this.settings.setValue("dimension", v);
+      this.update3DVisibility();
+      this.rebuildFunctionsTab();
+      this.requestPreviewUpdate();
+    }));
     new import_obsidian.Setting(tab).setName("Title").setDesc("Name displayed above the graph").addText((text) => text.setPlaceholder("My graph").setValue(this.settings.getValue("title")).onChange((v) => {
       this.settings.setValue("title", v);
       this.requestPreviewUpdate();
@@ -1115,6 +1521,22 @@ var TikzModal = class extends import_obsidian.Modal {
       this.settings.setValue("documentSetup", v);
       this.requestPreviewUpdate();
     }));
+    this.rotationContainer = tab.createDiv({ cls: "tikz-3d-controls" });
+    new import_obsidian.Setting(this.rotationContainer).setName("Elevation").setDesc("Camera tilt angle (0 = side, 90 = top). Drag preview to rotate.").addSlider((s) => {
+      this.elevationSlider = s;
+      s.setLimits(0, 90, 1).setValue(this.settings.getValue("rotationX")).setDynamicTooltip().onChange((v) => {
+        this.settings.setValue("rotationX", v);
+        this.requestPreviewUpdate();
+      });
+    });
+    new import_obsidian.Setting(this.rotationContainer).setName("Azimuth").setDesc("Camera rotation around vertical axis. Drag preview to rotate.").addSlider((s) => {
+      this.azimuthSlider = s;
+      s.setLimits(0, 360, 1).setValue(this.settings.getValue("rotationZ")).setDynamicTooltip().onChange((v) => {
+        this.settings.setValue("rotationZ", v);
+        this.requestPreviewUpdate();
+      });
+    });
+    this.update3DVisibility();
   }
   buildAxisTab(container) {
     const tab = this.createTabContent(container, "Axis");
@@ -1128,6 +1550,11 @@ var TikzModal = class extends import_obsidian.Modal {
     }));
     new import_obsidian.Setting(tab).setName("Y-Axis Label").addText((text) => text.setValue(this.settings.getValue("axis_label_y")).onChange((v) => {
       this.settings.setValue("axis_label_y", v);
+      this.requestPreviewUpdate();
+    }));
+    this.zAxisContainer = tab.createDiv({ cls: "tikz-3d-controls" });
+    new import_obsidian.Setting(this.zAxisContainer).setName("Z-Axis Label").addText((text) => text.setValue(this.settings.getValue("axis_label_z")).onChange((v) => {
+      this.settings.setValue("axis_label_z", v);
       this.requestPreviewUpdate();
     }));
     const xRange = tab.createDiv({ cls: "tikz-range-group" });
@@ -1154,13 +1581,42 @@ var TikzModal = class extends import_obsidian.Modal {
       this.settings.setValue("ymax", v);
       this.requestPreviewUpdate();
     }));
-    new import_obsidian.Setting(tab).setName("Axis style").setDesc("Box: axes around the plot. Middle: axes cross at origin").addDropdown((d) => d.addOptions({ box: "Box (all around)", middle: "Middle (crossing)" }).setValue(this.settings.getValue("axis_allaround") ? "box" : "middle").onChange((v) => {
+    const zRange = this.zAxisContainer.createDiv({ cls: "tikz-range-group" });
+    const zMinDiv = zRange.createDiv();
+    new import_obsidian.Setting(zMinDiv).setName("Z min").addText((t) => t.setPlaceholder("-5").setValue(this.settings.getValue("zmin")).onChange((v) => {
+      this.settings.setValue("zmin", v);
+      this.requestPreviewUpdate();
+    }));
+    zRange.createSpan({ cls: "tikz-range-separator", text: "to" });
+    const zMaxDiv = zRange.createDiv();
+    new import_obsidian.Setting(zMaxDiv).setName("Z max").addText((t) => t.setPlaceholder("5").setValue(this.settings.getValue("zmax")).onChange((v) => {
+      this.settings.setValue("zmax", v);
+      this.requestPreviewUpdate();
+    }));
+    this.axisStyleContainer = tab.createDiv();
+    new import_obsidian.Setting(this.axisStyleContainer).setName("Axis style").setDesc("Box: axes around the plot. Middle: axes cross at origin").addDropdown((d) => d.addOptions({ box: "Box (all around)", middle: "Middle (crossing)" }).setValue(this.settings.getValue("axis_allaround") ? "box" : "middle").onChange((v) => {
       this.settings.setValue("axis_allaround", v === "box");
       this.requestPreviewUpdate();
     }));
+    this.update3DVisibility();
   }
   buildFunctionsTab(container) {
-    const tab = this.createTabContent(container, "Functions");
+    this.functionsTabContent = this.createTabContent(container, "Functions");
+    this.populateFunctionsTab();
+  }
+  rebuildFunctionsTab() {
+    this.functionsTabContent.empty();
+    this.populateFunctionsTab();
+  }
+  populateFunctionsTab() {
+    const tab = this.functionsTabContent;
+    if (this.is3D()) {
+      this.build3DFunctionCards(tab);
+    } else {
+      this.build2DFunctionCards(tab);
+    }
+  }
+  build2DFunctionCards(tab) {
     const cardsContainer = tab.createDiv({ cls: "tikz-func-cards" });
     const rowStates = new Map();
     const updateFunctionValues = () => {
@@ -1191,8 +1647,7 @@ var TikzModal = class extends import_obsidian.Modal {
       const card = cardsContainer.createDiv({ cls: "tikz-func-card" });
       card.style.borderLeftColor = CSS_COLORS[state.color];
       const header = card.createDiv({ cls: "tikz-func-header" });
-      const label = header.createSpan({ cls: "tikz-func-label" });
-      label.textContent = `Function ${rowStates.size}`;
+      header.createSpan({ cls: "tikz-func-label", text: `Function ${rowStates.size}` });
       new import_obsidian.Setting(header).addButton((btn) => btn.setIcon("trash").setTooltip("Remove function").onClick(() => {
         rowStates.delete(rowId);
         card.remove();
@@ -1238,9 +1693,8 @@ var TikzModal = class extends import_obsidian.Modal {
         const chip = row3.createDiv({ cls: "tikz-toggle-chip" });
         new import_obsidian.Setting(chip).setName(name).addToggle((t) => t.setValue(state[key]).onChange((v) => {
           state[key] = v;
-          if (key === "tangent") {
+          if (key === "tangent")
             tangentInput.toggleClass("visible", v);
-          }
           updateFunctionValues();
         }));
       });
@@ -1248,6 +1702,79 @@ var TikzModal = class extends import_obsidian.Modal {
     addFunctionCard();
     const addBtnDiv = tab.createDiv({ cls: "tikz-add-func" });
     new import_obsidian.Setting(addBtnDiv).addButton((btn) => btn.setButtonText("+ Add Function").onClick(() => addFunctionCard()));
+  }
+  build3DFunctionCards(tab) {
+    const cardsContainer = tab.createDiv({ cls: "tikz-func-cards" });
+    const rowStates = new Map();
+    const updateFunctionValues = () => {
+      const functions = [];
+      rowStates.forEach((state) => {
+        if (state.expression) {
+          functions.push(__spreadValues({}, state));
+        }
+      });
+      this.settings.setValue("functions3D", functions);
+      this.requestPreviewUpdate();
+    };
+    const addFunctionCard = () => {
+      const rowId = `func3d-${Date.now()}`;
+      const state = {
+        expression: "",
+        xDomain: "-5:5",
+        yDomain: "-5:5",
+        color: "blue",
+        wireframe: false,
+        opacity: 0.7
+      };
+      rowStates.set(rowId, state);
+      const card = cardsContainer.createDiv({ cls: "tikz-func-card" });
+      card.style.borderLeftColor = CSS_COLORS[state.color] || "var(--text-muted)";
+      const header = card.createDiv({ cls: "tikz-func-header" });
+      header.createSpan({ cls: "tikz-func-label", text: `Surface ${rowStates.size}` });
+      new import_obsidian.Setting(header).addButton((btn) => btn.setIcon("trash").setTooltip("Remove surface").onClick(() => {
+        rowStates.delete(rowId);
+        card.remove();
+        updateFunctionValues();
+      }));
+      const row1 = card.createDiv({ cls: "tikz-func-row" });
+      const exprDiv = row1.createDiv({ cls: "tikz-func-field wide" });
+      new import_obsidian.Setting(exprDiv).setName("f(x, y)").addText((t) => t.setPlaceholder("sin(x)*cos(y)").onChange((v) => {
+        state.expression = v;
+        updateFunctionValues();
+      }));
+      const row2 = card.createDiv({ cls: "tikz-func-row" });
+      const xDomDiv = row2.createDiv({ cls: "tikz-func-field" });
+      new import_obsidian.Setting(xDomDiv).setName("X domain").addText((t) => t.setPlaceholder("-5:5").setValue(state.xDomain).onChange((v) => {
+        state.xDomain = v;
+        updateFunctionValues();
+      }));
+      const yDomDiv = row2.createDiv({ cls: "tikz-func-field" });
+      new import_obsidian.Setting(yDomDiv).setName("Y domain").addText((t) => t.setPlaceholder("-5:5").setValue(state.yDomain).onChange((v) => {
+        state.yDomain = v;
+        updateFunctionValues();
+      }));
+      const row3 = card.createDiv({ cls: "tikz-func-row" });
+      const colorDiv = row3.createDiv({ cls: "tikz-func-field" });
+      new import_obsidian.Setting(colorDiv).setName("Color").addDropdown((d) => d.addOptions(COLOR_OPTIONS).setValue(state.color).onChange((v) => {
+        state.color = v;
+        card.style.borderLeftColor = CSS_COLORS[v] || "var(--text-muted)";
+        updateFunctionValues();
+      }));
+      const row4 = card.createDiv({ cls: "tikz-func-row tikz-toggle-row" });
+      const wireChip = row4.createDiv({ cls: "tikz-toggle-chip" });
+      new import_obsidian.Setting(wireChip).setName("Wireframe").addToggle((t) => t.setValue(state.wireframe).onChange((v) => {
+        state.wireframe = v;
+        updateFunctionValues();
+      }));
+      const opacityDiv = row4.createDiv({ cls: "tikz-func-field" });
+      new import_obsidian.Setting(opacityDiv).setName("Opacity").addSlider((s) => s.setLimits(0.1, 1, 0.1).setValue(state.opacity).setDynamicTooltip().onChange((v) => {
+        state.opacity = v;
+        updateFunctionValues();
+      }));
+    };
+    addFunctionCard();
+    const addBtnDiv = tab.createDiv({ cls: "tikz-add-func" });
+    new import_obsidian.Setting(addBtnDiv).addButton((btn) => btn.setButtonText("+ Add Surface").onClick(() => addFunctionCard()));
   }
   buildGridTab(container) {
     const tab = this.createTabContent(container, "Grid");
@@ -1273,10 +1800,59 @@ var TikzModal = class extends import_obsidian.Modal {
     tab.appendChild(textarea);
     this.codeTextArea = textarea;
   }
+  update3DVisibility() {
+    const show3D = this.is3D();
+    if (this.rotationContainer)
+      this.rotationContainer.style.display = show3D ? "block" : "none";
+    if (this.zAxisContainer)
+      this.zAxisContainer.style.display = show3D ? "block" : "none";
+    if (this.axisStyleContainer)
+      this.axisStyleContainer.style.display = show3D ? "none" : "block";
+    if (this.previewContainer)
+      this.previewContainer.toggleClass("is-3d", show3D);
+  }
+  setupMouseDragRotation() {
+    const el = this.previewContainer;
+    el.addEventListener("mousedown", (e) => {
+      var _a, _b;
+      if (!this.is3D())
+        return;
+      this.isDragging = true;
+      this.dragStartX = e.clientX;
+      this.dragStartY = e.clientY;
+      this.dragStartAzimuth = (_a = this.settings.getValue("rotationZ")) != null ? _a : 45;
+      this.dragStartElevation = (_b = this.settings.getValue("rotationX")) != null ? _b : 30;
+      el.style.cursor = "grabbing";
+      e.preventDefault();
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!this.isDragging)
+        return;
+      const dx = e.clientX - this.dragStartX;
+      const dy = e.clientY - this.dragStartY;
+      let newAzimuth = this.dragStartAzimuth + dx * 0.5;
+      let newElevation = this.dragStartElevation - dy * 0.3;
+      newAzimuth = (newAzimuth % 360 + 360) % 360;
+      newElevation = Math.max(0, Math.min(90, newElevation));
+      this.settings.setValue("rotationZ", Math.round(newAzimuth));
+      this.settings.setValue("rotationX", Math.round(newElevation));
+      if (this.azimuthSlider)
+        this.azimuthSlider.setValue(Math.round(newAzimuth));
+      if (this.elevationSlider)
+        this.elevationSlider.setValue(Math.round(newElevation));
+      this.requestPreviewUpdate();
+    });
+    window.addEventListener("mouseup", () => {
+      if (this.isDragging) {
+        this.isDragging = false;
+        el.style.cursor = "";
+      }
+    });
+  }
   buildActionBar(container) {
     const bar = container.createDiv({ cls: "tikz-action-bar" });
     new import_obsidian.Setting(bar).addButton((btn) => btn.setButtonText("Copy TikZ Code").onClick(() => __async(this, null, function* () {
-      const code = this.settings.generateTikzCode();
+      const code = this.getCurrentTikzCode();
       yield navigator.clipboard.writeText(code);
       const orig = btn.buttonEl.textContent;
       btn.setButtonText("Copied!");
@@ -1287,11 +1863,13 @@ var TikzModal = class extends import_obsidian.Modal {
         new import_obsidian.Notice("No active note to insert into");
         return;
       }
-      const code = this.settings.generateTikzCode();
-      const editor = view.editor;
-      editor.replaceSelection("```tikz\n" + code + "\n```\n");
+      const code = this.getCurrentTikzCode();
+      view.editor.replaceSelection("```tikz\n" + code + "\n```\n");
       this.close();
     }));
+  }
+  getCurrentTikzCode() {
+    return this.is3D() ? this.settings.generate3DTikzCode() : this.settings.generateTikzCode();
   }
   requestPreviewUpdate() {
     if (this.previewTimer)
@@ -1302,8 +1880,12 @@ var TikzModal = class extends import_obsidian.Modal {
     this.previewContainer.empty();
     try {
       const config = this.settings.toRendererConfig();
-      const renderer = new SVGRenderer(config);
-      const svg = renderer.render();
+      let svg;
+      if (config.is3D) {
+        svg = new SVG3DRenderer(config).render();
+      } else {
+        svg = new SVGRenderer(config).render();
+      }
       this.previewContainer.appendChild(svg);
     } catch (e) {
       const errDiv = this.previewContainer.createDiv({ cls: "tikz-error" });
@@ -1313,7 +1895,7 @@ var TikzModal = class extends import_obsidian.Modal {
   }
   updateCodeArea() {
     if (this.codeTextArea) {
-      this.codeTextArea.value = this.settings.generateTikzCode();
+      this.codeTextArea.value = this.getCurrentTikzCode();
     }
   }
 };

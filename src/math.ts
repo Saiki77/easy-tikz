@@ -64,4 +64,9 @@ export class MathHelper {
         const f = new Function('x', `return ${expression.replace(/\^/g, '**')}`);
         return f(x);
     }
+
+    static evaluateExpression2D(expression: string, x: number, y: number): number {
+        const f = new Function('x', 'y', `return ${expression.replace(/\^/g, '**')}`);
+        return f(x, y);
+    }
 }

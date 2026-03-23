@@ -1,25 +1,65 @@
-# tikz-graph-help
+# TikZ Graph Helper
 
-A plugin for Obsidian that lets you create tikz graphs using a simple to use menu. 
+An [Obsidian](https://obsidian.md) plugin for creating TikZ/pgfplots graphs through an intuitive visual editor with live preview.
 
-## Function 
+## Features
 
-This plugin aims to simplify the process of creating and edditing tikz diagrams. 
-It includes a menu to create graphs using simplified selectors and input fields. 
+- **Live SVG preview** — see your graph update in real-time as you change settings (no external plugins needed)
+- **2D function plots** — plot mathematical functions with customizable color, thickness, dashing, and fill
+- **3D surface plots** — render 3D surfaces with wireframe or filled mode, adjustable opacity, and interactive mouse rotation
+- **Tangent lines** — compute and display tangent lines at any point
+- **Extrema detection** — automatically find and mark local minima/maxima
+- **TikZ code generation** — generates valid pgfplots code you can copy or insert directly into your notes
+- **Dark/light theme support** — respects your Obsidian theme
 
-<img width=1000 align="center" src="./img/Screenshot1.png">
-<img width=1000 align="center" src="./img/Screenshot2.png">
-<img width=1000 align="center" src="./img/Screenshot3.png">
+## Usage
 
+1. Click the function icon in the ribbon (or use the command palette)
+2. Configure your graph using the tabbed settings panel:
+   - **Graph** — title, dimensions, 2D/3D mode toggle, camera controls (3D)
+   - **Axis** — labels, ranges, axis style
+   - **Functions** — add functions with expression, domain, styling, and analysis options
+   - **Grid** — major/minor grid lines
+   - **Code** — view the generated TikZ code
+3. The live preview on the right updates as you edit
+4. In 3D mode, **drag the preview** to rotate the camera
+5. Click **Copy TikZ Code** or **Insert into Note** when done
 
-### Upcoming 
+### 2D Functions
 
-- Support for 3D Plots
-- Shapes
-- Native tikz renderering
-- Tikz syntax highlight 
+Enter any JavaScript math expression using `x`:
+- `x^2`, `x^3 - 3*x`, `1/x`
+- `sin(deg(x))`, `cos(deg(x))`, `Math.exp(x)`
 
-## Notice 
+### 3D Surfaces
 
-The preview section only works in combination with the [TikZJax](https://github.com/kisonecat/tikzjax) Plugin by @artisticat1. I am working on a native tikz rendering solution, which is not yet ready. 
+Enter expressions using `x` and `y`:
+- `sin(x)*cos(y)`
+- `x^2 + y^2`
+- `sin(Math.sqrt(x^2 + y^2))`
 
+## Installation
+
+### Via BRAT (recommended for beta)
+
+1. Install the [BRAT plugin](https://github.com/TfTHacker/obsidian42-brat)
+2. Add `Saiki77/tikz-graph-help` as a beta plugin
+
+### Manual
+
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Saiki77/tikz-graph-help/releases)
+2. Create a folder `tikz_graph_helper` in your vault's `.obsidian/plugins/` directory
+3. Place the downloaded files in that folder
+4. Enable the plugin in Obsidian settings
+
+## Development
+
+```bash
+npm install
+npm run dev    # watch mode
+npm run build  # production build
+```
+
+## License
+
+MIT

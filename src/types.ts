@@ -33,6 +33,15 @@ export interface DynamicTikzSetting extends TikzSetting {
     values?: string[];
 }
 
+export interface Function3DParameters {
+    expression: string;
+    xDomain: string;
+    yDomain: string;
+    color: string;
+    wireframe: boolean;
+    opacity: number;
+}
+
 export interface RendererConfig {
     width: number;
     height: number;
@@ -49,4 +58,11 @@ export interface RendererConfig {
     gridMinor: boolean;
     minorTickNum: number;
     functions: FunctionParameters[];
+    is3D: boolean;
+    zmin: number;
+    zmax: number;
+    zLabel: string;
+    rotationX: number;
+    rotationZ: number;
+    functions3D: Function3DParameters[];
 }

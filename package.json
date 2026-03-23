@@ -1,6 +1,6 @@
 {
     "name": "simple-tikz-renderer",
-    "version": "2.0.1",
+    "version": "2.2.0",
     "description": "A simple TikZ code renderer for Obsidian",
     "main": "main.js",
     "scripts": {

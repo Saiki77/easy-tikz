@@ -1,4 +1,4 @@
-import { TikzSetting, FunctionParameters } from './types';
+import { TikzSetting, FunctionParameters, Function3DParameters } from './types';
 import { MathHelper } from './math';
 
 export const TIKZ_SETTINGS: TikzSetting[] = [
@@ -247,6 +247,13 @@ export class SettingsManager {
         TIKZ_SETTINGS.forEach((setting) => {
             this.values.set(setting.id, setting.defaultValue);
         });
+        // 3D-specific defaults (not in TIKZ_SETTINGS since they have custom UI)
+        this.values.set('zmin', '-5');
+        this.values.set('zmax', '5');
+        this.values.set('axis_label_z', 'z');
+        this.values.set('rotationX', 30);
+        this.values.set('rotationZ', 45);
+        this.values.set('functions3D', []);
     }
 
     getValue(id: string): any {
@@ -298,6 +305,49 @@ export class SettingsManager {
             gridMinor: this.getValue('showSmallGrid') ?? false,
             minorTickNum: this.getValue('gridSize') ?? 5,
             functions: this.getValue('functions') || [],
+            is3D: this.getValue('dimension') ?? false,
+            zmin: parseFloat(this.getValue('zmin')) || -5,
+            zmax: parseFloat(this.getValue('zmax')) || 5,
+            zLabel: this.getValue('axis_label_z') || 'z',
+            rotationX: this.getValue('rotationX') ?? 30,
+            rotationZ: this.getValue('rotationZ') ?? 45,
+            functions3D: this.getValue('functions3D') || [],
         };
+    }
+
+    generate3DTikzCode(): string {
+        const funcs: Function3DParameters[] = this.getValue('functions3D') || [];
+        let code = '';
+
+        code += '\n\\usepackage{pgfplots}';
+        code += '\n\\pgfplotsset{compat=1.16}';
+        code += '\n\\begin{document}';
+        code += '\n\\begin{tikzpicture}';
+        code += '\n\\begin{axis}[';
+        code += `\n  title={${this.getValue('title') || ''}},`;
+        code += `\n  width={${this.getValue('size_x_cm') || 10}cm},`;
+        code += `\n  height={${this.getValue('size_y_cm') || 10}cm},`;
+        if (this.getValue('show_axis_label')) {
+            code += `\n  xlabel={${this.getValue('axis_label_x') || 'x'}},`;
+            code += `\n  ylabel={${this.getValue('axis_label_y') || 'y'}},`;
+            code += `\n  zlabel={${this.getValue('axis_label_z') || 'z'}},`;
+        }
+        code += `\n  xmin=${this.getValue('xmin')}, xmax=${this.getValue('xmax')},`;
+        code += `\n  ymin=${this.getValue('ymin')}, ymax=${this.getValue('ymax')},`;
+        code += `\n  zmin=${this.getValue('zmin')}, zmax=${this.getValue('zmax')},`;
+        code += '\n  view={' + (this.getValue('rotationZ') || 45) + '}{' + (this.getValue('rotationX') || 30) + '},';
+        code += '\n]';
+
+        for (const func of funcs) {
+            if (!func.expression) continue;
+            const surfType = func.wireframe ? 'mesh' : 'surf';
+            const opacity = func.wireframe ? '' : `, opacity=${func.opacity}`;
+            code += `\n\\addplot3[${surfType}, domain=${func.xDomain}, y domain=${func.yDomain}, ${func.color}${opacity}, samples=30] {${func.expression}};`;
+        }
+
+        code += '\n\\end{axis}';
+        code += '\n\\end{tikzpicture}';
+        code += '\n\\end{document}';
+        return code;
     }
 }

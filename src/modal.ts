@@ -1,7 +1,8 @@
 import { Modal, Setting, MarkdownView, Notice, App } from 'obsidian';
-import { FunctionParameters, DynamicFunctionSetting } from './types';
-import { SettingsManager, TIKZ_SETTINGS } from './settings';
+import { FunctionParameters, Function3DParameters } from './types';
+import { SettingsManager } from './settings';
 import { SVGRenderer } from './renderer';
+import { SVG3DRenderer } from './renderer3d';
 // @ts-ignore — inline import via esbuild plugin
 import styles from 'inline:./styles.css';
 
@@ -40,13 +41,30 @@ export class TikzModal extends Modal {
     private tabContents: Map<string, HTMLElement> = new Map();
     private tabButtons: Map<string, HTMLButtonElement> = new Map();
 
+    // References for 3D-conditional UI
+    private rotationContainer: HTMLElement;
+    private zAxisContainer: HTMLElement;
+    private axisStyleContainer: HTMLElement;
+    private functionsTabContent: HTMLElement;
+    private leftPanel: HTMLElement;
+
+    // Slider references for syncing with mouse drag
+    private elevationSlider: any;
+    private azimuthSlider: any;
+
+    // Mouse drag state
+    private isDragging = false;
+    private dragStartX = 0;
+    private dragStartY = 0;
+    private dragStartAzimuth = 0;
+    private dragStartElevation = 0;
+
     constructor(app: App) {
         super(app);
         this.settings = new SettingsManager();
     }
 
     onOpen() {
-        // Inject styles
         const styleEl = document.createElement('style');
         styleEl.id = 'tikz-graph-helper-styles';
         styleEl.textContent = styles;
@@ -59,22 +77,24 @@ export class TikzModal extends Modal {
 
         const layout = modalEl.createDiv({ cls: 'tikz-layout' });
 
-        // Left panel — settings
-        const leftPanel = layout.createDiv({ cls: 'tikz-panel-left' });
-        this.buildTabBar(leftPanel);
-        this.buildTabs(leftPanel);
+        this.leftPanel = layout.createDiv({ cls: 'tikz-panel-left' });
+        this.buildTabBar(this.leftPanel);
+        this.buildTabs(this.leftPanel);
 
-        // Right panel — preview + actions
         const rightPanel = layout.createDiv({ cls: 'tikz-panel-right' });
         this.previewContainer = rightPanel.createDiv({ cls: 'tikz-preview-area' });
+        this.setupMouseDragRotation();
         this.buildActionBar(rightPanel);
 
-        // Initial preview
         this.updatePreview();
     }
 
     onClose() {
         if (this.previewTimer) window.clearTimeout(this.previewTimer);
+    }
+
+    private is3D(): boolean {
+        return this.settings.getValue('dimension') ?? false;
     }
 
     // --- Tab bar ---
@@ -98,10 +118,7 @@ export class TikzModal extends Modal {
         this.tabContents.forEach((content, key) => {
             content.style.display = key === name ? 'block' : 'none';
         });
-        // Update code textarea when switching to Code tab
-        if (name === 'Code') {
-            this.updateCodeArea();
-        }
+        if (name === 'Code') this.updateCodeArea();
     }
 
     // --- Tab contents ---
@@ -124,6 +141,19 @@ export class TikzModal extends Modal {
     private buildGraphTab(container: HTMLElement) {
         const tab = this.createTabContent(container, 'Graph', true);
 
+        // 3D toggle
+        new Setting(tab)
+            .setName('3D Mode')
+            .setDesc('Switch between 2D function plots and 3D surface plots')
+            .addToggle((t) =>
+                t.setValue(this.settings.getValue('dimension')).onChange((v) => {
+                    this.settings.setValue('dimension', v);
+                    this.update3DVisibility();
+                    this.rebuildFunctionsTab();
+                    this.requestPreviewUpdate();
+                })
+            );
+
         new Setting(tab)
             .setName('Title')
             .setDesc('Name displayed above the graph')
@@ -141,28 +171,20 @@ export class TikzModal extends Modal {
             .setName('Width (cm)')
             .setDesc('Width of the exported TikZ image')
             .addSlider((s) =>
-                s
-                    .setLimits(1, 20, 1)
-                    .setValue(this.settings.getValue('size_x_cm'))
-                    .setDynamicTooltip()
-                    .onChange((v) => {
-                        this.settings.setValue('size_x_cm', v);
-                        this.requestPreviewUpdate();
-                    })
+                s.setLimits(1, 20, 1).setValue(this.settings.getValue('size_x_cm')).setDynamicTooltip().onChange((v) => {
+                    this.settings.setValue('size_x_cm', v);
+                    this.requestPreviewUpdate();
+                })
             );
 
         new Setting(tab)
             .setName('Height (cm)')
             .setDesc('Height of the exported TikZ image')
             .addSlider((s) =>
-                s
-                    .setLimits(1, 20, 1)
-                    .setValue(this.settings.getValue('size_y_cm'))
-                    .setDynamicTooltip()
-                    .onChange((v) => {
-                        this.settings.setValue('size_y_cm', v);
-                        this.requestPreviewUpdate();
-                    })
+                s.setLimits(1, 20, 1).setValue(this.settings.getValue('size_y_cm')).setDynamicTooltip().onChange((v) => {
+                    this.settings.setValue('size_y_cm', v);
+                    this.requestPreviewUpdate();
+                })
             );
 
         new Setting(tab)
@@ -174,6 +196,33 @@ export class TikzModal extends Modal {
                     this.requestPreviewUpdate();
                 })
             );
+
+        // 3D rotation controls (hidden in 2D mode)
+        this.rotationContainer = tab.createDiv({ cls: 'tikz-3d-controls' });
+
+        new Setting(this.rotationContainer)
+            .setName('Elevation')
+            .setDesc('Camera tilt angle (0 = side, 90 = top). Drag preview to rotate.')
+            .addSlider((s) => {
+                this.elevationSlider = s;
+                s.setLimits(0, 90, 1).setValue(this.settings.getValue('rotationX')).setDynamicTooltip().onChange((v) => {
+                    this.settings.setValue('rotationX', v);
+                    this.requestPreviewUpdate();
+                });
+            });
+
+        new Setting(this.rotationContainer)
+            .setName('Azimuth')
+            .setDesc('Camera rotation around vertical axis. Drag preview to rotate.')
+            .addSlider((s) => {
+                this.azimuthSlider = s;
+                s.setLimits(0, 360, 1).setValue(this.settings.getValue('rotationZ')).setDynamicTooltip().onChange((v) => {
+                    this.settings.setValue('rotationZ', v);
+                    this.requestPreviewUpdate();
+                });
+            });
+
+        this.update3DVisibility();
     }
 
     private buildAxisTab(container: HTMLElement) {
@@ -206,55 +255,75 @@ export class TikzModal extends Modal {
                 })
             );
 
+        // Z-axis label (3D only)
+        this.zAxisContainer = tab.createDiv({ cls: 'tikz-3d-controls' });
+
+        new Setting(this.zAxisContainer)
+            .setName('Z-Axis Label')
+            .addText((text) =>
+                text.setValue(this.settings.getValue('axis_label_z')).onChange((v) => {
+                    this.settings.setValue('axis_label_z', v);
+                    this.requestPreviewUpdate();
+                })
+            );
+
         // X-axis range
         const xRange = tab.createDiv({ cls: 'tikz-range-group' });
         const xMinDiv = xRange.createDiv();
         new Setting(xMinDiv).setName('X min').addText((t) =>
-            t
-                .setPlaceholder('-0.5')
-                .setValue(this.settings.getValue('xmin'))
-                .onChange((v) => {
-                    this.settings.setValue('xmin', v);
-                    this.requestPreviewUpdate();
-                })
+            t.setPlaceholder('-0.5').setValue(this.settings.getValue('xmin')).onChange((v) => {
+                this.settings.setValue('xmin', v);
+                this.requestPreviewUpdate();
+            })
         );
         xRange.createSpan({ cls: 'tikz-range-separator', text: 'to' });
         const xMaxDiv = xRange.createDiv();
         new Setting(xMaxDiv).setName('X max').addText((t) =>
-            t
-                .setPlaceholder('10')
-                .setValue(this.settings.getValue('xmax'))
-                .onChange((v) => {
-                    this.settings.setValue('xmax', v);
-                    this.requestPreviewUpdate();
-                })
+            t.setPlaceholder('10').setValue(this.settings.getValue('xmax')).onChange((v) => {
+                this.settings.setValue('xmax', v);
+                this.requestPreviewUpdate();
+            })
         );
 
         // Y-axis range
         const yRange = tab.createDiv({ cls: 'tikz-range-group' });
         const yMinDiv = yRange.createDiv();
         new Setting(yMinDiv).setName('Y min').addText((t) =>
-            t
-                .setPlaceholder('-0.5')
-                .setValue(this.settings.getValue('ymin'))
-                .onChange((v) => {
-                    this.settings.setValue('ymin', v);
-                    this.requestPreviewUpdate();
-                })
+            t.setPlaceholder('-0.5').setValue(this.settings.getValue('ymin')).onChange((v) => {
+                this.settings.setValue('ymin', v);
+                this.requestPreviewUpdate();
+            })
         );
         yRange.createSpan({ cls: 'tikz-range-separator', text: 'to' });
         const yMaxDiv = yRange.createDiv();
         new Setting(yMaxDiv).setName('Y max').addText((t) =>
-            t
-                .setPlaceholder('5')
-                .setValue(this.settings.getValue('ymax'))
-                .onChange((v) => {
-                    this.settings.setValue('ymax', v);
-                    this.requestPreviewUpdate();
-                })
+            t.setPlaceholder('5').setValue(this.settings.getValue('ymax')).onChange((v) => {
+                this.settings.setValue('ymax', v);
+                this.requestPreviewUpdate();
+            })
         );
 
-        new Setting(tab)
+        // Z-axis range (3D only) — append to zAxisContainer
+        const zRange = this.zAxisContainer.createDiv({ cls: 'tikz-range-group' });
+        const zMinDiv = zRange.createDiv();
+        new Setting(zMinDiv).setName('Z min').addText((t) =>
+            t.setPlaceholder('-5').setValue(this.settings.getValue('zmin')).onChange((v) => {
+                this.settings.setValue('zmin', v);
+                this.requestPreviewUpdate();
+            })
+        );
+        zRange.createSpan({ cls: 'tikz-range-separator', text: 'to' });
+        const zMaxDiv = zRange.createDiv();
+        new Setting(zMaxDiv).setName('Z max').addText((t) =>
+            t.setPlaceholder('5').setValue(this.settings.getValue('zmax')).onChange((v) => {
+                this.settings.setValue('zmax', v);
+                this.requestPreviewUpdate();
+            })
+        );
+
+        // Axis style (2D only)
+        this.axisStyleContainer = tab.createDiv();
+        new Setting(this.axisStyleContainer)
             .setName('Axis style')
             .setDesc('Box: axes around the plot. Middle: axes cross at origin')
             .addDropdown((d) =>
@@ -266,15 +335,32 @@ export class TikzModal extends Modal {
                         this.requestPreviewUpdate();
                     })
             );
+
+        this.update3DVisibility();
     }
 
     private buildFunctionsTab(container: HTMLElement) {
-        const tab = this.createTabContent(container, 'Functions');
+        this.functionsTabContent = this.createTabContent(container, 'Functions');
+        this.populateFunctionsTab();
+    }
+
+    private rebuildFunctionsTab() {
+        this.functionsTabContent.empty();
+        this.populateFunctionsTab();
+    }
+
+    private populateFunctionsTab() {
+        const tab = this.functionsTabContent;
+        if (this.is3D()) {
+            this.build3DFunctionCards(tab);
+        } else {
+            this.build2DFunctionCards(tab);
+        }
+    }
+
+    private build2DFunctionCards(tab: HTMLElement) {
         const cardsContainer = tab.createDiv({ cls: 'tikz-func-cards' });
-        const rowStates = new Map<
-            string,
-            FunctionParameters & { tangentPoint: string }
-        >();
+        const rowStates = new Map<string, FunctionParameters>();
 
         const updateFunctionValues = () => {
             const functions: FunctionParameters[] = [];
@@ -306,22 +392,16 @@ export class TikzModal extends Modal {
             const card = cardsContainer.createDiv({ cls: 'tikz-func-card' });
             card.style.borderLeftColor = CSS_COLORS[state.color];
 
-            // Header with label + delete
             const header = card.createDiv({ cls: 'tikz-func-header' });
-            const label = header.createSpan({ cls: 'tikz-func-label' });
-            label.textContent = `Function ${rowStates.size}`;
+            header.createSpan({ cls: 'tikz-func-label', text: `Function ${rowStates.size}` });
             new Setting(header).addButton((btn) =>
-                btn
-                    .setIcon('trash')
-                    .setTooltip('Remove function')
-                    .onClick(() => {
-                        rowStates.delete(rowId);
-                        card.remove();
-                        updateFunctionValues();
-                    })
+                btn.setIcon('trash').setTooltip('Remove function').onClick(() => {
+                    rowStates.delete(rowId);
+                    card.remove();
+                    updateFunctionValues();
+                })
             );
 
-            // Row 1: Expression + Domain
             const row1 = card.createDiv({ cls: 'tikz-func-row' });
             const exprDiv = row1.createDiv({ cls: 'tikz-func-field wide' });
             new Setting(exprDiv).setName('Expression').addText((t) =>
@@ -332,43 +412,31 @@ export class TikzModal extends Modal {
             );
             const domDiv = row1.createDiv({ cls: 'tikz-func-field' });
             new Setting(domDiv).setName('Domain').addText((t) =>
-                t
-                    .setPlaceholder('-10:10')
-                    .setValue(state.domain)
-                    .onChange((v) => {
-                        state.domain = v;
-                        updateFunctionValues();
-                    })
+                t.setPlaceholder('-10:10').setValue(state.domain).onChange((v) => {
+                    state.domain = v;
+                    updateFunctionValues();
+                })
             );
 
-            // Row 2: Color + Thickness
             const row2 = card.createDiv({ cls: 'tikz-func-row' });
             const colorDiv = row2.createDiv({ cls: 'tikz-func-field' });
             new Setting(colorDiv).setName('Color').addDropdown((d) =>
-                d
-                    .addOptions(COLOR_OPTIONS)
-                    .setValue(state.color)
-                    .onChange((v) => {
-                        state.color = v;
-                        card.style.borderLeftColor = CSS_COLORS[v] || 'var(--text-muted)';
-                        updateFunctionValues();
-                    })
+                d.addOptions(COLOR_OPTIONS).setValue(state.color).onChange((v) => {
+                    state.color = v;
+                    card.style.borderLeftColor = CSS_COLORS[v] || 'var(--text-muted)';
+                    updateFunctionValues();
+                })
             );
             const thickDiv = row2.createDiv({ cls: 'tikz-func-field' });
             new Setting(thickDiv).setName('Thickness').addDropdown((d) =>
-                d
-                    .addOptions(THICKNESS_OPTIONS)
-                    .setValue(state.thickness)
-                    .onChange((v) => {
-                        state.thickness = v;
-                        updateFunctionValues();
-                    })
+                d.addOptions(THICKNESS_OPTIONS).setValue(state.thickness).onChange((v) => {
+                    state.thickness = v;
+                    updateFunctionValues();
+                })
             );
 
-            // Row 3: Toggle chips
             const row3 = card.createDiv({ cls: 'tikz-func-row tikz-toggle-row' });
 
-            // Tangent input (hidden by default)
             const tangentInput = card.createDiv({ cls: 'tikz-tangent-input' });
             new Setting(tangentInput).setName('Tangent point (x)').addText((t) =>
                 t.setPlaceholder('x value').onChange((v) => {
@@ -390,22 +458,122 @@ export class TikzModal extends Modal {
                 new Setting(chip).setName(name).addToggle((t) =>
                     t.setValue(state[key] as boolean).onChange((v) => {
                         (state as any)[key] = v;
-                        if (key === 'tangent') {
-                            tangentInput.toggleClass('visible', v);
-                        }
+                        if (key === 'tangent') tangentInput.toggleClass('visible', v);
                         updateFunctionValues();
                     })
                 );
             });
         };
 
-        // Add initial card
         addFunctionCard();
 
-        // Add function button
         const addBtnDiv = tab.createDiv({ cls: 'tikz-add-func' });
         new Setting(addBtnDiv).addButton((btn) =>
             btn.setButtonText('+ Add Function').onClick(() => addFunctionCard())
+        );
+    }
+
+    private build3DFunctionCards(tab: HTMLElement) {
+        const cardsContainer = tab.createDiv({ cls: 'tikz-func-cards' });
+        const rowStates = new Map<string, Function3DParameters>();
+
+        const updateFunctionValues = () => {
+            const functions: Function3DParameters[] = [];
+            rowStates.forEach((state) => {
+                if (state.expression) {
+                    functions.push({ ...state });
+                }
+            });
+            this.settings.setValue('functions3D', functions);
+            this.requestPreviewUpdate();
+        };
+
+        const addFunctionCard = () => {
+            const rowId = `func3d-${Date.now()}`;
+            const state: Function3DParameters = {
+                expression: '',
+                xDomain: '-5:5',
+                yDomain: '-5:5',
+                color: 'blue',
+                wireframe: false,
+                opacity: 0.7,
+            };
+            rowStates.set(rowId, state);
+
+            const card = cardsContainer.createDiv({ cls: 'tikz-func-card' });
+            card.style.borderLeftColor = CSS_COLORS[state.color] || 'var(--text-muted)';
+
+            const header = card.createDiv({ cls: 'tikz-func-header' });
+            header.createSpan({ cls: 'tikz-func-label', text: `Surface ${rowStates.size}` });
+            new Setting(header).addButton((btn) =>
+                btn.setIcon('trash').setTooltip('Remove surface').onClick(() => {
+                    rowStates.delete(rowId);
+                    card.remove();
+                    updateFunctionValues();
+                })
+            );
+
+            // Expression
+            const row1 = card.createDiv({ cls: 'tikz-func-row' });
+            const exprDiv = row1.createDiv({ cls: 'tikz-func-field wide' });
+            new Setting(exprDiv).setName('f(x, y)').addText((t) =>
+                t.setPlaceholder('sin(x)*cos(y)').onChange((v) => {
+                    state.expression = v;
+                    updateFunctionValues();
+                })
+            );
+
+            // X and Y domains
+            const row2 = card.createDiv({ cls: 'tikz-func-row' });
+            const xDomDiv = row2.createDiv({ cls: 'tikz-func-field' });
+            new Setting(xDomDiv).setName('X domain').addText((t) =>
+                t.setPlaceholder('-5:5').setValue(state.xDomain).onChange((v) => {
+                    state.xDomain = v;
+                    updateFunctionValues();
+                })
+            );
+            const yDomDiv = row2.createDiv({ cls: 'tikz-func-field' });
+            new Setting(yDomDiv).setName('Y domain').addText((t) =>
+                t.setPlaceholder('-5:5').setValue(state.yDomain).onChange((v) => {
+                    state.yDomain = v;
+                    updateFunctionValues();
+                })
+            );
+
+            // Color + wireframe + opacity
+            const row3 = card.createDiv({ cls: 'tikz-func-row' });
+            const colorDiv = row3.createDiv({ cls: 'tikz-func-field' });
+            new Setting(colorDiv).setName('Color').addDropdown((d) =>
+                d.addOptions(COLOR_OPTIONS).setValue(state.color).onChange((v) => {
+                    state.color = v;
+                    card.style.borderLeftColor = CSS_COLORS[v] || 'var(--text-muted)';
+                    updateFunctionValues();
+                })
+            );
+
+            const row4 = card.createDiv({ cls: 'tikz-func-row tikz-toggle-row' });
+            const wireChip = row4.createDiv({ cls: 'tikz-toggle-chip' });
+            new Setting(wireChip).setName('Wireframe').addToggle((t) =>
+                t.setValue(state.wireframe).onChange((v) => {
+                    state.wireframe = v;
+                    updateFunctionValues();
+                })
+            );
+
+            const opacityDiv = row4.createDiv({ cls: 'tikz-func-field' });
+            new Setting(opacityDiv).setName('Opacity').addSlider((s) =>
+                s.setLimits(0.1, 1.0, 0.1).setValue(state.opacity).setDynamicTooltip().onChange((v) => {
+                    state.opacity = v;
+                    updateFunctionValues();
+                })
+            );
+        };
+
+        addFunctionCard();
+
+        const addBtnDiv = tab.createDiv({ cls: 'tikz-add-func' });
+        new Setting(addBtnDiv).addButton((btn) =>
+            btn.setButtonText('+ Add Surface').onClick(() => addFunctionCard())
         );
     }
 
@@ -436,26 +604,79 @@ export class TikzModal extends Modal {
             .setName('Grid subdivisions')
             .setDesc('Number of minor subdivisions between major grid lines')
             .addSlider((s) =>
-                s
-                    .setLimits(1, 10, 1)
-                    .setValue(this.settings.getValue('gridSize'))
-                    .setDynamicTooltip()
-                    .onChange((v) => {
-                        this.settings.setValue('gridSize', v);
-                        this.requestPreviewUpdate();
-                    })
+                s.setLimits(1, 10, 1).setValue(this.settings.getValue('gridSize')).setDynamicTooltip().onChange((v) => {
+                    this.settings.setValue('gridSize', v);
+                    this.requestPreviewUpdate();
+                })
             );
     }
 
     private buildCodeTab(container: HTMLElement) {
         const tab = this.createTabContent(container, 'Code');
-
         const textarea = document.createElement('textarea');
         textarea.className = 'tikz-code-textarea';
         textarea.readOnly = true;
         textarea.spellcheck = false;
         tab.appendChild(textarea);
         this.codeTextArea = textarea;
+    }
+
+    // --- 3D visibility ---
+
+    private update3DVisibility() {
+        const show3D = this.is3D();
+        if (this.rotationContainer) this.rotationContainer.style.display = show3D ? 'block' : 'none';
+        if (this.zAxisContainer) this.zAxisContainer.style.display = show3D ? 'block' : 'none';
+        if (this.axisStyleContainer) this.axisStyleContainer.style.display = show3D ? 'none' : 'block';
+        if (this.previewContainer) this.previewContainer.toggleClass('is-3d', show3D);
+    }
+
+    // --- Mouse drag rotation ---
+
+    private setupMouseDragRotation() {
+        const el = this.previewContainer;
+
+        el.addEventListener('mousedown', (e: MouseEvent) => {
+            if (!this.is3D()) return;
+            this.isDragging = true;
+            this.dragStartX = e.clientX;
+            this.dragStartY = e.clientY;
+            this.dragStartAzimuth = this.settings.getValue('rotationZ') ?? 45;
+            this.dragStartElevation = this.settings.getValue('rotationX') ?? 30;
+            el.style.cursor = 'grabbing';
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e: MouseEvent) => {
+            if (!this.isDragging) return;
+            const dx = e.clientX - this.dragStartX;
+            const dy = e.clientY - this.dragStartY;
+
+            // Horizontal drag → azimuth, vertical drag → elevation
+            let newAzimuth = this.dragStartAzimuth + dx * 0.5;
+            let newElevation = this.dragStartElevation - dy * 0.3;
+
+            // Wrap azimuth 0–360
+            newAzimuth = ((newAzimuth % 360) + 360) % 360;
+            // Clamp elevation 0–90
+            newElevation = Math.max(0, Math.min(90, newElevation));
+
+            this.settings.setValue('rotationZ', Math.round(newAzimuth));
+            this.settings.setValue('rotationX', Math.round(newElevation));
+
+            // Sync sliders
+            if (this.azimuthSlider) this.azimuthSlider.setValue(Math.round(newAzimuth));
+            if (this.elevationSlider) this.elevationSlider.setValue(Math.round(newElevation));
+
+            this.requestPreviewUpdate();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (this.isDragging) {
+                this.isDragging = false;
+                el.style.cursor = '';
+            }
+        });
     }
 
     // --- Action bar ---
@@ -466,7 +687,7 @@ export class TikzModal extends Modal {
         new Setting(bar)
             .addButton((btn) =>
                 btn.setButtonText('Copy TikZ Code').onClick(async () => {
-                    const code = this.settings.generateTikzCode();
+                    const code = this.getCurrentTikzCode();
                     await navigator.clipboard.writeText(code);
                     const orig = btn.buttonEl.textContent;
                     btn.setButtonText('Copied!');
@@ -483,12 +704,15 @@ export class TikzModal extends Modal {
                             new Notice('No active note to insert into');
                             return;
                         }
-                        const code = this.settings.generateTikzCode();
-                        const editor = view.editor;
-                        editor.replaceSelection('```tikz\n' + code + '\n```\n');
+                        const code = this.getCurrentTikzCode();
+                        view.editor.replaceSelection('```tikz\n' + code + '\n```\n');
                         this.close();
                     })
             );
+    }
+
+    private getCurrentTikzCode(): string {
+        return this.is3D() ? this.settings.generate3DTikzCode() : this.settings.generateTikzCode();
     }
 
     // --- Preview ---
@@ -503,8 +727,12 @@ export class TikzModal extends Modal {
 
         try {
             const config = this.settings.toRendererConfig();
-            const renderer = new SVGRenderer(config);
-            const svg = renderer.render();
+            let svg: SVGElement;
+            if (config.is3D) {
+                svg = new SVG3DRenderer(config).render();
+            } else {
+                svg = new SVGRenderer(config).render();
+            }
             this.previewContainer.appendChild(svg);
         } catch (e: any) {
             const errDiv = this.previewContainer.createDiv({ cls: 'tikz-error' });
@@ -516,7 +744,7 @@ export class TikzModal extends Modal {
 
     private updateCodeArea() {
         if (this.codeTextArea) {
-            this.codeTextArea.value = this.settings.generateTikzCode();
+            this.codeTextArea.value = this.getCurrentTikzCode();
         }
     }
 }
