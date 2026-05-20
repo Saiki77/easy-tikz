@@ -1,7 +1,7 @@
 {
 	"id": "easy-tikz",
 	"name": "Easy TikZ",
-	"version": "3.5.0",
+	"version": "3.6.0",
 	"minAppVersion": "0.15.0",
 	"description": "Visually design TikZ and pgfplots graphs with a live SVG preview. Supports 2D functions, 3D surfaces, tangents, extrema, and one-click code insertion.",
 	"author": "Saiki77",
