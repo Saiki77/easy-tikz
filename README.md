@@ -52,12 +52,12 @@ Pgfplots is powerful but the syntax is fiddly and the feedback loop is "edit, re
 ### BRAT (beta channel)
 
 1. Install the [BRAT plugin](https://github.com/TfTHacker/obsidian42-brat).
-2. Add `Saiki77/tikz-graph-help` as a beta plugin.
+2. Add `Saiki77/easy-tikz` as a beta plugin.
 3. Enable the plugin in Obsidian Settings.
 
 ### Manual install
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Saiki77/tikz-graph-help/releases).
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Saiki77/easy-tikz/releases).
 2. Place them in `<vault>/.obsidian/plugins/easy-tikz/`.
 3. Enable the plugin in Obsidian Settings.
 
