@@ -23,8 +23,11 @@ const ELEVATION_DRAG_RATE = 0.3;
 /** Step size for keyboard rotation when the preview has focus. */
 const KEYBOARD_ROTATION_STEP = 5;
 
-const TABS = ['Graph', 'Axis', 'Functions', 'Grid', 'Code'] as const;
+const TABS = ['Graph', 'Axis', 'Functions', 'Grid', 'Code', 'Reference'] as const;
 type TabName = (typeof TABS)[number];
+
+/** Tabs that share the same scrollable settings column. Clicking jumps the scroll. */
+const SETTINGS_TABS = new Set<TabName>(['Graph', 'Axis', 'Functions', 'Grid']);
 
 interface AxisRange {
     key: string;
@@ -59,6 +62,10 @@ export class TikzModal extends Modal {
     private onMouseMove: ((e: MouseEvent) => void) | null = null;
     private onMouseUp: (() => void) | null = null;
 
+    private settingsColumn: HTMLElement | null = null;
+    private sectionObserver: IntersectionObserver | null = null;
+    private suspendObserverUntil = 0;
+
     constructor(app: App) {
         super(app);
         this.settings = new SettingsManager();
@@ -91,6 +98,7 @@ export class TikzModal extends Modal {
         this.setupKeyboardRotation();
         this.buildActionBar(rightPanel);
 
+        this.setupSectionObserver();
         this.updatePreview();
     }
 
@@ -104,6 +112,11 @@ export class TikzModal extends Modal {
             this.styleEl.parentNode.removeChild(this.styleEl);
         }
         this.styleEl = null;
+        if (this.sectionObserver) {
+            this.sectionObserver.disconnect();
+            this.sectionObserver = null;
+        }
+        this.settingsColumn = null;
         this.tabContents.clear();
         this.tabButtons.clear();
     }
@@ -131,33 +144,100 @@ export class TikzModal extends Modal {
     }
 
     private switchTab(name: TabName) {
+        this.setActiveTabButton(name);
+
+        const isSettingsTab = SETTINGS_TABS.has(name);
+
+        if (isSettingsTab) {
+            if (this.settingsColumn) this.settingsColumn.style.display = '';
+            this.tabContents.forEach((content) => {
+                content.style.display = 'none';
+            });
+            const target = this.settingsColumn?.querySelector<HTMLElement>(`[data-section="${name}"]`);
+            if (target && this.settingsColumn) {
+                // Suspend the observer briefly so the smooth scroll does not
+                // race against scroll-position-based active-tab updates.
+                this.suspendObserverUntil = Date.now() + 600;
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        } else {
+            if (this.settingsColumn) this.settingsColumn.style.display = 'none';
+            this.tabContents.forEach((content, key) => {
+                content.style.display = key === name ? 'flex' : 'none';
+            });
+            if (name === 'Code') this.updateCodeArea();
+        }
+    }
+
+    private setActiveTabButton(name: TabName) {
         this.tabButtons.forEach((btn, key) => {
             const isActive = key === name;
             btn.toggleClass('active', isActive);
             btn.setAttr('aria-selected', String(isActive));
         });
-        this.tabContents.forEach((content, key) => {
-            content.style.display = key === name ? 'block' : 'none';
-        });
-        if (name === 'Code') this.updateCodeArea();
+    }
+
+    private setupSectionObserver() {
+        if (!this.settingsColumn) return;
+        const sections = this.settingsColumn.querySelectorAll<HTMLElement>('[data-section]');
+        if (!sections.length) return;
+
+        this.sectionObserver = new IntersectionObserver(
+            (entries) => {
+                if (Date.now() < this.suspendObserverUntil) return;
+                // Pick the section closest to the top of the viewport among the intersecting ones.
+                const visible = entries
+                    .filter((e) => e.isIntersecting)
+                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+                if (visible) {
+                    const name = visible.target.getAttribute('data-section') as TabName | null;
+                    if (name) this.setActiveTabButton(name);
+                }
+            },
+            {
+                root: this.settingsColumn,
+                rootMargin: '0px 0px -65% 0px',
+                threshold: [0, 0.1, 0.5, 1],
+            }
+        );
+
+        sections.forEach((s) => this.sectionObserver?.observe(s));
     }
 
     // --- Tab contents ---
 
     private buildTabs(container: HTMLElement) {
-        this.buildGraphTab(container);
-        this.buildAxisTab(container);
-        this.buildFunctionsTab(container);
-        this.buildGridTab(container);
+        // Single scrollable column shared by Graph, Axis, Functions, Grid.
+        this.settingsColumn = container.createDiv({ cls: 'tikz-settings-column' });
+
+        this.buildGraphTab(this.settingsColumn);
+        this.buildAxisTab(this.settingsColumn);
+        this.buildFunctionsTab(this.settingsColumn);
+        this.buildGridTab(this.settingsColumn);
+
+        // Standalone panels for the non-settings tabs.
         this.buildCodeTab(container);
+        this.buildReferenceTab(container);
     }
 
-    private createTabContent(container: HTMLElement, name: TabName, visible = false): HTMLElement {
-        const content = container.createDiv({ cls: 'tikz-tab-content tikz-settings-section' });
+    private createTabContent(container: HTMLElement, name: TabName, _visible = false): HTMLElement {
+        if (SETTINGS_TABS.has(name)) {
+            // Section inside the shared scroll column.
+            const section = container.createDiv({ cls: 'tikz-section tikz-settings-section' });
+            section.setAttr('data-section', name);
+            section.setAttr('id', `tikz-section-${name.toLowerCase()}`);
+            section.createEl('h3', { cls: 'tikz-section-heading', text: name });
+            return section;
+        }
+
+        // Standalone tab panel (Code, Reference) sitting next to the settings column.
+        const content = container.createDiv({ cls: 'tikz-tab-content' });
         content.setAttr('role', 'tabpanel');
         content.setAttr('id', `tikz-tabpanel-${name.toLowerCase()}`);
         content.setAttr('aria-labelledby', `tikz-tab-${name.toLowerCase()}`);
-        if (!visible) content.style.display = 'none';
+        content.style.display = 'none';
+        if (name === 'Code') content.addClass('tikz-code-panel');
+        if (name === 'Reference') content.addClass('tikz-reference');
         this.tabContents.set(name, content);
         return content;
     }
@@ -606,8 +686,18 @@ export class TikzModal extends Modal {
             );
 
         new Setting(tab)
+            .setName('Major divisions')
+            .setDesc('Approximate number of major grid cells across the X axis. The Y axis follows proportionally.')
+            .addSlider((s) =>
+                s.setLimits(2, 20, 1).setValue(this.settings.getValue('majorTickNum') ?? 8).setDynamicTooltip().onChange((v) => {
+                    this.settings.setValue('majorTickNum', v);
+                    this.requestPreviewUpdate();
+                })
+            );
+
+        new Setting(tab)
             .setName('Show minor grid')
-            .setDesc('Display minor coordinate grid lines.')
+            .setDesc('Display minor coordinate grid lines between the major ones.')
             .addToggle((t) =>
                 t.setValue(this.settings.getValue('showSmallGrid')).onChange((v) => {
                     this.settings.setValue('showSmallGrid', v);
@@ -616,8 +706,8 @@ export class TikzModal extends Modal {
             );
 
         new Setting(tab)
-            .setName('Grid subdivisions')
-            .setDesc('Number of minor subdivisions between major grid lines.')
+            .setName('Minor subdivisions')
+            .setDesc('Number of minor subdivisions between two major grid lines.')
             .addSlider((s) =>
                 s.setLimits(1, 10, 1).setValue(this.settings.getValue('gridSize')).setDynamicTooltip().onChange((v) => {
                     this.settings.setValue('gridSize', v);
@@ -629,10 +719,120 @@ export class TikzModal extends Modal {
     private buildCodeTab(container: HTMLElement) {
         const tab = this.createTabContent(container, 'Code');
         const textarea = tab.createEl('textarea', { cls: 'tikz-code-textarea' });
-        textarea.readOnly = true;
         textarea.spellcheck = false;
-        textarea.setAttr('aria-label', 'Generated TikZ code (read only)');
+        textarea.setAttr('aria-label', 'Generated TikZ code. Editable, but changes are overwritten when settings update.');
         this.codeTextArea = textarea;
+    }
+
+    private buildReferenceTab(container: HTMLElement) {
+        const tab = this.createTabContent(container, 'Reference');
+
+        const section = (title: string) => {
+            const h = tab.createEl('h3', { cls: 'tikz-ref-heading', text: title });
+            return h;
+        };
+
+        const para = (text: string) => {
+            tab.createEl('p', { cls: 'tikz-ref-para', text });
+        };
+
+        const list = (items: { name: string; desc: string }[]) => {
+            const dl = tab.createEl('dl', { cls: 'tikz-ref-list' });
+            items.forEach((item) => {
+                dl.createEl('dt', { text: item.name });
+                dl.createEl('dd', { text: item.desc });
+            });
+        };
+
+        const code = (text: string) => {
+            tab.createEl('pre', { cls: 'tikz-ref-code', text });
+        };
+
+        section('Expressions');
+        para('Use the variable x in 2D, or x and y in 3D. Expressions are JavaScript with one convenience: ^ is treated as the power operator (rewritten to **).');
+
+        section('Operators');
+        list([
+            { name: '+  -  *  /', desc: 'Standard arithmetic.' },
+            { name: '^', desc: 'Power. Equivalent to ** in JavaScript. x^2 means x squared.' },
+            { name: '( )', desc: 'Grouping. Always wrap fractions, e.g. 1/(x+1).' },
+        ]);
+
+        section('Trigonometry');
+        para('Angles are in radians. Use PI for degrees, e.g. sin(x * PI / 180).');
+        list([
+            { name: 'sin(x)  cos(x)  tan(x)', desc: 'Sine, cosine, tangent.' },
+            { name: 'asin(x)  acos(x)  atan(x)', desc: 'Inverse trig (radians).' },
+            { name: 'atan2(y, x)', desc: 'Inverse tangent of y/x with correct quadrant.' },
+            { name: 'sinh(x)  cosh(x)  tanh(x)', desc: 'Hyperbolic trig.' },
+            { name: 'asinh(x)  acosh(x)  atanh(x)', desc: 'Inverse hyperbolic.' },
+        ]);
+
+        section('Exponentials and logs');
+        list([
+            { name: 'exp(x)', desc: 'e raised to x.' },
+            { name: 'log(x)', desc: 'Natural log (base e).' },
+            { name: 'log2(x)  log10(x)', desc: 'Logs base 2 and 10.' },
+            { name: 'pow(a, b)', desc: 'Same as a^b. Useful when one operand is itself complex.' },
+        ]);
+
+        section('Roots and rounding');
+        list([
+            { name: 'sqrt(x)  cbrt(x)', desc: 'Square root, cube root.' },
+            { name: 'abs(x)  sign(x)', desc: 'Absolute value, sign (-1, 0, or 1).' },
+            { name: 'floor(x)  ceil(x)  round(x)  trunc(x)', desc: 'Rounding helpers.' },
+            { name: 'min(a, b)  max(a, b)  hypot(a, b)', desc: 'Pairwise helpers.' },
+        ]);
+
+        section('Constants');
+        list([
+            { name: 'PI', desc: '3.14159...' },
+            { name: 'E', desc: '2.71828...' },
+            { name: 'LN2  LN10  LOG2E  LOG10E  SQRT2', desc: 'The usual companions.' },
+        ]);
+
+        section('Examples');
+        code(
+            'x^2                       parabola\n' +
+            'x^3 - 3*x                 cubic with two extrema\n' +
+            'sin(x)                    sine wave\n' +
+            'tanh(x)                   smooth step\n' +
+            'sin(x) * exp(-x/5)        damped oscillation\n' +
+            '1 / (1 + x^2)             bell curve (Cauchy)\n' +
+            'sqrt(1 - x^2)             upper half-circle (domain -1:1)\n' +
+            'sin(x*PI/180)             sine of an angle in degrees'
+        );
+
+        section('Domain');
+        para('A domain is min:max, e.g. -10:10 or 0:6.28. Min must be strictly less than max.');
+
+        section('Tangent point');
+        para('A single number inside the domain, e.g. 1.5. Enable Tangent on a function card to expose the field.');
+
+        section('3D surfaces');
+        para('Use both x and y. Each axis has its own domain field.');
+        code(
+            'sin(x) * cos(y)\n' +
+            'x^2 + y^2                 paraboloid\n' +
+            'sin(sqrt(x^2 + y^2))      ripple pattern\n' +
+            'exp(-(x^2 + y^2) / 4)     gaussian bump'
+        );
+
+        section('Tips');
+        list([
+            {
+                name: 'Math.* still works.',
+                desc: 'Anything from the JavaScript Math namespace is also accessible explicitly, e.g. Math.tan(x). The bare names above are just shortcuts.',
+            },
+            {
+                name: 'Errors surface as a notice.',
+                desc: 'If an expression fails to evaluate, you will see a transient toast at the top of the screen. The Code tab still updates.',
+            },
+            {
+                name: 'Asymptotes are clipped.',
+                desc: 'Values whose absolute size exceeds 10x the Y axis range are dropped, so tan(x) near pi/2 will not blow out the chart.',
+            },
+        ]);
     }
 
     private update3DVisibility() {
@@ -756,8 +956,19 @@ export class TikzModal extends Modal {
             );
     }
 
-    private getCurrentTikzCode(): string {
+    /** Fresh TikZ code generated from the current settings. */
+    private generateTikzCodeFresh(): string {
         return this.is3D() ? this.settings.generate3DTikzCode() : this.settings.generateTikzCode();
+    }
+
+    /**
+     * Returns the code to copy or insert. Uses the textarea value so user
+     * tweaks survive, falling back to a fresh render if the textarea is empty.
+     */
+    private getCurrentTikzCode(): string {
+        const edited = this.codeTextArea?.value;
+        if (edited && edited.trim().length > 0) return edited;
+        return this.generateTikzCodeFresh();
     }
 
     private requestPreviewUpdate() {
@@ -783,8 +994,9 @@ export class TikzModal extends Modal {
     }
 
     private updateCodeArea() {
-        if (this.codeTextArea) {
-            this.codeTextArea.value = this.getCurrentTikzCode();
-        }
+        if (!this.codeTextArea) return;
+        // Don't trample user edits while they're actively typing in the textarea.
+        if (document.activeElement === this.codeTextArea) return;
+        this.codeTextArea.value = this.generateTikzCodeFresh();
     }
 }

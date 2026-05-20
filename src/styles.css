@@ -5,8 +5,8 @@
     flex-direction: column;
     height: 80vh;
     max-height: 80vh;
-    width: 90vw !important;
-    max-width: 1200px !important;
+    width: 92vw !important;
+    max-width: 1400px !important;
 }
 
 .tikz-modal .modal-content {
@@ -29,7 +29,7 @@
     min-width: 380px;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid var(--background-modifier-border);
+    border-right: 1px solid color-mix(in srgb, var(--background-modifier-border) 70%, transparent);
     overflow: hidden;
 }
 
@@ -44,48 +44,82 @@
 /* Tab bar */
 .tikz-tab-bar {
     display: flex;
-    gap: 2px;
-    padding: 10px 16px 0;
-    border-bottom: 1px solid var(--background-modifier-border);
-    background: var(--background-secondary);
+    gap: 4px;
+    padding: 12px 20px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 70%, transparent);
+    background: var(--background-primary);
     flex-shrink: 0;
 }
 
 .tikz-tab-btn {
-    padding: 8px 16px;
+    padding: 10px 20px;
     border: none;
-    background: none;
+    background: transparent;
+    box-shadow: none;
     color: var(--text-muted);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     border-bottom: 2px solid transparent;
-    border-radius: 4px 4px 0 0;
-    transition: all 0.15s ease;
+    border-radius: 6px 6px 0 0;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
     white-space: nowrap;
+    margin: 0;
+    line-height: 1.2;
 }
 
 .tikz-tab-btn:hover {
     color: var(--text-normal);
     background: var(--background-modifier-hover);
+    box-shadow: none;
 }
 
 .tikz-tab-btn.active {
     color: var(--interactive-accent);
     border-bottom-color: var(--interactive-accent);
-    background: var(--background-primary);
+    background: transparent;
+    box-shadow: none;
 }
 
 .tikz-tab-btn:focus-visible {
-    outline: 2px solid var(--interactive-accent);
-    outline-offset: -2px;
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--interactive-accent);
 }
 
-/* Tab content */
+/* Tab content (for Code and Reference) */
 .tikz-tab-content {
     flex: 1;
     overflow-y: auto;
     padding: 20px 24px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Settings column: continuous scroll across Graph, Axis, Functions, Grid */
+.tikz-settings-column {
+    flex: 1;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+}
+
+.tikz-section {
+    padding: 24px 24px 32px;
+    border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 50%, transparent);
+}
+
+.tikz-section:last-child {
+    border-bottom: none;
+}
+
+.tikz-section-heading {
+    margin: 0 0 18px;
+    padding: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-normal);
+    letter-spacing: -0.01em;
+    line-height: 1.2;
 }
 
 /* Preview area */
@@ -132,9 +166,9 @@
 .tikz-action-bar {
     display: flex;
     gap: 8px;
-    padding: 12px 20px;
-    border-top: 1px solid var(--background-modifier-border);
-    background: var(--background-secondary);
+    padding: 14px 24px;
+    border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 70%, transparent);
+    background: var(--background-primary);
     flex-shrink: 0;
     justify-content: flex-end;
 }
@@ -160,7 +194,7 @@
 .tikz-func-card {
     border: 1px solid var(--background-modifier-border);
     border-left: 4px solid var(--text-muted);
-    border-radius: 8px;
+    border-radius: 0 8px 8px 0;
     padding: 16px;
     background: var(--background-secondary);
     transition: border-left-color 0.2s ease;
@@ -286,48 +320,66 @@
     padding: 0;
 }
 
-/* Code tab */
+/* Code tab: textarea fills the whole panel, no padding around it */
+
+.tikz-tab-content.tikz-code-panel {
+    padding: 0;
+}
 
 .tikz-code-textarea {
+    flex: 1;
     width: 100%;
-    min-height: 350px;
+    min-height: 0;
     font-family: var(--font-monospace);
-    font-size: 12px;
-    padding: 12px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 6px;
-    background: var(--background-primary-alt);
+    font-size: 12.5px;
+    padding: 18px 22px;
+    border: none;
+    border-radius: 0;
+    background: var(--background-primary);
     color: var(--text-normal);
-    resize: vertical;
-    line-height: 1.5;
+    resize: none;
+    line-height: 1.55;
+    box-shadow: none;
 }
 
 .tikz-code-textarea:focus {
-    outline: 1px solid var(--interactive-accent);
+    outline: none;
+    box-shadow: inset 2px 0 0 var(--interactive-accent);
 }
 
 /* Axis tab */
 
 .tikz-range-group {
     display: flex;
-    gap: 8px;
+    gap: 20px;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
 }
 
 .tikz-range-group > div {
     flex: 1;
+    min-width: 0;
 }
 
 .tikz-range-group .setting-item {
     border: none;
+    padding: 6px 0;
+}
+
+.tikz-range-group .setting-item-name {
+    white-space: nowrap;
+}
+
+.tikz-range-group .setting-item-control input[type="text"] {
+    width: 100%;
+    min-width: 80px;
 }
 
 .tikz-range-separator {
     color: var(--text-muted);
     font-size: 13px;
     flex-shrink: 0;
-    padding-top: 8px;
+    padding-top: 4px;
 }
 
 /* 3D controls */
@@ -342,4 +394,68 @@
 
 .tikz-settings-section .setting-item {
     padding: 10px 0;
+}
+
+/* Reference tab */
+
+.tikz-reference {
+    color: var(--text-normal);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.tikz-ref-heading {
+    margin: 22px 0 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-normal);
+    letter-spacing: 0.01em;
+}
+
+.tikz-reference > .tikz-ref-heading:first-of-type {
+    margin-top: 0;
+}
+
+.tikz-ref-para {
+    margin: 0 0 12px;
+    color: var(--text-muted);
+}
+
+.tikz-ref-list {
+    margin: 0 0 14px;
+    padding: 0;
+}
+
+.tikz-ref-list dt {
+    font-family: var(--font-monospace);
+    font-size: 12px;
+    color: var(--text-normal);
+    background: var(--background-modifier-form-field);
+    border-radius: 4px;
+    padding: 2px 6px;
+    display: inline-block;
+    margin-top: 8px;
+}
+
+.tikz-ref-list dt:first-child {
+    margin-top: 0;
+}
+
+.tikz-ref-list dd {
+    margin: 4px 0 0 4px;
+    color: var(--text-muted);
+}
+
+.tikz-ref-code {
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    background: var(--background-primary-alt);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    font-family: var(--font-monospace);
+    font-size: 12px;
+    color: var(--text-normal);
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.5;
 }

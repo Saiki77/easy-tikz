@@ -19,8 +19,9 @@ const SAMPLES_PER_FUNCTION = 500;
  */
 const Y_CLAMP_FACTOR = 10;
 
-const TARGET_TICKS_X = 8;
-const TARGET_TICKS_Y = 6;
+/** Default target tick counts used when no user override is supplied. */
+const DEFAULT_TARGET_TICKS_X = 8;
+const Y_TICK_RATIO = 0.75;
 
 export class SVGRenderer {
     private config: RendererConfig;
@@ -111,8 +112,10 @@ export class SVGRenderer {
         if (!this.config.gridMajor && !this.config.gridMinor) return;
 
         const { xmin, xmax, ymin, ymax } = this.config;
-        const majorInterval = niceInterval(xmax - xmin, TARGET_TICKS_X);
-        const majorIntervalY = niceInterval(ymax - ymin, TARGET_TICKS_Y);
+        const targetX = this.config.majorTickNum || DEFAULT_TARGET_TICKS_X;
+        const targetY = Math.max(2, Math.round(targetX * Y_TICK_RATIO));
+        const majorInterval = niceInterval(xmax - xmin, targetX);
+        const majorIntervalY = niceInterval(ymax - ymin, targetY);
 
         const gridGroup = this.el('g', { class: 'tikz-grid' });
 
@@ -189,8 +192,10 @@ export class SVGRenderer {
         const { xmin, xmax, ymin, ymax } = this.config;
         const axisGroup = this.el('g', { class: 'tikz-axes' });
 
-        const majorIntervalX = niceInterval(xmax - xmin, TARGET_TICKS_X);
-        const majorIntervalY = niceInterval(ymax - ymin, TARGET_TICKS_Y);
+        const targetX = this.config.majorTickNum || DEFAULT_TARGET_TICKS_X;
+        const targetY = Math.max(2, Math.round(targetX * Y_TICK_RATIO));
+        const majorIntervalX = niceInterval(xmax - xmin, targetX);
+        const majorIntervalY = niceInterval(ymax - ymin, targetY);
 
         if (this.config.axisMiddle) {
             const originX = this.toScreenX(0);

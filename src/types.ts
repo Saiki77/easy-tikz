@@ -57,6 +57,7 @@ export interface RendererConfig {
     gridMajor: boolean;
     gridMinor: boolean;
     minorTickNum: number;
+    majorTickNum: number;
     functions: FunctionParameters[];
     is3D: boolean;
     zmin: number;

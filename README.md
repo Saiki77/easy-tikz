@@ -84,21 +84,16 @@ Settings carry over.
 4. In 3D mode, drag the preview to rotate, or focus it and use the arrow keys.
 5. Click **Copy TikZ code** or **Insert into note** when done.
 
-### 2D function syntax
+### Function syntax
 
-Use `x` as the variable. Expressions are JavaScript style:
+Use `x` (2D) or `x` and `y` (3D). `^` is the power operator. All `Math.*` helpers are available as bare names, plus the constants `PI` and `E`.
 
-- `x^2`, `x^3 - 3*x`, `1/x`
-- `Math.sin(x)`, `Math.cos(x)`, `Math.exp(x)`
-- Combinations: `Math.sin(x) * Math.exp(-x/5)`
+- `x^2`, `x^3 - 3*x`, `1/(1 + x^2)`
+- `sin(x)`, `cos(x)`, `tan(x)`, `tanh(x)`, `exp(x)`, `log(x)`, `sqrt(x)`
+- Combinations: `sin(x) * exp(-x/5)`
+- 3D: `sin(x) * cos(y)`, `x^2 + y^2`, `sin(sqrt(x^2 + y^2))`
 
-### 3D surface syntax
-
-Use `x` and `y`:
-
-- `Math.sin(x) * Math.cos(y)`
-- `x^2 + y^2`
-- `Math.sin(Math.sqrt(x^2 + y^2))`
+The Reference tab inside the modal lists everything supported, with examples.
 
 ## Permissions
 

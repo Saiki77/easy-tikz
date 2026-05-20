@@ -11,15 +11,34 @@ const DERIVATIVE_STEP = 0.0001;
 const EXTREMA_SAMPLES = 100;
 
 /**
+ * Bare names from Math made available inside expressions so users can write
+ * `tan(x)` instead of `Math.tan(x)`. Constants `PI` and `E` are exposed too.
+ * The full `Math` object is still accessible for anything not listed here.
+ */
+const MATH_PRELUDE =
+    'const {' +
+    'sin,cos,tan,asin,acos,atan,atan2,' +
+    'sinh,cosh,tanh,asinh,acosh,atanh,' +
+    'exp,log,log2,log10,' +
+    'sqrt,cbrt,pow,abs,sign,' +
+    'floor,ceil,round,trunc,' +
+    'min,max,hypot,' +
+    'PI,E,LN2,LN10,LOG2E,LOG10E,SQRT2' +
+    '}=Math;';
+
+/**
  * Compile a math expression of one or two variables into a callable function.
- * Supports `^` as the power operator (rewritten to `**`).
+ * Supports `^` as the power operator (rewritten to `**`) and exposes the
+ * usual Math functions as bare names via the prelude.
  */
 function compile1D(expression: string): (x: number) => number {
-    return new Function('x', `return ${expression.replace(/\^/g, '**')}`) as (x: number) => number;
+    const body = expression.replace(/\^/g, '**');
+    return new Function('x', `${MATH_PRELUDE}return (${body});`) as (x: number) => number;
 }
 
 function compile2D(expression: string): (x: number, y: number) => number {
-    return new Function('x', 'y', `return ${expression.replace(/\^/g, '**')}`) as (x: number, y: number) => number;
+    const body = expression.replace(/\^/g, '**');
+    return new Function('x', 'y', `${MATH_PRELUDE}return (${body});`) as (x: number, y: number) => number;
 }
 
 export class MathHelper {

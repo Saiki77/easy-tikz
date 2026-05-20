@@ -20,8 +20,8 @@ const VIEWPORT_SCALE = 0.28;
 /** Surface sampling resolution. Higher numbers give smoother surfaces but slow the live preview. */
 const GRID_SAMPLES = 40;
 
-/** Target number of major ticks along each 3D axis. */
-const TARGET_TICKS = 5;
+/** Default target number of major ticks per 3D axis. */
+const DEFAULT_TARGET_TICKS = 5;
 
 interface Quad {
     points: { sx: number; sy: number }[];
@@ -358,7 +358,8 @@ export class SVG3DRenderer {
         fixedA: number,
         fixedB: number
     ) {
-        const interval = niceInterval(max - min, TARGET_TICKS);
+        const target = this.config.majorTickNum ? Math.max(2, Math.round(this.config.majorTickNum * 0.6)) : DEFAULT_TARGET_TICKS;
+        const interval = niceInterval(max - min, target);
         const start = Math.ceil(min / interval) * interval;
 
         for (let v = start; v <= max; v += interval) {

@@ -259,6 +259,8 @@ export class SettingsManager {
         this.values.set('rotationX', 30);
         this.values.set('rotationZ', 45);
         this.values.set('functions3D', []);
+        // Grid density (live preview only; pgfplots picks its own ticks unless told otherwise).
+        this.values.set('majorTickNum', 8);
     }
 
     /** Look up the value for a setting id. Returns `undefined` if absent. */
@@ -312,6 +314,7 @@ export class SettingsManager {
             gridMajor: this.getValue('showLargeGrid') ?? false,
             gridMinor: this.getValue('showSmallGrid') ?? false,
             minorTickNum: this.getValue('gridSize') ?? 5,
+            majorTickNum: this.getValue('majorTickNum') ?? 8,
             functions: this.getValue('functions') || [],
             is3D: this.getValue('dimension') ?? false,
             zmin: parseFloat(this.getValue('zmin')) || -5,
