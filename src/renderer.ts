@@ -426,19 +426,26 @@ export class SVGRenderer {
             const cssColor = COLOR_MAP[func.color] || func.color;
             const strokeWidth = THICKNESS_MAP[func.thickness] || 1.5;
 
-            const isPolar = this.config.coordinateSystem === 'polar';
+            const isParametric = !!func.parametric;
+            const isPolar = !isParametric && this.config.coordinateSystem === 'polar';
 
             let domMin: number;
             let domMax: number;
             let evalFn: (x: number) => number;
+            let evalFnY: ((t: number) => number) | null = null;
             try {
                 [domMin, domMax] = MathHelper.parseDomain(func.domain);
-                // Polar uses `theta` as the variable; rewrite to `x` so the
-                // compile cache stays unified.
-                const exprToCompile = isPolar
-                    ? func.expression.replace(/\btheta\b/g, 'x')
-                    : func.expression;
-                evalFn = MathHelper.compile1D(exprToCompile);
+                if (isParametric) {
+                    // x(t) and y(t). Replace `t` with `x` so the compile cache
+                    // can reuse expressions across functions.
+                    if (!func.expressionY) throw new Error('y(t) is empty');
+                    evalFn = MathHelper.compile1D(func.expression.replace(/\bt\b/g, 'x'));
+                    evalFnY = MathHelper.compile1D(func.expressionY.replace(/\bt\b/g, 'x'));
+                } else if (isPolar) {
+                    evalFn = MathHelper.compile1D(func.expression.replace(/\btheta\b/g, 'x'));
+                } else {
+                    evalFn = MathHelper.compile1D(func.expression);
+                }
             } catch {
                 continue;
             }
@@ -461,7 +468,16 @@ export class SVGRenderer {
             const ys = new Float64Array(sampleCount);
             const step = (domMax - domMin) / SAMPLES_PER_FUNCTION;
             try {
-                if (isPolar) {
+                if (isParametric && evalFnY) {
+                    // Two callables: x(t), y(t).
+                    for (let i = 0; i < sampleCount; i++) {
+                        const t = domMin + i * step;
+                        const x = evalFn(t);
+                        const y = evalFnY(t);
+                        xs[i] = x === x && x !== Infinity && x !== -Infinity ? x : NaN;
+                        ys[i] = y === y && y !== Infinity && y !== -Infinity ? y : NaN;
+                    }
+                } else if (isPolar) {
                     // The user's domain is in theta. Evaluate r = f(theta), then
                     // emit Cartesian (r*cos(theta), r*sin(theta)) so the existing
                     // path-builder code stays unchanged.

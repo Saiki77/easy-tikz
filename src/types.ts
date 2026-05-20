@@ -23,6 +23,9 @@ export interface FunctionParameters {
     tangentPoint: string;
     extrema: boolean;
     thickness: string;
+    /** When true, `expression` is x(t) and `expressionY` is y(t). Domain is t-range. */
+    parametric: boolean;
+    expressionY: string;
 }
 
 export interface TikzSetting {

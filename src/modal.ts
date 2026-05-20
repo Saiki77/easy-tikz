@@ -599,6 +599,8 @@ export class TikzModal extends Modal {
                 extrema: false,
                 color: 'black',
                 thickness: 'thin',
+                parametric: false,
+                expressionY: '',
             };
             rowStates.set(rowId, state);
 
@@ -748,6 +750,19 @@ export class TikzModal extends Modal {
 
             const row3 = card.createDiv({ cls: 'tikz-func-row tikz-toggle-row' });
 
+            // y(t) field for parametric mode. Hidden by default, revealed by
+            // the Parametric toggle below.
+            const parametricInput = card.createDiv({ cls: 'tikz-tangent-input' });
+            new Setting(parametricInput)
+                .setName('y(t)')
+                .setDesc('Second component when parametric. The Expression field above becomes x(t). Domain is the t range.')
+                .addText((t) =>
+                    t.setPlaceholder('sin(t)').onChange((v) => {
+                        state.expressionY = v;
+                        updateFunctionValues();
+                    })
+                );
+
             const tangentInput = card.createDiv({ cls: 'tikz-tangent-input' });
             new Setting(tangentInput)
                 .setName('Tangent point (x)')
@@ -805,13 +820,14 @@ export class TikzModal extends Modal {
                         })
                 );
 
-            type BooleanKey = 'showLegend' | 'fill' | 'tangent' | 'dashed' | 'extrema';
+            type BooleanKey = 'showLegend' | 'fill' | 'tangent' | 'dashed' | 'extrema' | 'parametric';
             const toggles: { name: string; key: BooleanKey }[] = [
                 { name: 'Legend', key: 'showLegend' },
                 { name: 'Fill', key: 'fill' },
                 { name: 'Tangent', key: 'tangent' },
                 { name: 'Dashed', key: 'dashed' },
                 { name: 'Extrema', key: 'extrema' },
+                { name: 'Parametric', key: 'parametric' },
             ];
 
             toggles.forEach(({ name, key }) => {
@@ -821,6 +837,7 @@ export class TikzModal extends Modal {
                         state[key] = v;
                         if (key === 'tangent') tangentInput.toggleClass('visible', v);
                         if (key === 'fill') fillOptions.toggleClass('visible', v);
+                        if (key === 'parametric') parametricInput.toggleClass('visible', v);
                         updateFunctionValues();
                     })
                 );
@@ -1341,6 +1358,19 @@ export class TikzModal extends Modal {
 
         section('Extrema');
         para('Enable the Extrema toggle to scan the domain for local minima and maxima. Detected points are marked with a dot and labelled "min" or "max". Resolution is 100 samples across the domain, so very sharp features inside a wide domain might be missed.');
+
+        section('Parametric curves');
+        para('Enable the Parametric toggle on a 2D function card to plot a parametric curve. The Expression field becomes x(t), a new y(t) field appears, and the Domain field is now the t range (default `0:2*PI`). Both components can use any Math.* function and the constants PI, E. The exported TikZ emits `\\addplot[parametric, ...]`.');
+        code(
+            'x(t) = sin(3*t)             Lissajous (3:4)    domain 0:2*PI\n' +
+            'y(t) = sin(4*t)\n\n' +
+            'x(t) = cos(t) * (1 + 0.3*cos(8*t))   epicycloid   domain 0:2*PI\n' +
+            'y(t) = sin(t) * (1 + 0.3*cos(8*t))\n\n' +
+            'x(t) = t                     classic curve      domain -2:2\n' +
+            'y(t) = t^3 - 3*t\n\n' +
+            'x(t) = cos(t)                circle             domain 0:2*PI\n' +
+            'y(t) = sin(t)'
+        );
 
         section('Polar coordinates');
         para('On the Graph tab, set Coordinate system to "Polar". The Functions tab\'s expression is then interpreted as r(theta) and the domain is the theta range in radians. The preview transforms to Cartesian internally; the exported TikZ uses a parametric `\\addplot ({r*cos(deg(\\t))}, {r*sin(deg(\\t))})` and adds `axis equal` so circles stay circular. You can write the variable as `theta` or `x`; both are accepted.');

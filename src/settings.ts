@@ -313,14 +313,16 @@ export class SettingsManager {
             if (setting.id === 'gridSize' && !this.getValue('showSmallGrid')) return;
             if ((setting.id === 'axis_label_x' || setting.id === 'axis_label_y') && !this.getValue('show_axis_label'))
                 return;
-            // For polar mode emit a parametric Cartesian \addplot per function.
-            if (setting.id === 'functions' && isPolar) {
-                code += this.generatePolarFunctionsCode();
+            // Functions are emitted by our own per-function method so polar and
+            // parametric branches stay in one place.
+            if (setting.id === 'functions') {
+                code += this.generate2DFunctionsCode(isPolar);
                 return;
             }
-            // Inject `axis equal,` so the polar plot stays circular. This goes
-            // right before axis_allaround's closing `\n]` so it lands inside
-            // the axis options block.
+            // Inject `axis equal,` so the polar plot stays circular. Only
+            // matters when at least one function is non-parametric (polar
+            // coordinate system applies). Parametric plots already fix their
+            // own coordinates so it does no harm.
             if (setting.id === 'axis_allaround' && isPolar) {
                 code += '\n  axis equal,';
             }
@@ -339,25 +341,42 @@ export class SettingsManager {
     }
 
     /**
-     * Emit each 2D function as a parametric Cartesian \addplot:
-     *   \addplot[domain=...] ({r*cos(deg(t))}, {r*sin(deg(t))});
-     * where r is the user's expression with theta and x substituted to the
-     * pgfplots variable \t. This avoids the deg/rad ambiguity of polaraxis
-     * and works inside the existing axis environment.
+     * Emit each 2D function with the right code path:
+     *  - parametric → `\addplot[parametric, domain=...] ({x(t)}, {y(t)})`
+     *  - polar mode (non-parametric) → `\addplot[...] ({r*cos(deg(\t))}, {r*sin(deg(\t))})`
+     *  - otherwise → reuse the original cartesian code (with tangent/extrema).
+     * Parametric beats polar at the per-function level.
      */
-    private generatePolarFunctionsCode(): string {
+    private generate2DFunctionsCode(isPolar: boolean): string {
         const funcs: FunctionParameters[] = this.getValue('functions') || [];
         let out = '';
         for (const func of funcs) {
             if (!func.expression || !func.domain) continue;
-            const expr = func.expression.replace(/\b(?:theta|x)\b/g, '\\t');
-            const styleParts: string[] = [];
-            if (func.dashed) styleParts.push('dashed');
-            styleParts.push(func.color);
-            styleParts.push(func.thickness);
-            out += `\n\\addplot[domain=${func.domain}, variable=\\t, ${styleParts.join(',')}, samples=300] ({(${expr})*cos(deg(\\t))}, {(${expr})*sin(deg(\\t))});`;
-            if (func.showLegend) {
-                out += `\n\\addlegendentry{\\(r = ${func.expression}\\)}`;
+            if (func.parametric) {
+                if (!func.expressionY) continue;
+                const styleParts: string[] = [];
+                if (func.dashed) styleParts.push('dashed');
+                styleParts.push(func.color);
+                styleParts.push(func.thickness);
+                out += `\n\\addplot[parametric, domain=${func.domain}, ${styleParts.join(',')}, samples=300] ({${func.expression}}, {${func.expressionY}});`;
+                if (func.showLegend) {
+                    out += `\n\\addlegendentry{\\((${func.expression},\\ ${func.expressionY})\\)}`;
+                }
+            } else if (isPolar) {
+                const expr = func.expression.replace(/\b(?:theta|x)\b/g, '\\t');
+                const styleParts: string[] = [];
+                if (func.dashed) styleParts.push('dashed');
+                styleParts.push(func.color);
+                styleParts.push(func.thickness);
+                out += `\n\\addplot[domain=${func.domain}, variable=\\t, ${styleParts.join(',')}, samples=300] ({(${expr})*cos(deg(\\t))}, {(${expr})*sin(deg(\\t))});`;
+                if (func.showLegend) {
+                    out += `\n\\addlegendentry{\\(r = ${func.expression}\\)}`;
+                }
+            } else {
+                // Cartesian non-parametric: reuse the original code path (which
+                // also adds tangent and extrema annotations).
+                const setting = TIKZ_SETTINGS.find((s) => s.id === 'functions');
+                if (setting) out += setting.insertText([func]);
             }
         }
         return out;

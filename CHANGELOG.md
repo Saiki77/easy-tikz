@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.12.0] - 2026-05-21
+
+### Added
+
+- **Parametric curves (2D).** Each function card gains a Parametric toggle. When on, the Expression field becomes x(t), a y(t) field appears, and the Domain field is now the t range. Both components can use the full Math.* suite. The exported TikZ emits `\addplot[parametric, ...]({x(t)}, {y(t)})`. Parametric overrides polar at the per-function level.
+- Reference tab gains a Parametric section with copy-ready recipes: Lissajous figures, epicycloids, classic cubic, circle.
+
 ## [3.11.0] - 2026-05-21
 
 ### Added
