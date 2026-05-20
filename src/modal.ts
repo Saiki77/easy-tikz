@@ -1,4 +1,4 @@
-import { Modal, Setting, SliderComponent, MarkdownView, Notice, App } from 'obsidian';
+import { Modal, Setting, SliderComponent, TextComponent, MarkdownView, Notice, App } from 'obsidian';
 import { FunctionParameters, Function3DParameters } from './types';
 import { SettingsManager } from './settings';
 import { SVGRenderer } from './renderer';
@@ -22,6 +22,15 @@ const ELEVATION_DRAG_RATE = 0.3;
 
 /** Step size for keyboard rotation when the preview has focus. */
 const KEYBOARD_ROTATION_STEP = 5;
+
+/**
+ * Padding the SVG renderers reserve around the plot area. Mirrored here so
+ * the modal can map cursor positions back to math coordinates for zoom/pan.
+ */
+const RENDERER_PADDING = { top: 45, right: 30, bottom: 45, left: 55 };
+
+/** Scroll-wheel zoom factor per notch. > 1 zooms out, < 1 zooms in. */
+const WHEEL_ZOOM_FACTOR = 1.15;
 
 const TABS = ['Graph', 'Axis', 'Functions', 'Grid', 'Code', 'Reference'] as const;
 type TabName = (typeof TABS)[number];
@@ -57,6 +66,12 @@ export class TikzModal extends Modal {
     private dragStartY = 0;
     private dragStartAzimuth = 0;
     private dragStartElevation = 0;
+    private dragStartXmin = 0;
+    private dragStartXmax = 0;
+    private dragStartYmin = 0;
+    private dragStartYmax = 0;
+
+    private rangeInputs: Map<string, TextComponent> = new Map();
 
     private styleEl: HTMLStyleElement | null = null;
     private onMouseMove: ((e: MouseEvent) => void) | null = null;
@@ -109,6 +124,7 @@ export class TikzModal extends Modal {
         if (this.onMouseUp) window.removeEventListener('mouseup', this.onMouseUp);
         this.onMouseMove = null;
         this.onMouseUp = null;
+        this.rangeInputs.clear();
         if (this.styleEl && this.styleEl.parentNode) {
             this.styleEl.parentNode.removeChild(this.styleEl);
         }
@@ -322,6 +338,19 @@ export class TikzModal extends Modal {
                 })
             );
 
+        new Setting(tab)
+            .setName('Preview size')
+            .setDesc('Width of the live preview, in pixels. Does not affect the exported TikZ dimensions. Scroll on the preview to zoom and drag to pan.')
+            .addSlider((s) =>
+                s.setLimits(400, 1400, 20)
+                    .setValue(this.settings.getValue('previewSize') ?? 760)
+                    .setDynamicTooltip()
+                    .onChange((v) => {
+                        this.settings.setValue('previewSize', v);
+                        this.requestPreviewUpdate();
+                    })
+            );
+
         this.rotationContainer = tab.createDiv({ cls: 'tikz-3d-controls' });
 
         new Setting(this.rotationContainer)
@@ -425,6 +454,7 @@ export class TikzModal extends Modal {
         fields.forEach((field, i) => {
             const wrapper = range.createDiv();
             new Setting(wrapper).setName(field.label).addText((t) => {
+                this.rangeInputs.set(field.key, t);
                 t.setPlaceholder(field.placeholder)
                     .setValue(this.settings.getValue(field.key))
                     .onChange((v) => {
@@ -863,6 +893,14 @@ export class TikzModal extends Modal {
             { name: 'Opacity', desc: 'Slider from 0.1 to 1.0. Affects the filled surface; wireframes use the opacity for stroke transparency.' },
         ]);
 
+        section('Preview (2D)');
+        para('The right-hand preview is a live SVG that always reflects the current settings. In 2D mode you can interact with it directly:');
+        list([
+            { name: 'Scroll', desc: 'Mouse wheel zooms in or out around the cursor. Zoom updates xmin/xmax/ymin/ymax, so the generated TikZ code reflects what you see.' },
+            { name: 'Drag', desc: 'Click and drag inside the preview to pan. Like zoom, this updates the axis ranges and round-trips into the code.' },
+            { name: 'Preview size slider', desc: 'On the Graph tab. Sets the live preview width in pixels. The exported TikZ size is controlled by Width and Height (cm) and stays independent.' },
+        ]);
+
         section('Camera (3D)');
         para('The Graph tab has Elevation and Azimuth sliders. You can also drag the preview to rotate, or click into the preview and use the arrow keys (5 degree steps).');
         list([
@@ -934,12 +972,21 @@ export class TikzModal extends Modal {
         const el = this.previewContainer;
 
         el.addEventListener('mousedown', (e: MouseEvent) => {
-            if (!this.is3D()) return;
+            if (e.button !== 0) return;
             this.isDragging = true;
             this.dragStartX = e.clientX;
             this.dragStartY = e.clientY;
-            this.dragStartAzimuth = this.settings.getValue('rotationZ') ?? 45;
-            this.dragStartElevation = this.settings.getValue('rotationX') ?? 30;
+
+            if (this.is3D()) {
+                this.dragStartAzimuth = this.settings.getValue('rotationZ') ?? 45;
+                this.dragStartElevation = this.settings.getValue('rotationX') ?? 30;
+            } else {
+                this.dragStartXmin = parseFloat(this.settings.getValue('xmin')) || -0.5;
+                this.dragStartXmax = parseFloat(this.settings.getValue('xmax')) || 10;
+                this.dragStartYmin = parseFloat(this.settings.getValue('ymin')) || -0.5;
+                this.dragStartYmax = parseFloat(this.settings.getValue('ymax')) || 5;
+            }
+
             el.addClass('tikz-preview-dragging');
             e.preventDefault();
         });
@@ -949,13 +996,28 @@ export class TikzModal extends Modal {
             const dx = e.clientX - this.dragStartX;
             const dy = e.clientY - this.dragStartY;
 
-            let newAzimuth = this.dragStartAzimuth + dx * AZIMUTH_DRAG_RATE;
-            let newElevation = this.dragStartElevation - dy * ELEVATION_DRAG_RATE;
-
-            newAzimuth = ((newAzimuth % 360) + 360) % 360;
-            newElevation = Math.max(0, Math.min(90, newElevation));
-
-            this.applyRotation(Math.round(newAzimuth), Math.round(newElevation));
+            if (this.is3D()) {
+                let newAzimuth = this.dragStartAzimuth + dx * AZIMUTH_DRAG_RATE;
+                let newElevation = this.dragStartElevation - dy * ELEVATION_DRAG_RATE;
+                newAzimuth = ((newAzimuth % 360) + 360) % 360;
+                newElevation = Math.max(0, Math.min(90, newElevation));
+                this.applyRotation(Math.round(newAzimuth), Math.round(newElevation));
+            } else {
+                const plot = this.getPlotMetricsFromSvg();
+                if (!plot) return;
+                const dxVb = dx * plot.scale;
+                const dyVb = dy * plot.scale;
+                const startXrange = this.dragStartXmax - this.dragStartXmin;
+                const startYrange = this.dragStartYmax - this.dragStartYmin;
+                const dxMath = -dxVb / plot.plotW * startXrange;
+                const dyMath = dyVb / plot.plotH * startYrange;
+                this.applyAxisRange(
+                    this.dragStartXmin + dxMath,
+                    this.dragStartXmax + dxMath,
+                    this.dragStartYmin + dyMath,
+                    this.dragStartYmax + dyMath
+                );
+            }
         };
 
         this.onMouseUp = () => {
@@ -967,6 +1029,106 @@ export class TikzModal extends Modal {
 
         window.addEventListener('mousemove', this.onMouseMove);
         window.addEventListener('mouseup', this.onMouseUp);
+
+        // Wheel zoom (2D only). Pan/zoom converge on the same set of axis-range settings.
+        el.addEventListener(
+            'wheel',
+            (e: WheelEvent) => {
+                if (this.is3D()) return;
+                if (e.deltaY === 0) return;
+                e.preventDefault();
+
+                const plot = this.getPlotMetricsFromSvg(e.clientX, e.clientY);
+                if (!plot) return;
+                const { xFracInPlot, yFracInPlot } = plot;
+                if (
+                    xFracInPlot < -0.05 || xFracInPlot > 1.05 ||
+                    yFracInPlot < -0.05 || yFracInPlot > 1.05
+                ) {
+                    return;
+                }
+
+                const xmin = parseFloat(this.settings.getValue('xmin')) || -0.5;
+                const xmax = parseFloat(this.settings.getValue('xmax')) || 10;
+                const ymin = parseFloat(this.settings.getValue('ymin')) || -0.5;
+                const ymax = parseFloat(this.settings.getValue('ymax')) || 5;
+                const xRange = xmax - xmin;
+                const yRange = ymax - ymin;
+
+                const cursorMx = xmin + xFracInPlot * xRange;
+                const cursorMy = ymax - yFracInPlot * yRange;
+
+                const factor = e.deltaY < 0 ? 1 / WHEEL_ZOOM_FACTOR : WHEEL_ZOOM_FACTOR;
+                const newXrange = xRange * factor;
+                const newYrange = yRange * factor;
+
+                const newXmin = cursorMx - xFracInPlot * newXrange;
+                const newXmax = newXmin + newXrange;
+                const newYmax = cursorMy + yFracInPlot * newYrange;
+                const newYmin = newYmax - newYrange;
+
+                this.applyAxisRange(newXmin, newXmax, newYmin, newYmax);
+            },
+            { passive: false }
+        );
+    }
+
+    /**
+     * Returns the rendered SVG's plot metrics plus optional cursor coordinates
+     * mapped into the SVG viewBox and into 0..1 fractions of the plot area.
+     */
+    private getPlotMetricsFromSvg(
+        clientX?: number,
+        clientY?: number
+    ): {
+        scale: number;
+        plotW: number;
+        plotH: number;
+        xFracInPlot: number;
+        yFracInPlot: number;
+    } | null {
+        const svg = this.previewContainer.querySelector('svg');
+        if (!svg) return null;
+        const rect = svg.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return null;
+        const config = this.settings.toRendererConfig();
+        const scale = config.width / rect.width;
+        const plotW = config.width - RENDERER_PADDING.left - RENDERER_PADDING.right;
+        const plotH = config.height - RENDERER_PADDING.top - RENDERER_PADDING.bottom;
+
+        let xFracInPlot = 0;
+        let yFracInPlot = 0;
+        if (clientX !== undefined && clientY !== undefined) {
+            const cursorVbX = (clientX - rect.left) * scale;
+            const cursorVbY = (clientY - rect.top) * (config.height / rect.height);
+            xFracInPlot = (cursorVbX - RENDERER_PADDING.left) / plotW;
+            yFracInPlot = (cursorVbY - RENDERER_PADDING.top) / plotH;
+        }
+
+        return { scale, plotW, plotH, xFracInPlot, yFracInPlot };
+    }
+
+    private applyAxisRange(xmin: number, xmax: number, ymin: number, ymax: number) {
+        if (!isFinite(xmin) || !isFinite(xmax) || !isFinite(ymin) || !isFinite(ymax)) return;
+        if (xmin >= xmax || ymin >= ymax) return;
+        this.settings.setValue('xmin', this.formatRange(xmin));
+        this.settings.setValue('xmax', this.formatRange(xmax));
+        this.settings.setValue('ymin', this.formatRange(ymin));
+        this.settings.setValue('ymax', this.formatRange(ymax));
+        this.refreshRangeInputs();
+        this.requestPreviewUpdate();
+    }
+
+    /** Trim trailing zeros and cap to 3 decimals so the inputs stay readable. */
+    private formatRange(value: number): string {
+        return String(parseFloat(value.toFixed(3)));
+    }
+
+    private refreshRangeInputs() {
+        for (const key of ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax']) {
+            const input = this.rangeInputs.get(key);
+            if (input) input.setValue(String(this.settings.getValue(key)));
+        }
     }
 
     private setupKeyboardRotation() {

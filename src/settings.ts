@@ -261,6 +261,8 @@ export class SettingsManager {
         this.values.set('functions3D', []);
         // Grid density (live preview only; pgfplots picks its own ticks unless told otherwise).
         this.values.set('majorTickNum', 8);
+        // Live preview size in pixels (width). Height is derived as 0.7 * width.
+        this.values.set('previewSize', 760);
     }
 
     /** Look up the value for a setting id. Returns `undefined` if absent. */
@@ -299,9 +301,12 @@ export class SettingsManager {
     }
 
     toRendererConfig(): import('./types').RendererConfig {
+        const previewSize = (this.getValue('previewSize') as number) || 760;
+        const width = Math.max(320, Math.min(1600, Math.round(previewSize)));
+        const height = Math.round(width * 0.7);
         return {
-            width: 550,
-            height: 400,
+            width,
+            height,
             xmin: parseFloat(this.getValue('xmin')) || -0.5,
             xmax: parseFloat(this.getValue('xmax')) || 10,
             ymin: parseFloat(this.getValue('ymin')) || -0.5,

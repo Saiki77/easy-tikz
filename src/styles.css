@@ -143,12 +143,11 @@
     box-shadow: 0 1px 4px color-mix(in srgb, var(--background-modifier-border) 60%, transparent);
 }
 
-.tikz-preview-area.is-3d {
+.tikz-preview-area {
     cursor: grab;
 }
 
-.tikz-preview-area.is-3d.tikz-preview-dragging,
-.tikz-preview-area.is-3d:active {
+.tikz-preview-area.tikz-preview-dragging {
     cursor: grabbing;
 }
 
