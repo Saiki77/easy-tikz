@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.10.0] - 2026-05-21
+
+### Added
+
+- **Drag annotations on the preview (2D).** Click any annotation label in the live preview and drag it to a new position. The x and y inputs in the Annotations tab update live, and the exported TikZ uses the new coordinates. Drag is clamped to the visible axis range. 3D drag is not yet supported; edit those via the input fields for now.
+
+### Changed
+
+- 2D annotation `<text>` elements now have `pointer-events: bounding-box` and a `grab` cursor, so the entire text bounding box is hittable.
+
 ## [3.9.1] - 2026-05-21
 
 ### Added

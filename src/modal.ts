@@ -98,6 +98,16 @@ export class TikzModal extends Modal {
 
     private rangeInputs: Map<string, TextComponent> = new Map();
 
+    private draggingAnnotationIdx: number | null = null;
+    private annotationCards: Array<{
+        rowId: string;
+        state: import('./types').Annotation;
+        xInput: TextComponent | null;
+        yInput: TextComponent | null;
+        zInput: TextComponent | null;
+    }> = [];
+    private annotationUpdateFn: (() => void) | null = null;
+
     private styleEl: HTMLStyleElement | null = null;
     private onMouseMove: ((e: MouseEvent) => void) | null = null;
     private onMouseUp: (() => void) | null = null;
@@ -1040,11 +1050,12 @@ export class TikzModal extends Modal {
 
         tab.createEl('p', {
             cls: 'tikz-section-blurb',
-            text: 'Add text labels at any point in the coordinate system. Annotations are rendered in the live preview and emitted as \\node commands in the exported TikZ.',
+            text: 'Add text labels at any point in the coordinate system. In 2D, drag a label in the preview to move it. Annotations are rendered in the live preview and emitted as \\node commands in the exported TikZ.',
         });
 
         const cardsContainer = tab.createDiv({ cls: 'tikz-func-cards' });
         const rowStates = new Map<string, import('./types').Annotation>();
+        this.annotationCards.length = 0;
 
         const update = () => {
             const list: import('./types').Annotation[] = [];
@@ -1054,6 +1065,7 @@ export class TikzModal extends Modal {
             this.settings.setValue('annotations', list);
             this.requestPreviewUpdate();
         };
+        this.annotationUpdateFn = update;
 
         const addCard = () => {
             const rowId = `ann-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1067,6 +1079,8 @@ export class TikzModal extends Modal {
                 anchor: 'above',
             };
             rowStates.set(rowId, state);
+            const cardEntry: typeof this.annotationCards[number] = { rowId, state, xInput: null, yInput: null, zInput: null };
+            this.annotationCards.push(cardEntry);
 
             const card = cardsContainer.createDiv({ cls: 'tikz-func-card' });
             card.style.borderLeftColor = COLOR_MAP[state.color];
@@ -1080,6 +1094,8 @@ export class TikzModal extends Modal {
                     .then((b) => b.buttonEl.setAttr('aria-label', 'Remove label'))
                     .onClick(() => {
                         rowStates.delete(rowId);
+                        const idx = this.annotationCards.indexOf(cardEntry);
+                        if (idx >= 0) this.annotationCards.splice(idx, 1);
                         card.remove();
                         update();
                     })
@@ -1096,26 +1112,29 @@ export class TikzModal extends Modal {
 
             const row2 = card.createDiv({ cls: 'tikz-func-row' });
             const xDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(xDiv).setName('x').addText((t) =>
+            new Setting(xDiv).setName('x').addText((t) => {
+                cardEntry.xInput = t;
                 t.setPlaceholder('0').setValue(state.x).onChange((v) => {
                     state.x = v;
                     update();
-                })
-            );
+                });
+            });
             const yDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(yDiv).setName('y').addText((t) =>
+            new Setting(yDiv).setName('y').addText((t) => {
+                cardEntry.yInput = t;
                 t.setPlaceholder('0').setValue(state.y).onChange((v) => {
                     state.y = v;
                     update();
-                })
-            );
+                });
+            });
             const zDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(zDiv).setName('z').addText((t) =>
+            new Setting(zDiv).setName('z').addText((t) => {
+                cardEntry.zInput = t;
                 t.setPlaceholder('0').setValue(state.z ?? '').onChange((v) => {
                     state.z = v;
                     update();
-                })
-            );
+                });
+            });
 
             const row3 = card.createDiv({ cls: 'tikz-func-row' });
             const colorDiv = row3.createDiv({ cls: 'tikz-func-field' });
@@ -1422,6 +1441,22 @@ export class TikzModal extends Modal {
 
         el.addEventListener('mousedown', (e: MouseEvent) => {
             if (e.button !== 0) return;
+
+            // Annotation drag takes priority. Only supported in 2D for now.
+            if (!this.is3D()) {
+                const target = e.target as Element | null;
+                const annoEl = target?.closest('[data-annotation-idx]') as Element | null;
+                if (annoEl) {
+                    const idx = parseInt(annoEl.getAttribute('data-annotation-idx') || '-1', 10);
+                    if (idx >= 0) {
+                        this.draggingAnnotationIdx = idx;
+                        el.addClass('tikz-preview-dragging');
+                        e.preventDefault();
+                        return;
+                    }
+                }
+            }
+
             this.isDragging = true;
             this.dragStartX = e.clientX;
             this.dragStartY = e.clientY;
@@ -1441,6 +1476,10 @@ export class TikzModal extends Modal {
         });
 
         this.onMouseMove = (e: MouseEvent) => {
+            if (this.draggingAnnotationIdx !== null) {
+                this.applyAnnotationDrag(this.draggingAnnotationIdx, e);
+                return;
+            }
             if (!this.isDragging) return;
             const dx = e.clientX - this.dragStartX;
             const dy = e.clientY - this.dragStartY;
@@ -1470,6 +1509,10 @@ export class TikzModal extends Modal {
         };
 
         this.onMouseUp = () => {
+            if (this.draggingAnnotationIdx !== null) {
+                this.draggingAnnotationIdx = null;
+                el.removeClass('tikz-preview-dragging');
+            }
             if (this.isDragging) {
                 this.isDragging = false;
                 el.removeClass('tikz-preview-dragging');
@@ -1555,6 +1598,47 @@ export class TikzModal extends Modal {
         }
 
         return { scale, plotW, plotH, xFracInPlot, yFracInPlot };
+    }
+
+    /**
+     * Update the annotation at `idx` (within the current settings.annotations
+     * array) from the cursor position. 2D only: maps the cursor through the
+     * inverse of toScreenX/toScreenY and updates both the card state and the
+     * x/y text inputs.
+     */
+    private applyAnnotationDrag(idx: number, e: MouseEvent) {
+        const plot = this.getPlotMetricsFromSvg(e.clientX, e.clientY);
+        if (!plot) return;
+        const xmin = parseFloat(this.settings.getValue('xmin')) || -0.5;
+        const xmax = parseFloat(this.settings.getValue('xmax')) || 10;
+        const ymin = parseFloat(this.settings.getValue('ymin')) || -0.5;
+        const ymax = parseFloat(this.settings.getValue('ymax')) || 5;
+        const cursorMx = xmin + plot.xFracInPlot * (xmax - xmin);
+        const cursorMy = ymax - plot.yFracInPlot * (ymax - ymin);
+        const clampedX = Math.max(xmin, Math.min(xmax, cursorMx));
+        const clampedY = Math.max(ymin, Math.min(ymax, cursorMy));
+
+        // Find the matching annotation card (idx-th card with non-empty text).
+        const nonEmpty = this.annotationCards.filter((c) => c.state.text);
+        const card = nonEmpty[idx];
+        if (!card) return;
+
+        const newX = String(parseFloat(clampedX.toFixed(3)));
+        const newY = String(parseFloat(clampedY.toFixed(3)));
+        card.state.x = newX;
+        card.state.y = newY;
+        if (card.xInput) card.xInput.setValue(newX);
+        if (card.yInput) card.yInput.setValue(newY);
+
+        // Rebuild settings.annotations from the card states (same shape as the
+        // tab's `update` callback) and use the fast render path so the drag
+        // stays smooth.
+        const list: import('./types').Annotation[] = [];
+        for (const c of this.annotationCards) {
+            if (c.state.text) list.push({ ...c.state });
+        }
+        this.settings.setValue('annotations', list);
+        this.requestPreviewUpdateFast();
     }
 
     /**

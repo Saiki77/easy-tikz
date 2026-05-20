@@ -684,7 +684,8 @@ export class SVGRenderer {
         const annotations = this.config.annotations || [];
         if (!annotations.length) return;
         const group = this.el('g', { class: 'tikz-annotations' });
-        for (const a of annotations) {
+        for (let idx = 0; idx < annotations.length; idx++) {
+            const a = annotations[idx];
             if (!a.text) continue;
             const x = parseFloat(a.x);
             const y = parseFloat(a.y);
@@ -713,7 +714,10 @@ export class SVGRenderer {
                 'font-size': fontSize,
                 'font-weight': '500',
                 'font-family': 'var(--font-text)',
+                'data-annotation-idx': String(idx),
+                'pointer-events': 'bounding-box',
             });
+            t.style.cursor = 'grab';
             t.textContent = a.text;
             group.appendChild(t);
         }
