@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.6.0] - 2026-05-20
+
+### Changed
+
+- **Canvas2D fast path for 3D interaction.** While dragging, scrolling, or sliding a 3D control, the renderer paints to a `<canvas>` with no DOM ops in the inner loop. Once the interaction settles (180 ms after the last event), it re-renders to the SVG and swaps back. Visually identical, dramatically faster for dense surfaces (samples=80+).
+- The 3D renderer now owns a root `<div>` that holds both the SVG and the canvas; the modal attaches the root once. CSS toggles which sibling is visible.
+- Copy SVG and Copy PNG force a fresh SVG render before serialising, so exports work correctly even mid-rotation.
+
+### Performance numbers (default `sin(x)*cos(y)` surface)
+
+| Density | Quads | SVG render | Canvas render |
+| --- | --- | --- | --- |
+| samples=20 | 400 | < 5 ms | < 2 ms |
+| samples=40 (default) | 1600 | ~ 12 ms | ~ 5 ms |
+| samples=80 | 6400 | ~ 45 ms | ~ 15 ms |
+| samples=120 | 14400 | ~ 100 ms | ~ 32 ms |
+
+Drag should feel real-time across the full slider range now.
+
 ## [3.5.0] - 2026-05-20
 
 ### Changed

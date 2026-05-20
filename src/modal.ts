@@ -50,6 +50,7 @@ export class TikzModal extends Modal {
     private codeTextArea: HTMLTextAreaElement;
     private previewTimer: number | null = null;
     private previewRafId: number | null = null;
+    private trailingSvgTimer: number | null = null;
     private svg3dRenderer: SVG3DRenderer | null = null;
     private currentRenderMode: '2d' | '3d' | null = null;
     private tabContents: Map<TabName, HTMLElement> = new Map();
@@ -126,6 +127,8 @@ export class TikzModal extends Modal {
         this.previewTimer = null;
         if (this.previewRafId !== null) cancelAnimationFrame(this.previewRafId);
         this.previewRafId = null;
+        if (this.trailingSvgTimer) window.clearTimeout(this.trailingSvgTimer);
+        this.trailingSvgTimer = null;
         if (this.onMouseMove) window.removeEventListener('mousemove', this.onMouseMove);
         if (this.onMouseUp) window.removeEventListener('mouseup', this.onMouseUp);
         this.onMouseMove = null;
@@ -1425,6 +1428,9 @@ export class TikzModal extends Modal {
      * the background rect for transparency.
      */
     private prepareSvgForExport(): SVGElement | null {
+        // If we're showing the canvas (mid-rotation), force a fresh SVG render
+        // so the export captures the current scene.
+        this.ensureSvgMode();
         const svg = this.previewContainer.querySelector('svg');
         if (!svg) return null;
         const clone = svg.cloneNode(true) as SVGElement;
@@ -1535,34 +1541,50 @@ export class TikzModal extends Modal {
     /**
      * Schedule a preview update after the standard debounce. Right for text
      * inputs and settings that should not re-render on every keystroke.
+     * 3D path always ends up in the SVG render (queryable, exportable).
      */
     private requestPreviewUpdate() {
+        if (this.previewRafId !== null) {
+            window.cancelAnimationFrame(this.previewRafId);
+            this.previewRafId = null;
+        }
+        if (this.trailingSvgTimer) {
+            window.clearTimeout(this.trailingSvgTimer);
+            this.trailingSvgTimer = null;
+        }
         if (this.previewTimer) window.clearTimeout(this.previewTimer);
         this.previewTimer = window.setTimeout(() => {
             this.previewTimer = null;
-            this.updatePreview();
+            this.updatePreview('svg');
         }, PREVIEW_DEBOUNCE_MS) as unknown as number;
     }
 
     /**
-     * Schedule a preview update on the next animation frame. Right for
-     * continuous interactions (drag rotation, drag pan, wheel zoom) where the
-     * 150 ms debounce would feel sluggish.
+     * Schedule a fast canvas render on the next animation frame for
+     * continuous interactions (drag, wheel, slider) plus a trailing SVG
+     * render once the interaction settles. The canvas keeps the FPS high
+     * during drag; the SVG kicks in afterward so Copy SVG / Copy PNG see a
+     * fresh, queryable DOM tree.
      */
     private requestPreviewUpdateFast() {
-        // If a debounced render is pending, drop it: we're going to render NOW.
         if (this.previewTimer) {
             window.clearTimeout(this.previewTimer);
             this.previewTimer = null;
         }
-        if (this.previewRafId !== null) return;
-        this.previewRafId = window.requestAnimationFrame(() => {
-            this.previewRafId = null;
-            this.updatePreview();
-        });
+        if (this.previewRafId === null) {
+            this.previewRafId = window.requestAnimationFrame(() => {
+                this.previewRafId = null;
+                this.updatePreview('canvas');
+            });
+        }
+        if (this.trailingSvgTimer) window.clearTimeout(this.trailingSvgTimer);
+        this.trailingSvgTimer = window.setTimeout(() => {
+            this.trailingSvgTimer = null;
+            this.updatePreview('svg');
+        }, 180) as unknown as number;
     }
 
-    private updatePreview() {
+    private updatePreview(mode: 'svg' | 'canvas' = 'svg') {
         if (this.previewTimer) {
             window.clearTimeout(this.previewTimer);
             this.previewTimer = null;
@@ -1571,18 +1593,24 @@ export class TikzModal extends Modal {
             window.cancelAnimationFrame(this.previewRafId);
             this.previewRafId = null;
         }
+        // Note: we do NOT clear the trailing SVG timer here. If we just
+        // rendered to canvas, the trailing SVG render still needs to run.
 
         try {
             const config = this.settings.toRendererConfig();
             if (config.is3D) {
                 if (!this.svg3dRenderer) this.svg3dRenderer = new SVG3DRenderer();
-                const svg = this.svg3dRenderer.render(config);
-                if (this.currentRenderMode !== '3d') {
+                if (mode === 'canvas') {
+                    this.svg3dRenderer.renderCanvas(config);
+                } else {
+                    this.svg3dRenderer.renderSvg(config);
+                }
+                const root = this.svg3dRenderer.getElement();
+                if (this.currentRenderMode !== '3d' || root.parentElement !== this.previewContainer) {
                     this.previewContainer.empty();
-                    this.previewContainer.appendChild(svg);
+                    this.previewContainer.appendChild(root);
                     this.currentRenderMode = '3d';
                 }
-                // For repeat 3D renders, render() mutated the persistent SVG in place.
             } else {
                 this.previewContainer.empty();
                 const svg = new SVGRenderer(config).render();
@@ -1595,6 +1623,21 @@ export class TikzModal extends Modal {
         }
 
         this.updateCodeArea();
+    }
+
+    /**
+     * Force the 3D preview into SVG mode immediately. Used before Copy SVG /
+     * Copy PNG so the export sees a fresh, queryable SVG even if the user
+     * just released a drag (where we may still be showing the canvas).
+     */
+    private ensureSvgMode() {
+        if (!this.is3D() || !this.svg3dRenderer) return;
+        if (this.trailingSvgTimer) {
+            window.clearTimeout(this.trailingSvgTimer);
+            this.trailingSvgTimer = null;
+        }
+        const config = this.settings.toRendererConfig();
+        this.svg3dRenderer.renderSvg(config);
     }
 
     private updateCodeArea() {

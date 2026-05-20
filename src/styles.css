@@ -150,6 +150,32 @@
     box-shadow: 0 1px 4px color-mix(in srgb, var(--background-modifier-border) 60%, transparent);
 }
 
+/* 3D renderer root: holds both SVG and canvas, swaps which is visible. */
+.tikz-3d-root {
+    position: relative;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--background-modifier-border) 60%, transparent);
+    overflow: hidden;
+}
+
+.tikz-3d-root .tikz-3d-svg,
+.tikz-3d-root .tikz-3d-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
+}
+
+.tikz-3d-root.tikz-3d-mode-svg .tikz-3d-canvas {
+    display: none;
+}
+
+.tikz-3d-root.tikz-3d-mode-canvas .tikz-3d-svg {
+    display: none;
+}
+
 .tikz-preview-area {
     cursor: grab;
 }

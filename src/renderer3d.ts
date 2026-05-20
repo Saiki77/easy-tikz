@@ -10,13 +10,10 @@ const PADDING_RIGHT = 40;
 const PADDING_BOTTOM = 40;
 const PADDING_LEFT = 40;
 
-/**
- * Fraction of the available viewport used by the projected unit cube. Anything
- * below 1.0 leaves margin for axis labels.
- */
+/** Fraction of the available viewport used by the projected unit cube. */
 const VIEWPORT_SCALE = 0.28;
 
-/** Default surface sampling resolution per axis when the function does not set its own. */
+/** Default surface sampling resolution per axis. */
 const DEFAULT_GRID_SAMPLES = 40;
 
 /** Default target number of major ticks per 3D axis. */
@@ -42,11 +39,17 @@ interface SurfaceData {
     zs: Float64Array;
 }
 
-/**
- * Lighten a color towards white based on a 0..1 parameter. Handles hex,
- * `rgb(...)`, and CSS variables. If the color cannot be parsed the original
- * string is returned unchanged.
- */
+interface AxisGeometry {
+    layer: 'back' | 'front';
+    drawX: boolean;
+    drawY: boolean;
+    drawZ: boolean;
+    origin: { sx: number; sy: number };
+    xEnd: { sx: number; sy: number };
+    yEnd: { sx: number; sy: number };
+    zEnd: { sx: number; sy: number };
+}
+
 function shadeColor(baseColor: string, t: number): string {
     const resolved = resolveCssColor(baseColor);
     const rgb = hexToRgb(resolved) || rgbStringToRgb(resolved);
@@ -59,18 +62,20 @@ function shadeColor(baseColor: string, t: number): string {
 }
 
 /**
- * Stateful 3D renderer designed for real-time camera interaction.
+ * Stateful 3D renderer with two output paths:
+ *  - `renderSvg(config)`: mutates a pool of `<polygon>` elements inside a
+ *    persistent SVG. Use for the idle / settled state where Copy SVG and
+ *    Copy PNG need a queryable DOM tree.
+ *  - `renderCanvas(config)`: paints to a `<canvas>` with no DOM ops in the
+ *    inner loop. Use during continuous interaction (drag, wheel, slider).
  *
- * Lifecycle:
- *  - `new SVG3DRenderer()` builds the SVG and its child groups once.
- *  - Each `render(config)` updates camera state, re-uses cached samples when
- *    only the camera changed, mutates pooled polygon elements in place,
- *    and clears+rebuilds the small overlay groups (axes, annotations, title).
- *
- * The returned SVGElement is the same node across calls, so the modal only
- * needs to attach it once.
+ * Both paths share the same data cache and the same project + sort pass.
+ * The renderer owns a root `<div>` that contains both the SVG and the
+ * canvas; the modal attaches the root once and the renderer toggles which
+ * sibling is visible.
  */
 export class SVG3DRenderer {
+    private root: HTMLDivElement;
     private svg: SVGSVGElement;
     private backgroundRect: SVGRectElement;
     private surfaceGroup: SVGGElement;
@@ -79,14 +84,13 @@ export class SVG3DRenderer {
     private annotationsGroup: SVGGElement;
     private titleEl: SVGTextElement;
 
-    /** Polygon pool reused across renders. Grown on demand, never shrunk. */
+    private canvas: HTMLCanvasElement;
+    private ctx: CanvasRenderingContext2D;
+
+    /** Polygon pool reused across renders. */
     private surfacePool: SVGPolygonElement[] = [];
 
-    /**
-     * Sampled data per surface index. Key encodes everything that affects the
-     * z values; if it matches the new key, we skip the function evaluation
-     * loop entirely and only re-project.
-     */
+    /** Sampled data per surface index. */
     private dataCache: Map<number, SurfaceData> = new Map();
 
     // Camera state (refreshed per render).
@@ -99,13 +103,26 @@ export class SVG3DRenderer {
     private cosE = 1;
     private sinE = 0;
 
-    // Scratch buffers for the project pass, grown lazily.
     private sxBuf = new Float64Array(0);
     private syBuf = new Float64Array(0);
     private depthBuf = new Float64Array(0);
 
+    /** Most recent gathered + sorted quad list. Set by `prepareScene`. */
+    private quads: Quad[] = [];
+
+    /** Resolved theme colors, refreshed per render so theme switches repaint. */
+    private themeColors: { textNormal: string; textMuted: string; bgPrimary: string } = {
+        textNormal: '#000',
+        textMuted: '#666',
+        bgPrimary: '#fff',
+    };
+
     constructor() {
+        this.root = document.createElement('div');
+        this.root.className = 'tikz-3d-root tikz-3d-mode-svg';
+
         this.svg = document.createElementNS(SVG_NS, 'svg') as SVGSVGElement;
+        this.svg.setAttribute('class', 'tikz-3d-svg');
 
         this.backgroundRect = document.createElementNS(SVG_NS, 'rect') as SVGRectElement;
         this.backgroundRect.setAttribute('fill', 'var(--background-primary)');
@@ -123,6 +140,15 @@ export class SVG3DRenderer {
         this.titleEl.setAttribute('font-size', '15');
         this.titleEl.setAttribute('font-weight', '600');
         this.svg.appendChild(this.titleEl);
+
+        this.canvas = document.createElement('canvas');
+        this.canvas.className = 'tikz-3d-canvas';
+        const ctx = this.canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas 2D context unavailable');
+        this.ctx = ctx;
+
+        this.root.appendChild(this.svg);
+        this.root.appendChild(this.canvas);
     }
 
     private makeGroup(cls: string): SVGGElement {
@@ -132,26 +158,78 @@ export class SVG3DRenderer {
         return g;
     }
 
-    /** Discard cached data. Useful when settings outside the cache key change. */
+    /** The container holding both the SVG and the canvas. Attach this once. */
+    getElement(): HTMLElement {
+        return this.root;
+    }
+
     invalidateCache() {
         this.dataCache.clear();
     }
 
     /**
-     * Update the SVG to reflect `config`. Returns the persistent SVG element
-     * (always the same node across calls).
+     * Update the persistent SVG to reflect `config`. Sets the root into
+     * "SVG mode" so the SVG shows and the canvas is hidden.
      */
-    render(config: RendererConfig): SVGElement {
-        this.config = config;
+    renderSvg(config: RendererConfig) {
+        this.prepareScene(config);
+        this.updateSurfacePool(this.quads);
 
-        // SVG dimensions
+        clearChildren(this.backAxesGroup);
+        clearChildren(this.frontAxesGroup);
+        clearChildren(this.annotationsGroup);
+        this.drawAxesToSvg('back');
+        this.drawAxesToSvg('front');
+        this.drawAnnotationsToSvg();
+        this.updateTitleSvg();
+
+        if (this.root.className !== 'tikz-3d-root tikz-3d-mode-svg') {
+            this.root.className = 'tikz-3d-root tikz-3d-mode-svg';
+        }
+    }
+
+    /**
+     * Paint to the canvas to reflect `config`. Sets the root into "canvas
+     * mode" so the canvas shows and the SVG is hidden. The SVG keeps its
+     * last state until renderSvg is called again.
+     */
+    renderCanvas(config: RendererConfig) {
+        this.prepareScene(config);
+        this.paintCanvas();
+
+        if (this.root.className !== 'tikz-3d-root tikz-3d-mode-canvas') {
+            this.root.className = 'tikz-3d-root tikz-3d-mode-canvas';
+        }
+    }
+
+    /**
+     * Shared phase: refresh camera, resize SVG, sample data (cached if
+     * possible), project, sort. Leaves the result in `this.quads`.
+     */
+    private prepareScene(config: RendererConfig) {
+        this.config = config;
+        this.refreshThemeColors();
+
+        // SVG dimensions (only matters for the SVG path, but cheap to set).
         this.svg.setAttribute('width', String(config.width));
         this.svg.setAttribute('height', String(config.height));
         this.svg.setAttribute('viewBox', `0 0 ${config.width} ${config.height}`);
         this.backgroundRect.setAttribute('width', String(config.width));
         this.backgroundRect.setAttribute('height', String(config.height));
+        this.root.style.width = config.width + 'px';
+        this.root.style.height = config.height + 'px';
 
-        // Camera (sin/cos precomputed so the projection inner loop is just multiply-add).
+        // Canvas dimensions, hi-DPI aware.
+        const dpr = window.devicePixelRatio || 1;
+        const pxW = Math.round(config.width * dpr);
+        const pxH = Math.round(config.height * dpr);
+        if (this.canvas.width !== pxW || this.canvas.height !== pxH) {
+            this.canvas.width = pxW;
+            this.canvas.height = pxH;
+        }
+        this.canvas.style.width = config.width + 'px';
+        this.canvas.style.height = config.height + 'px';
+
         this.centerX = config.width / 2;
         this.centerY = config.height / 2 + 20;
         const availW = config.width - PADDING_LEFT - PADDING_RIGHT;
@@ -164,13 +242,12 @@ export class SVG3DRenderer {
         this.cosE = Math.cos(el);
         this.sinE = Math.sin(el);
 
-        // Prune cache entries for surfaces that no longer exist.
+        // Prune stale cache entries.
         const liveCount = config.functions3D.length;
         for (const idx of Array.from(this.dataCache.keys())) {
             if (idx >= liveCount) this.dataCache.delete(idx);
         }
 
-        // Collect all quads from all surfaces (depth-sorted across surfaces).
         const allQuads: Quad[] = [];
         for (let i = 0; i < liveCount; i++) {
             const func = config.functions3D[i];
@@ -182,31 +259,21 @@ export class SVG3DRenderer {
                 const data = this.getSurfaceData(i, func);
                 this.projectQuads(data, func, allQuads);
             } catch {
-                // Bad domain or compile error; surface skipped silently.
                 this.dataCache.delete(i);
             }
         }
-
         allQuads.sort(quadDepthCompare);
-
-        this.updateSurfacePool(allQuads);
-
-        // Axes and annotations rebuild each frame (cheap; just a few dozen elements).
-        clearChildren(this.backAxesGroup);
-        clearChildren(this.frontAxesGroup);
-        clearChildren(this.annotationsGroup);
-        this.drawAxes('back');
-        this.drawAxes('front');
-        this.drawAnnotations();
-        this.updateTitle();
-
-        return this.svg;
+        this.quads = allQuads;
     }
 
-    /**
-     * Return cached samples for surface `idx`, sampling fresh only if the
-     * cache key (expression + domains + z range + samples) does not match.
-     */
+    private refreshThemeColors() {
+        const cs = getComputedStyle(document.body);
+        this.themeColors.textNormal = cs.getPropertyValue('--text-normal').trim() || '#000';
+        this.themeColors.textMuted = cs.getPropertyValue('--text-muted').trim() || '#666';
+        this.themeColors.bgPrimary = cs.getPropertyValue('--background-primary').trim() || '#fff';
+    }
+
+    /** Surface data (cached). */
     private getSurfaceData(idx: number, func: Function3DParameters): SurfaceData {
         const cfg = this.config!;
         const samples = Math.max(4, Math.min(120, func.samples || DEFAULT_GRID_SAMPLES));
@@ -248,11 +315,7 @@ export class SVG3DRenderer {
         return data;
     }
 
-    /**
-     * Project cached samples through the current camera and push one Quad
-     * per cell of the grid into `out`. Two-pass to avoid the 4x redundant
-     * projection that a per-quad pass would do.
-     */
+    /** Project cached samples and emit one Quad per grid cell. */
     private projectQuads(data: SurfaceData, func: Function3DParameters, out: Quad[]) {
         const cfg = this.config!;
         const { xmin, xmax, ymin, ymax, zmin, zmax } = cfg;
@@ -265,7 +328,6 @@ export class SVG3DRenderer {
         const stride = samples + 1;
         const total = stride * stride;
 
-        // Grow scratch buffers if needed.
         if (this.sxBuf.length < total) {
             this.sxBuf = new Float64Array(total);
             this.syBuf = new Float64Array(total);
@@ -283,7 +345,6 @@ export class SVG3DRenderer {
         const cy = this.centerY;
         const scl = this.scale;
 
-        // Pass 1: project each grid vertex once. NaN cells get sentinel depth = -Infinity.
         for (let k = 0; k < total; k++) {
             const z = data.zs[k];
             if (z !== z) {
@@ -306,7 +367,6 @@ export class SVG3DRenderer {
             depthBuf[k] = ry2;
         }
 
-        // Pass 2: emit a quad per (i, j) cell, dropping any cell with a NaN corner.
         const color = func.color;
         const wireframe = func.wireframe;
         const opacity = func.opacity;
@@ -341,12 +401,40 @@ export class SVG3DRenderer {
         }
     }
 
-    /**
-     * Mutate the pool to match the new quad list:
-     *  - reuse `quads.length` polygons by setattr;
-     *  - hide the rest;
-     *  - lazily grow the pool when needed.
-     */
+    private project(x: number, y: number, z: number): { sx: number; sy: number; depth: number } {
+        const cfg = this.config!;
+        const nx = ((x - cfg.xmin) / (cfg.xmax - cfg.xmin)) * 2 - 1;
+        const ny = ((y - cfg.ymin) / (cfg.ymax - cfg.ymin)) * 2 - 1;
+        const nz = ((z - cfg.zmin) / (cfg.zmax - cfg.zmin)) * 2 - 1;
+        const rx = nx * this.cosA - ny * this.sinA;
+        const ry = nx * this.sinA + ny * this.cosA;
+        const ry2 = ry * this.cosE - nz * this.sinE;
+        const rz2 = ry * this.sinE + nz * this.cosE;
+        return { sx: this.centerX + rx * this.scale, sy: this.centerY - rz2 * this.scale, depth: ry2 };
+    }
+
+    private computeAxisGeometry(layer: 'back' | 'front'): AxisGeometry {
+        const cfg = this.config!;
+        const { xmin, xmax, ymin, ymax, zmin, zmax } = cfg;
+        const origin = this.project(xmin, ymin, zmin);
+        const xEnd = this.project(xmax, ymin, zmin);
+        const yEnd = this.project(xmin, ymax, zmin);
+        const zEnd = this.project(xmin, ymin, zmax);
+        const xMid = this.project((xmin + xmax) / 2, ymin, zmin);
+        const yMid = this.project(xmin, (ymin + ymax) / 2, zmin);
+        const isXBack = xMid.depth < origin.depth;
+        const isYBack = yMid.depth < origin.depth;
+        return {
+            layer,
+            drawX: (layer === 'back') === isXBack || (layer === 'front' && !isXBack),
+            drawY: (layer === 'back') === isYBack || (layer === 'front' && !isYBack),
+            drawZ: layer === 'front',
+            origin, xEnd, yEnd, zEnd,
+        };
+    }
+
+    // ---- SVG path ----
+
     private updateSurfacePool(quads: Quad[]) {
         const pool = this.surfacePool;
         const surfaceGroup = this.surfaceGroup;
@@ -387,23 +475,7 @@ export class SVG3DRenderer {
         }
     }
 
-    /**
-     * Project a single 3D point using the current camera. Used by the
-     * (relatively rare) axes and annotation passes.
-     */
-    private project(x: number, y: number, z: number): { sx: number; sy: number; depth: number } {
-        const cfg = this.config!;
-        const nx = ((x - cfg.xmin) / (cfg.xmax - cfg.xmin)) * 2 - 1;
-        const ny = ((y - cfg.ymin) / (cfg.ymax - cfg.ymin)) * 2 - 1;
-        const nz = ((z - cfg.zmin) / (cfg.zmax - cfg.zmin)) * 2 - 1;
-        const rx = nx * this.cosA - ny * this.sinA;
-        const ry = nx * this.sinA + ny * this.cosA;
-        const ry2 = ry * this.cosE - nz * this.sinE;
-        const rz2 = ry * this.sinE + nz * this.cosE;
-        return { sx: this.centerX + rx * this.scale, sy: this.centerY - rz2 * this.scale, depth: ry2 };
-    }
-
-    private drawAnnotations() {
+    private drawAnnotationsToSvg() {
         const cfg = this.config!;
         const annotations = cfg.annotations || [];
         if (!annotations.length) return;
@@ -440,58 +512,40 @@ export class SVG3DRenderer {
         }
     }
 
-    private drawAxes(layer: 'back' | 'front') {
+    private drawAxesToSvg(layer: 'back' | 'front') {
         const cfg = this.config!;
-        const { xmin, xmax, ymin, ymax, zmin, zmax } = cfg;
+        const geom = this.computeAxisGeometry(layer);
         const axisGroup = layer === 'back' ? this.backAxesGroup : this.frontAxesGroup;
-
-        const origin = this.project(xmin, ymin, zmin);
-        const xEnd = this.project(xmax, ymin, zmin);
-        const yEnd = this.project(xmin, ymax, zmin);
-        const zEnd = this.project(xmin, ymin, zmax);
-
-        const xMid = this.project((xmin + xmax) / 2, ymin, zmin);
-        const yMid = this.project(xmin, (ymin + ymax) / 2, zmin);
-
-        const isXBack = xMid.depth < origin.depth;
-        const isYBack = yMid.depth < origin.depth;
-
-        const drawX = (layer === 'back') === isXBack || (layer === 'front' && !isXBack);
-        const drawY = (layer === 'back') === isYBack || (layer === 'front' && !isYBack);
-        const drawZ = layer === 'front';
-
         const axisColor = 'var(--text-muted)';
         const axisWidth = '1.5';
 
-        if (drawX) {
-            this.appendLine(axisGroup, origin.sx, origin.sy, xEnd.sx, xEnd.sy, axisColor, axisWidth);
-            this.drawAxisTicks(axisGroup, 'x', xmin, xmax, ymin, zmin);
+        if (geom.drawX) {
+            this.svgLine(axisGroup, geom.origin.sx, geom.origin.sy, geom.xEnd.sx, geom.xEnd.sy, axisColor, axisWidth);
+            this.svgAxisTicks(axisGroup, 'x', cfg.xmin, cfg.xmax, cfg.ymin, cfg.zmin);
             if (cfg.showAxisLabels) {
-                const lp = this.project(xmax, ymin, zmin);
-                this.appendLabel(axisGroup, lp.sx + 10, lp.sy + 5, cfg.xLabel, 'start');
+                const lp = this.project(cfg.xmax, cfg.ymin, cfg.zmin);
+                this.svgLabel(axisGroup, lp.sx + 10, lp.sy + 5, cfg.xLabel, 'start');
             }
         }
-
-        if (drawY) {
-            this.appendLine(axisGroup, origin.sx, origin.sy, yEnd.sx, yEnd.sy, axisColor, axisWidth);
-            this.drawAxisTicks(axisGroup, 'y', ymin, ymax, xmin, zmin);
+        if (geom.drawY) {
+            this.svgLine(axisGroup, geom.origin.sx, geom.origin.sy, geom.yEnd.sx, geom.yEnd.sy, axisColor, axisWidth);
+            this.svgAxisTicks(axisGroup, 'y', cfg.ymin, cfg.ymax, cfg.xmin, cfg.zmin);
             if (cfg.showAxisLabels) {
-                const lp = this.project(xmin, ymax, zmin);
-                this.appendLabel(axisGroup, lp.sx - 15, lp.sy + 5, cfg.yLabel, 'end');
+                const lp = this.project(cfg.xmin, cfg.ymax, cfg.zmin);
+                this.svgLabel(axisGroup, lp.sx - 15, lp.sy + 5, cfg.yLabel, 'end');
             }
         }
-
-        if (drawZ) {
-            this.appendLine(axisGroup, origin.sx, origin.sy, zEnd.sx, zEnd.sy, axisColor, axisWidth);
-            this.drawAxisTicks(axisGroup, 'z', zmin, zmax, xmin, ymin);
+        if (geom.drawZ) {
+            this.svgLine(axisGroup, geom.origin.sx, geom.origin.sy, geom.zEnd.sx, geom.zEnd.sy, axisColor, axisWidth);
+            this.svgAxisTicks(axisGroup, 'z', cfg.zmin, cfg.zmax, cfg.xmin, cfg.ymin);
             if (cfg.showAxisLabels) {
-                const lp = this.project(xmin, ymin, zmax);
-                this.appendLabel(axisGroup, lp.sx - 10, lp.sy - 8, cfg.zLabel, 'end');
+                const lp = this.project(cfg.xmin, cfg.ymin, cfg.zmax);
+                this.svgLabel(axisGroup, lp.sx - 10, lp.sy - 8, cfg.zLabel, 'end');
             }
         }
     }
 
-    private appendLine(parent: SVGElement, x1: number, y1: number, x2: number, y2: number, stroke: string, width: string) {
+    private svgLine(parent: SVGElement, x1: number, y1: number, x2: number, y2: number, stroke: string, width: string) {
         const line = document.createElementNS(SVG_NS, 'line');
         line.setAttribute('x1', String(x1));
         line.setAttribute('y1', String(y1));
@@ -502,7 +556,7 @@ export class SVG3DRenderer {
         parent.appendChild(line);
     }
 
-    private appendLabel(parent: SVGElement, x: number, y: number, text: string, anchor: string) {
+    private svgLabel(parent: SVGElement, x: number, y: number, text: string, anchor: string) {
         const t = document.createElementNS(SVG_NS, 'text');
         t.setAttribute('x', String(x));
         t.setAttribute('y', String(y));
@@ -514,14 +568,7 @@ export class SVG3DRenderer {
         parent.appendChild(t);
     }
 
-    private drawAxisTicks(
-        group: SVGElement,
-        axis: 'x' | 'y' | 'z',
-        min: number,
-        max: number,
-        fixedA: number,
-        fixedB: number
-    ) {
+    private svgAxisTicks(group: SVGElement, axis: 'x' | 'y' | 'z', min: number, max: number, fixedA: number, fixedB: number) {
         const cfg = this.config!;
         const target = cfg.majorTickNum ? Math.max(2, Math.round(cfg.majorTickNum * 0.6)) : DEFAULT_TARGET_TICKS;
         const interval = niceInterval(max - min, target);
@@ -552,7 +599,7 @@ export class SVG3DRenderer {
         }
     }
 
-    private updateTitle() {
+    private updateTitleSvg() {
         const cfg = this.config!;
         if (!cfg.title) {
             this.titleEl.textContent = '';
@@ -562,6 +609,186 @@ export class SVG3DRenderer {
         this.titleEl.setAttribute('y', String(PADDING_TOP - 10));
         this.titleEl.textContent = stripLatex(cfg.title);
     }
+
+    // ---- Canvas path ----
+
+    private paintCanvas() {
+        const cfg = this.config!;
+        const ctx = this.ctx;
+        const dpr = window.devicePixelRatio || 1;
+
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.scale(dpr, dpr);
+
+        // Background (matches the SVG's background rect).
+        ctx.fillStyle = this.themeColors.bgPrimary;
+        ctx.beginPath();
+        // Rounded rect for parity with the SVG `rx=4`.
+        roundedRectPath(ctx, 0, 0, cfg.width, cfg.height, 4);
+        ctx.fill();
+
+        // Back axes -> surface -> front axes -> annotations -> title.
+        this.drawAxesToCanvas('back');
+        this.drawQuadsToCanvas(this.quads);
+        this.drawAxesToCanvas('front');
+        this.drawAnnotationsToCanvas();
+        this.drawTitleToCanvas();
+
+        ctx.restore();
+    }
+
+    private drawQuadsToCanvas(quads: Quad[]) {
+        const ctx = this.ctx;
+        for (let i = 0; i < quads.length; i++) {
+            const q = quads[i];
+            const baseColor = COLOR_MAP[q.color] || q.color;
+            const resolved = resolveCssColor(baseColor);
+            ctx.beginPath();
+            ctx.moveTo(q.p0x, q.p0y);
+            ctx.lineTo(q.p1x, q.p1y);
+            ctx.lineTo(q.p2x, q.p2y);
+            ctx.lineTo(q.p3x, q.p3y);
+            ctx.closePath();
+            if (q.wireframe) {
+                ctx.strokeStyle = resolved;
+                ctx.lineWidth = 0.5;
+                ctx.globalAlpha = q.opacity;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            } else {
+                ctx.fillStyle = shadeColor(baseColor, q.zValue);
+                ctx.globalAlpha = q.opacity;
+                ctx.fill();
+                ctx.globalAlpha = 0.4;
+                ctx.strokeStyle = resolved;
+                ctx.lineWidth = 0.3;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+        }
+    }
+
+    private drawAxesToCanvas(layer: 'back' | 'front') {
+        const cfg = this.config!;
+        const geom = this.computeAxisGeometry(layer);
+        const ctx = this.ctx;
+        const axisColor = this.themeColors.textMuted;
+        ctx.strokeStyle = axisColor;
+        ctx.fillStyle = axisColor;
+        ctx.lineWidth = 1.5;
+
+        if (geom.drawX) {
+            this.canvasLine(geom.origin.sx, geom.origin.sy, geom.xEnd.sx, geom.xEnd.sy);
+            this.canvasAxisTicks('x', cfg.xmin, cfg.xmax, cfg.ymin, cfg.zmin);
+            if (cfg.showAxisLabels) {
+                const lp = this.project(cfg.xmax, cfg.ymin, cfg.zmin);
+                this.canvasLabel(lp.sx + 10, lp.sy + 5, cfg.xLabel, 'left');
+            }
+        }
+        if (geom.drawY) {
+            this.canvasLine(geom.origin.sx, geom.origin.sy, geom.yEnd.sx, geom.yEnd.sy);
+            this.canvasAxisTicks('y', cfg.ymin, cfg.ymax, cfg.xmin, cfg.zmin);
+            if (cfg.showAxisLabels) {
+                const lp = this.project(cfg.xmin, cfg.ymax, cfg.zmin);
+                this.canvasLabel(lp.sx - 15, lp.sy + 5, cfg.yLabel, 'right');
+            }
+        }
+        if (geom.drawZ) {
+            this.canvasLine(geom.origin.sx, geom.origin.sy, geom.zEnd.sx, geom.zEnd.sy);
+            this.canvasAxisTicks('z', cfg.zmin, cfg.zmax, cfg.xmin, cfg.ymin);
+            if (cfg.showAxisLabels) {
+                const lp = this.project(cfg.xmin, cfg.ymin, cfg.zmax);
+                this.canvasLabel(lp.sx - 10, lp.sy - 8, cfg.zLabel, 'right');
+            }
+        }
+    }
+
+    private canvasLine(x1: number, y1: number, x2: number, y2: number) {
+        const ctx = this.ctx;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+    }
+
+    private canvasAxisTicks(axis: 'x' | 'y' | 'z', min: number, max: number, fixedA: number, fixedB: number) {
+        const cfg = this.config!;
+        const ctx = this.ctx;
+        const target = cfg.majorTickNum ? Math.max(2, Math.round(cfg.majorTickNum * 0.6)) : DEFAULT_TARGET_TICKS;
+        const interval = niceInterval(max - min, target);
+        const start = Math.ceil(min / interval) * interval;
+
+        ctx.font = '10px var(--font-monospace, monospace)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+
+        for (let v = start; v <= max; v += interval) {
+            let p: { sx: number; sy: number };
+            if (axis === 'x') p = this.project(v, fixedA, fixedB);
+            else if (axis === 'y') p = this.project(fixedA, v, fixedB);
+            else p = this.project(fixedA, fixedB, v);
+            ctx.beginPath();
+            ctx.arc(p.sx, p.sy, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillText(formatTick(v), p.sx, p.sy + (axis === 'z' ? -8 : 14));
+        }
+    }
+
+    private canvasLabel(x: number, y: number, text: string, align: 'left' | 'right' | 'center') {
+        const ctx = this.ctx;
+        ctx.fillStyle = this.themeColors.textNormal;
+        ctx.font = '500 13px var(--font-text, sans-serif)';
+        ctx.textAlign = align === 'left' ? 'left' : align === 'right' ? 'right' : 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(text, x, y);
+        ctx.fillStyle = this.themeColors.textMuted;
+    }
+
+    private drawAnnotationsToCanvas() {
+        const cfg = this.config!;
+        const annotations = cfg.annotations || [];
+        if (!annotations.length) return;
+        const ctx = this.ctx;
+        for (const a of annotations) {
+            if (!a.text) continue;
+            const x = parseFloat(a.x);
+            const y = parseFloat(a.y);
+            const z = parseFloat(a.z ?? '0');
+            if (!isFinite(x) || !isFinite(y) || !isFinite(z)) continue;
+            const p = this.project(x, y, z);
+            const baseColor = COLOR_MAP[a.color] || a.color || 'var(--text-normal)';
+            const fillColor = resolveCssColor(baseColor);
+            const fontSize = a.size === 'small' ? 10 : a.size === 'large' ? 15 : 12;
+            let align: CanvasTextAlign = 'center';
+            let dx = 0;
+            let dy = 4;
+            switch (a.anchor) {
+                case 'above': align = 'center'; dy = -6; break;
+                case 'below': align = 'center'; dy = 14; break;
+                case 'left': align = 'right'; dx = -6; dy = 4; break;
+                case 'right': align = 'left'; dx = 6; dy = 4; break;
+                case 'center': default: align = 'center'; dy = 4; break;
+            }
+            ctx.fillStyle = fillColor;
+            ctx.font = `500 ${fontSize}px var(--font-text, sans-serif)`;
+            ctx.textAlign = align;
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(a.text, p.sx + dx, p.sy + dy);
+        }
+    }
+
+    private drawTitleToCanvas() {
+        const cfg = this.config!;
+        if (!cfg.title) return;
+        const ctx = this.ctx;
+        ctx.fillStyle = this.themeColors.textNormal;
+        ctx.font = '600 15px var(--font-text, sans-serif)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(stripLatex(cfg.title), cfg.width / 2, PADDING_TOP - 10);
+    }
 }
 
 function quadDepthCompare(a: Quad, b: Quad): number {
@@ -570,4 +797,17 @@ function quadDepthCompare(a: Quad, b: Quad): number {
 
 function clearChildren(el: SVGElement) {
     while (el.firstChild) el.removeChild(el.firstChild);
+}
+
+function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+    const radius = Math.min(r, w / 2, h / 2);
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + w - radius, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+    ctx.lineTo(x + w, y + h - radius);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+    ctx.lineTo(x + radius, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
 }
