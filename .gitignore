@@ -8,9 +8,9 @@
 # npm
 node_modules
 
-# Don't include build outputs
-main.js
-styles.css
+# Don't include build outputs (leading slash so the src/ source files are not ignored)
+/main.js
+/styles.css
 
 # Exclude sourcemaps
 *.map
