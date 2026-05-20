@@ -5,11 +5,25 @@ import { SVGRenderer } from './renderer';
 import { SVG3DRenderer } from './renderer3d';
 import { COLOR_OPTIONS, THICKNESS_OPTIONS, COLOR_MAP } from './colors';
 import { BUILT_IN_2D, BUILT_IN_3D, UserTemplate } from './templates';
+import { MathHelper } from './math';
 
 // Loose type so we can keep importing the plugin without a circular dep.
 interface PluginHost {
     data: { userTemplates: UserTemplate[] };
     saveUserTemplates(templates: UserTemplate[]): Promise<void>;
+}
+
+/**
+ * Trim the top and bottom percentile of the values then return min/max.
+ * Keeps vertical asymptotes from blowing out auto-fit ranges.
+ */
+function trimmedRange(values: number[], percentile = 0.01): [number, number] {
+    if (!values.length) return [0, 1];
+    const sorted = values.slice().sort((a, b) => a - b);
+    const drop = Math.floor(sorted.length * percentile);
+    const lo = sorted[drop];
+    const hi = sorted[sorted.length - 1 - drop];
+    return [lo, hi];
 }
 // @ts-ignore: inline import via esbuild plugin
 import styles from 'inline:./styles.css';
@@ -461,6 +475,16 @@ export class TikzModal extends Modal {
             { key: 'zmin', label: 'Z min', placeholder: '-5' },
             { key: 'zmax', label: 'Z max', placeholder: '5' },
         ]);
+
+        new Setting(tab)
+            .setName('Fit to functions')
+            .setDesc('Sample every enabled function and set the axis ranges so the curves fit comfortably inside the plot. Clips outliers so vertical asymptotes do not blow out the range.')
+            .addButton((btn) =>
+                btn
+                    .setButtonText('Auto-fit')
+                    .setTooltip('Compute axis ranges from the current functions')
+                    .onClick(() => this.autoFitRanges())
+            );
 
         this.axisStyleContainer = tab.createDiv();
         new Setting(this.axisStyleContainer)
@@ -1511,6 +1535,108 @@ export class TikzModal extends Modal {
         }
 
         return { scale, plotW, plotH, xFracInPlot, yFracInPlot };
+    }
+
+    /**
+     * Sample every enabled function and set xmin/xmax/ymin/ymax (and zmin/zmax
+     * in 3D) so the curves fit. Drops outliers above the 99th percentile so a
+     * vertical asymptote does not blow out the range.
+     */
+    private autoFitRanges() {
+        if (this.is3D()) {
+            const surfaces: Function3DParameters[] = this.settings.getValue('functions3D') || [];
+            const live = surfaces.filter((s) => s.expression);
+            if (!live.length) {
+                new Notice('Add a surface first.');
+                return;
+            }
+            let xs: number[] = [];
+            let ys: number[] = [];
+            let zs: number[] = [];
+            for (const s of live) {
+                try {
+                    const [xmin, xmax] = MathHelper.parseDomain(s.xDomain);
+                    const [ymin, ymax] = MathHelper.parseDomain(s.yDomain);
+                    const samples = Math.max(8, Math.min(40, s.samples ?? 30));
+                    const f = MathHelper.compile2D(s.expression);
+                    for (let i = 0; i <= samples; i++) {
+                        const x = xmin + ((xmax - xmin) * i) / samples;
+                        for (let j = 0; j <= samples; j++) {
+                            const y = ymin + ((ymax - ymin) * j) / samples;
+                            const z = f(x, y);
+                            if (isFinite(z)) { xs.push(x); ys.push(y); zs.push(z); }
+                        }
+                    }
+                } catch {
+                    // skip surfaces with bad domain/expression
+                }
+            }
+            if (!xs.length) {
+                new Notice('Could not evaluate any surface.');
+                return;
+            }
+            const [zLo, zHi] = trimmedRange(zs);
+            const xPad = (Math.max(...xs) - Math.min(...xs)) * 0.05 || 0.5;
+            const yPad = (Math.max(...ys) - Math.min(...ys)) * 0.05 || 0.5;
+            const zPad = (zHi - zLo) * 0.05 || 0.5;
+            const newXmin = Math.min(...xs) - xPad;
+            const newXmax = Math.max(...xs) + xPad;
+            const newYmin = Math.min(...ys) - yPad;
+            const newYmax = Math.max(...ys) + yPad;
+            const newZmin = zLo - zPad;
+            const newZmax = zHi + zPad;
+            this.settings.setValue('xmin', this.formatRange(newXmin));
+            this.settings.setValue('xmax', this.formatRange(newXmax));
+            this.settings.setValue('ymin', this.formatRange(newYmin));
+            this.settings.setValue('ymax', this.formatRange(newYmax));
+            this.settings.setValue('zmin', this.formatRange(newZmin));
+            this.settings.setValue('zmax', this.formatRange(newZmax));
+            this.refreshRangeInputs();
+            this.requestPreviewUpdate();
+            new Notice('Axis ranges fit to surfaces.');
+            return;
+        }
+
+        const funcs: FunctionParameters[] = this.settings.getValue('functions') || [];
+        const live = funcs.filter((f) => f.expression && f.domain);
+        if (!live.length) {
+            new Notice('Add a function first.');
+            return;
+        }
+        let xs: number[] = [];
+        let ys: number[] = [];
+        for (const f of live) {
+            try {
+                const [xmin, xmax] = MathHelper.parseDomain(f.domain);
+                const fn = MathHelper.compile1D(f.expression);
+                const N = 200;
+                for (let i = 0; i <= N; i++) {
+                    const x = xmin + ((xmax - xmin) * i) / N;
+                    const y = fn(x);
+                    if (isFinite(y)) { xs.push(x); ys.push(y); }
+                }
+            } catch {
+                // skip
+            }
+        }
+        if (!xs.length) {
+            new Notice('Could not evaluate any function.');
+            return;
+        }
+        const [yLo, yHi] = trimmedRange(ys);
+        const xPad = (Math.max(...xs) - Math.min(...xs)) * 0.05 || 0.5;
+        const yPad = (yHi - yLo) * 0.05 || 0.5;
+        const newXmin = Math.min(...xs) - xPad;
+        const newXmax = Math.max(...xs) + xPad;
+        const newYmin = yLo - yPad;
+        const newYmax = yHi + yPad;
+        this.settings.setValue('xmin', this.formatRange(newXmin));
+        this.settings.setValue('xmax', this.formatRange(newXmax));
+        this.settings.setValue('ymin', this.formatRange(newYmin));
+        this.settings.setValue('ymax', this.formatRange(newYmax));
+        this.refreshRangeInputs();
+        this.requestPreviewUpdate();
+        new Notice('Axis ranges fit to functions.');
     }
 
     private applyAxisRange(xmin: number, xmax: number, ymin: number, ymax: number) {

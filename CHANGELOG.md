@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.9.0] - 2026-05-21
+
+### Added
+
+- **Auto-fit button on the Axis tab.** One click samples every enabled function (or surface in 3D), drops the top and bottom 1 percent so vertical asymptotes do not blow out the range, adds 5 percent padding, and writes the result to xmin/xmax/ymin/ymax (and zmin/zmax in 3D). The range inputs and the live preview update immediately.
+
 ## [3.8.0] - 2026-05-21
 
 ### Added
