@@ -49,6 +49,9 @@ export class TikzModal extends Modal {
     private previewContainer: HTMLElement;
     private codeTextArea: HTMLTextAreaElement;
     private previewTimer: number | null = null;
+    private previewRafId: number | null = null;
+    private svg3dRenderer: SVG3DRenderer | null = null;
+    private currentRenderMode: '2d' | '3d' | null = null;
     private tabContents: Map<TabName, HTMLElement> = new Map();
     private tabButtons: Map<TabName, HTMLButtonElement> = new Map();
 
@@ -120,11 +123,16 @@ export class TikzModal extends Modal {
 
     onClose() {
         if (this.previewTimer) window.clearTimeout(this.previewTimer);
+        this.previewTimer = null;
+        if (this.previewRafId !== null) cancelAnimationFrame(this.previewRafId);
+        this.previewRafId = null;
         if (this.onMouseMove) window.removeEventListener('mousemove', this.onMouseMove);
         if (this.onMouseUp) window.removeEventListener('mouseup', this.onMouseUp);
         this.onMouseMove = null;
         this.onMouseUp = null;
         this.rangeInputs.clear();
+        this.svg3dRenderer = null;
+        this.currentRenderMode = null;
         if (this.styleEl && this.styleEl.parentNode) {
             this.styleEl.parentNode.removeChild(this.styleEl);
         }
@@ -361,7 +369,7 @@ export class TikzModal extends Modal {
                 this.elevationSlider = s;
                 s.setLimits(0, 90, 1).setValue(this.settings.getValue('rotationX')).setDynamicTooltip().onChange((v) => {
                     this.settings.setValue('rotationX', v);
-                    this.requestPreviewUpdate();
+                    this.requestPreviewUpdateFast();
                 });
             });
 
@@ -372,7 +380,7 @@ export class TikzModal extends Modal {
                 this.azimuthSlider = s;
                 s.setLimits(0, 360, 1).setValue(this.settings.getValue('rotationZ')).setDynamicTooltip().onChange((v) => {
                     this.settings.setValue('rotationZ', v);
-                    this.requestPreviewUpdate();
+                    this.requestPreviewUpdateFast();
                 });
             });
 
@@ -1303,7 +1311,9 @@ export class TikzModal extends Modal {
         this.settings.setValue('ymin', this.formatRange(ymin));
         this.settings.setValue('ymax', this.formatRange(ymax));
         this.refreshRangeInputs();
-        this.requestPreviewUpdate();
+        // Drag pan and wheel zoom are continuous; render on the next frame
+        // instead of the 150 ms debounce.
+        this.requestPreviewUpdateFast();
     }
 
     /** Trim trailing zeros and cap to 3 decimals so the inputs stay readable. */
@@ -1351,7 +1361,8 @@ export class TikzModal extends Modal {
         this.settings.setValue('rotationX', elevation);
         if (this.azimuthSlider) this.azimuthSlider.setValue(azimuth);
         if (this.elevationSlider) this.elevationSlider.setValue(elevation);
-        this.requestPreviewUpdate();
+        // Camera-only change; render on the next animation frame.
+        this.requestPreviewUpdateFast();
     }
 
     private buildActionBar(container: HTMLElement) {
@@ -1521,20 +1532,63 @@ export class TikzModal extends Modal {
         return this.generateTikzCodeFresh();
     }
 
+    /**
+     * Schedule a preview update after the standard debounce. Right for text
+     * inputs and settings that should not re-render on every keystroke.
+     */
     private requestPreviewUpdate() {
         if (this.previewTimer) window.clearTimeout(this.previewTimer);
-        this.previewTimer = window.setTimeout(() => this.updatePreview(), PREVIEW_DEBOUNCE_MS) as unknown as number;
+        this.previewTimer = window.setTimeout(() => {
+            this.previewTimer = null;
+            this.updatePreview();
+        }, PREVIEW_DEBOUNCE_MS) as unknown as number;
+    }
+
+    /**
+     * Schedule a preview update on the next animation frame. Right for
+     * continuous interactions (drag rotation, drag pan, wheel zoom) where the
+     * 150 ms debounce would feel sluggish.
+     */
+    private requestPreviewUpdateFast() {
+        // If a debounced render is pending, drop it: we're going to render NOW.
+        if (this.previewTimer) {
+            window.clearTimeout(this.previewTimer);
+            this.previewTimer = null;
+        }
+        if (this.previewRafId !== null) return;
+        this.previewRafId = window.requestAnimationFrame(() => {
+            this.previewRafId = null;
+            this.updatePreview();
+        });
     }
 
     private updatePreview() {
-        this.previewContainer.empty();
+        if (this.previewTimer) {
+            window.clearTimeout(this.previewTimer);
+            this.previewTimer = null;
+        }
+        if (this.previewRafId !== null) {
+            window.cancelAnimationFrame(this.previewRafId);
+            this.previewRafId = null;
+        }
 
         try {
             const config = this.settings.toRendererConfig();
-            const svg: SVGElement = config.is3D
-                ? new SVG3DRenderer(config).render()
-                : new SVGRenderer(config).render();
-            this.previewContainer.appendChild(svg);
+            if (config.is3D) {
+                if (!this.svg3dRenderer) this.svg3dRenderer = new SVG3DRenderer();
+                const svg = this.svg3dRenderer.render(config);
+                if (this.currentRenderMode !== '3d') {
+                    this.previewContainer.empty();
+                    this.previewContainer.appendChild(svg);
+                    this.currentRenderMode = '3d';
+                }
+                // For repeat 3D renders, render() mutated the persistent SVG in place.
+            } else {
+                this.previewContainer.empty();
+                const svg = new SVGRenderer(config).render();
+                this.previewContainer.appendChild(svg);
+                this.currentRenderMode = '2d';
+            }
         } catch (e) {
             const message = e instanceof Error ? e.message : 'Rendering error';
             new Notice(`Render failed: ${message}`);
