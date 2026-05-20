@@ -39,15 +39,28 @@ interface SurfaceData {
     zs: Float64Array;
 }
 
-interface AxisGeometry {
+interface ProjectedPoint {
+    sx: number;
+    sy: number;
+    depth: number;
+}
+
+interface BoxEdge {
+    p1Idx: number;
+    p2Idx: number;
     layer: 'back' | 'front';
-    drawX: boolean;
-    drawY: boolean;
-    drawZ: boolean;
-    origin: { sx: number; sy: number };
-    xEnd: { sx: number; sy: number };
-    yEnd: { sx: number; sy: number };
-    zEnd: { sx: number; sy: number };
+}
+
+interface TickEdge {
+    /** Endpoints in screen space (for axis label placement at midpoint). */
+    p1: ProjectedPoint;
+    p2: ProjectedPoint;
+    /** Coordinate values that stay constant along this edge. */
+    fixedA: number;
+    fixedB: number;
+    /** Unit vector in screen space pointing away from the box centroid. */
+    outwardX: number;
+    outwardY: number;
 }
 
 function shadeColor(baseColor: string, t: number): string {
@@ -109,6 +122,14 @@ export class SVG3DRenderer {
 
     /** Most recent gathered + sorted quad list. Set by `prepareScene`. */
     private quads: Quad[] = [];
+
+    /** Box geometry. Refreshed per render via `prepareBox`. */
+    private boxCorners: ProjectedPoint[] = [];
+    private boxEdges: BoxEdge[] = [];
+    private boxCentroid: { sx: number; sy: number } = { sx: 0, sy: 0 };
+    private xTickEdge: TickEdge | null = null;
+    private yTickEdge: TickEdge | null = null;
+    private zTickEdge: TickEdge | null = null;
 
     /** Resolved theme colors, refreshed per render so theme switches repaint. */
     private themeColors: { textNormal: string; textMuted: string; bgPrimary: string } = {
@@ -178,8 +199,8 @@ export class SVG3DRenderer {
         clearChildren(this.backAxesGroup);
         clearChildren(this.frontAxesGroup);
         clearChildren(this.annotationsGroup);
-        this.drawAxesToSvg('back');
-        this.drawAxesToSvg('front');
+        this.drawBoxToSvg('back');
+        this.drawBoxToSvg('front');
         this.drawAnnotationsToSvg();
         this.updateTitleSvg();
 
@@ -264,6 +285,103 @@ export class SVG3DRenderer {
         }
         allQuads.sort(quadDepthCompare);
         this.quads = allQuads;
+
+        this.prepareBox();
+    }
+
+    /**
+     * Compute the 12 box edges, classify them as front/back, and decide
+     * which edges hold the x/y/z tick marks based on which face is away
+     * from the camera.
+     */
+    private prepareBox() {
+        const cfg = this.config!;
+        const { xmin, xmax, ymin, ymax, zmin, zmax } = cfg;
+
+        // 8 corners indexed by bit pattern: bit 0 = x (0=min, 1=max), bit 1 = y, bit 2 = z.
+        const corners: ProjectedPoint[] = [
+            this.project(xmin, ymin, zmin), // 0: ---
+            this.project(xmax, ymin, zmin), // 1: x++
+            this.project(xmin, ymax, zmin), // 2: y++
+            this.project(xmax, ymax, zmin), // 3: xy++
+            this.project(xmin, ymin, zmax), // 4: z++
+            this.project(xmax, ymin, zmax), // 5: xz++
+            this.project(xmin, ymax, zmax), // 6: yz++
+            this.project(xmax, ymax, zmax), // 7: xyz++
+        ];
+        this.boxCorners = corners;
+
+        let cdepth = 0;
+        let csx = 0;
+        let csy = 0;
+        for (const c of corners) {
+            cdepth += c.depth;
+            csx += c.sx;
+            csy += c.sy;
+        }
+        cdepth /= 8;
+        csx /= 8;
+        csy /= 8;
+        this.boxCentroid = { sx: csx, sy: csy };
+
+        // 12 edges of the cuboid as corner-index pairs.
+        const edgeIndices: [number, number][] = [
+            // Bottom face (z=zmin).
+            [0, 1], [1, 3], [3, 2], [2, 0],
+            // Top face (z=zmax).
+            [4, 5], [5, 7], [7, 6], [6, 4],
+            // Vertical edges connecting bottom and top.
+            [0, 4], [1, 5], [2, 6], [3, 7],
+        ];
+        this.boxEdges = edgeIndices.map(([i, j]) => {
+            const midDepth = (corners[i].depth + corners[j].depth) / 2;
+            return {
+                p1Idx: i,
+                p2Idx: j,
+                layer: midDepth < cdepth ? 'back' : 'front',
+            };
+        });
+
+        // Pick the back face along each direction so ticks live on the edge
+        // the user is "looking into".
+        const yMinFace = this.project((xmin + xmax) / 2, ymin, (zmin + zmax) / 2);
+        const yMaxFace = this.project((xmin + xmax) / 2, ymax, (zmin + zmax) / 2);
+        const yBack = yMinFace.depth < yMaxFace.depth ? ymin : ymax;
+
+        const xMinFace = this.project(xmin, (ymin + ymax) / 2, (zmin + zmax) / 2);
+        const xMaxFace = this.project(xmax, (ymin + ymax) / 2, (zmin + zmax) / 2);
+        const xBack = xMinFace.depth < xMaxFace.depth ? xmin : xmax;
+
+        // Tick-bearing edges.
+        const xP1 = this.project(xmin, yBack, zmin);
+        const xP2 = this.project(xmax, yBack, zmin);
+        this.xTickEdge = this.buildTickEdge(xP1, xP2, yBack, zmin, csx, csy);
+
+        const yP1 = this.project(xBack, ymin, zmin);
+        const yP2 = this.project(xBack, ymax, zmin);
+        this.yTickEdge = this.buildTickEdge(yP1, yP2, xBack, zmin, csx, csy);
+
+        const zP1 = this.project(xBack, yBack, zmin);
+        const zP2 = this.project(xBack, yBack, zmax);
+        this.zTickEdge = this.buildTickEdge(zP1, zP2, xBack, yBack, csx, csy);
+    }
+
+    private buildTickEdge(p1: ProjectedPoint, p2: ProjectedPoint, fixedA: number, fixedB: number, centroidSx: number, centroidSy: number): TickEdge {
+        const ex = p2.sx - p1.sx;
+        const ey = p2.sy - p1.sy;
+        let perpX = -ey;
+        let perpY = ex;
+        const len = Math.hypot(perpX, perpY) || 1;
+        perpX /= len;
+        perpY /= len;
+        const mx = (p1.sx + p2.sx) / 2;
+        const my = (p1.sy + p2.sy) / 2;
+        const towardOutside = (mx - centroidSx) * perpX + (my - centroidSy) * perpY;
+        if (towardOutside < 0) {
+            perpX = -perpX;
+            perpY = -perpY;
+        }
+        return { p1, p2, fixedA, fixedB, outwardX: perpX, outwardY: perpY };
     }
 
     private refreshThemeColors() {
@@ -413,26 +531,6 @@ export class SVG3DRenderer {
         return { sx: this.centerX + rx * this.scale, sy: this.centerY - rz2 * this.scale, depth: ry2 };
     }
 
-    private computeAxisGeometry(layer: 'back' | 'front'): AxisGeometry {
-        const cfg = this.config!;
-        const { xmin, xmax, ymin, ymax, zmin, zmax } = cfg;
-        const origin = this.project(xmin, ymin, zmin);
-        const xEnd = this.project(xmax, ymin, zmin);
-        const yEnd = this.project(xmin, ymax, zmin);
-        const zEnd = this.project(xmin, ymin, zmax);
-        const xMid = this.project((xmin + xmax) / 2, ymin, zmin);
-        const yMid = this.project(xmin, (ymin + ymax) / 2, zmin);
-        const isXBack = xMid.depth < origin.depth;
-        const isYBack = yMid.depth < origin.depth;
-        return {
-            layer,
-            drawX: (layer === 'back') === isXBack || (layer === 'front' && !isXBack),
-            drawY: (layer === 'back') === isYBack || (layer === 'front' && !isYBack),
-            drawZ: layer === 'front',
-            origin, xEnd, yEnd, zEnd,
-        };
-    }
-
     // ---- SVG path ----
 
     private updateSurfacePool(quads: Quad[]) {
@@ -512,40 +610,93 @@ export class SVG3DRenderer {
         }
     }
 
-    private drawAxesToSvg(layer: 'back' | 'front') {
+    /** Draw the cuboid edges plus (front layer only) tick marks and labels. */
+    private drawBoxToSvg(layer: 'back' | 'front') {
         const cfg = this.config!;
-        const geom = this.computeAxisGeometry(layer);
         const axisGroup = layer === 'back' ? this.backAxesGroup : this.frontAxesGroup;
         const axisColor = 'var(--text-muted)';
-        const axisWidth = '1.5';
 
-        if (geom.drawX) {
-            this.svgLine(axisGroup, geom.origin.sx, geom.origin.sy, geom.xEnd.sx, geom.xEnd.sy, axisColor, axisWidth);
-            this.svgAxisTicks(axisGroup, 'x', cfg.xmin, cfg.xmax, cfg.ymin, cfg.zmin);
-            if (cfg.showAxisLabels) {
-                const lp = this.project(cfg.xmax, cfg.ymin, cfg.zmin);
-                this.svgLabel(axisGroup, lp.sx + 10, lp.sy + 5, cfg.xLabel, 'start');
-            }
+        // Edges classified to this layer.
+        for (const edge of this.boxEdges) {
+            if (edge.layer !== layer) continue;
+            const c1 = this.boxCorners[edge.p1Idx];
+            const c2 = this.boxCorners[edge.p2Idx];
+            this.svgLine(axisGroup, c1.sx, c1.sy, c2.sx, c2.sy, axisColor, '1', layer === 'back' ? 0.4 : 0.85);
         }
-        if (geom.drawY) {
-            this.svgLine(axisGroup, geom.origin.sx, geom.origin.sy, geom.yEnd.sx, geom.yEnd.sy, axisColor, axisWidth);
-            this.svgAxisTicks(axisGroup, 'y', cfg.ymin, cfg.ymax, cfg.xmin, cfg.zmin);
-            if (cfg.showAxisLabels) {
-                const lp = this.project(cfg.xmin, cfg.ymax, cfg.zmin);
-                this.svgLabel(axisGroup, lp.sx - 15, lp.sy + 5, cfg.yLabel, 'end');
-            }
-        }
-        if (geom.drawZ) {
-            this.svgLine(axisGroup, geom.origin.sx, geom.origin.sy, geom.zEnd.sx, geom.zEnd.sy, axisColor, axisWidth);
-            this.svgAxisTicks(axisGroup, 'z', cfg.zmin, cfg.zmax, cfg.xmin, cfg.ymin);
-            if (cfg.showAxisLabels) {
-                const lp = this.project(cfg.xmin, cfg.ymin, cfg.zmax);
-                this.svgLabel(axisGroup, lp.sx - 10, lp.sy - 8, cfg.zLabel, 'end');
-            }
+
+        // Tick marks, tick labels, and axis-name labels live in the front
+        // layer so they are never occluded by the surface.
+        if (layer === 'front') {
+            this.drawTicksToSvg(axisGroup);
+            if (cfg.showAxisLabels) this.drawAxisNameLabelsToSvg(axisGroup);
         }
     }
 
-    private svgLine(parent: SVGElement, x1: number, y1: number, x2: number, y2: number, stroke: string, width: string) {
+    private drawTicksToSvg(group: SVGElement) {
+        if (this.xTickEdge) this.drawTicksOnEdgeSvg(group, 'x', this.xTickEdge);
+        if (this.yTickEdge) this.drawTicksOnEdgeSvg(group, 'y', this.yTickEdge);
+        if (this.zTickEdge) this.drawTicksOnEdgeSvg(group, 'z', this.zTickEdge);
+    }
+
+    private drawTicksOnEdgeSvg(group: SVGElement, axis: 'x' | 'y' | 'z', edge: TickEdge) {
+        const cfg = this.config!;
+        const target = cfg.majorTickNum ? Math.max(2, Math.round(cfg.majorTickNum * 0.6)) : DEFAULT_TARGET_TICKS;
+        const [min, max] = axis === 'x' ? [cfg.xmin, cfg.xmax] : axis === 'y' ? [cfg.ymin, cfg.ymax] : [cfg.zmin, cfg.zmax];
+        const interval = niceInterval(max - min, target);
+        const start = Math.ceil(min / interval) * interval;
+        const tickColor = 'var(--text-muted)';
+        const TICK_LENGTH = 6;
+        const LABEL_OFFSET = 14;
+
+        for (let v = start; v <= max + interval * 1e-6; v += interval) {
+            const p =
+                axis === 'x' ? this.project(v, edge.fixedA, edge.fixedB) :
+                axis === 'y' ? this.project(edge.fixedA, v, edge.fixedB) :
+                this.project(edge.fixedA, edge.fixedB, v);
+
+            const markX2 = p.sx + edge.outwardX * TICK_LENGTH;
+            const markY2 = p.sy + edge.outwardY * TICK_LENGTH;
+            this.svgLine(group, p.sx, p.sy, markX2, markY2, tickColor, '1');
+
+            const label = document.createElementNS(SVG_NS, 'text');
+            label.setAttribute('x', String(p.sx + edge.outwardX * LABEL_OFFSET));
+            label.setAttribute('y', String(p.sy + edge.outwardY * LABEL_OFFSET));
+            label.setAttribute('text-anchor', 'middle');
+            label.setAttribute('dominant-baseline', 'central');
+            label.setAttribute('fill', tickColor);
+            label.setAttribute('font-size', '10');
+            label.setAttribute('font-family', 'var(--font-monospace)');
+            label.textContent = formatTick(v);
+            group.appendChild(label);
+        }
+    }
+
+    private drawAxisNameLabelsToSvg(group: SVGElement) {
+        const cfg = this.config!;
+        const AXIS_LABEL_OFFSET = 30;
+        const edges: { edge: TickEdge | null; text: string }[] = [
+            { edge: this.xTickEdge, text: cfg.xLabel },
+            { edge: this.yTickEdge, text: cfg.yLabel },
+            { edge: this.zTickEdge, text: cfg.zLabel },
+        ];
+        for (const { edge, text } of edges) {
+            if (!edge) continue;
+            const mx = (edge.p1.sx + edge.p2.sx) / 2;
+            const my = (edge.p1.sy + edge.p2.sy) / 2;
+            const label = document.createElementNS(SVG_NS, 'text');
+            label.setAttribute('x', String(mx + edge.outwardX * AXIS_LABEL_OFFSET));
+            label.setAttribute('y', String(my + edge.outwardY * AXIS_LABEL_OFFSET));
+            label.setAttribute('text-anchor', 'middle');
+            label.setAttribute('dominant-baseline', 'central');
+            label.setAttribute('fill', 'var(--text-normal)');
+            label.setAttribute('font-size', '13');
+            label.setAttribute('font-weight', '500');
+            label.textContent = text;
+            group.appendChild(label);
+        }
+    }
+
+    private svgLine(parent: SVGElement, x1: number, y1: number, x2: number, y2: number, stroke: string, width: string, opacity?: number) {
         const line = document.createElementNS(SVG_NS, 'line');
         line.setAttribute('x1', String(x1));
         line.setAttribute('y1', String(y1));
@@ -553,50 +704,8 @@ export class SVG3DRenderer {
         line.setAttribute('y2', String(y2));
         line.setAttribute('stroke', stroke);
         line.setAttribute('stroke-width', width);
+        if (opacity !== undefined && opacity !== 1) line.setAttribute('stroke-opacity', String(opacity));
         parent.appendChild(line);
-    }
-
-    private svgLabel(parent: SVGElement, x: number, y: number, text: string, anchor: string) {
-        const t = document.createElementNS(SVG_NS, 'text');
-        t.setAttribute('x', String(x));
-        t.setAttribute('y', String(y));
-        if (anchor !== 'start') t.setAttribute('text-anchor', anchor);
-        t.setAttribute('fill', 'var(--text-normal)');
-        t.setAttribute('font-size', '13');
-        t.setAttribute('font-weight', '500');
-        t.textContent = text;
-        parent.appendChild(t);
-    }
-
-    private svgAxisTicks(group: SVGElement, axis: 'x' | 'y' | 'z', min: number, max: number, fixedA: number, fixedB: number) {
-        const cfg = this.config!;
-        const target = cfg.majorTickNum ? Math.max(2, Math.round(cfg.majorTickNum * 0.6)) : DEFAULT_TARGET_TICKS;
-        const interval = niceInterval(max - min, target);
-        const start = Math.ceil(min / interval) * interval;
-
-        for (let v = start; v <= max; v += interval) {
-            let p: { sx: number; sy: number };
-            if (axis === 'x') p = this.project(v, fixedA, fixedB);
-            else if (axis === 'y') p = this.project(fixedA, v, fixedB);
-            else p = this.project(fixedA, fixedB, v);
-
-            const circle = document.createElementNS(SVG_NS, 'circle');
-            circle.setAttribute('cx', String(p.sx));
-            circle.setAttribute('cy', String(p.sy));
-            circle.setAttribute('r', '2');
-            circle.setAttribute('fill', 'var(--text-muted)');
-            group.appendChild(circle);
-
-            const label = document.createElementNS(SVG_NS, 'text');
-            label.setAttribute('x', String(p.sx));
-            label.setAttribute('y', String(p.sy + (axis === 'z' ? -8 : 14)));
-            label.setAttribute('text-anchor', 'middle');
-            label.setAttribute('fill', 'var(--text-muted)');
-            label.setAttribute('font-size', '10');
-            label.setAttribute('font-family', 'var(--font-monospace)');
-            label.textContent = formatTick(v);
-            group.appendChild(label);
-        }
     }
 
     private updateTitleSvg() {
@@ -630,9 +739,9 @@ export class SVG3DRenderer {
         ctx.fill();
 
         // Back axes -> surface -> front axes -> annotations -> title.
-        this.drawAxesToCanvas('back');
+        this.drawBoxToCanvas('back');
         this.drawQuadsToCanvas(this.quads);
-        this.drawAxesToCanvas('front');
+        this.drawBoxToCanvas('front');
         this.drawAnnotationsToCanvas();
         this.drawTitleToCanvas();
 
@@ -670,80 +779,90 @@ export class SVG3DRenderer {
         }
     }
 
-    private drawAxesToCanvas(layer: 'back' | 'front') {
-        const cfg = this.config!;
-        const geom = this.computeAxisGeometry(layer);
+    /** Draw the cuboid edges on the canvas plus, in front layer, tick marks and labels. */
+    private drawBoxToCanvas(layer: 'back' | 'front') {
         const ctx = this.ctx;
+        const cfg = this.config!;
         const axisColor = this.themeColors.textMuted;
         ctx.strokeStyle = axisColor;
-        ctx.fillStyle = axisColor;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = layer === 'back' ? 0.4 : 0.85;
+        for (const edge of this.boxEdges) {
+            if (edge.layer !== layer) continue;
+            const c1 = this.boxCorners[edge.p1Idx];
+            const c2 = this.boxCorners[edge.p2Idx];
+            ctx.beginPath();
+            ctx.moveTo(c1.sx, c1.sy);
+            ctx.lineTo(c2.sx, c2.sy);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
 
-        if (geom.drawX) {
-            this.canvasLine(geom.origin.sx, geom.origin.sy, geom.xEnd.sx, geom.xEnd.sy);
-            this.canvasAxisTicks('x', cfg.xmin, cfg.xmax, cfg.ymin, cfg.zmin);
-            if (cfg.showAxisLabels) {
-                const lp = this.project(cfg.xmax, cfg.ymin, cfg.zmin);
-                this.canvasLabel(lp.sx + 10, lp.sy + 5, cfg.xLabel, 'left');
-            }
-        }
-        if (geom.drawY) {
-            this.canvasLine(geom.origin.sx, geom.origin.sy, geom.yEnd.sx, geom.yEnd.sy);
-            this.canvasAxisTicks('y', cfg.ymin, cfg.ymax, cfg.xmin, cfg.zmin);
-            if (cfg.showAxisLabels) {
-                const lp = this.project(cfg.xmin, cfg.ymax, cfg.zmin);
-                this.canvasLabel(lp.sx - 15, lp.sy + 5, cfg.yLabel, 'right');
-            }
-        }
-        if (geom.drawZ) {
-            this.canvasLine(geom.origin.sx, geom.origin.sy, geom.zEnd.sx, geom.zEnd.sy);
-            this.canvasAxisTicks('z', cfg.zmin, cfg.zmax, cfg.xmin, cfg.ymin);
-            if (cfg.showAxisLabels) {
-                const lp = this.project(cfg.xmin, cfg.ymin, cfg.zmax);
-                this.canvasLabel(lp.sx - 10, lp.sy - 8, cfg.zLabel, 'right');
-            }
+        if (layer === 'front') {
+            this.drawTicksToCanvas();
+            if (cfg.showAxisLabels) this.drawAxisNameLabelsToCanvas();
         }
     }
 
-    private canvasLine(x1: number, y1: number, x2: number, y2: number) {
-        const ctx = this.ctx;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
+    private drawTicksToCanvas() {
+        if (this.xTickEdge) this.drawTicksOnEdgeCanvas('x', this.xTickEdge);
+        if (this.yTickEdge) this.drawTicksOnEdgeCanvas('y', this.yTickEdge);
+        if (this.zTickEdge) this.drawTicksOnEdgeCanvas('z', this.zTickEdge);
     }
 
-    private canvasAxisTicks(axis: 'x' | 'y' | 'z', min: number, max: number, fixedA: number, fixedB: number) {
+    private drawTicksOnEdgeCanvas(axis: 'x' | 'y' | 'z', edge: TickEdge) {
         const cfg = this.config!;
         const ctx = this.ctx;
         const target = cfg.majorTickNum ? Math.max(2, Math.round(cfg.majorTickNum * 0.6)) : DEFAULT_TARGET_TICKS;
+        const [min, max] = axis === 'x' ? [cfg.xmin, cfg.xmax] : axis === 'y' ? [cfg.ymin, cfg.ymax] : [cfg.zmin, cfg.zmax];
         const interval = niceInterval(max - min, target);
         const start = Math.ceil(min / interval) * interval;
+        const TICK_LENGTH = 6;
+        const LABEL_OFFSET = 14;
 
+        ctx.strokeStyle = this.themeColors.textMuted;
+        ctx.fillStyle = this.themeColors.textMuted;
+        ctx.lineWidth = 1;
         ctx.font = '10px var(--font-monospace, monospace)';
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'alphabetic';
+        ctx.textBaseline = 'middle';
 
-        for (let v = start; v <= max; v += interval) {
-            let p: { sx: number; sy: number };
-            if (axis === 'x') p = this.project(v, fixedA, fixedB);
-            else if (axis === 'y') p = this.project(fixedA, v, fixedB);
-            else p = this.project(fixedA, fixedB, v);
+        for (let v = start; v <= max + interval * 1e-6; v += interval) {
+            const p =
+                axis === 'x' ? this.project(v, edge.fixedA, edge.fixedB) :
+                axis === 'y' ? this.project(edge.fixedA, v, edge.fixedB) :
+                this.project(edge.fixedA, edge.fixedB, v);
             ctx.beginPath();
-            ctx.arc(p.sx, p.sy, 2, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillText(formatTick(v), p.sx, p.sy + (axis === 'z' ? -8 : 14));
+            ctx.moveTo(p.sx, p.sy);
+            ctx.lineTo(p.sx + edge.outwardX * TICK_LENGTH, p.sy + edge.outwardY * TICK_LENGTH);
+            ctx.stroke();
+            ctx.fillText(
+                formatTick(v),
+                p.sx + edge.outwardX * LABEL_OFFSET,
+                p.sy + edge.outwardY * LABEL_OFFSET
+            );
         }
     }
 
-    private canvasLabel(x: number, y: number, text: string, align: 'left' | 'right' | 'center') {
+    private drawAxisNameLabelsToCanvas() {
+        const cfg = this.config!;
         const ctx = this.ctx;
+        const AXIS_LABEL_OFFSET = 30;
         ctx.fillStyle = this.themeColors.textNormal;
         ctx.font = '500 13px var(--font-text, sans-serif)';
-        ctx.textAlign = align === 'left' ? 'left' : align === 'right' ? 'right' : 'center';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillText(text, x, y);
-        ctx.fillStyle = this.themeColors.textMuted;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const edges: { edge: TickEdge | null; text: string }[] = [
+            { edge: this.xTickEdge, text: cfg.xLabel },
+            { edge: this.yTickEdge, text: cfg.yLabel },
+            { edge: this.zTickEdge, text: cfg.zLabel },
+        ];
+        for (const { edge, text } of edges) {
+            if (!edge) continue;
+            const mx = (edge.p1.sx + edge.p2.sx) / 2;
+            const my = (edge.p1.sy + edge.p2.sy) / 2;
+            ctx.fillText(text, mx + edge.outwardX * AXIS_LABEL_OFFSET, my + edge.outwardY * AXIS_LABEL_OFFSET);
+        }
     }
 
     private drawAnnotationsToCanvas() {

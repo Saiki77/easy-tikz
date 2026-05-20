@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.7.0] - 2026-05-21
+
+### Changed
+
+- **3D preview now matches pgfplots framing.** The 3D scene is wrapped in a real bounding cuboid (12 edges, back-vs-front classified by camera orientation) instead of axes through the origin. Tick marks are short outward strokes on the back-facing edges; tick numbers and axis names (`x`, `y`, `z`) sit just outside the box. Drag through 360 degrees and the framing always opens toward the viewer.
+- Box edges layered with the surface via the existing back-surface-front pass: back edges sit behind the surface (faint), front edges sit on top (stronger). Tick marks and labels live in the front layer so they are never occluded.
+- The Canvas2D fast path uses the same box geometry, so what you see during drag matches what you see at rest.
+
+The visual gap with the compiled pgfplots output is much smaller now.
+
 ## [3.6.1] - 2026-05-21
 
 ### Changed
