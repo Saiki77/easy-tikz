@@ -1,10 +1,10 @@
 {
-	"id": "tikz_graph_helper",
+	"id": "tikz-graph-helper",
 	"name": "Tikz Graph Helper",
 	"version": "2.2.0",
 	"minAppVersion": "0.15.0",
-	"description": "Helps to generate tikz graphs and code.",
-	"author": "Justus",
+	"description": "Visually design TikZ and pgfplots graphs with a live SVG preview. Supports 2D functions, 3D surfaces, tangents, extrema, and one-click code insertion.",
+	"author": "Saiki77",
 	"authorUrl": "https://github.com/Saiki77",
 	"isDesktopOnly": true
 }

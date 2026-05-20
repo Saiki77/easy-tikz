@@ -71,38 +71,58 @@ var import_obsidian2 = __toModule(require("obsidian"));
 var import_obsidian = __toModule(require("obsidian"));
 
 // src/math.ts
+var DERIVATIVE_STEP = 1e-4;
+var EXTREMA_SAMPLES = 100;
+function compile1D(expression) {
+  return new Function("x", `return ${expression.replace(/\^/g, "**")}`);
+}
+function compile2D(expression) {
+  return new Function("x", "y", `return ${expression.replace(/\^/g, "**")}`);
+}
 var MathHelper = class {
   static parseDomain(domain) {
-    const [min, max] = domain.split(":").map(Number);
+    if (!domain || typeof domain !== "string") {
+      throw new Error("Domain is empty");
+    }
+    const parts = domain.split(":");
+    if (parts.length !== 2) {
+      throw new Error('Domain must look like "min:max", e.g. -10:10');
+    }
+    const min = Number(parts[0]);
+    const max = Number(parts[1]);
+    if (!isFinite(min) || !isFinite(max)) {
+      throw new Error("Domain bounds must be finite numbers");
+    }
+    if (min >= max) {
+      throw new Error("Domain min must be less than max");
+    }
     return [min, max];
   }
   static parseTangentPoint(point, domain) {
     const x = Number(point);
-    if (isNaN(x)) {
-      throw new Error("Invalid tangent point");
+    if (!isFinite(x)) {
+      throw new Error("Tangent point must be a number");
     }
     const [min, max] = domain;
     if (x < min || x > max) {
-      throw new Error("Tangent point outside domain");
+      throw new Error(`Tangent point ${x} is outside the domain [${min}, ${max}]`);
     }
     return x;
   }
   static calculateDerivative(expression, x) {
-    const h = 1e-4;
-    const f = new Function("x", `return ${expression.replace(/\^/g, "**")}`);
-    return (f(x + h) - f(x)) / h;
+    const f = compile1D(expression);
+    return (f(x + DERIVATIVE_STEP) - f(x)) / DERIVATIVE_STEP;
   }
   static findExtrema(expression, domain) {
     const [min, max] = this.parseDomain(domain);
-    const step = (max - min) / 100;
+    const step = (max - min) / EXTREMA_SAMPLES;
     const extrema = [];
-    const f = new Function("x", `return ${expression.replace(/\^/g, "**")}`);
-    const h = 1e-4;
+    const f = compile1D(expression);
     for (let x = min + step; x < max - step; x += step) {
       const deriv1 = this.calculateDerivative(expression, x - step);
       const deriv2 = this.calculateDerivative(expression, x);
       if (deriv1 < 0 && deriv2 > 0 || deriv1 > 0 && deriv2 < 0) {
-        const secondDeriv = (this.calculateDerivative(expression, x + h) - this.calculateDerivative(expression, x)) / h;
+        const secondDeriv = (this.calculateDerivative(expression, x + DERIVATIVE_STEP) - this.calculateDerivative(expression, x)) / DERIVATIVE_STEP;
         const type = secondDeriv > 0 ? "minimum" : "maximum";
         extrema.push({
           x: Number(x.toFixed(3)),
@@ -114,23 +134,16 @@ var MathHelper = class {
     return extrema;
   }
   static calculateTangentLine(expression, x0) {
-    try {
-      const f = new Function("x", `return ${expression.replace(/\^/g, "**")}`);
-      const y0 = f(x0);
-      const slope = this.calculateDerivative(expression, x0);
-      return `${slope}*x + ${y0 - slope * x0}`;
-    } catch (error) {
-      console.error("Error calculating tangent line:", error);
-      throw error;
-    }
+    const f = compile1D(expression);
+    const y0 = f(x0);
+    const slope = this.calculateDerivative(expression, x0);
+    return `${slope}*x + ${y0 - slope * x0}`;
   }
   static evaluateExpression(expression, x) {
-    const f = new Function("x", `return ${expression.replace(/\^/g, "**")}`);
-    return f(x);
+    return compile1D(expression)(x);
   }
   static evaluateExpression2D(expression, x, y) {
-    const f = new Function("x", "y", `return ${expression.replace(/\^/g, "**")}`);
-    return f(x, y);
+    return compile2D(expression)(x, y);
   }
 };
 
@@ -348,11 +361,10 @@ fill opacity=0.3`);
             const tangentExpression = MathHelper.calculateTangentLine(func.expression, tangentX);
             code += `
 \\addplot[${func.color}, dashed, domain=${func.domain}] {${tangentExpression}};`;
-            const f = new Function("x", `return ${func.expression.replace(/\^/g, "**")}`);
+            const ty = MathHelper.evaluateExpression(func.expression, tangentX);
             code += `
-\\addplot[${func.color}, only marks] coordinates {(${tangentX},${f(tangentX)})};`;
-          } catch (error) {
-            console.error("Error calculating tangent:", error);
+\\addplot[${func.color}, only marks] coordinates {(${tangentX},${ty})};`;
+          } catch (e) {
           }
         }
         if (func.extrema) {
@@ -371,8 +383,7 @@ fill opacity=0.3`);
 \\node[above] at (axis cs:${point.x},${point.y + 1}) {${point.type}};`;
               });
             }
-          } catch (error) {
-            console.error("Error calculating extrema:", error);
+          } catch (e) {
           }
         }
         return code;
@@ -492,8 +503,7 @@ var SettingsManager = class {
   }
 };
 
-// src/renderer.ts
-var SVG_NS = "http://www.w3.org/2000/svg";
+// src/colors.ts
 var COLOR_MAP = {
   black: "var(--text-normal)",
   red: "#e74c3c",
@@ -503,12 +513,40 @@ var COLOR_MAP = {
   green: "#2ecc71",
   purple: "#9b59b6"
 };
+var COLOR_OPTIONS = {
+  black: "Black",
+  red: "Red",
+  blue: "Blue",
+  teal: "Teal",
+  orange: "Orange",
+  green: "Green",
+  purple: "Purple"
+};
+var THICKNESS_OPTIONS = {
+  "very thin": "Very Thin",
+  thin: "Thin",
+  thick: "Thick",
+  "very thick": "Very Thick"
+};
 var THICKNESS_MAP = {
   "very thin": 1,
   thin: 1.5,
   thick: 2.5,
   "very thick": 3.5
 };
+function resolveCssColor(cssValue) {
+  if (!cssValue)
+    return cssValue;
+  if (cssValue.startsWith("#") || cssValue.startsWith("rgb"))
+    return cssValue;
+  const match = cssValue.match(/var\((--[^,)]+)/);
+  if (!match)
+    return cssValue;
+  const resolved = getComputedStyle(document.body).getPropertyValue(match[1]).trim();
+  return resolved || cssValue;
+}
+
+// src/util.ts
 function niceInterval(range, targetTicks) {
   const rough = range / targetTicks;
   const mag = Math.pow(10, Math.floor(Math.log10(rough)));
@@ -533,39 +571,59 @@ function formatTick(value) {
   const s = value.toPrecision(4);
   return parseFloat(s).toString();
 }
+var GREEK_MAP = {
+  "\\sum": "\u2211",
+  "\\int": "\u222B",
+  "\\infty": "\u221E",
+  "\\pi": "\u03C0",
+  "\\alpha": "\u03B1",
+  "\\beta": "\u03B2",
+  "\\gamma": "\u03B3",
+  "\\delta": "\u03B4",
+  "\\theta": "\u03B8",
+  "\\lambda": "\u03BB",
+  "\\mu": "\u03BC",
+  "\\sigma": "\u03C3",
+  "\\phi": "\u03C6",
+  "\\omega": "\u03C9"
+};
 function stripLatex(text) {
-  return text.replace(/\\[({]/g, "").replace(/\\[)}]/g, "").replace(/\\\\/g, "").replace(/\\[a-zA-Z]+/g, (m) => {
-    const map = {
-      "\\sum": "\u2211",
-      "\\int": "\u222B",
-      "\\infty": "\u221E",
-      "\\pi": "\u03C0",
-      "\\alpha": "\u03B1",
-      "\\beta": "\u03B2",
-      "\\gamma": "\u03B3",
-      "\\delta": "\u03B4",
-      "\\theta": "\u03B8",
-      "\\lambda": "\u03BB",
-      "\\mu": "\u03BC",
-      "\\sigma": "\u03C3",
-      "\\phi": "\u03C6",
-      "\\omega": "\u03C9"
-    };
-    return map[m] || m.replace("\\", "");
-  });
+  return text.replace(/\\[({]/g, "").replace(/\\[)}]/g, "").replace(/\\\\/g, "").replace(/\\[a-zA-Z]+/g, (m) => GREEK_MAP[m] || m.replace("\\", ""));
 }
+function hexToRgb(hex) {
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!m)
+    return null;
+  return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+}
+function rgbStringToRgb(rgb) {
+  const m = rgb.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (!m)
+    return null;
+  return { r: parseInt(m[1], 10), g: parseInt(m[2], 10), b: parseInt(m[3], 10) };
+}
+
+// src/renderer.ts
+var SVG_NS = "http://www.w3.org/2000/svg";
+var PADDING_TOP = 45;
+var PADDING_RIGHT = 30;
+var PADDING_BOTTOM = 45;
+var PADDING_LEFT = 55;
+var SAMPLES_PER_FUNCTION = 500;
+var Y_CLAMP_FACTOR = 10;
+var TARGET_TICKS_X = 8;
+var TARGET_TICKS_Y = 6;
 var SVGRenderer = class {
   constructor(config) {
-    this.padding = { top: 45, right: 30, bottom: 45, left: 55 };
     this.config = config;
-    this.plotWidth = config.width - this.padding.left - this.padding.right;
-    this.plotHeight = config.height - this.padding.top - this.padding.bottom;
+    this.plotWidth = config.width - PADDING_LEFT - PADDING_RIGHT;
+    this.plotHeight = config.height - PADDING_TOP - PADDING_BOTTOM;
   }
   toScreenX(mathX) {
-    return this.padding.left + (mathX - this.config.xmin) / (this.config.xmax - this.config.xmin) * this.plotWidth;
+    return PADDING_LEFT + (mathX - this.config.xmin) / (this.config.xmax - this.config.xmin) * this.plotWidth;
   }
   toScreenY(mathY) {
-    return this.config.height - this.padding.bottom - (mathY - this.config.ymin) / (this.config.ymax - this.config.ymin) * this.plotHeight;
+    return this.config.height - PADDING_BOTTOM - (mathY - this.config.ymin) / (this.config.ymax - this.config.ymin) * this.plotHeight;
   }
   el(tag, attrs = {}) {
     const e = document.createElementNS(SVG_NS, tag);
@@ -589,8 +647,8 @@ var SVGRenderer = class {
     const defs = this.el("defs");
     const clipPath = this.el("clipPath", { id: "plot-clip" });
     clipPath.appendChild(this.el("rect", {
-      x: String(this.padding.left),
-      y: String(this.padding.top),
+      x: String(PADDING_LEFT),
+      y: String(PADDING_TOP),
       width: String(this.plotWidth),
       height: String(this.plotHeight)
     }));
@@ -619,17 +677,17 @@ var SVGRenderer = class {
     if (!this.config.gridMajor && !this.config.gridMinor)
       return;
     const { xmin, xmax, ymin, ymax } = this.config;
-    const majorInterval = niceInterval(xmax - xmin, 8);
-    const majorIntervalY = niceInterval(ymax - ymin, 6);
+    const majorInterval = niceInterval(xmax - xmin, TARGET_TICKS_X);
+    const majorIntervalY = niceInterval(ymax - ymin, TARGET_TICKS_Y);
     const gridGroup = this.el("g", { class: "tikz-grid" });
     if (this.config.gridMajor || this.config.gridMinor) {
       const startX = Math.ceil(xmin / majorInterval) * majorInterval;
       for (let x = startX; x <= xmax; x += majorInterval) {
         gridGroup.appendChild(this.el("line", {
           x1: String(this.toScreenX(x)),
-          y1: String(this.padding.top),
+          y1: String(PADDING_TOP),
           x2: String(this.toScreenX(x)),
-          y2: String(this.config.height - this.padding.bottom),
+          y2: String(this.config.height - PADDING_BOTTOM),
           stroke: "var(--background-modifier-border)",
           "stroke-width": "1",
           "stroke-opacity": "0.5"
@@ -638,9 +696,9 @@ var SVGRenderer = class {
       const startY = Math.ceil(ymin / majorIntervalY) * majorIntervalY;
       for (let y = startY; y <= ymax; y += majorIntervalY) {
         gridGroup.appendChild(this.el("line", {
-          x1: String(this.padding.left),
+          x1: String(PADDING_LEFT),
           y1: String(this.toScreenY(y)),
-          x2: String(this.config.width - this.padding.right),
+          x2: String(this.config.width - PADDING_RIGHT),
           y2: String(this.toScreenY(y)),
           stroke: "var(--background-modifier-border)",
           "stroke-width": "1",
@@ -656,9 +714,9 @@ var SVGRenderer = class {
       for (let x = startMX; x <= xmax; x += minorStepX) {
         gridGroup.appendChild(this.el("line", {
           x1: String(this.toScreenX(x)),
-          y1: String(this.padding.top),
+          y1: String(PADDING_TOP),
           x2: String(this.toScreenX(x)),
-          y2: String(this.config.height - this.padding.bottom),
+          y2: String(this.config.height - PADDING_BOTTOM),
           stroke: "var(--background-modifier-border)",
           "stroke-width": "0.5",
           "stroke-opacity": "0.25"
@@ -667,9 +725,9 @@ var SVGRenderer = class {
       const startMY = Math.ceil(ymin / minorStepY) * minorStepY;
       for (let y = startMY; y <= ymax; y += minorStepY) {
         gridGroup.appendChild(this.el("line", {
-          x1: String(this.padding.left),
+          x1: String(PADDING_LEFT),
           y1: String(this.toScreenY(y)),
-          x2: String(this.config.width - this.padding.right),
+          x2: String(this.config.width - PADDING_RIGHT),
           y2: String(this.toScreenY(y)),
           stroke: "var(--background-modifier-border)",
           "stroke-width": "0.5",
@@ -682,17 +740,17 @@ var SVGRenderer = class {
   drawAxes(svg) {
     const { xmin, xmax, ymin, ymax } = this.config;
     const axisGroup = this.el("g", { class: "tikz-axes" });
-    const majorIntervalX = niceInterval(xmax - xmin, 8);
-    const majorIntervalY = niceInterval(ymax - ymin, 6);
+    const majorIntervalX = niceInterval(xmax - xmin, TARGET_TICKS_X);
+    const majorIntervalY = niceInterval(ymax - ymin, TARGET_TICKS_Y);
     if (this.config.axisMiddle) {
       const originX = this.toScreenX(0);
       const originY = this.toScreenY(0);
-      const clampedOX = Math.max(this.padding.left, Math.min(this.config.width - this.padding.right, originX));
-      const clampedOY = Math.max(this.padding.top, Math.min(this.config.height - this.padding.bottom, originY));
+      const clampedOX = Math.max(PADDING_LEFT, Math.min(this.config.width - PADDING_RIGHT, originX));
+      const clampedOY = Math.max(PADDING_TOP, Math.min(this.config.height - PADDING_BOTTOM, originY));
       axisGroup.appendChild(this.el("line", {
-        x1: String(this.padding.left),
+        x1: String(PADDING_LEFT),
         y1: String(clampedOY),
-        x2: String(this.config.width - this.padding.right),
+        x2: String(this.config.width - PADDING_RIGHT),
         y2: String(clampedOY),
         stroke: "var(--text-muted)",
         "stroke-width": "1.5",
@@ -700,9 +758,9 @@ var SVGRenderer = class {
       }));
       axisGroup.appendChild(this.el("line", {
         x1: String(clampedOX),
-        y1: String(this.config.height - this.padding.bottom),
+        y1: String(this.config.height - PADDING_BOTTOM),
         x2: String(clampedOX),
-        y2: String(this.padding.top),
+        y2: String(PADDING_TOP),
         stroke: "var(--text-muted)",
         "stroke-width": "1.5",
         "marker-end": "url(#arrowhead)"
@@ -757,8 +815,8 @@ var SVGRenderer = class {
       }
     } else {
       axisGroup.appendChild(this.el("rect", {
-        x: String(this.padding.left),
-        y: String(this.padding.top),
+        x: String(PADDING_LEFT),
+        y: String(PADDING_TOP),
         width: String(this.plotWidth),
         height: String(this.plotHeight),
         fill: "none",
@@ -770,15 +828,15 @@ var SVGRenderer = class {
         const sx = this.toScreenX(x);
         axisGroup.appendChild(this.el("line", {
           x1: String(sx),
-          y1: String(this.config.height - this.padding.bottom),
+          y1: String(this.config.height - PADDING_BOTTOM),
           x2: String(sx),
-          y2: String(this.config.height - this.padding.bottom + 5),
+          y2: String(this.config.height - PADDING_BOTTOM + 5),
           stroke: "var(--text-muted)",
           "stroke-width": "1"
         }));
         const label = this.el("text", {
           x: String(sx),
-          y: String(this.config.height - this.padding.bottom + 18),
+          y: String(this.config.height - PADDING_BOTTOM + 18),
           "text-anchor": "middle",
           fill: "var(--text-muted)",
           "font-size": "11",
@@ -791,15 +849,15 @@ var SVGRenderer = class {
       for (let y = startY; y <= ymax; y += majorIntervalY) {
         const sy = this.toScreenY(y);
         axisGroup.appendChild(this.el("line", {
-          x1: String(this.padding.left - 5),
+          x1: String(PADDING_LEFT - 5),
           y1: String(sy),
-          x2: String(this.padding.left),
+          x2: String(PADDING_LEFT),
           y2: String(sy),
           stroke: "var(--text-muted)",
           "stroke-width": "1"
         }));
         const label = this.el("text", {
-          x: String(this.padding.left - 8),
+          x: String(PADDING_LEFT - 8),
           y: String(sy + 4),
           "text-anchor": "end",
           fill: "var(--text-muted)",
@@ -812,7 +870,7 @@ var SVGRenderer = class {
     }
     if (this.config.showAxisLabels) {
       const xLabelEl = this.el("text", {
-        x: String(this.padding.left + this.plotWidth / 2),
+        x: String(PADDING_LEFT + this.plotWidth / 2),
         y: String(this.config.height - 5),
         "text-anchor": "middle",
         fill: "var(--text-normal)",
@@ -823,12 +881,12 @@ var SVGRenderer = class {
       axisGroup.appendChild(xLabelEl);
       const yLabelEl = this.el("text", {
         x: String(12),
-        y: String(this.padding.top + this.plotHeight / 2),
+        y: String(PADDING_TOP + this.plotHeight / 2),
         "text-anchor": "middle",
         fill: "var(--text-normal)",
         "font-size": "13",
         "font-weight": "500",
-        transform: `rotate(-90, 12, ${this.padding.top + this.plotHeight / 2})`
+        transform: `rotate(-90, 12, ${PADDING_TOP + this.plotHeight / 2})`
       });
       yLabelEl.textContent = this.config.yLabel;
       axisGroup.appendChild(yLabelEl);
@@ -846,159 +904,157 @@ var SVGRenderer = class {
         continue;
       const cssColor = COLOR_MAP[func.color] || func.color;
       const strokeWidth = THICKNESS_MAP[func.thickness] || 1.5;
+      let domMin;
+      let domMax;
       try {
-        const [domMin, domMax] = MathHelper.parseDomain(func.domain);
-        const samples = 500;
-        const step = (domMax - domMin) / samples;
-        const points = [];
-        for (let i = 0; i <= samples; i++) {
-          const mx = domMin + i * step;
-          try {
-            const my = MathHelper.evaluateExpression(func.expression, mx);
-            if (isFinite(my)) {
-              points.push({ x: mx, y: my });
+        [domMin, domMax] = MathHelper.parseDomain(func.domain);
+      } catch (e) {
+        continue;
+      }
+      const step = (domMax - domMin) / SAMPLES_PER_FUNCTION;
+      const points = [];
+      for (let i = 0; i <= SAMPLES_PER_FUNCTION; i++) {
+        const mx = domMin + i * step;
+        try {
+          const my = MathHelper.evaluateExpression(func.expression, mx);
+          points.push({ x: mx, y: isFinite(my) ? my : NaN });
+        } catch (e) {
+          points.push({ x: mx, y: NaN });
+        }
+      }
+      let pathD = "";
+      let inSegment = false;
+      const yClamp = (this.config.ymax - this.config.ymin) * Y_CLAMP_FACTOR;
+      for (const p of points) {
+        if (isNaN(p.y) || Math.abs(p.y) > yClamp) {
+          inSegment = false;
+          continue;
+        }
+        const sx = this.toScreenX(p.x);
+        const sy = this.toScreenY(p.y);
+        if (!inSegment) {
+          pathD += `M${sx.toFixed(2)},${sy.toFixed(2)} `;
+          inSegment = true;
+        } else {
+          pathD += `L${sx.toFixed(2)},${sy.toFixed(2)} `;
+        }
+      }
+      if (pathD) {
+        if (func.fill) {
+          let fillD = "";
+          let firstX = null;
+          let lastX = null;
+          let segInProgress = false;
+          const yAxisScreen = this.toScreenY(0);
+          for (const p of points) {
+            if (isNaN(p.y) || Math.abs(p.y) > yClamp) {
+              if (segInProgress && lastX !== null) {
+                fillD += `L${this.toScreenX(lastX).toFixed(2)},${yAxisScreen.toFixed(2)} Z `;
+                segInProgress = false;
+                firstX = null;
+              }
+              continue;
+            }
+            const sx = this.toScreenX(p.x);
+            const sy = this.toScreenY(p.y);
+            if (!segInProgress) {
+              fillD += `M${sx.toFixed(2)},${yAxisScreen.toFixed(2)} L${sx.toFixed(2)},${sy.toFixed(2)} `;
+              firstX = p.x;
+              segInProgress = true;
             } else {
-              points.push({ x: mx, y: NaN });
+              fillD += `L${sx.toFixed(2)},${sy.toFixed(2)} `;
             }
-          } catch (e) {
-            points.push({ x: mx, y: NaN });
+            lastX = p.x;
           }
+          if (segInProgress && lastX !== null) {
+            fillD += `L${this.toScreenX(lastX).toFixed(2)},${yAxisScreen.toFixed(2)} Z`;
+          }
+          funcGroup.appendChild(this.el("path", {
+            d: fillD,
+            fill: cssColor,
+            "fill-opacity": "0.15",
+            stroke: "none"
+          }));
         }
-        let pathD = "";
-        let inSegment = false;
-        const yClamp = (this.config.ymax - this.config.ymin) * 10;
-        for (const p of points) {
-          if (isNaN(p.y) || Math.abs(p.y) > yClamp) {
-            inSegment = false;
-            continue;
-          }
-          const sx = this.toScreenX(p.x);
-          const sy = this.toScreenY(p.y);
-          if (!inSegment) {
-            pathD += `M${sx.toFixed(2)},${sy.toFixed(2)} `;
-            inSegment = true;
-          } else {
-            pathD += `L${sx.toFixed(2)},${sy.toFixed(2)} `;
-          }
+        const attrs = {
+          d: pathD,
+          fill: "none",
+          stroke: cssColor,
+          "stroke-width": String(strokeWidth),
+          "stroke-linejoin": "round",
+          "stroke-linecap": "round"
+        };
+        if (func.dashed) {
+          attrs["stroke-dasharray"] = "6 4";
         }
-        if (pathD) {
-          if (func.fill) {
-            let fillD = "";
-            let firstX = null;
-            let lastX = null;
-            let segInProgress = false;
-            const yAxisScreen = this.toScreenY(0);
-            for (const p of points) {
-              if (isNaN(p.y) || Math.abs(p.y) > yClamp) {
-                if (segInProgress && lastX !== null) {
-                  fillD += `L${this.toScreenX(lastX).toFixed(2)},${yAxisScreen.toFixed(2)} Z `;
-                  segInProgress = false;
-                  firstX = null;
-                }
-                continue;
+        funcGroup.appendChild(this.el("path", attrs));
+      }
+      if (func.tangent && func.tangentPoint) {
+        try {
+          const domain = MathHelper.parseDomain(func.domain);
+          const tangentX = MathHelper.parseTangentPoint(func.tangentPoint, domain);
+          const tangentExpr = MathHelper.calculateTangentLine(func.expression, tangentX);
+          const ty0 = MathHelper.evaluateExpression(func.expression, tangentX);
+          const tLinePoints = [];
+          for (let i = 0; i <= 100; i++) {
+            const mx = domMin + i / 100 * (domMax - domMin);
+            try {
+              const my = MathHelper.evaluateExpression(tangentExpr, mx);
+              if (isFinite(my)) {
+                tLinePoints.push(`${i === 0 ? "M" : "L"}${this.toScreenX(mx).toFixed(2)},${this.toScreenY(my).toFixed(2)}`);
               }
-              const sx = this.toScreenX(p.x);
-              const sy = this.toScreenY(p.y);
-              if (!segInProgress) {
-                fillD += `M${sx.toFixed(2)},${yAxisScreen.toFixed(2)} L${sx.toFixed(2)},${sy.toFixed(2)} `;
-                firstX = p.x;
-                segInProgress = true;
-              } else {
-                fillD += `L${sx.toFixed(2)},${sy.toFixed(2)} `;
-              }
-              lastX = p.x;
+            } catch (e) {
             }
-            if (segInProgress && lastX !== null) {
-              fillD += `L${this.toScreenX(lastX).toFixed(2)},${yAxisScreen.toFixed(2)} Z`;
-            }
+          }
+          if (tLinePoints.length > 1) {
             funcGroup.appendChild(this.el("path", {
-              d: fillD,
-              fill: cssColor,
-              "fill-opacity": "0.15",
-              stroke: "none"
+              d: tLinePoints.join(" "),
+              fill: "none",
+              stroke: cssColor,
+              "stroke-width": "1.5",
+              "stroke-dasharray": "6 3",
+              "stroke-opacity": "0.7"
             }));
           }
-          const attrs = {
-            d: pathD,
-            fill: "none",
-            stroke: cssColor,
-            "stroke-width": String(strokeWidth),
-            "stroke-linejoin": "round",
-            "stroke-linecap": "round"
-          };
-          if (func.dashed) {
-            attrs["stroke-dasharray"] = "6 4";
-          }
-          funcGroup.appendChild(this.el("path", attrs));
+          funcGroup.appendChild(this.el("circle", {
+            cx: String(this.toScreenX(tangentX).toFixed(2)),
+            cy: String(this.toScreenY(ty0).toFixed(2)),
+            r: "5",
+            fill: cssColor,
+            stroke: "var(--background-primary)",
+            "stroke-width": "2"
+          }));
+        } catch (e) {
         }
-        if (func.tangent && func.tangentPoint) {
-          try {
-            const domain = MathHelper.parseDomain(func.domain);
-            const tangentX = MathHelper.parseTangentPoint(func.tangentPoint, domain);
-            const tangentExpr = MathHelper.calculateTangentLine(func.expression, tangentX);
-            const ty0 = MathHelper.evaluateExpression(func.expression, tangentX);
-            const tLinePoints = [];
-            for (let i = 0; i <= 100; i++) {
-              const mx = domMin + i / 100 * (domMax - domMin);
-              try {
-                const my = MathHelper.evaluateExpression(tangentExpr, mx);
-                if (isFinite(my)) {
-                  tLinePoints.push(`${i === 0 ? "M" : "L"}${this.toScreenX(mx).toFixed(2)},${this.toScreenY(my).toFixed(2)}`);
-                }
-              } catch (e) {
-              }
-            }
-            if (tLinePoints.length > 1) {
-              funcGroup.appendChild(this.el("path", {
-                d: tLinePoints.join(" "),
-                fill: "none",
-                stroke: cssColor,
-                "stroke-width": "1.5",
-                "stroke-dasharray": "6 3",
-                "stroke-opacity": "0.7"
-              }));
-            }
+      }
+      if (func.extrema) {
+        try {
+          const extremaPoints = MathHelper.findExtrema(func.expression, func.domain);
+          for (const pt of extremaPoints) {
             funcGroup.appendChild(this.el("circle", {
-              cx: String(this.toScreenX(tangentX).toFixed(2)),
-              cy: String(this.toScreenY(ty0).toFixed(2)),
+              cx: String(this.toScreenX(pt.x).toFixed(2)),
+              cy: String(this.toScreenY(pt.y).toFixed(2)),
               r: "5",
               fill: cssColor,
               stroke: "var(--background-primary)",
               "stroke-width": "2"
             }));
-          } catch (e) {
+            const label = this.el("text", {
+              x: String(this.toScreenX(pt.x).toFixed(2)),
+              y: String(this.toScreenY(pt.y) + (pt.type === "minimum" ? 18 : -10)),
+              "text-anchor": "middle",
+              fill: cssColor,
+              "font-size": "11",
+              "font-weight": "600"
+            });
+            label.textContent = pt.type === "minimum" ? "min" : "max";
+            funcGroup.appendChild(label);
           }
+        } catch (e) {
         }
-        if (func.extrema) {
-          try {
-            const extremaPoints = MathHelper.findExtrema(func.expression, func.domain);
-            for (const pt of extremaPoints) {
-              funcGroup.appendChild(this.el("circle", {
-                cx: String(this.toScreenX(pt.x).toFixed(2)),
-                cy: String(this.toScreenY(pt.y).toFixed(2)),
-                r: "5",
-                fill: cssColor,
-                stroke: "var(--background-primary)",
-                "stroke-width": "2"
-              }));
-              const label = this.el("text", {
-                x: String(this.toScreenX(pt.x).toFixed(2)),
-                y: String(this.toScreenY(pt.y) + (pt.type === "minimum" ? 18 : -10)),
-                "text-anchor": "middle",
-                fill: cssColor,
-                "font-size": "11",
-                "font-weight": "600"
-              });
-              label.textContent = pt.type === "minimum" ? "min" : "max";
-              funcGroup.appendChild(label);
-            }
-          } catch (e) {
-          }
-        }
-        if (func.showLegend) {
-          legendEntries.push({ color: cssColor, label: func.expression });
-        }
-      } catch (e) {
+      }
+      if (func.showLegend) {
+        legendEntries.push({ color: cssColor, label: func.expression });
       }
     }
     svg.appendChild(funcGroup);
@@ -1008,12 +1064,12 @@ var SVGRenderer = class {
   }
   drawLegend(svg, entries) {
     const legendGroup = this.el("g", { class: "tikz-legend" });
-    const boxX = this.config.width - this.padding.right - 10;
+    const boxX = this.config.width - PADDING_RIGHT - 10;
     const lineHeight = 20;
     const boxHeight = entries.length * lineHeight + 10;
     const boxWidth = 140;
     const startX = boxX - boxWidth;
-    const startY = this.padding.top + 5;
+    const startY = PADDING_TOP + 5;
     legendGroup.appendChild(this.el("rect", {
       x: String(startX),
       y: String(startY),
@@ -1052,7 +1108,7 @@ var SVGRenderer = class {
       return;
     const titleEl = this.el("text", {
       x: String(this.config.width / 2),
-      y: String(this.padding.top - 12),
+      y: String(PADDING_TOP - 12),
       "text-anchor": "middle",
       fill: "var(--text-normal)",
       "font-size": "15",
@@ -1065,64 +1121,32 @@ var SVGRenderer = class {
 
 // src/renderer3d.ts
 var SVG_NS2 = "http://www.w3.org/2000/svg";
-var COLOR_MAP2 = {
-  black: "#888888",
-  red: "#e74c3c",
-  blue: "#3498db",
-  teal: "#1abc9c",
-  orange: "#e67e22",
-  green: "#2ecc71",
-  purple: "#9b59b6"
-};
-function hexToRgb(hex) {
-  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
-  if (!m)
-    return null;
-  return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
-}
-function shadeColor(baseHex, t) {
-  const rgb = hexToRgb(baseHex);
+var PADDING_TOP2 = 40;
+var PADDING_RIGHT2 = 40;
+var PADDING_BOTTOM2 = 40;
+var PADDING_LEFT2 = 40;
+var VIEWPORT_SCALE = 0.28;
+var GRID_SAMPLES = 40;
+var TARGET_TICKS = 5;
+function shadeColor(baseColor, t) {
+  const resolved = resolveCssColor(baseColor);
+  const rgb = hexToRgb(resolved) || rgbStringToRgb(resolved);
   if (!rgb)
-    return baseHex;
+    return baseColor;
   const factor = 0.3 + t * 0.7;
   const r = Math.round(rgb.r * factor + 255 * (1 - factor));
   const g = Math.round(rgb.g * factor + 255 * (1 - factor));
   const b = Math.round(rgb.b * factor + 255 * (1 - factor));
   return `rgb(${r},${g},${b})`;
 }
-function niceInterval2(range, targetTicks) {
-  const rough = range / targetTicks;
-  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
-  const norm = rough / mag;
-  let nice;
-  if (norm <= 1.5)
-    nice = 1;
-  else if (norm <= 3)
-    nice = 2;
-  else if (norm <= 7)
-    nice = 5;
-  else
-    nice = 10;
-  return nice * mag;
-}
-function formatTick2(value) {
-  if (Math.abs(value) < 1e-10)
-    return "0";
-  const s = value.toPrecision(3);
-  return parseFloat(s).toString();
-}
-function stripLatex2(text) {
-  return text.replace(/\\[({]/g, "").replace(/\\[)}]/g, "").replace(/\\\\/g, "").replace(/\\[a-zA-Z]+/g, (m) => m.replace("\\", ""));
-}
 var SVG3DRenderer = class {
   constructor(config) {
-    this.padding = { top: 40, right: 40, bottom: 40, left: 40 };
     this.config = config;
     this.centerX = config.width / 2;
     this.centerY = config.height / 2 + 20;
-    const availW = config.width - this.padding.left - this.padding.right;
-    const availH = config.height - this.padding.top - this.padding.bottom;
-    this.scale = Math.min(availW, availH) * 0.28;
+    const availW = config.width - PADDING_LEFT2 - PADDING_RIGHT2;
+    const availH = config.height - PADDING_TOP2 - PADDING_BOTTOM2;
+    this.scale = Math.min(availW, availH) * VIEWPORT_SCALE;
     const azimuth = config.rotationZ * Math.PI / 180;
     const elevation = config.rotationX * Math.PI / 180;
     this.cosA = Math.cos(azimuth);
@@ -1168,15 +1192,18 @@ var SVG3DRenderer = class {
     for (const func of this.config.functions3D) {
       if (!func.expression)
         continue;
-      const quads = this.sampleSurface(func);
-      allQuads.push(...quads);
+      try {
+        const quads = this.sampleSurface(func);
+        allQuads.push(...quads);
+      } catch (e) {
+      }
     }
     this.drawAxes(svg, "back");
     allQuads.sort((a, b) => a.depth - b.depth);
     const surfaceGroup = this.el("g", { class: "tikz-3d-surface" });
     for (const quad of allQuads) {
       const pointsStr = quad.points.map((p) => `${p.sx.toFixed(1)},${p.sy.toFixed(1)}`).join(" ");
-      const baseColor = COLOR_MAP2[quad.color] || quad.color;
+      const baseColor = COLOR_MAP[quad.color] || quad.color;
       if (quad.wireframe) {
         surfaceGroup.appendChild(this.el("polygon", {
           points: pointsStr,
@@ -1208,13 +1235,12 @@ var SVG3DRenderer = class {
     const [ymin, ymax] = MathHelper.parseDomain(func.yDomain);
     const { zmin, zmax } = this.config;
     const zRange = zmax - zmin || 1;
-    const gridSize = 40;
-    const stepX = (xmax - xmin) / gridSize;
-    const stepY = (ymax - ymin) / gridSize;
+    const stepX = (xmax - xmin) / GRID_SAMPLES;
+    const stepY = (ymax - ymin) / GRID_SAMPLES;
     const zValues = [];
-    for (let i = 0; i <= gridSize; i++) {
+    for (let i = 0; i <= GRID_SAMPLES; i++) {
       zValues[i] = [];
-      for (let j = 0; j <= gridSize; j++) {
+      for (let j = 0; j <= GRID_SAMPLES; j++) {
         const x = xmin + i * stepX;
         const y = ymin + j * stepY;
         try {
@@ -1225,8 +1251,8 @@ var SVG3DRenderer = class {
         }
       }
     }
-    for (let i = 0; i < gridSize; i++) {
-      for (let j = 0; j < gridSize; j++) {
+    for (let i = 0; i < GRID_SAMPLES; i++) {
+      for (let j = 0; j < GRID_SAMPLES; j++) {
         const z00 = zValues[i][j];
         const z10 = zValues[i + 1][j];
         const z01 = zValues[i][j + 1];
@@ -1350,7 +1376,7 @@ var SVG3DRenderer = class {
     svg.appendChild(axisGroup);
   }
   drawAxisTicks(group, axis, min, max, fixedA, fixedB) {
-    const interval = niceInterval2(max - min, 5);
+    const interval = niceInterval(max - min, TARGET_TICKS);
     const start = Math.ceil(min / interval) * interval;
     for (let v = start; v <= max; v += interval) {
       let p;
@@ -1374,7 +1400,7 @@ var SVG3DRenderer = class {
         "font-size": "10",
         "font-family": "var(--font-monospace)"
       });
-      label.textContent = formatTick2(v);
+      label.textContent = formatTick(v);
       group.appendChild(label);
     }
   }
@@ -1383,64 +1409,52 @@ var SVG3DRenderer = class {
       return;
     const titleEl = this.el("text", {
       x: String(this.config.width / 2),
-      y: String(this.padding.top - 10),
+      y: String(PADDING_TOP2 - 10),
       "text-anchor": "middle",
       fill: "var(--text-normal)",
       "font-size": "15",
       "font-weight": "600"
     });
-    titleEl.textContent = stripLatex2(this.config.title);
+    titleEl.textContent = stripLatex(this.config.title);
     svg.appendChild(titleEl);
   }
 };
 
-// _bu5vauvob:/Users/justus/PycharmProjects/tikz-graph-help/src/styles.css
-var styles_default = '/* TikZ Graph Helper \u2014 Dashboard Styles */\n\n.tikz-modal {\n    display: flex;\n    flex-direction: column;\n    height: 80vh;\n    max-height: 80vh;\n    width: 90vw !important;\n    max-width: 1200px !important;\n}\n\n.tikz-modal .modal-content {\n    display: flex;\n    flex: 1;\n    overflow: hidden;\n    padding: 0 !important;\n}\n\n/* Split pane layout */\n.tikz-layout {\n    display: flex;\n    width: 100%;\n    height: 100%;\n    overflow: hidden;\n}\n\n.tikz-panel-left {\n    width: 42%;\n    min-width: 380px;\n    display: flex;\n    flex-direction: column;\n    border-right: 1px solid var(--background-modifier-border);\n    overflow: hidden;\n}\n\n.tikz-panel-right {\n    flex: 1;\n    display: flex;\n    flex-direction: column;\n    overflow: hidden;\n    min-width: 0;\n}\n\n/* Tab bar */\n.tikz-tab-bar {\n    display: flex;\n    gap: 2px;\n    padding: 10px 16px 0;\n    border-bottom: 1px solid var(--background-modifier-border);\n    background: var(--background-secondary);\n    flex-shrink: 0;\n}\n\n.tikz-tab-btn {\n    padding: 8px 16px;\n    border: none;\n    background: none;\n    color: var(--text-muted);\n    font-size: 13px;\n    font-weight: 500;\n    cursor: pointer;\n    border-bottom: 2px solid transparent;\n    border-radius: 4px 4px 0 0;\n    transition: all 0.15s ease;\n    white-space: nowrap;\n}\n\n.tikz-tab-btn:hover {\n    color: var(--text-normal);\n    background: var(--background-modifier-hover);\n}\n\n.tikz-tab-btn.active {\n    color: var(--interactive-accent);\n    border-bottom-color: var(--interactive-accent);\n    background: var(--background-primary);\n}\n\n/* Tab content */\n.tikz-tab-content {\n    flex: 1;\n    overflow-y: auto;\n    padding: 20px 24px;\n}\n\n/* Preview area */\n.tikz-preview-area {\n    flex: 1;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n    overflow: auto;\n    padding: 20px;\n    background: var(--background-primary);\n}\n\n.tikz-preview-area svg {\n    border-radius: 6px;\n    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);\n}\n\n.tikz-preview-area.is-3d {\n    cursor: grab;\n}\n\n.tikz-preview-area.is-3d:active {\n    cursor: grabbing;\n}\n\n.tikz-error {\n    color: var(--text-error);\n    font-size: 13px;\n    padding: 12px 16px;\n    background: var(--background-modifier-error);\n    border-radius: 6px;\n    max-width: 80%;\n    text-align: center;\n}\n\n/* Action bar */\n.tikz-action-bar {\n    display: flex;\n    gap: 8px;\n    padding: 12px 20px;\n    border-top: 1px solid var(--background-modifier-border);\n    background: var(--background-secondary);\n    flex-shrink: 0;\n    justify-content: flex-end;\n}\n\n.tikz-action-bar .setting-item {\n    border: none;\n    padding: 0;\n}\n\n.tikz-action-bar button {\n    padding: 6px 16px;\n    font-size: 13px;\n}\n\n/* \u2500\u2500\u2500 Function cards \u2500\u2500\u2500 */\n\n.tikz-func-cards {\n    display: flex;\n    flex-direction: column;\n    gap: 12px;\n}\n\n.tikz-func-card {\n    border: 1px solid var(--background-modifier-border);\n    border-left: 4px solid var(--text-muted);\n    border-radius: 8px;\n    padding: 16px;\n    background: var(--background-secondary);\n    transition: border-left-color 0.2s ease;\n}\n\n/* Row layout inside cards */\n.tikz-func-row {\n    display: flex;\n    gap: 12px;\n    margin-bottom: 12px;\n    align-items: flex-end;\n}\n\n.tikz-func-row:last-child {\n    margin-bottom: 0;\n}\n\n.tikz-func-field {\n    flex: 1;\n    min-width: 0;\n}\n\n.tikz-func-field.wide {\n    flex: 2;\n}\n\n/* Compact settings inside function cards */\n.tikz-func-card .setting-item {\n    padding: 2px 0;\n    border: none;\n}\n\n.tikz-func-card .setting-item-info {\n    flex: 0 0 auto;\n    margin-right: 8px;\n}\n\n.tikz-func-card .setting-item-name {\n    font-size: 12px;\n    color: var(--text-muted);\n    font-weight: 500;\n}\n\n.tikz-func-card .setting-item-description {\n    display: none;\n}\n\n.tikz-func-card .setting-item-control input[type="text"] {\n    width: 100%;\n}\n\n/* Header row with delete */\n.tikz-func-header {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    margin-bottom: 12px;\n    padding-bottom: 8px;\n    border-bottom: 1px solid var(--background-modifier-border);\n}\n\n.tikz-func-header .tikz-func-label {\n    font-size: 13px;\n    font-weight: 600;\n    color: var(--text-normal);\n}\n\n.tikz-func-header .setting-item {\n    padding: 0;\n    border: none;\n    flex: 0;\n}\n\n/* Toggle chips row */\n.tikz-toggle-row {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 10px 16px;\n    align-items: center;\n    padding: 4px 0;\n}\n\n.tikz-toggle-chip {\n    display: flex;\n    align-items: center;\n}\n\n.tikz-toggle-chip .setting-item {\n    padding: 0;\n    min-height: auto;\n    gap: 6px;\n}\n\n.tikz-toggle-chip .setting-item-name {\n    font-size: 12px;\n    color: var(--text-normal);\n}\n\n.tikz-toggle-chip .setting-item-control {\n    margin-left: 0;\n}\n\n/* Tangent input transition */\n.tikz-tangent-input {\n    overflow: hidden;\n    max-height: 0;\n    opacity: 0;\n    transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;\n    margin-top: 0;\n}\n\n.tikz-tangent-input.visible {\n    max-height: 60px;\n    opacity: 1;\n    margin-top: 10px;\n}\n\n/* Add function button */\n.tikz-add-func {\n    margin-top: 12px;\n}\n\n.tikz-add-func .setting-item {\n    justify-content: center;\n    border: none;\n    padding: 0;\n}\n\n/* \u2500\u2500\u2500 Code tab \u2500\u2500\u2500 */\n\n.tikz-code-textarea {\n    width: 100%;\n    min-height: 350px;\n    font-family: var(--font-monospace);\n    font-size: 12px;\n    padding: 12px;\n    border: 1px solid var(--background-modifier-border);\n    border-radius: 6px;\n    background: var(--background-primary-alt);\n    color: var(--text-normal);\n    resize: vertical;\n    line-height: 1.5;\n}\n\n.tikz-code-textarea:focus {\n    outline: 1px solid var(--interactive-accent);\n}\n\n/* \u2500\u2500\u2500 Axis tab \u2500\u2500\u2500 */\n\n.tikz-range-group {\n    display: flex;\n    gap: 8px;\n    align-items: center;\n    margin-bottom: 8px;\n}\n\n.tikz-range-group > div {\n    flex: 1;\n}\n\n.tikz-range-group .setting-item {\n    border: none;\n}\n\n.tikz-range-separator {\n    color: var(--text-muted);\n    font-size: 13px;\n    flex-shrink: 0;\n    padding-top: 8px;\n}\n\n/* \u2500\u2500\u2500 3D controls \u2500\u2500\u2500 */\n\n.tikz-3d-controls {\n    border-top: 1px solid var(--background-modifier-border);\n    margin-top: 8px;\n    padding-top: 8px;\n}\n\n/* \u2500\u2500\u2500 General settings sections \u2500\u2500\u2500 */\n\n.tikz-settings-section .setting-item {\n    padding: 10px 0;\n}\n';
+// _aeall03l6:/Users/justus/PycharmProjects/tikz-graph-help/src/styles.css
+var styles_default = '/* TikZ Graph Helper: dashboard styles */\n\n.tikz-modal {\n    display: flex;\n    flex-direction: column;\n    height: 80vh;\n    max-height: 80vh;\n    width: 90vw !important;\n    max-width: 1200px !important;\n}\n\n.tikz-modal .modal-content {\n    display: flex;\n    flex: 1;\n    overflow: hidden;\n    padding: 0 !important;\n}\n\n/* Split pane layout */\n.tikz-layout {\n    display: flex;\n    width: 100%;\n    height: 100%;\n    overflow: hidden;\n}\n\n.tikz-panel-left {\n    width: 42%;\n    min-width: 380px;\n    display: flex;\n    flex-direction: column;\n    border-right: 1px solid var(--background-modifier-border);\n    overflow: hidden;\n}\n\n.tikz-panel-right {\n    flex: 1;\n    display: flex;\n    flex-direction: column;\n    overflow: hidden;\n    min-width: 0;\n}\n\n/* Tab bar */\n.tikz-tab-bar {\n    display: flex;\n    gap: 2px;\n    padding: 10px 16px 0;\n    border-bottom: 1px solid var(--background-modifier-border);\n    background: var(--background-secondary);\n    flex-shrink: 0;\n}\n\n.tikz-tab-btn {\n    padding: 8px 16px;\n    border: none;\n    background: none;\n    color: var(--text-muted);\n    font-size: 13px;\n    font-weight: 500;\n    cursor: pointer;\n    border-bottom: 2px solid transparent;\n    border-radius: 4px 4px 0 0;\n    transition: all 0.15s ease;\n    white-space: nowrap;\n}\n\n.tikz-tab-btn:hover {\n    color: var(--text-normal);\n    background: var(--background-modifier-hover);\n}\n\n.tikz-tab-btn.active {\n    color: var(--interactive-accent);\n    border-bottom-color: var(--interactive-accent);\n    background: var(--background-primary);\n}\n\n.tikz-tab-btn:focus-visible {\n    outline: 2px solid var(--interactive-accent);\n    outline-offset: -2px;\n}\n\n/* Tab content */\n.tikz-tab-content {\n    flex: 1;\n    overflow-y: auto;\n    padding: 20px 24px;\n}\n\n/* Preview area */\n.tikz-preview-area {\n    flex: 1;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n    overflow: auto;\n    padding: 20px;\n    background: var(--background-primary);\n    outline: none;\n}\n\n.tikz-preview-area:focus-visible {\n    box-shadow: inset 0 0 0 2px var(--interactive-accent);\n}\n\n.tikz-preview-area svg {\n    border-radius: 6px;\n    box-shadow: 0 1px 4px color-mix(in srgb, var(--background-modifier-border) 60%, transparent);\n}\n\n.tikz-preview-area.is-3d {\n    cursor: grab;\n}\n\n.tikz-preview-area.is-3d.tikz-preview-dragging,\n.tikz-preview-area.is-3d:active {\n    cursor: grabbing;\n}\n\n.tikz-error {\n    color: var(--text-error);\n    font-size: 13px;\n    padding: 12px 16px;\n    background: var(--background-modifier-error);\n    border-radius: 6px;\n    max-width: 80%;\n    text-align: center;\n}\n\n/* Action bar */\n.tikz-action-bar {\n    display: flex;\n    gap: 8px;\n    padding: 12px 20px;\n    border-top: 1px solid var(--background-modifier-border);\n    background: var(--background-secondary);\n    flex-shrink: 0;\n    justify-content: flex-end;\n}\n\n.tikz-action-bar .setting-item {\n    border: none;\n    padding: 0;\n}\n\n.tikz-action-bar button {\n    padding: 6px 16px;\n    font-size: 13px;\n}\n\n/* Function cards */\n\n.tikz-func-cards {\n    display: flex;\n    flex-direction: column;\n    gap: 12px;\n}\n\n.tikz-func-card {\n    border: 1px solid var(--background-modifier-border);\n    border-left: 4px solid var(--text-muted);\n    border-radius: 8px;\n    padding: 16px;\n    background: var(--background-secondary);\n    transition: border-left-color 0.2s ease;\n}\n\n.tikz-func-row {\n    display: flex;\n    gap: 12px;\n    margin-bottom: 12px;\n    align-items: flex-end;\n}\n\n.tikz-func-row:last-child {\n    margin-bottom: 0;\n}\n\n.tikz-func-field {\n    flex: 1;\n    min-width: 0;\n}\n\n.tikz-func-field.wide {\n    flex: 2;\n}\n\n.tikz-func-card .setting-item {\n    padding: 2px 0;\n    border: none;\n}\n\n.tikz-func-card .setting-item-info {\n    flex: 0 0 auto;\n    margin-right: 8px;\n}\n\n.tikz-func-card .setting-item-name {\n    font-size: 12px;\n    color: var(--text-muted);\n    font-weight: 500;\n}\n\n.tikz-func-card .setting-item-description {\n    display: none;\n}\n\n.tikz-func-card .setting-item-control input[type="text"] {\n    width: 100%;\n}\n\n.tikz-func-header {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    margin-bottom: 12px;\n    padding-bottom: 8px;\n    border-bottom: 1px solid var(--background-modifier-border);\n}\n\n.tikz-func-header .tikz-func-label {\n    font-size: 13px;\n    font-weight: 600;\n    color: var(--text-normal);\n}\n\n.tikz-func-header .setting-item {\n    padding: 0;\n    border: none;\n    flex: 0;\n}\n\n/* Toggle chips row */\n.tikz-toggle-row {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 10px 16px;\n    align-items: center;\n    padding: 4px 0;\n}\n\n.tikz-toggle-chip {\n    display: flex;\n    align-items: center;\n}\n\n.tikz-toggle-chip .setting-item {\n    padding: 0;\n    min-height: auto;\n    gap: 6px;\n}\n\n.tikz-toggle-chip .setting-item-name {\n    font-size: 12px;\n    color: var(--text-normal);\n}\n\n.tikz-toggle-chip .setting-item-control {\n    margin-left: 0;\n}\n\n/* Tangent input transition */\n.tikz-tangent-input {\n    overflow: hidden;\n    max-height: 0;\n    opacity: 0;\n    transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;\n    margin-top: 0;\n}\n\n.tikz-tangent-input.visible {\n    max-height: 60px;\n    opacity: 1;\n    margin-top: 10px;\n}\n\n/* Add function button */\n.tikz-add-func {\n    margin-top: 12px;\n}\n\n.tikz-add-func .setting-item {\n    justify-content: center;\n    border: none;\n    padding: 0;\n}\n\n/* Code tab */\n\n.tikz-code-textarea {\n    width: 100%;\n    min-height: 350px;\n    font-family: var(--font-monospace);\n    font-size: 12px;\n    padding: 12px;\n    border: 1px solid var(--background-modifier-border);\n    border-radius: 6px;\n    background: var(--background-primary-alt);\n    color: var(--text-normal);\n    resize: vertical;\n    line-height: 1.5;\n}\n\n.tikz-code-textarea:focus {\n    outline: 1px solid var(--interactive-accent);\n}\n\n/* Axis tab */\n\n.tikz-range-group {\n    display: flex;\n    gap: 8px;\n    align-items: center;\n    margin-bottom: 8px;\n}\n\n.tikz-range-group > div {\n    flex: 1;\n}\n\n.tikz-range-group .setting-item {\n    border: none;\n}\n\n.tikz-range-separator {\n    color: var(--text-muted);\n    font-size: 13px;\n    flex-shrink: 0;\n    padding-top: 8px;\n}\n\n/* 3D controls */\n\n.tikz-3d-controls {\n    border-top: 1px solid var(--background-modifier-border);\n    margin-top: 8px;\n    padding-top: 8px;\n}\n\n/* General settings sections */\n\n.tikz-settings-section .setting-item {\n    padding: 10px 0;\n}\n';
 
 // src/modal.ts
-var COLOR_OPTIONS = {
-  black: "Black",
-  red: "Red",
-  blue: "Blue",
-  teal: "Teal",
-  orange: "Orange",
-  green: "Green",
-  purple: "Purple"
-};
-var THICKNESS_OPTIONS = {
-  "very thin": "Very Thin",
-  thin: "Thin",
-  thick: "Thick",
-  "very thick": "Very Thick"
-};
-var CSS_COLORS = {
-  black: "var(--text-muted)",
-  red: "#e74c3c",
-  blue: "#3498db",
-  teal: "#1abc9c",
-  orange: "#e67e22",
-  green: "#2ecc71",
-  purple: "#9b59b6"
-};
+var STYLE_ELEMENT_ID = "tikz-graph-helper-styles";
+var PREVIEW_DEBOUNCE_MS = 150;
+var AZIMUTH_DRAG_RATE = 0.5;
+var ELEVATION_DRAG_RATE = 0.3;
+var KEYBOARD_ROTATION_STEP = 5;
+var TABS = ["Graph", "Axis", "Functions", "Grid", "Code"];
 var TikzModal = class extends import_obsidian.Modal {
   constructor(app) {
     super(app);
     this.previewTimer = null;
     this.tabContents = new Map();
     this.tabButtons = new Map();
+    this.elevationSlider = null;
+    this.azimuthSlider = null;
     this.isDragging = false;
     this.dragStartX = 0;
     this.dragStartY = 0;
     this.dragStartAzimuth = 0;
     this.dragStartElevation = 0;
+    this.styleEl = null;
+    this.onMouseMove = null;
+    this.onMouseUp = null;
     this.settings = new SettingsManager();
   }
   onOpen() {
-    const styleEl = document.createElement("style");
-    styleEl.id = "tikz-graph-helper-styles";
-    styleEl.textContent = styles_default;
-    if (!document.getElementById("tikz-graph-helper-styles")) {
+    if (!document.getElementById(STYLE_ELEMENT_ID)) {
+      const styleEl = document.createElement("style");
+      styleEl.id = STYLE_ELEMENT_ID;
+      styleEl.textContent = styles_default;
       document.head.appendChild(styleEl);
+      this.styleEl = styleEl;
     }
     const { modalEl } = this;
     modalEl.addClass("tikz-modal");
@@ -1450,13 +1464,29 @@ var TikzModal = class extends import_obsidian.Modal {
     this.buildTabs(this.leftPanel);
     const rightPanel = layout.createDiv({ cls: "tikz-panel-right" });
     this.previewContainer = rightPanel.createDiv({ cls: "tikz-preview-area" });
+    this.previewContainer.setAttr("tabindex", "0");
+    this.previewContainer.setAttr("role", "img");
+    this.previewContainer.setAttr("aria-label", "Graph preview. Use arrow keys in 3D mode to rotate.");
     this.setupMouseDragRotation();
+    this.setupKeyboardRotation();
     this.buildActionBar(rightPanel);
     this.updatePreview();
   }
   onClose() {
     if (this.previewTimer)
       window.clearTimeout(this.previewTimer);
+    if (this.onMouseMove)
+      window.removeEventListener("mousemove", this.onMouseMove);
+    if (this.onMouseUp)
+      window.removeEventListener("mouseup", this.onMouseUp);
+    this.onMouseMove = null;
+    this.onMouseUp = null;
+    if (this.styleEl && this.styleEl.parentNode) {
+      this.styleEl.parentNode.removeChild(this.styleEl);
+    }
+    this.styleEl = null;
+    this.tabContents.clear();
+    this.tabButtons.clear();
   }
   is3D() {
     var _a;
@@ -1464,9 +1494,13 @@ var TikzModal = class extends import_obsidian.Modal {
   }
   buildTabBar(container) {
     const bar = container.createDiv({ cls: "tikz-tab-bar" });
-    const tabs = ["Graph", "Axis", "Functions", "Grid", "Code"];
-    tabs.forEach((name, i) => {
+    bar.setAttr("role", "tablist");
+    TABS.forEach((name, i) => {
       const btn = bar.createEl("button", { cls: "tikz-tab-btn", text: name });
+      btn.setAttr("role", "tab");
+      btn.setAttr("id", `tikz-tab-${name.toLowerCase()}`);
+      btn.setAttr("aria-controls", `tikz-tabpanel-${name.toLowerCase()}`);
+      btn.setAttr("aria-selected", String(i === 0));
       if (i === 0)
         btn.addClass("active");
       btn.onclick = () => this.switchTab(name);
@@ -1475,7 +1509,9 @@ var TikzModal = class extends import_obsidian.Modal {
   }
   switchTab(name) {
     this.tabButtons.forEach((btn, key) => {
-      btn.toggleClass("active", key === name);
+      const isActive = key === name;
+      btn.toggleClass("active", isActive);
+      btn.setAttr("aria-selected", String(isActive));
     });
     this.tabContents.forEach((content, key) => {
       content.style.display = key === name ? "block" : "none";
@@ -1492,6 +1528,9 @@ var TikzModal = class extends import_obsidian.Modal {
   }
   createTabContent(container, name, visible = false) {
     const content = container.createDiv({ cls: "tikz-tab-content tikz-settings-section" });
+    content.setAttr("role", "tabpanel");
+    content.setAttr("id", `tikz-tabpanel-${name.toLowerCase()}`);
+    content.setAttr("aria-labelledby", `tikz-tab-${name.toLowerCase()}`);
     if (!visible)
       content.style.display = "none";
     this.tabContents.set(name, content);
@@ -1499,37 +1538,37 @@ var TikzModal = class extends import_obsidian.Modal {
   }
   buildGraphTab(container) {
     const tab = this.createTabContent(container, "Graph", true);
-    new import_obsidian.Setting(tab).setName("3D Mode").setDesc("Switch between 2D function plots and 3D surface plots").addToggle((t) => t.setValue(this.settings.getValue("dimension")).onChange((v) => {
+    new import_obsidian.Setting(tab).setName("3D mode").setDesc("Switch between 2D function plots and 3D surface plots.").addToggle((t) => t.setValue(this.settings.getValue("dimension")).onChange((v) => {
       this.settings.setValue("dimension", v);
       this.update3DVisibility();
       this.rebuildFunctionsTab();
       this.requestPreviewUpdate();
     }));
-    new import_obsidian.Setting(tab).setName("Title").setDesc("Name displayed above the graph").addText((text) => text.setPlaceholder("My graph").setValue(this.settings.getValue("title")).onChange((v) => {
+    new import_obsidian.Setting(tab).setName("Title").setDesc("Name displayed above the graph.").addText((text) => text.setPlaceholder("My graph").setValue(this.settings.getValue("title")).onChange((v) => {
       this.settings.setValue("title", v);
       this.requestPreviewUpdate();
     }));
-    new import_obsidian.Setting(tab).setName("Width (cm)").setDesc("Width of the exported TikZ image").addSlider((s) => s.setLimits(1, 20, 1).setValue(this.settings.getValue("size_x_cm")).setDynamicTooltip().onChange((v) => {
+    new import_obsidian.Setting(tab).setName("Width (cm)").setDesc("Width of the exported TikZ image.").addSlider((s) => s.setLimits(1, 20, 1).setValue(this.settings.getValue("size_x_cm")).setDynamicTooltip().onChange((v) => {
       this.settings.setValue("size_x_cm", v);
       this.requestPreviewUpdate();
     }));
-    new import_obsidian.Setting(tab).setName("Height (cm)").setDesc("Height of the exported TikZ image").addSlider((s) => s.setLimits(1, 20, 1).setValue(this.settings.getValue("size_y_cm")).setDynamicTooltip().onChange((v) => {
+    new import_obsidian.Setting(tab).setName("Height (cm)").setDesc("Height of the exported TikZ image.").addSlider((s) => s.setLimits(1, 20, 1).setValue(this.settings.getValue("size_y_cm")).setDynamicTooltip().onChange((v) => {
       this.settings.setValue("size_y_cm", v);
       this.requestPreviewUpdate();
     }));
-    new import_obsidian.Setting(tab).setName("Use pgfplots").setDesc("Include pgfplots package in TikZ code").addToggle((t) => t.setValue(this.settings.getValue("documentSetup")).onChange((v) => {
+    new import_obsidian.Setting(tab).setName("Use pgfplots").setDesc("Include the pgfplots package in the TikZ code.").addToggle((t) => t.setValue(this.settings.getValue("documentSetup")).onChange((v) => {
       this.settings.setValue("documentSetup", v);
       this.requestPreviewUpdate();
     }));
     this.rotationContainer = tab.createDiv({ cls: "tikz-3d-controls" });
-    new import_obsidian.Setting(this.rotationContainer).setName("Elevation").setDesc("Camera tilt angle (0 = side, 90 = top). Drag preview to rotate.").addSlider((s) => {
+    new import_obsidian.Setting(this.rotationContainer).setName("Elevation").setDesc("Tilt: 0 looks at the surface edge-on, 90 looks straight down. Drag preview or press up/down arrows.").addSlider((s) => {
       this.elevationSlider = s;
       s.setLimits(0, 90, 1).setValue(this.settings.getValue("rotationX")).setDynamicTooltip().onChange((v) => {
         this.settings.setValue("rotationX", v);
         this.requestPreviewUpdate();
       });
     });
-    new import_obsidian.Setting(this.rotationContainer).setName("Azimuth").setDesc("Camera rotation around vertical axis. Drag preview to rotate.").addSlider((s) => {
+    new import_obsidian.Setting(this.rotationContainer).setName("Azimuth").setDesc("Camera rotation around the vertical axis. Drag preview or press left/right arrows.").addSlider((s) => {
       this.azimuthSlider = s;
       s.setLimits(0, 360, 1).setValue(this.settings.getValue("rotationZ")).setDynamicTooltip().onChange((v) => {
         this.settings.setValue("rotationZ", v);
@@ -1544,61 +1583,58 @@ var TikzModal = class extends import_obsidian.Modal {
       this.settings.setValue("show_axis_label", v);
       this.requestPreviewUpdate();
     }));
-    new import_obsidian.Setting(tab).setName("X-Axis Label").addText((text) => text.setValue(this.settings.getValue("axis_label_x")).onChange((v) => {
+    new import_obsidian.Setting(tab).setName("X-axis label").addText((text) => text.setValue(this.settings.getValue("axis_label_x")).onChange((v) => {
       this.settings.setValue("axis_label_x", v);
       this.requestPreviewUpdate();
     }));
-    new import_obsidian.Setting(tab).setName("Y-Axis Label").addText((text) => text.setValue(this.settings.getValue("axis_label_y")).onChange((v) => {
+    new import_obsidian.Setting(tab).setName("Y-axis label").addText((text) => text.setValue(this.settings.getValue("axis_label_y")).onChange((v) => {
       this.settings.setValue("axis_label_y", v);
       this.requestPreviewUpdate();
     }));
     this.zAxisContainer = tab.createDiv({ cls: "tikz-3d-controls" });
-    new import_obsidian.Setting(this.zAxisContainer).setName("Z-Axis Label").addText((text) => text.setValue(this.settings.getValue("axis_label_z")).onChange((v) => {
+    new import_obsidian.Setting(this.zAxisContainer).setName("Z-axis label").addText((text) => text.setValue(this.settings.getValue("axis_label_z")).onChange((v) => {
       this.settings.setValue("axis_label_z", v);
       this.requestPreviewUpdate();
     }));
-    const xRange = tab.createDiv({ cls: "tikz-range-group" });
-    const xMinDiv = xRange.createDiv();
-    new import_obsidian.Setting(xMinDiv).setName("X min").addText((t) => t.setPlaceholder("-0.5").setValue(this.settings.getValue("xmin")).onChange((v) => {
-      this.settings.setValue("xmin", v);
-      this.requestPreviewUpdate();
-    }));
-    xRange.createSpan({ cls: "tikz-range-separator", text: "to" });
-    const xMaxDiv = xRange.createDiv();
-    new import_obsidian.Setting(xMaxDiv).setName("X max").addText((t) => t.setPlaceholder("10").setValue(this.settings.getValue("xmax")).onChange((v) => {
-      this.settings.setValue("xmax", v);
-      this.requestPreviewUpdate();
-    }));
-    const yRange = tab.createDiv({ cls: "tikz-range-group" });
-    const yMinDiv = yRange.createDiv();
-    new import_obsidian.Setting(yMinDiv).setName("Y min").addText((t) => t.setPlaceholder("-0.5").setValue(this.settings.getValue("ymin")).onChange((v) => {
-      this.settings.setValue("ymin", v);
-      this.requestPreviewUpdate();
-    }));
-    yRange.createSpan({ cls: "tikz-range-separator", text: "to" });
-    const yMaxDiv = yRange.createDiv();
-    new import_obsidian.Setting(yMaxDiv).setName("Y max").addText((t) => t.setPlaceholder("5").setValue(this.settings.getValue("ymax")).onChange((v) => {
-      this.settings.setValue("ymax", v);
-      this.requestPreviewUpdate();
-    }));
-    const zRange = this.zAxisContainer.createDiv({ cls: "tikz-range-group" });
-    const zMinDiv = zRange.createDiv();
-    new import_obsidian.Setting(zMinDiv).setName("Z min").addText((t) => t.setPlaceholder("-5").setValue(this.settings.getValue("zmin")).onChange((v) => {
-      this.settings.setValue("zmin", v);
-      this.requestPreviewUpdate();
-    }));
-    zRange.createSpan({ cls: "tikz-range-separator", text: "to" });
-    const zMaxDiv = zRange.createDiv();
-    new import_obsidian.Setting(zMaxDiv).setName("Z max").addText((t) => t.setPlaceholder("5").setValue(this.settings.getValue("zmax")).onChange((v) => {
-      this.settings.setValue("zmax", v);
-      this.requestPreviewUpdate();
-    }));
+    this.buildAxisRange(tab, [
+      { key: "xmin", label: "X min", placeholder: "-0.5" },
+      { key: "xmax", label: "X max", placeholder: "10" }
+    ]);
+    this.buildAxisRange(tab, [
+      { key: "ymin", label: "Y min", placeholder: "-0.5" },
+      { key: "ymax", label: "Y max", placeholder: "5" }
+    ]);
+    this.buildAxisRange(this.zAxisContainer, [
+      { key: "zmin", label: "Z min", placeholder: "-5" },
+      { key: "zmax", label: "Z max", placeholder: "5" }
+    ]);
     this.axisStyleContainer = tab.createDiv();
-    new import_obsidian.Setting(this.axisStyleContainer).setName("Axis style").setDesc("Box: axes around the plot. Middle: axes cross at origin").addDropdown((d) => d.addOptions({ box: "Box (all around)", middle: "Middle (crossing)" }).setValue(this.settings.getValue("axis_allaround") ? "box" : "middle").onChange((v) => {
+    new import_obsidian.Setting(this.axisStyleContainer).setName("Axis style").setDesc("Box: axes around the plot. Middle: axes cross at origin.").addDropdown((d) => d.addOptions({ box: "Box (all around)", middle: "Middle (crossing)" }).setValue(this.settings.getValue("axis_allaround") ? "box" : "middle").onChange((v) => {
       this.settings.setValue("axis_allaround", v === "box");
       this.requestPreviewUpdate();
     }));
     this.update3DVisibility();
+  }
+  buildAxisRange(parent, fields) {
+    const range = parent.createDiv({ cls: "tikz-range-group" });
+    fields.forEach((field, i) => {
+      const wrapper = range.createDiv();
+      new import_obsidian.Setting(wrapper).setName(field.label).addText((t) => {
+        t.setPlaceholder(field.placeholder).setValue(this.settings.getValue(field.key)).onChange((v) => {
+          const trimmed = v.trim();
+          if (trimmed === "" || isFinite(Number(trimmed))) {
+            this.settings.setValue(field.key, v);
+            this.requestPreviewUpdate();
+          } else {
+            new import_obsidian.Notice(`${field.label} must be a number.`);
+            t.setValue(this.settings.getValue(field.key));
+          }
+        });
+      });
+      if (i < fields.length - 1) {
+        range.createSpan({ cls: "tikz-range-separator", text: "to" });
+      }
+    });
   }
   buildFunctionsTab(container) {
     this.functionsTabContent = this.createTabContent(container, "Functions");
@@ -1645,17 +1681,17 @@ var TikzModal = class extends import_obsidian.Modal {
       };
       rowStates.set(rowId, state);
       const card = cardsContainer.createDiv({ cls: "tikz-func-card" });
-      card.style.borderLeftColor = CSS_COLORS[state.color];
+      card.style.borderLeftColor = COLOR_MAP[state.color];
       const header = card.createDiv({ cls: "tikz-func-header" });
       header.createSpan({ cls: "tikz-func-label", text: `Function ${rowStates.size}` });
-      new import_obsidian.Setting(header).addButton((btn) => btn.setIcon("trash").setTooltip("Remove function").onClick(() => {
+      new import_obsidian.Setting(header).addButton((btn) => btn.setIcon("trash").setTooltip("Remove function").then((b) => b.buttonEl.setAttr("aria-label", "Remove function")).onClick(() => {
         rowStates.delete(rowId);
         card.remove();
         updateFunctionValues();
       }));
       const row1 = card.createDiv({ cls: "tikz-func-row" });
       const exprDiv = row1.createDiv({ cls: "tikz-func-field wide" });
-      new import_obsidian.Setting(exprDiv).setName("Expression").addText((t) => t.setPlaceholder("x^2").onChange((v) => {
+      new import_obsidian.Setting(exprDiv).setName("Expression").setDesc("Use x. Supports +, -, *, /, ^, parentheses, and Math.* functions.").addText((t) => t.setPlaceholder("x^2").onChange((v) => {
         state.expression = v;
         updateFunctionValues();
       }));
@@ -1668,7 +1704,7 @@ var TikzModal = class extends import_obsidian.Modal {
       const colorDiv = row2.createDiv({ cls: "tikz-func-field" });
       new import_obsidian.Setting(colorDiv).setName("Color").addDropdown((d) => d.addOptions(COLOR_OPTIONS).setValue(state.color).onChange((v) => {
         state.color = v;
-        card.style.borderLeftColor = CSS_COLORS[v] || "var(--text-muted)";
+        card.style.borderLeftColor = COLOR_MAP[v] || "var(--text-muted)";
         updateFunctionValues();
       }));
       const thickDiv = row2.createDiv({ cls: "tikz-func-field" });
@@ -1701,7 +1737,7 @@ var TikzModal = class extends import_obsidian.Modal {
     };
     addFunctionCard();
     const addBtnDiv = tab.createDiv({ cls: "tikz-add-func" });
-    new import_obsidian.Setting(addBtnDiv).addButton((btn) => btn.setButtonText("+ Add Function").onClick(() => addFunctionCard()));
+    new import_obsidian.Setting(addBtnDiv).addButton((btn) => btn.setButtonText("+ Add function").onClick(() => addFunctionCard()));
   }
   build3DFunctionCards(tab) {
     const cardsContainer = tab.createDiv({ cls: "tikz-func-cards" });
@@ -1728,17 +1764,17 @@ var TikzModal = class extends import_obsidian.Modal {
       };
       rowStates.set(rowId, state);
       const card = cardsContainer.createDiv({ cls: "tikz-func-card" });
-      card.style.borderLeftColor = CSS_COLORS[state.color] || "var(--text-muted)";
+      card.style.borderLeftColor = COLOR_MAP[state.color] || "var(--text-muted)";
       const header = card.createDiv({ cls: "tikz-func-header" });
       header.createSpan({ cls: "tikz-func-label", text: `Surface ${rowStates.size}` });
-      new import_obsidian.Setting(header).addButton((btn) => btn.setIcon("trash").setTooltip("Remove surface").onClick(() => {
+      new import_obsidian.Setting(header).addButton((btn) => btn.setIcon("trash").setTooltip("Remove surface").then((b) => b.buttonEl.setAttr("aria-label", "Remove surface")).onClick(() => {
         rowStates.delete(rowId);
         card.remove();
         updateFunctionValues();
       }));
       const row1 = card.createDiv({ cls: "tikz-func-row" });
       const exprDiv = row1.createDiv({ cls: "tikz-func-field wide" });
-      new import_obsidian.Setting(exprDiv).setName("f(x, y)").addText((t) => t.setPlaceholder("sin(x)*cos(y)").onChange((v) => {
+      new import_obsidian.Setting(exprDiv).setName("f(x, y)").setDesc("Use x and y. Supports +, -, *, /, ^, parentheses, and Math.* functions.").addText((t) => t.setPlaceholder("sin(x)*cos(y)").onChange((v) => {
         state.expression = v;
         updateFunctionValues();
       }));
@@ -1757,7 +1793,7 @@ var TikzModal = class extends import_obsidian.Modal {
       const colorDiv = row3.createDiv({ cls: "tikz-func-field" });
       new import_obsidian.Setting(colorDiv).setName("Color").addDropdown((d) => d.addOptions(COLOR_OPTIONS).setValue(state.color).onChange((v) => {
         state.color = v;
-        card.style.borderLeftColor = CSS_COLORS[v] || "var(--text-muted)";
+        card.style.borderLeftColor = COLOR_MAP[v] || "var(--text-muted)";
         updateFunctionValues();
       }));
       const row4 = card.createDiv({ cls: "tikz-func-row tikz-toggle-row" });
@@ -1774,30 +1810,29 @@ var TikzModal = class extends import_obsidian.Modal {
     };
     addFunctionCard();
     const addBtnDiv = tab.createDiv({ cls: "tikz-add-func" });
-    new import_obsidian.Setting(addBtnDiv).addButton((btn) => btn.setButtonText("+ Add Surface").onClick(() => addFunctionCard()));
+    new import_obsidian.Setting(addBtnDiv).addButton((btn) => btn.setButtonText("+ Add surface").onClick(() => addFunctionCard()));
   }
   buildGridTab(container) {
     const tab = this.createTabContent(container, "Grid");
-    new import_obsidian.Setting(tab).setName("Show major grid").setDesc("Display major coordinate grid lines").addToggle((t) => t.setValue(this.settings.getValue("showLargeGrid")).onChange((v) => {
+    new import_obsidian.Setting(tab).setName("Show major grid").setDesc("Display major coordinate grid lines.").addToggle((t) => t.setValue(this.settings.getValue("showLargeGrid")).onChange((v) => {
       this.settings.setValue("showLargeGrid", v);
       this.requestPreviewUpdate();
     }));
-    new import_obsidian.Setting(tab).setName("Show minor grid").setDesc("Display minor coordinate grid lines").addToggle((t) => t.setValue(this.settings.getValue("showSmallGrid")).onChange((v) => {
+    new import_obsidian.Setting(tab).setName("Show minor grid").setDesc("Display minor coordinate grid lines.").addToggle((t) => t.setValue(this.settings.getValue("showSmallGrid")).onChange((v) => {
       this.settings.setValue("showSmallGrid", v);
       this.requestPreviewUpdate();
     }));
-    new import_obsidian.Setting(tab).setName("Grid subdivisions").setDesc("Number of minor subdivisions between major grid lines").addSlider((s) => s.setLimits(1, 10, 1).setValue(this.settings.getValue("gridSize")).setDynamicTooltip().onChange((v) => {
+    new import_obsidian.Setting(tab).setName("Grid subdivisions").setDesc("Number of minor subdivisions between major grid lines.").addSlider((s) => s.setLimits(1, 10, 1).setValue(this.settings.getValue("gridSize")).setDynamicTooltip().onChange((v) => {
       this.settings.setValue("gridSize", v);
       this.requestPreviewUpdate();
     }));
   }
   buildCodeTab(container) {
     const tab = this.createTabContent(container, "Code");
-    const textarea = document.createElement("textarea");
-    textarea.className = "tikz-code-textarea";
+    const textarea = tab.createEl("textarea", { cls: "tikz-code-textarea" });
     textarea.readOnly = true;
     textarea.spellcheck = false;
-    tab.appendChild(textarea);
+    textarea.setAttr("aria-label", "Generated TikZ code (read only)");
     this.codeTextArea = textarea;
   }
   update3DVisibility() {
@@ -1822,45 +1857,83 @@ var TikzModal = class extends import_obsidian.Modal {
       this.dragStartY = e.clientY;
       this.dragStartAzimuth = (_a = this.settings.getValue("rotationZ")) != null ? _a : 45;
       this.dragStartElevation = (_b = this.settings.getValue("rotationX")) != null ? _b : 30;
-      el.style.cursor = "grabbing";
+      el.addClass("tikz-preview-dragging");
       e.preventDefault();
     });
-    window.addEventListener("mousemove", (e) => {
+    this.onMouseMove = (e) => {
       if (!this.isDragging)
         return;
       const dx = e.clientX - this.dragStartX;
       const dy = e.clientY - this.dragStartY;
-      let newAzimuth = this.dragStartAzimuth + dx * 0.5;
-      let newElevation = this.dragStartElevation - dy * 0.3;
+      let newAzimuth = this.dragStartAzimuth + dx * AZIMUTH_DRAG_RATE;
+      let newElevation = this.dragStartElevation - dy * ELEVATION_DRAG_RATE;
       newAzimuth = (newAzimuth % 360 + 360) % 360;
       newElevation = Math.max(0, Math.min(90, newElevation));
-      this.settings.setValue("rotationZ", Math.round(newAzimuth));
-      this.settings.setValue("rotationX", Math.round(newElevation));
-      if (this.azimuthSlider)
-        this.azimuthSlider.setValue(Math.round(newAzimuth));
-      if (this.elevationSlider)
-        this.elevationSlider.setValue(Math.round(newElevation));
-      this.requestPreviewUpdate();
-    });
-    window.addEventListener("mouseup", () => {
+      this.applyRotation(Math.round(newAzimuth), Math.round(newElevation));
+    };
+    this.onMouseUp = () => {
       if (this.isDragging) {
         this.isDragging = false;
-        el.style.cursor = "";
+        el.removeClass("tikz-preview-dragging");
       }
+    };
+    window.addEventListener("mousemove", this.onMouseMove);
+    window.addEventListener("mouseup", this.onMouseUp);
+  }
+  setupKeyboardRotation() {
+    this.previewContainer.addEventListener("keydown", (e) => {
+      var _a, _b;
+      if (!this.is3D())
+        return;
+      const az = (_a = this.settings.getValue("rotationZ")) != null ? _a : 45;
+      const el = (_b = this.settings.getValue("rotationX")) != null ? _b : 30;
+      let newAz = az;
+      let newEl = el;
+      switch (e.key) {
+        case "ArrowLeft":
+          newAz = ((az - KEYBOARD_ROTATION_STEP) % 360 + 360) % 360;
+          break;
+        case "ArrowRight":
+          newAz = (az + KEYBOARD_ROTATION_STEP) % 360;
+          break;
+        case "ArrowUp":
+          newEl = Math.min(90, el + KEYBOARD_ROTATION_STEP);
+          break;
+        case "ArrowDown":
+          newEl = Math.max(0, el - KEYBOARD_ROTATION_STEP);
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+      this.applyRotation(newAz, newEl);
     });
+  }
+  applyRotation(azimuth, elevation) {
+    this.settings.setValue("rotationZ", azimuth);
+    this.settings.setValue("rotationX", elevation);
+    if (this.azimuthSlider)
+      this.azimuthSlider.setValue(azimuth);
+    if (this.elevationSlider)
+      this.elevationSlider.setValue(elevation);
+    this.requestPreviewUpdate();
   }
   buildActionBar(container) {
     const bar = container.createDiv({ cls: "tikz-action-bar" });
-    new import_obsidian.Setting(bar).addButton((btn) => btn.setButtonText("Copy TikZ Code").onClick(() => __async(this, null, function* () {
+    new import_obsidian.Setting(bar).addButton((btn) => btn.setButtonText("Copy TikZ code").then((b) => b.buttonEl.setAttr("aria-label", "Copy generated TikZ code to clipboard")).onClick(() => __async(this, null, function* () {
       const code = this.getCurrentTikzCode();
-      yield navigator.clipboard.writeText(code);
-      const orig = btn.buttonEl.textContent;
-      btn.setButtonText("Copied!");
-      setTimeout(() => btn.setButtonText(orig || "Copy TikZ Code"), 2e3);
-    }))).addButton((btn) => btn.setButtonText("Insert into Note").setCta().onClick(() => {
+      try {
+        yield navigator.clipboard.writeText(code);
+        const orig = btn.buttonEl.textContent;
+        btn.setButtonText("Copied");
+        setTimeout(() => btn.setButtonText(orig || "Copy TikZ code"), 2e3);
+      } catch (e) {
+        new import_obsidian.Notice("Could not access clipboard.");
+      }
+    }))).addButton((btn) => btn.setButtonText("Insert into note").setCta().then((b) => b.buttonEl.setAttr("aria-label", "Insert generated TikZ code into the current note")).onClick(() => {
       const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
       if (!view) {
-        new import_obsidian.Notice("No active note to insert into");
+        new import_obsidian.Notice("No active note to insert into.");
         return;
       }
       const code = this.getCurrentTikzCode();
@@ -1874,22 +1947,17 @@ var TikzModal = class extends import_obsidian.Modal {
   requestPreviewUpdate() {
     if (this.previewTimer)
       window.clearTimeout(this.previewTimer);
-    this.previewTimer = window.setTimeout(() => this.updatePreview(), 150);
+    this.previewTimer = window.setTimeout(() => this.updatePreview(), PREVIEW_DEBOUNCE_MS);
   }
   updatePreview() {
     this.previewContainer.empty();
     try {
       const config = this.settings.toRendererConfig();
-      let svg;
-      if (config.is3D) {
-        svg = new SVG3DRenderer(config).render();
-      } else {
-        svg = new SVGRenderer(config).render();
-      }
+      const svg = config.is3D ? new SVG3DRenderer(config).render() : new SVGRenderer(config).render();
       this.previewContainer.appendChild(svg);
     } catch (e) {
-      const errDiv = this.previewContainer.createDiv({ cls: "tikz-error" });
-      errDiv.textContent = e.message || "Rendering error";
+      const message = e instanceof Error ? e.message : "Rendering error";
+      new import_obsidian.Notice(`Render failed: ${message}`);
     }
     this.updateCodeArea();
   }

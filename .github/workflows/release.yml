@@ -5,23 +5,73 @@ on:
     tags:
       - "*"
 
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: "20"
 
-      - run: npm install
+      - name: Install dependencies
+        run: npm ci
 
-      - run: npm run build
+      - name: Build plugin
+        run: npm run build
 
-      - uses: softprops/action-gh-release@v2
+      - name: Verify manifest version matches tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          TAG_VERSION="${TAG#v}"
+          if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag $TAG_VERSION does not match manifest.json version $MANIFEST_VERSION"
+            exit 1
+          fi
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          NOTES=$(awk -v v="$VERSION" '
+            $0 ~ "^## \\[?"v"\\]?" { flag=1; next }
+            /^## \[?[0-9]/ && flag { exit }
+            flag { print }
+          ' CHANGELOG.md)
+          {
+            echo "body<<__EOF__"
+            echo "$NOTES"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
         with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.notes.outputs.body }}
+          draft: false
+          prerelease: false
           files: |
             main.js
             manifest.json

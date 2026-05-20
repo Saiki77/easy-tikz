@@ -1,56 +1,115 @@
 # TikZ Graph Helper
 
-An [Obsidian](https://obsidian.md) plugin for creating TikZ/pgfplots graphs through an intuitive visual editor with live preview.
+<p align="center">
+  <img src="docs/logo.svg" width="160" alt="TikZ Graph Helper logo">
+</p>
+
+<p align="center">
+  <strong>Visually design TikZ and pgfplots graphs in Obsidian with a live SVG preview.</strong>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/screenshot-2d.png" alt="TikZ Graph Helper main window with a 2D plot" width="100%">
+</p>
 
 ## Features
 
-- **Live SVG preview** — see your graph update in real-time as you change settings (no external plugins needed)
-- **2D function plots** — plot mathematical functions with customizable color, thickness, dashing, and fill
-- **3D surface plots** — render 3D surfaces with wireframe or filled mode, adjustable opacity, and interactive mouse rotation
-- **Tangent lines** — compute and display tangent lines at any point
-- **Extrema detection** — automatically find and mark local minima/maxima
-- **TikZ code generation** — generates valid pgfplots code you can copy or insert directly into your notes
-- **Dark/light theme support** — respects your Obsidian theme
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/screenshot-2d.png" alt="2D function plot with tangent and extrema markers"><br>
+      <strong>2D function plots.</strong> Plot any one-variable expression with customizable color, thickness, dashing, and fill. Tangent lines and automatic extrema detection are one toggle away.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/screenshot-3d.png" alt="3D surface plot mid-rotation"><br>
+      <strong>3D surface plots.</strong> Render f(x, y) surfaces with wireframe or filled mode, adjustable opacity, and interactive mouse-drag or arrow-key rotation.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/screenshot-settings.png" alt="Settings tab"><br>
+      <strong>Live, tabbed editor.</strong> A clean tabbed UI (Graph, Axis, Functions, Grid, Code) updates the preview as you type. Everything respects your Obsidian theme.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/screenshot-settings.png" alt="Generated TikZ code"><br>
+      <strong>One-click code insertion.</strong> Generates valid TikZ and pgfplots code you can copy to the clipboard or drop straight into your active note.
+    </td>
+  </tr>
+</table>
 
-## Usage
+## Why
 
-1. Click the function icon in the ribbon (or use the command palette)
-2. Configure your graph using the tabbed settings panel:
-   - **Graph** — title, dimensions, 2D/3D mode toggle, camera controls (3D)
-   - **Axis** — labels, ranges, axis style
-   - **Functions** — add functions with expression, domain, styling, and analysis options
-   - **Grid** — major/minor grid lines
-   - **Code** — view the generated TikZ code
-3. The live preview on the right updates as you edit
-4. In 3D mode, **drag the preview** to rotate the camera
-5. Click **Copy TikZ Code** or **Insert into Note** when done
-
-### 2D Functions
-
-Enter any JavaScript math expression using `x`:
-- `x^2`, `x^3 - 3*x`, `1/x`
-- `sin(deg(x))`, `cos(deg(x))`, `Math.exp(x)`
-
-### 3D Surfaces
-
-Enter expressions using `x` and `y`:
-- `sin(x)*cos(y)`
-- `x^2 + y^2`
-- `sin(Math.sqrt(x^2 + y^2))`
+Hand-writing pgfplots options is finicky, the iteration loop is slow, and you cannot see what you are doing until you compile. This plugin gives you the visual editor and live preview that pgfplots itself lacks, then emits the LaTeX for you when you are happy with the result.
 
 ## Installation
 
-### Via BRAT (recommended for beta)
+### Community plugins (recommended, once approved)
 
-1. Install the [BRAT plugin](https://github.com/TfTHacker/obsidian42-brat)
-2. Add `Saiki77/tikz-graph-help` as a beta plugin
+1. Open Obsidian Settings, Community plugins, Browse.
+2. Search for "TikZ Graph Helper".
+3. Install and enable.
 
-### Manual
+### BRAT (beta channel)
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Saiki77/tikz-graph-help/releases)
-2. Create a folder `tikz_graph_helper` in your vault's `.obsidian/plugins/` directory
-3. Place the downloaded files in that folder
-4. Enable the plugin in Obsidian settings
+1. Install the [BRAT plugin](https://github.com/TfTHacker/obsidian42-brat).
+2. Add `Saiki77/tikz-graph-helper` as a beta plugin.
+3. Enable the plugin in Obsidian Settings.
+
+### Manual install
+
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Saiki77/tikz-graph-help/releases).
+2. Place them in `<vault>/.obsidian/plugins/tikz-graph-helper/`.
+3. Enable the plugin in Obsidian Settings.
+
+### Migrating from 2.x
+
+The plugin id changed from `tikz_graph_helper` (snake_case) to `tikz-graph-helper` (kebab-case) in version 3.0.0 to match the Obsidian community convention. If you have a 2.x install via BRAT or manual:
+
+1. Disable the plugin in Settings, Community plugins.
+2. Rename `.obsidian/plugins/tikz_graph_helper/` to `.obsidian/plugins/tikz-graph-helper/`.
+3. Re-enable the plugin.
+
+Your settings carry over with the rename.
+
+## Usage
+
+1. Click the function icon in the ribbon, or run the command from the palette.
+2. Configure your graph using the tabbed panel on the left:
+   - **Graph:** title, dimensions, 2D or 3D mode, camera controls.
+   - **Axis:** labels, ranges, axis style.
+   - **Functions:** expressions, domains, styling, tangents, extrema.
+   - **Grid:** major and minor grid lines.
+   - **Code:** the generated TikZ output.
+3. The live preview on the right updates as you edit.
+4. In 3D mode, drag the preview to rotate, or focus it and use the arrow keys.
+5. Click **Copy TikZ code** or **Insert into note** when done.
+
+### 2D function syntax
+
+Use `x` as the variable. Expressions are JavaScript style:
+
+- `x^2`, `x^3 - 3*x`, `1/x`
+- `Math.sin(x)`, `Math.cos(x)`, `Math.exp(x)`
+- Combinations: `Math.sin(x) * Math.exp(-x/5)`
+
+### 3D surface syntax
+
+Use `x` and `y`:
+
+- `Math.sin(x) * Math.cos(y)`
+- `x^2 + y^2`
+- `Math.sin(Math.sqrt(x^2 + y^2))`
+
+## Permissions and data handling
+
+Transparency matters. Here is what the plugin does and does not do:
+
+- **Clipboard:** writes the generated TikZ code to the clipboard when you click "Copy TikZ code". No reads.
+- **Active note:** inserts the generated TikZ code into the current Markdown view when you click "Insert into note". Nothing else is read or written.
+- **Network:** none. The plugin makes no network requests.
+- **Telemetry:** none. No analytics, no tracking, no remote logging.
+- **Files:** no access to the vault outside the active note's insertion point.
+- **Math evaluation:** expressions are compiled with the `Function` constructor and evaluated in the renderer to draw the preview. They are not persisted and not transmitted.
 
 ## Development
 
@@ -60,6 +119,21 @@ npm run dev    # watch mode
 npm run build  # production build
 ```
 
+Source layout:
+
+```
+src/
+  modal.ts         # main modal UI
+  renderer.ts      # 2D SVG renderer
+  renderer3d.ts    # 3D SVG renderer
+  settings.ts      # state and TikZ code generation
+  math.ts          # expression evaluation, derivatives, extrema
+  colors.ts        # shared color palette
+  util.ts          # shared rendering helpers (tick formatting, etc.)
+  styles.css       # all dashboard styling
+  types.ts         # shared interfaces
+```
+
 ## License
 
-MIT
+[MIT](LICENSE.md).

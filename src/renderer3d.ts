@@ -1,78 +1,59 @@
 import { RendererConfig, Function3DParameters } from './types';
 import { MathHelper } from './math';
+import { COLOR_MAP, resolveCssColor } from './colors';
+import { niceInterval, formatTick, stripLatex, hexToRgb, rgbStringToRgb } from './util';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-const COLOR_MAP: Record<string, string> = {
-    black: '#888888',
-    red: '#e74c3c',
-    blue: '#3498db',
-    teal: '#1abc9c',
-    orange: '#e67e22',
-    green: '#2ecc71',
-    purple: '#9b59b6',
-};
+const PADDING_TOP = 40;
+const PADDING_RIGHT = 40;
+const PADDING_BOTTOM = 40;
+const PADDING_LEFT = 40;
+
+/**
+ * Fraction of the available viewport used by the projected unit cube. Anything
+ * below 1.0 leaves margin for axis labels. 0.28 was chosen empirically as a
+ * good fit for the default 550x400 preview.
+ */
+const VIEWPORT_SCALE = 0.28;
+
+/** Surface sampling resolution. Higher numbers give smoother surfaces but slow the live preview. */
+const GRID_SAMPLES = 40;
+
+/** Target number of major ticks along each 3D axis. */
+const TARGET_TICKS = 5;
 
 interface Quad {
     points: { sx: number; sy: number }[];
     depth: number;
-    zValue: number; // normalized 0–1 for color shading
+    zValue: number;
     color: string;
     wireframe: boolean;
     opacity: number;
 }
 
-function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-    const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
-    if (!m) return null;
-    return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
-}
-
-function shadeColor(baseHex: string, t: number): string {
-    const rgb = hexToRgb(baseHex);
-    if (!rgb) return baseHex;
-    // Lighten towards white as t increases (higher z = brighter)
-    const factor = 0.3 + t * 0.7; // range 0.3 – 1.0
+/**
+ * Lighten a color towards white based on a 0..1 parameter. Handles hex,
+ * `rgb(...)`, and CSS variables. If the color cannot be parsed the original
+ * string is returned unchanged.
+ */
+function shadeColor(baseColor: string, t: number): string {
+    const resolved = resolveCssColor(baseColor);
+    const rgb = hexToRgb(resolved) || rgbStringToRgb(resolved);
+    if (!rgb) return baseColor;
+    const factor = 0.3 + t * 0.7;
     const r = Math.round(rgb.r * factor + 255 * (1 - factor));
     const g = Math.round(rgb.g * factor + 255 * (1 - factor));
     const b = Math.round(rgb.b * factor + 255 * (1 - factor));
     return `rgb(${r},${g},${b})`;
 }
 
-function niceInterval(range: number, targetTicks: number): number {
-    const rough = range / targetTicks;
-    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
-    const norm = rough / mag;
-    let nice: number;
-    if (norm <= 1.5) nice = 1;
-    else if (norm <= 3) nice = 2;
-    else if (norm <= 7) nice = 5;
-    else nice = 10;
-    return nice * mag;
-}
-
-function formatTick(value: number): string {
-    if (Math.abs(value) < 1e-10) return '0';
-    const s = value.toPrecision(3);
-    return parseFloat(s).toString();
-}
-
-function stripLatex(text: string): string {
-    return text
-        .replace(/\\[({]/g, '')
-        .replace(/\\[)}]/g, '')
-        .replace(/\\\\/g, '')
-        .replace(/\\[a-zA-Z]+/g, (m) => m.replace('\\', ''));
-}
-
 export class SVG3DRenderer {
     private config: RendererConfig;
-    private padding = { top: 40, right: 40, bottom: 40, left: 40 };
     private centerX: number;
     private centerY: number;
     private scale: number;
 
-    // Precomputed rotation
     private cosA: number;
     private sinA: number;
     private cosE: number;
@@ -81,12 +62,11 @@ export class SVG3DRenderer {
     constructor(config: RendererConfig) {
         this.config = config;
         this.centerX = config.width / 2;
-        this.centerY = config.height / 2 + 20; // shift down slightly for title
+        this.centerY = config.height / 2 + 20;
 
-        // Scale to fit the viewport
-        const availW = config.width - this.padding.left - this.padding.right;
-        const availH = config.height - this.padding.top - this.padding.bottom;
-        this.scale = Math.min(availW, availH) * 0.28;
+        const availW = config.width - PADDING_LEFT - PADDING_RIGHT;
+        const availH = config.height - PADDING_TOP - PADDING_BOTTOM;
+        this.scale = Math.min(availW, availH) * VIEWPORT_SCALE;
 
         const azimuth = (config.rotationZ * Math.PI) / 180;
         const elevation = (config.rotationX * Math.PI) / 180;
@@ -96,26 +76,28 @@ export class SVG3DRenderer {
         this.sinE = Math.sin(elevation);
     }
 
+    /**
+     * Project a 3D point to screen coordinates. Normalises into [-1, 1],
+     * rotates around the Z axis by azimuth, tilts around X by elevation, then
+     * uses an orthographic projection. Returns the screen position and a
+     * depth value usable for painter's-algorithm sorting (further = smaller).
+     */
     private project(x: number, y: number, z: number): { sx: number; sy: number; depth: number } {
-        // Normalize to [-1, 1] range
         const { xmin, xmax, ymin, ymax, zmin, zmax } = this.config;
         const nx = ((x - xmin) / (xmax - xmin)) * 2 - 1;
         const ny = ((y - ymin) / (ymax - ymin)) * 2 - 1;
         const nz = ((z - zmin) / (zmax - zmin)) * 2 - 1;
 
-        // Rotate around Z-axis (azimuth)
         const rx = nx * this.cosA - ny * this.sinA;
         const ry = nx * this.sinA + ny * this.cosA;
         const rz = nz;
 
-        // Tilt by elevation (rotate around X-axis)
         const ry2 = ry * this.cosE - rz * this.sinE;
         const rz2 = ry * this.sinE + rz * this.cosE;
 
-        // Orthographic projection
         const sx = this.centerX + rx * this.scale;
         const sy = this.centerY - rz2 * this.scale;
-        const depth = ry2; // depth for sorting (further = more negative)
+        const depth = ry2;
 
         return { sx, sy, depth };
     }
@@ -135,7 +117,6 @@ export class SVG3DRenderer {
             viewBox: `0 0 ${this.config.width} ${this.config.height}`,
         }) as SVGSVGElement;
 
-        // Background
         svg.appendChild(
             this.el('rect', {
                 width: String(this.config.width),
@@ -145,22 +126,22 @@ export class SVG3DRenderer {
             })
         );
 
-        // Collect all quads from all 3D functions
         const allQuads: Quad[] = [];
 
         for (const func of this.config.functions3D) {
             if (!func.expression) continue;
-            const quads = this.sampleSurface(func);
-            allQuads.push(...quads);
+            try {
+                const quads = this.sampleSurface(func);
+                allQuads.push(...quads);
+            } catch {
+                // Bad domain or expression; skip this surface without aborting the render.
+            }
         }
 
-        // Draw back axes first (behind surface)
         this.drawAxes(svg, 'back');
 
-        // Sort quads back-to-front (painter's algorithm)
         allQuads.sort((a, b) => a.depth - b.depth);
 
-        // Draw quads
         const surfaceGroup = this.el('g', { class: 'tikz-3d-surface' });
         for (const quad of allQuads) {
             const pointsStr = quad.points.map((p) => `${p.sx.toFixed(1)},${p.sy.toFixed(1)}`).join(' ');
@@ -192,10 +173,7 @@ export class SVG3DRenderer {
         }
         svg.appendChild(surfaceGroup);
 
-        // Draw front axes (on top)
         this.drawAxes(svg, 'front');
-
-        // Title
         this.drawTitle(svg);
 
         return svg;
@@ -208,15 +186,13 @@ export class SVG3DRenderer {
         const { zmin, zmax } = this.config;
         const zRange = zmax - zmin || 1;
 
-        const gridSize = 40;
-        const stepX = (xmax - xmin) / gridSize;
-        const stepY = (ymax - ymin) / gridSize;
+        const stepX = (xmax - xmin) / GRID_SAMPLES;
+        const stepY = (ymax - ymin) / GRID_SAMPLES;
 
-        // Sample all z values
         const zValues: (number | null)[][] = [];
-        for (let i = 0; i <= gridSize; i++) {
+        for (let i = 0; i <= GRID_SAMPLES; i++) {
             zValues[i] = [];
-            for (let j = 0; j <= gridSize; j++) {
+            for (let j = 0; j <= GRID_SAMPLES; j++) {
                 const x = xmin + i * stepX;
                 const y = ymin + j * stepY;
                 try {
@@ -228,9 +204,8 @@ export class SVG3DRenderer {
             }
         }
 
-        // Build quads
-        for (let i = 0; i < gridSize; i++) {
-            for (let j = 0; j < gridSize; j++) {
+        for (let i = 0; i < GRID_SAMPLES; i++) {
+            for (let j = 0; j < GRID_SAMPLES; j++) {
                 const z00 = zValues[i][j];
                 const z10 = zValues[i + 1][j];
                 const z01 = zValues[i][j + 1];
@@ -274,23 +249,20 @@ export class SVG3DRenderer {
         const { xmin, xmax, ymin, ymax, zmin, zmax } = this.config;
         const axisGroup = this.el('g', { class: `tikz-3d-axes-${layer}` });
 
-        // Axis endpoints
         const origin = this.project(xmin, ymin, zmin);
         const xEnd = this.project(xmax, ymin, zmin);
         const yEnd = this.project(xmin, ymax, zmin);
         const zEnd = this.project(xmin, ymin, zmax);
 
-        // Determine which axes go behind vs in front based on camera
-        // Simple heuristic: axes going "away" from camera are back, toward camera are front
         const xMid = this.project((xmin + xmax) / 2, ymin, zmin);
         const yMid = this.project(xmin, (ymin + ymax) / 2, zmin);
 
         const isXBack = xMid.depth < origin.depth;
         const isYBack = yMid.depth < origin.depth;
 
-        const drawX = (layer === 'back') === isXBack || layer === 'front' && !isXBack;
-        const drawY = (layer === 'back') === isYBack || layer === 'front' && !isYBack;
-        const drawZ = layer === 'front'; // Z-axis usually in front
+        const drawX = (layer === 'back') === isXBack || (layer === 'front' && !isXBack);
+        const drawY = (layer === 'back') === isYBack || (layer === 'front' && !isYBack);
+        const drawZ = layer === 'front';
 
         const axisColor = 'var(--text-muted)';
         const axisWidth = '1.5';
@@ -298,19 +270,23 @@ export class SVG3DRenderer {
         if (drawX) {
             axisGroup.appendChild(
                 this.el('line', {
-                    x1: String(origin.sx), y1: String(origin.sy),
-                    x2: String(xEnd.sx), y2: String(xEnd.sy),
-                    stroke: axisColor, 'stroke-width': axisWidth,
+                    x1: String(origin.sx),
+                    y1: String(origin.sy),
+                    x2: String(xEnd.sx),
+                    y2: String(xEnd.sy),
+                    stroke: axisColor,
+                    'stroke-width': axisWidth,
                 })
             );
-            // X ticks
             this.drawAxisTicks(axisGroup, 'x', xmin, xmax, ymin, zmin);
-            // Label
             if (this.config.showAxisLabels) {
                 const lp = this.project(xmax, ymin, zmin);
                 const label = this.el('text', {
-                    x: String(lp.sx + 10), y: String(lp.sy + 5),
-                    fill: 'var(--text-normal)', 'font-size': '13', 'font-weight': '500',
+                    x: String(lp.sx + 10),
+                    y: String(lp.sy + 5),
+                    fill: 'var(--text-normal)',
+                    'font-size': '13',
+                    'font-weight': '500',
                 });
                 label.textContent = this.config.xLabel;
                 axisGroup.appendChild(label);
@@ -320,20 +296,24 @@ export class SVG3DRenderer {
         if (drawY) {
             axisGroup.appendChild(
                 this.el('line', {
-                    x1: String(origin.sx), y1: String(origin.sy),
-                    x2: String(yEnd.sx), y2: String(yEnd.sy),
-                    stroke: axisColor, 'stroke-width': axisWidth,
+                    x1: String(origin.sx),
+                    y1: String(origin.sy),
+                    x2: String(yEnd.sx),
+                    y2: String(yEnd.sy),
+                    stroke: axisColor,
+                    'stroke-width': axisWidth,
                 })
             );
-            // Y ticks
             this.drawAxisTicks(axisGroup, 'y', ymin, ymax, xmin, zmin);
-            // Label
             if (this.config.showAxisLabels) {
                 const lp = this.project(xmin, ymax, zmin);
                 const label = this.el('text', {
-                    x: String(lp.sx - 15), y: String(lp.sy + 5),
+                    x: String(lp.sx - 15),
+                    y: String(lp.sy + 5),
                     'text-anchor': 'end',
-                    fill: 'var(--text-normal)', 'font-size': '13', 'font-weight': '500',
+                    fill: 'var(--text-normal)',
+                    'font-size': '13',
+                    'font-weight': '500',
                 });
                 label.textContent = this.config.yLabel;
                 axisGroup.appendChild(label);
@@ -343,20 +323,24 @@ export class SVG3DRenderer {
         if (drawZ) {
             axisGroup.appendChild(
                 this.el('line', {
-                    x1: String(origin.sx), y1: String(origin.sy),
-                    x2: String(zEnd.sx), y2: String(zEnd.sy),
-                    stroke: axisColor, 'stroke-width': axisWidth,
+                    x1: String(origin.sx),
+                    y1: String(origin.sy),
+                    x2: String(zEnd.sx),
+                    y2: String(zEnd.sy),
+                    stroke: axisColor,
+                    'stroke-width': axisWidth,
                 })
             );
-            // Z ticks
             this.drawAxisTicks(axisGroup, 'z', zmin, zmax, xmin, ymin);
-            // Label
             if (this.config.showAxisLabels) {
                 const lp = this.project(xmin, ymin, zmax);
                 const label = this.el('text', {
-                    x: String(lp.sx - 10), y: String(lp.sy - 8),
+                    x: String(lp.sx - 10),
+                    y: String(lp.sy - 8),
                     'text-anchor': 'end',
-                    fill: 'var(--text-normal)', 'font-size': '13', 'font-weight': '500',
+                    fill: 'var(--text-normal)',
+                    'font-size': '13',
+                    'font-weight': '500',
                 });
                 label.textContent = this.config.zLabel;
                 axisGroup.appendChild(label);
@@ -366,8 +350,15 @@ export class SVG3DRenderer {
         svg.appendChild(axisGroup);
     }
 
-    private drawAxisTicks(group: SVGElement, axis: 'x' | 'y' | 'z', min: number, max: number, fixedA: number, fixedB: number) {
-        const interval = niceInterval(max - min, 5);
+    private drawAxisTicks(
+        group: SVGElement,
+        axis: 'x' | 'y' | 'z',
+        min: number,
+        max: number,
+        fixedA: number,
+        fixedB: number
+    ) {
+        const interval = niceInterval(max - min, TARGET_TICKS);
         const start = Math.ceil(min / interval) * interval;
 
         for (let v = start; v <= max; v += interval) {
@@ -376,15 +367,15 @@ export class SVG3DRenderer {
             else if (axis === 'y') p = this.project(fixedA, v, fixedB);
             else p = this.project(fixedA, fixedB, v);
 
-            // Tick mark (small cross)
             group.appendChild(
                 this.el('circle', {
-                    cx: String(p.sx), cy: String(p.sy), r: '2',
+                    cx: String(p.sx),
+                    cy: String(p.sy),
+                    r: '2',
                     fill: 'var(--text-muted)',
                 })
             );
 
-            // Label
             const label = this.el('text', {
                 x: String(p.sx),
                 y: String(p.sy + (axis === 'z' ? -8 : 14)),
@@ -402,7 +393,7 @@ export class SVG3DRenderer {
         if (!this.config.title) return;
         const titleEl = this.el('text', {
             x: String(this.config.width / 2),
-            y: String(this.padding.top - 10),
+            y: String(PADDING_TOP - 10),
             'text-anchor': 'middle',
             fill: 'var(--text-normal)',
             'font-size': '15',

@@ -208,10 +208,10 @@ export const TIKZ_SETTINGS: TikzSetting[] = [
                             const tangentX = MathHelper.parseTangentPoint(func.tangentPoint, domain);
                             const tangentExpression = MathHelper.calculateTangentLine(func.expression, tangentX);
                             code += `\n\\addplot[${func.color}, dashed, domain=${func.domain}] {${tangentExpression}};`;
-                            const f = new Function('x', `return ${func.expression.replace(/\^/g, '**')}`);
-                            code += `\n\\addplot[${func.color}, only marks] coordinates {(${tangentX},${f(tangentX)})};`;
-                        } catch (error) {
-                            console.error('Error calculating tangent:', error);
+                            const ty = MathHelper.evaluateExpression(func.expression, tangentX);
+                            code += `\n\\addplot[${func.color}, only marks] coordinates {(${tangentX},${ty})};`;
+                        } catch {
+                            // Bad tangent input; omit the tangent annotation from the generated code.
                         }
                     }
 
@@ -228,8 +228,8 @@ export const TIKZ_SETTINGS: TikzSetting[] = [
                                         code += `\n\\node[above] at (axis cs:${point.x},${point.y + 1}) {${point.type}};`;
                                 });
                             }
-                        } catch (error) {
-                            console.error('Error calculating extrema:', error);
+                        } catch {
+                            // Extrema search failed; omit the annotation.
                         }
                     }
                     return code;
@@ -239,15 +239,20 @@ export const TIKZ_SETTINGS: TikzSetting[] = [
     },
 ];
 
+/**
+ * Holds the live setting values for the modal and generates TikZ/pgfplots
+ * code from them. Wraps a `Map<string, unknown>` so both 2D and 3D modes can
+ * share storage without a sprawling typed schema.
+ */
 export class SettingsManager {
-    private values: Map<string, any>;
+    private values: Map<string, unknown>;
 
     constructor() {
         this.values = new Map();
         TIKZ_SETTINGS.forEach((setting) => {
             this.values.set(setting.id, setting.defaultValue);
         });
-        // 3D-specific defaults (not in TIKZ_SETTINGS since they have custom UI)
+        // 3D-specific defaults (the 3D UI is built directly in the modal rather than driven by TIKZ_SETTINGS).
         this.values.set('zmin', '-5');
         this.values.set('zmax', '5');
         this.values.set('axis_label_z', 'z');
@@ -256,11 +261,14 @@ export class SettingsManager {
         this.values.set('functions3D', []);
     }
 
-    getValue(id: string): any {
-        return this.values.get(id);
+    /** Look up the value for a setting id. Returns `undefined` if absent. */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getValue<T = any>(id: string): T {
+        return this.values.get(id) as T;
     }
 
-    setValue(id: string, value: any) {
+    /** Store a value for a setting id. Callers are responsible for type safety. */
+    setValue(id: string, value: unknown) {
         this.values.set(id, value);
     }
 

@@ -1,15 +1,25 @@
 {
-    "name": "simple-tikz-renderer",
+    "name": "tikz-graph-helper",
     "version": "2.2.0",
-    "description": "A simple TikZ code renderer for Obsidian",
+    "description": "Visually design TikZ and pgfplots graphs with a live SVG preview.",
     "main": "main.js",
     "scripts": {
         "dev": "node esbuild.config.mjs",
         "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production && cp src/styles.css styles.css",
-        "version": "node version-bump.mjs && git add manifest.json versions.json"
+        "version": "node version-bump.mjs && git add manifest.json versions.json CHANGELOG.md"
     },
-    "keywords": [],
-    "author": "",
+    "keywords": [
+        "obsidian",
+        "plugin",
+        "tikz",
+        "pgfplots",
+        "graph",
+        "latex",
+        "math",
+        "renderer",
+        "visualization"
+    ],
+    "author": "Saiki77",
     "license": "MIT",
     "devDependencies": {
         "@types/node": "^16.11.6",
