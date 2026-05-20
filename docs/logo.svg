@@ -3,15 +3,43 @@
 
   <rect width="512" height="512" rx="72" fill="#ffffff"/>
 
-  <line x1="116" y1="420" x2="116" y2="116" stroke="#000000" stroke-width="10" stroke-linecap="butt"/>
-  <polygon points="116,76 92,120 140,120" fill="#000000"/>
+  <g stroke="#ececec" stroke-width="1.5" shape-rendering="crispEdges">
+    <line x1="100" y1="140" x2="424" y2="140"/>
+    <line x1="100" y1="194" x2="424" y2="194"/>
+    <line x1="100" y1="248" x2="424" y2="248"/>
+    <line x1="100" y1="302" x2="424" y2="302"/>
+    <line x1="100" y1="356" x2="424" y2="356"/>
 
-  <line x1="116" y1="420" x2="396" y2="420" stroke="#000000" stroke-width="10" stroke-linecap="butt"/>
-  <polygon points="436,420 392,396 392,444" fill="#000000"/>
+    <line x1="154" y1="86" x2="154" y2="410"/>
+    <line x1="208" y1="86" x2="208" y2="410"/>
+    <line x1="262" y1="86" x2="262" y2="410"/>
+    <line x1="316" y1="86" x2="316" y2="410"/>
+    <line x1="370" y1="86" x2="370" y2="410"/>
+  </g>
 
-  <path d="M 156 412 Q 256 -120 356 412"
-        stroke="#000000"
-        stroke-width="18"
+  <g stroke="#111111" stroke-width="3.5" stroke-linecap="butt" fill="none" shape-rendering="geometricPrecision">
+    <line x1="100" y1="410" x2="426" y2="410"/>
+    <line x1="100" y1="86" x2="100" y2="410"/>
+
+    <line x1="154" y1="405" x2="154" y2="415"/>
+    <line x1="208" y1="405" x2="208" y2="415"/>
+    <line x1="262" y1="405" x2="262" y2="415"/>
+    <line x1="316" y1="405" x2="316" y2="415"/>
+    <line x1="370" y1="405" x2="370" y2="415"/>
+
+    <line x1="95" y1="140" x2="105" y2="140"/>
+    <line x1="95" y1="194" x2="105" y2="194"/>
+    <line x1="95" y1="248" x2="105" y2="248"/>
+    <line x1="95" y1="302" x2="105" y2="302"/>
+    <line x1="95" y1="356" x2="105" y2="356"/>
+  </g>
+
+  <polygon points="438,410 424,403 424,417" fill="#111111"/>
+  <polygon points="100,72 93,86 107,86" fill="#111111"/>
+
+  <path d="M 154 380 Q 262 -60 370 380"
+        stroke="#111111"
+        stroke-width="6"
         fill="none"
         stroke-linecap="butt"
         shape-rendering="geometricPrecision"/>
