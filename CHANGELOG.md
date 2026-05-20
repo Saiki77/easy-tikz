@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.8.0] - 2026-05-21
+
+### Added
+
+- **Function templates.** Each function card on the Functions tab now has a Template dropdown. Built-in 2D templates: Parabola, Cubic, Sine wave, Cosine, Damped oscillation, Gaussian, Logistic, Hyperbola, Tangent (clipped), Upper half-circle. Built-in 3D templates: Ripple, Paraboloid, Saddle, Gaussian bump, Wave interference, Pringle. Selecting one fills the expression, domain(s), and a sensible color in a single click.
+- **User-defined templates.** Each card has a "Save as" button. Type a name, and the current expression/domain/color is saved to Obsidian's plugin data store. Saved templates appear in the same Template dropdown under a "Saved" group and persist across sessions.
+
+### Changed
+
+- Plugin class renamed internally from `SimpleTikzPlugin` to `EasyTikzPlugin` and gained a small data layer for the user templates above.
+
 ## [3.7.0] - 2026-05-21
 
 ### Changed

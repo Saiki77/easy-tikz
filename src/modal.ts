@@ -4,6 +4,13 @@ import { SettingsManager } from './settings';
 import { SVGRenderer } from './renderer';
 import { SVG3DRenderer } from './renderer3d';
 import { COLOR_OPTIONS, THICKNESS_OPTIONS, COLOR_MAP } from './colors';
+import { BUILT_IN_2D, BUILT_IN_3D, UserTemplate } from './templates';
+
+// Loose type so we can keep importing the plugin without a circular dep.
+interface PluginHost {
+    data: { userTemplates: UserTemplate[] };
+    saveUserTemplates(templates: UserTemplate[]): Promise<void>;
+}
 // @ts-ignore: inline import via esbuild plugin
 import styles from 'inline:./styles.css';
 
@@ -86,9 +93,20 @@ export class TikzModal extends Modal {
     private scrollRafId: number | null = null;
     private suspendObserverUntil = 0;
 
-    constructor(app: App) {
+    private plugin: PluginHost | null = null;
+
+    constructor(app: App, plugin?: PluginHost) {
         super(app);
         this.settings = new SettingsManager();
+        this.plugin = plugin ?? null;
+    }
+
+    private getUserTemplates(): UserTemplate[] {
+        return this.plugin?.data?.userTemplates ?? [];
+    }
+
+    private async setUserTemplates(templates: UserTemplate[]): Promise<void> {
+        if (this.plugin) await this.plugin.saveUserTemplates(templates);
     }
 
     onOpen() {
@@ -555,34 +573,125 @@ export class TikzModal extends Modal {
                     })
             );
 
+            // Captures so the Template dropdown can refresh the UI when applied.
+            let expressionInput: TextComponent | null = null;
+            let domainInput: TextComponent | null = null;
+            let colorDropdown: { setValue: (v: string) => unknown } | null = null;
+
+            const templateRow = card.createDiv({ cls: 'tikz-func-row' });
+            const templateDiv = templateRow.createDiv({ cls: 'tikz-func-field wide' });
+            new Setting(templateDiv)
+                .setName('Template')
+                .setDesc('Quick start from a built-in curve, or save the current card as your own template.')
+                .addDropdown((d) => {
+                    const buildOptions = () => {
+                        d.selectEl.empty();
+                        d.addOption('', 'Choose a template...');
+                        const builtIn = d.selectEl.createEl('optgroup');
+                        builtIn.setAttribute('label', 'Built-in');
+                        for (let i = 0; i < BUILT_IN_2D.length; i++) {
+                            const opt = builtIn.createEl('option', { text: BUILT_IN_2D[i].name });
+                            opt.value = `builtin:${i}`;
+                        }
+                        const userTemplates2D = this.getUserTemplates().filter((t) => !t.is3D);
+                        if (userTemplates2D.length > 0) {
+                            const saved = d.selectEl.createEl('optgroup');
+                            saved.setAttribute('label', 'Saved');
+                            for (const t of userTemplates2D) {
+                                const opt = saved.createEl('option', { text: t.name });
+                                opt.value = `user:${t.name}`;
+                            }
+                        }
+                        d.selectEl.value = '';
+                    };
+                    buildOptions();
+                    d.onChange((v) => {
+                        if (!v) return;
+                        let chosenExpr = '', chosenDomain = '', chosenColor = state.color;
+                        if (v.startsWith('builtin:')) {
+                            const idx = parseInt(v.slice(8), 10);
+                            const tpl = BUILT_IN_2D[idx];
+                            if (!tpl) return;
+                            chosenExpr = tpl.expression;
+                            chosenDomain = tpl.domain;
+                            if (tpl.color) chosenColor = tpl.color;
+                        } else if (v.startsWith('user:')) {
+                            const name = v.slice(5);
+                            const tpl = this.getUserTemplates().find((t) => !t.is3D && t.name === name);
+                            if (!tpl) return;
+                            chosenExpr = tpl.expression;
+                            chosenDomain = tpl.domain ?? state.domain;
+                            if (tpl.color) chosenColor = tpl.color;
+                        }
+                        state.expression = chosenExpr;
+                        state.domain = chosenDomain;
+                        state.color = chosenColor;
+                        if (expressionInput) expressionInput.setValue(chosenExpr);
+                        if (domainInput) domainInput.setValue(chosenDomain);
+                        if (colorDropdown) colorDropdown.setValue(chosenColor);
+                        card.style.borderLeftColor = COLOR_MAP[chosenColor] || 'var(--text-muted)';
+                        updateFunctionValues();
+                        d.selectEl.value = '';
+                    });
+                });
+            const saveDiv = templateRow.createDiv({ cls: 'tikz-func-field' });
+            new Setting(saveDiv).addButton((btn) =>
+                btn
+                    .setButtonText('Save as')
+                    .setTooltip('Save the current expression, domain, and color as a personal template')
+                    .onClick(async () => {
+                        if (!state.expression) {
+                            new Notice('Enter an expression before saving as a template.');
+                            return;
+                        }
+                        const name = window.prompt('Template name:', state.expression);
+                        if (!name) return;
+                        const trimmed = name.trim();
+                        if (!trimmed) return;
+                        const existing = this.getUserTemplates().filter((t) => !(t.is3D === false && t.name === trimmed));
+                        const next: UserTemplate[] = [...existing, {
+                            name: trimmed,
+                            is3D: false,
+                            expression: state.expression,
+                            domain: state.domain,
+                            color: state.color,
+                        }];
+                        await this.setUserTemplates(next);
+                        new Notice(`Saved template "${trimmed}".`);
+                    })
+            );
+
             const row1 = card.createDiv({ cls: 'tikz-func-row' });
             const exprDiv = row1.createDiv({ cls: 'tikz-func-field wide' });
             new Setting(exprDiv)
                 .setName('Expression')
                 .setDesc('Use x. Supports +, -, *, /, ^, parentheses, and Math.* functions.')
-                .addText((t) =>
+                .addText((t) => {
+                    expressionInput = t;
                     t.setPlaceholder('x^2').onChange((v) => {
                         state.expression = v;
                         updateFunctionValues();
-                    })
-                );
+                    });
+                });
             const domDiv = row1.createDiv({ cls: 'tikz-func-field' });
-            new Setting(domDiv).setName('Domain').addText((t) =>
+            new Setting(domDiv).setName('Domain').addText((t) => {
+                domainInput = t;
                 t.setPlaceholder('-10:10').setValue(state.domain).onChange((v) => {
                     state.domain = v;
                     updateFunctionValues();
-                })
-            );
+                });
+            });
 
             const row2 = card.createDiv({ cls: 'tikz-func-row' });
             const colorDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(colorDiv).setName('Color').addDropdown((d) =>
+            new Setting(colorDiv).setName('Color').addDropdown((d) => {
+                colorDropdown = d;
                 d.addOptions(COLOR_OPTIONS).setValue(state.color).onChange((v) => {
                     state.color = v;
                     card.style.borderLeftColor = COLOR_MAP[v] || 'var(--text-muted)';
                     updateFunctionValues();
-                })
-            );
+                });
+            });
             const thickDiv = row2.createDiv({ cls: 'tikz-func-field' });
             new Setting(thickDiv).setName('Thickness').addDropdown((d) =>
                 d.addOptions(THICKNESS_OPTIONS).setValue(state.thickness).onChange((v) => {
@@ -705,43 +814,141 @@ export class TikzModal extends Modal {
                     })
             );
 
+            // Captures used by the template dropdown to refresh inputs.
+            let expressionInput: TextComponent | null = null;
+            let xDomainInput: TextComponent | null = null;
+            let yDomainInput: TextComponent | null = null;
+            let colorDropdown: { setValue: (v: string) => unknown } | null = null;
+
+            const templateRow = card.createDiv({ cls: 'tikz-func-row' });
+            const templateDiv = templateRow.createDiv({ cls: 'tikz-func-field wide' });
+            new Setting(templateDiv)
+                .setName('Template')
+                .setDesc('Quick start from a built-in surface, or save the current card as your own template.')
+                .addDropdown((d) => {
+                    const buildOptions = () => {
+                        d.selectEl.empty();
+                        d.addOption('', 'Choose a template...');
+                        const builtIn = d.selectEl.createEl('optgroup');
+                        builtIn.setAttribute('label', 'Built-in');
+                        for (let i = 0; i < BUILT_IN_3D.length; i++) {
+                            const opt = builtIn.createEl('option', { text: BUILT_IN_3D[i].name });
+                            opt.value = `builtin:${i}`;
+                        }
+                        const userTemplates3D = this.getUserTemplates().filter((t) => t.is3D);
+                        if (userTemplates3D.length > 0) {
+                            const saved = d.selectEl.createEl('optgroup');
+                            saved.setAttribute('label', 'Saved');
+                            for (const t of userTemplates3D) {
+                                const opt = saved.createEl('option', { text: t.name });
+                                opt.value = `user:${t.name}`;
+                            }
+                        }
+                        d.selectEl.value = '';
+                    };
+                    buildOptions();
+                    d.onChange((v) => {
+                        if (!v) return;
+                        let chosenExpr = '', chosenXDomain = state.xDomain, chosenYDomain = state.yDomain, chosenColor = state.color;
+                        if (v.startsWith('builtin:')) {
+                            const idx = parseInt(v.slice(8), 10);
+                            const tpl = BUILT_IN_3D[idx];
+                            if (!tpl) return;
+                            chosenExpr = tpl.expression;
+                            chosenXDomain = tpl.xDomain;
+                            chosenYDomain = tpl.yDomain;
+                            if (tpl.color) chosenColor = tpl.color;
+                        } else if (v.startsWith('user:')) {
+                            const name = v.slice(5);
+                            const tpl = this.getUserTemplates().find((t) => t.is3D && t.name === name);
+                            if (!tpl) return;
+                            chosenExpr = tpl.expression;
+                            chosenXDomain = tpl.xDomain ?? state.xDomain;
+                            chosenYDomain = tpl.yDomain ?? state.yDomain;
+                            if (tpl.color) chosenColor = tpl.color;
+                        }
+                        state.expression = chosenExpr;
+                        state.xDomain = chosenXDomain;
+                        state.yDomain = chosenYDomain;
+                        state.color = chosenColor;
+                        if (expressionInput) expressionInput.setValue(chosenExpr);
+                        if (xDomainInput) xDomainInput.setValue(chosenXDomain);
+                        if (yDomainInput) yDomainInput.setValue(chosenYDomain);
+                        if (colorDropdown) colorDropdown.setValue(chosenColor);
+                        card.style.borderLeftColor = COLOR_MAP[chosenColor] || 'var(--text-muted)';
+                        updateFunctionValues();
+                        d.selectEl.value = '';
+                    });
+                });
+            const saveDiv = templateRow.createDiv({ cls: 'tikz-func-field' });
+            new Setting(saveDiv).addButton((btn) =>
+                btn
+                    .setButtonText('Save as')
+                    .setTooltip('Save the current expression and domains as a personal template')
+                    .onClick(async () => {
+                        if (!state.expression) {
+                            new Notice('Enter an expression before saving as a template.');
+                            return;
+                        }
+                        const name = window.prompt('Template name:', state.expression);
+                        if (!name) return;
+                        const trimmed = name.trim();
+                        if (!trimmed) return;
+                        const existing = this.getUserTemplates().filter((t) => !(t.is3D === true && t.name === trimmed));
+                        const next: UserTemplate[] = [...existing, {
+                            name: trimmed,
+                            is3D: true,
+                            expression: state.expression,
+                            xDomain: state.xDomain,
+                            yDomain: state.yDomain,
+                            color: state.color,
+                        }];
+                        await this.setUserTemplates(next);
+                        new Notice(`Saved template "${trimmed}".`);
+                    })
+            );
+
             const row1 = card.createDiv({ cls: 'tikz-func-row' });
             const exprDiv = row1.createDiv({ cls: 'tikz-func-field wide' });
             new Setting(exprDiv)
                 .setName('f(x, y)')
                 .setDesc('Use x and y. Supports +, -, *, /, ^, parentheses, and Math.* functions.')
-                .addText((t) =>
+                .addText((t) => {
+                    expressionInput = t;
                     t.setPlaceholder('sin(x)*cos(y)').onChange((v) => {
                         state.expression = v;
                         updateFunctionValues();
-                    })
-                );
+                    });
+                });
 
             const row2 = card.createDiv({ cls: 'tikz-func-row' });
             const xDomDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(xDomDiv).setName('X domain').addText((t) =>
+            new Setting(xDomDiv).setName('X domain').addText((t) => {
+                xDomainInput = t;
                 t.setPlaceholder('-5:5').setValue(state.xDomain).onChange((v) => {
                     state.xDomain = v;
                     updateFunctionValues();
-                })
-            );
+                });
+            });
             const yDomDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(yDomDiv).setName('Y domain').addText((t) =>
+            new Setting(yDomDiv).setName('Y domain').addText((t) => {
+                yDomainInput = t;
                 t.setPlaceholder('-5:5').setValue(state.yDomain).onChange((v) => {
                     state.yDomain = v;
                     updateFunctionValues();
-                })
-            );
+                });
+            });
 
             const row3 = card.createDiv({ cls: 'tikz-func-row' });
             const colorDiv = row3.createDiv({ cls: 'tikz-func-field' });
-            new Setting(colorDiv).setName('Color').addDropdown((d) =>
+            new Setting(colorDiv).setName('Color').addDropdown((d) => {
+                colorDropdown = d;
                 d.addOptions(COLOR_OPTIONS).setValue(state.color).onChange((v) => {
                     state.color = v;
                     card.style.borderLeftColor = COLOR_MAP[v] || 'var(--text-muted)';
                     updateFunctionValues();
-                })
-            );
+                });
+            });
 
             const row4 = card.createDiv({ cls: 'tikz-func-row tikz-toggle-row' });
             const wireChip = row4.createDiv({ cls: 'tikz-toggle-chip' });
