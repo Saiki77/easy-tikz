@@ -826,19 +826,76 @@ export class TikzModal extends Modal {
         );
 
         section('Domain');
-        para('A domain is min:max, e.g. -10:10 or 0:6.28. Min must be strictly less than max.');
+        para('A domain is min:max, e.g. -10:10 or 0:6.28. Min must be strictly less than max. Each function card has its own domain so different curves can span different ranges.');
 
-        section('Tangent point');
-        para('A single number inside the domain, e.g. 1.5. Enable Tangent on a function card to expose the field.');
+        section('Function options');
+        para('Each card on the Functions tab exposes the same set of styling and analysis toggles.');
+        list([
+            { name: 'Color', desc: 'Black, Red, Blue, Teal, Orange, Green, Purple. Black resolves to the theme text color so the curve is visible in both light and dark themes.' },
+            { name: 'Thickness', desc: 'Very thin, Thin, Thick, Very thick. Affects the rendered TikZ output and the live preview equally.' },
+            { name: 'Dashed', desc: 'Draws the curve as a dashed line rather than a solid stroke.' },
+            { name: 'Fill', desc: 'Shades the region between the curve and the x-axis with a low-opacity tint of the curve color.' },
+            { name: 'Legend', desc: 'Adds the expression to the legend box in the upper-right of the plot.' },
+        ]);
+
+        section('Tangent');
+        para('Enable the Tangent toggle to draw the line tangent to the curve at a chosen x value. The Tangent point field appears once the toggle is on. The point must lie inside the domain. A small dot marks the touch point.');
+
+        section('Extrema');
+        para('Enable the Extrema toggle to scan the domain for local minima and maxima. Detected points are marked with a dot and labelled "min" or "max". Resolution is 100 samples across the domain, so very sharp features inside a wide domain might be missed.');
 
         section('3D surfaces');
-        para('Use both x and y. Each axis has its own domain field.');
+        para('Switch the modal to 3D mode on the Graph tab. The Functions tab then accepts two-variable expressions.');
         code(
             'sin(x) * cos(y)\n' +
             'x^2 + y^2                 paraboloid\n' +
             'sin(sqrt(x^2 + y^2))      ripple pattern\n' +
-            'exp(-(x^2 + y^2) / 4)     gaussian bump'
+            'exp(-(x^2 + y^2) / 4)     gaussian bump\n' +
+            'x*y                       saddle\n' +
+            'cos(x) + sin(y)           interference pattern'
         );
+
+        section('3D surface options');
+        list([
+            { name: 'X domain / Y domain', desc: 'Each axis gets its own range. The surface is sampled on a 40 by 40 grid across these ranges.' },
+            { name: 'Color', desc: 'Same palette as 2D. The surface is shaded from the base color toward white based on z value.' },
+            { name: 'Wireframe', desc: 'Renders only the grid lines of the surface, no fill. Useful when stacking multiple surfaces.' },
+            { name: 'Opacity', desc: 'Slider from 0.1 to 1.0. Affects the filled surface; wireframes use the opacity for stroke transparency.' },
+        ]);
+
+        section('Camera (3D)');
+        para('The Graph tab has Elevation and Azimuth sliders. You can also drag the preview to rotate, or click into the preview and use the arrow keys (5 degree steps).');
+        list([
+            { name: 'Elevation', desc: '0 is edge-on (looking along the y-axis), 90 is straight down.' },
+            { name: 'Azimuth', desc: 'Rotation of the camera around the vertical axis (0 to 360).' },
+        ]);
+
+        section('Grid');
+        para('Major grid lines and minor subdivisions can be toggled independently. The Major divisions slider sets how many cells span the X axis (Y follows proportionally). Minor subdivisions chooses how many minor lines sit between two major ones.');
+
+        section('Recipes');
+        para('Quick starts for common plots. Copy the expression, the suggested domain, and the suggested ranges.');
+        code(
+            'Parabola               x^2                       domain -3:3       y -1:9\n' +
+            'Cubic                  x^3 - 3*x                 domain -2:2       y -3:3\n' +
+            'Sine wave              sin(x)                    domain 0:2*PI     y -1.5:1.5\n' +
+            'Damped oscillation     sin(x) * exp(-x/5)        domain 0:20       y -1:1\n' +
+            'Gaussian               exp(-x^2)                 domain -3:3       y 0:1.2\n' +
+            'Logistic               1 / (1 + exp(-x))         domain -6:6       y 0:1\n' +
+            'Hyperbola              1 / x                     domain 0.1:5      y 0:10\n' +
+            'Tangent (clipped)      tan(x)                    domain -1.5:1.5   y -10:10\n' +
+            'Circle (upper half)    sqrt(1 - x^2)             domain -1:1       y 0:1.2\n' +
+            'Ellipse (upper half)   sqrt(1 - (x/2)^2)         domain -2:2       y 0:1.2'
+        );
+
+        section('Troubleshooting');
+        list([
+            { name: '"Render failed" toast.', desc: 'The expression could not be evaluated. Common causes: missing operator (write 2*x not 2x), unbalanced parentheses, undefined name (you typed Tan instead of tan).' },
+            { name: 'Curve disappears off the top or bottom.', desc: 'Adjust the Y range on the Axis tab. Values outside the range are clipped.' },
+            { name: 'Tangent point error.', desc: 'The x value you entered is not inside the function domain. Check the Domain field on the same card.' },
+            { name: '3D surface is empty.', desc: 'The expression returned NaN or Infinity at every sample. Most often log of a negative number, or division by zero across the whole grid.' },
+            { name: 'Plot looks jagged.', desc: 'The 2D renderer uses 500 samples; the 3D renderer uses a 40x40 grid. Both are fixed. For smoother output, narrow the domain so the same samples cover a smaller range.' },
+        ]);
 
         section('Tips');
         list([
@@ -853,6 +910,14 @@ export class TikzModal extends Modal {
             {
                 name: 'Asymptotes are clipped.',
                 desc: 'Values whose absolute size exceeds 10x the Y axis range are dropped, so tan(x) near pi/2 will not blow out the chart.',
+            },
+            {
+                name: 'Code tab is editable.',
+                desc: 'You can tweak the generated TikZ before copying or inserting. Settings changes overwrite your edits unless the textarea is focused.',
+            },
+            {
+                name: 'Keyboard navigation.',
+                desc: 'Click any tab and the active state follows you as you scroll. Tab clicks smooth-scroll to that section.',
             },
         ]);
     }

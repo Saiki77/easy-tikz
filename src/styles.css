@@ -398,6 +398,12 @@
 
 /* Reference tab */
 
+.tikz-tab-content.tikz-reference {
+    /* Normal block flow: children get their natural height and the panel
+       scrolls. Flex layout was shrinking the <pre> blocks to one line. */
+    display: block;
+}
+
 .tikz-reference {
     color: var(--text-normal);
     font-size: 13px;
@@ -447,15 +453,17 @@
 }
 
 .tikz-ref-code {
+    display: block;
     margin: 0 0 14px;
-    padding: 12px 14px;
+    padding: 14px 16px;
     background: var(--background-primary-alt);
-    border: 1px solid var(--background-modifier-border);
+    border: 1px solid color-mix(in srgb, var(--background-modifier-border) 60%, transparent);
     border-radius: 6px;
     font-family: var(--font-monospace);
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--text-normal);
     white-space: pre;
     overflow-x: auto;
-    line-height: 1.5;
+    line-height: 1.6;
+    flex-shrink: 0;
 }
