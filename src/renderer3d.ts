@@ -229,29 +229,39 @@ export class SVG3DRenderer {
         const stepX = (xmax - xmin) / samples;
         const stepY = (ymax - ymin) / samples;
 
-        const zValues: (number | null)[][] = [];
-        for (let i = 0; i <= samples; i++) {
-            zValues[i] = [];
-            for (let j = 0; j <= samples; j++) {
+        // Compile once instead of N*N times via evaluateExpression2D.
+        const evalFn = MathHelper.compile2D(func.expression);
+
+        // Flat Float64Array is faster than a 2D nested array. NaN marks invalid cells.
+        const stride = samples + 1;
+        const zValues = new Float64Array(stride * stride);
+        try {
+            for (let i = 0; i <= samples; i++) {
                 const x = xmin + i * stepX;
-                const y = ymin + j * stepY;
-                try {
-                    const z = MathHelper.evaluateExpression2D(func.expression, x, y);
-                    zValues[i][j] = isFinite(z) ? z : null;
-                } catch {
-                    zValues[i][j] = null;
+                const rowOffset = i * stride;
+                for (let j = 0; j <= samples; j++) {
+                    const y = ymin + j * stepY;
+                    const z = evalFn(x, y);
+                    zValues[rowOffset + j] = z === z && z !== Infinity && z !== -Infinity ? z : NaN;
                 }
             }
+        } catch {
+            // Defensive: leave any unfilled cells as NaN (Float64Array defaults to 0,
+            // but NaN-or-0 sentinel is fine because we only check NaN below).
+            for (let k = 0; k < zValues.length; k++) {
+                if (zValues[k] === 0 && !(zValues[k] === zValues[k])) zValues[k] = NaN;
+            }
         }
+        const z = (i: number, j: number): number => zValues[i * stride + j];
 
         for (let i = 0; i < samples; i++) {
             for (let j = 0; j < samples; j++) {
-                const z00 = zValues[i][j];
-                const z10 = zValues[i + 1][j];
-                const z01 = zValues[i][j + 1];
-                const z11 = zValues[i + 1][j + 1];
+                const z00 = z(i, j);
+                const z10 = z(i + 1, j);
+                const z01 = z(i, j + 1);
+                const z11 = z(i + 1, j + 1);
 
-                if (z00 === null || z10 === null || z01 === null || z11 === null) continue;
+                if (z00 !== z00 || z10 !== z10 || z01 !== z01 || z11 !== z11) continue;
 
                 const x0 = xmin + i * stepX;
                 const x1 = xmin + (i + 1) * stepX;

@@ -177,6 +177,7 @@
     background: var(--background-primary);
     flex-shrink: 0;
     justify-content: flex-end;
+    flex-wrap: wrap;
 }
 
 .tikz-action-bar .setting-item {

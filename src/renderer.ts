@@ -428,84 +428,102 @@ export class SVGRenderer {
 
             let domMin: number;
             let domMax: number;
+            let evalFn: (x: number) => number;
             try {
                 [domMin, domMax] = MathHelper.parseDomain(func.domain);
+                evalFn = MathHelper.compile1D(func.expression);
             } catch {
                 continue;
             }
 
+            // Cache scaling factors so the hot loop avoids repeated property
+            // accesses and computes the screen coords inline (no method call).
+            const xmin = this.config.xmin;
+            const xRange = this.config.xmax - xmin;
+            const ymax = this.config.ymax;
+            const yRange = ymax - this.config.ymin;
+            const plotW = this.plotWidth;
+            const plotH = this.plotHeight;
+            const padLeft = PADDING_LEFT;
+            const baselineY = this.config.height - PADDING_BOTTOM;
+            const yClamp = yRange * Y_CLAMP_FACTOR;
+
+            // Allocate once; fill via index assignment to avoid array resizing.
+            const sampleCount = SAMPLES_PER_FUNCTION + 1;
+            const xs = new Float64Array(sampleCount);
+            const ys = new Float64Array(sampleCount);
             const step = (domMax - domMin) / SAMPLES_PER_FUNCTION;
-            const points: { x: number; y: number }[] = [];
-            for (let i = 0; i <= SAMPLES_PER_FUNCTION; i++) {
-                const mx = domMin + i * step;
-                try {
-                    const my = MathHelper.evaluateExpression(func.expression, mx);
-                    points.push({ x: mx, y: isFinite(my) ? my : NaN });
-                } catch {
-                    points.push({ x: mx, y: NaN });
+            try {
+                for (let i = 0; i < sampleCount; i++) {
+                    const mx = domMin + i * step;
+                    xs[i] = mx;
+                    const my = evalFn(mx);
+                    ys[i] = my === my && my !== Infinity && my !== -Infinity ? my : NaN;
+                }
+            } catch {
+                // Expression threw at runtime for some sample. Mark remaining as NaN.
+                for (let i = 0; i < sampleCount; i++) {
+                    if (xs[i] === 0 && i !== 0) xs[i] = domMin + i * step;
+                    if (!(ys[i] === ys[i])) ys[i] = NaN;
                 }
             }
 
-            let pathD = '';
+            const pathParts: string[] = [];
             let inSegment = false;
-            const yClamp = (this.config.ymax - this.config.ymin) * Y_CLAMP_FACTOR;
-
-            for (const p of points) {
-                if (isNaN(p.y) || Math.abs(p.y) > yClamp) {
+            for (let i = 0; i < sampleCount; i++) {
+                const y = ys[i];
+                if (y !== y || y > yClamp || y < -yClamp) {
                     inSegment = false;
                     continue;
                 }
-                const sx = this.toScreenX(p.x);
-                const sy = this.toScreenY(p.y);
-                if (!inSegment) {
-                    pathD += `M${sx.toFixed(2)},${sy.toFixed(2)} `;
-                    inSegment = true;
-                } else {
-                    pathD += `L${sx.toFixed(2)},${sy.toFixed(2)} `;
-                }
+                const sx = padLeft + ((xs[i] - xmin) / xRange) * plotW;
+                const sy = baselineY - ((y - this.config.ymin) / yRange) * plotH;
+                pathParts.push(`${inSegment ? 'L' : 'M'}${sx.toFixed(2)},${sy.toFixed(2)}`);
+                inSegment = true;
             }
+            const pathD = pathParts.join(' ');
 
             if (pathD) {
                 if (func.fill) {
-                    let fillD = '';
-                    let firstX: number | null = null;
-                    let lastX: number | null = null;
-                    let segInProgress = false;
                     const yAxisScreen = this.toScreenY(0);
-
-                    for (const p of points) {
-                        if (isNaN(p.y) || Math.abs(p.y) > yClamp) {
-                            if (segInProgress && lastX !== null) {
-                                fillD += `L${this.toScreenX(lastX).toFixed(2)},${yAxisScreen.toFixed(2)} Z `;
+                    const fillParts: string[] = [];
+                    let lastX = 0;
+                    let segInProgress = false;
+                    for (let i = 0; i < sampleCount; i++) {
+                        const y = ys[i];
+                        if (y !== y || y > yClamp || y < -yClamp) {
+                            if (segInProgress) {
+                                const closeSx = padLeft + ((lastX - xmin) / xRange) * plotW;
+                                fillParts.push(`L${closeSx.toFixed(2)},${yAxisScreen.toFixed(2)} Z`);
                                 segInProgress = false;
-                                firstX = null;
                             }
                             continue;
                         }
-                        const sx = this.toScreenX(p.x);
-                        const sy = this.toScreenY(p.y);
+                        const sx = padLeft + ((xs[i] - xmin) / xRange) * plotW;
+                        const sy = baselineY - ((y - this.config.ymin) / yRange) * plotH;
                         if (!segInProgress) {
-                            fillD += `M${sx.toFixed(2)},${yAxisScreen.toFixed(2)} L${sx.toFixed(2)},${sy.toFixed(2)} `;
-                            firstX = p.x;
+                            fillParts.push(`M${sx.toFixed(2)},${yAxisScreen.toFixed(2)} L${sx.toFixed(2)},${sy.toFixed(2)}`);
                             segInProgress = true;
                         } else {
-                            fillD += `L${sx.toFixed(2)},${sy.toFixed(2)} `;
+                            fillParts.push(`L${sx.toFixed(2)},${sy.toFixed(2)}`);
                         }
-                        lastX = p.x;
+                        lastX = xs[i];
                     }
-                    if (segInProgress && lastX !== null) {
-                        fillD += `L${this.toScreenX(lastX).toFixed(2)},${yAxisScreen.toFixed(2)} Z`;
+                    if (segInProgress) {
+                        const closeSx = padLeft + ((lastX - xmin) / xRange) * plotW;
+                        fillParts.push(`L${closeSx.toFixed(2)},${yAxisScreen.toFixed(2)} Z`);
                     }
 
                     const opacity = typeof func.fillOpacity === 'number' ? func.fillOpacity : 0.15;
                     const patternUrl = this.getOrCreatePattern(func.fillPattern || 'solid', cssColor);
-                    const fillAttrs: Record<string, string> = {
-                        d: fillD,
-                        fill: patternUrl || cssColor,
-                        'fill-opacity': String(opacity),
-                        stroke: 'none',
-                    };
-                    funcGroup.appendChild(this.el('path', fillAttrs));
+                    funcGroup.appendChild(
+                        this.el('path', {
+                            d: fillParts.join(' '),
+                            fill: patternUrl || cssColor,
+                            'fill-opacity': String(opacity),
+                            stroke: 'none',
+                        })
+                    );
                 }
 
                 const attrs: Record<string, string> = {

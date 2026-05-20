@@ -1072,6 +1072,14 @@ export class TikzModal extends Modal {
         section('Preview vs exported code');
         para('The live preview is a custom SVG renderer; the exported code is pgfplots that you compile with a real TeX engine. They are necessarily two pipelines. The plugin keeps them as close as possible: the SVG aspect ratio now follows the Width/Height (cm) values on the Graph tab, and the same axis ranges, fill options, samples, and annotations are used by both.');
 
+        section('Exporting the preview');
+        list([
+            { name: 'Copy TikZ code', desc: 'The default. Copies the pgfplots source to the clipboard.' },
+            { name: 'Copy SVG', desc: 'Copies the live SVG with a transparent background. Paste into Inkscape, Figma, or directly into Obsidian as <img src="...">. CSS variables are resolved so the file renders correctly outside the plugin.' },
+            { name: 'Copy PNG', desc: 'Rasterises the SVG at 2x resolution and copies a PNG to the clipboard, also with a transparent background. Paste into any image-aware app.' },
+            { name: 'Insert into note', desc: 'Inserts a `tikz` code block into the active note.' },
+        ]);
+
         section('Preview (2D)');
         para('The right-hand preview is a live SVG that always reflects the current settings. In 2D mode you can interact with it directly:');
         list([
@@ -1352,6 +1360,22 @@ export class TikzModal extends Modal {
         new Setting(bar)
             .addButton((btn) =>
                 btn
+                    .setButtonText('Copy SVG')
+                    .then((b) => b.buttonEl.setAttr('aria-label', 'Copy the preview as an SVG with transparent background'))
+                    .onClick(async () => {
+                        await this.copyPreviewAsSvg();
+                    })
+            )
+            .addButton((btn) =>
+                btn
+                    .setButtonText('Copy PNG')
+                    .then((b) => b.buttonEl.setAttr('aria-label', 'Copy the preview as a PNG with transparent background'))
+                    .onClick(async () => {
+                        await this.copyPreviewAsPng();
+                    })
+            )
+            .addButton((btn) =>
+                btn
                     .setButtonText('Copy TikZ code')
                     .then((b) => b.buttonEl.setAttr('aria-label', 'Copy generated TikZ code to clipboard'))
                     .onClick(async () => {
@@ -1382,6 +1406,104 @@ export class TikzModal extends Modal {
                         this.close();
                     })
             );
+    }
+
+    /**
+     * Clone the live SVG and prepare it for export: resolve every `var(--...)`
+     * to its computed value (so the image survives outside Obsidian) and drop
+     * the background rect for transparency.
+     */
+    private prepareSvgForExport(): SVGElement | null {
+        const svg = this.previewContainer.querySelector('svg');
+        if (!svg) return null;
+        const clone = svg.cloneNode(true) as SVGElement;
+        const computed = getComputedStyle(document.body);
+
+        const resolveVars = (value: string): string =>
+            value.replace(/var\((--[^,)]+)(?:,\s*([^)]+))?\)/g, (_match, name, fallback) => {
+                const v = computed.getPropertyValue(name).trim();
+                return v || (fallback ? String(fallback).trim() : '');
+            });
+
+        const nodes: Element[] = [clone, ...Array.from(clone.querySelectorAll('*'))];
+        for (const el of nodes) {
+            for (const attrName of ['fill', 'stroke']) {
+                const v = el.getAttribute(attrName);
+                if (v && v.includes('var(')) el.setAttribute(attrName, resolveVars(v));
+            }
+            const styleAttr = el.getAttribute('style');
+            if (styleAttr && styleAttr.includes('var(')) el.setAttribute('style', resolveVars(styleAttr));
+        }
+
+        // Drop the background rect (it's the first child, fill="var(--background-primary)").
+        const firstRect = clone.querySelector(':scope > rect');
+        if (firstRect) firstRect.remove();
+
+        // Make sure the SVG carries proper xmlns so it renders standalone outside the page.
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+        return clone;
+    }
+
+    private async copyPreviewAsSvg() {
+        const clone = this.prepareSvgForExport();
+        if (!clone) {
+            new Notice('No graph to copy yet.');
+            return;
+        }
+        const svgString = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' +
+            new XMLSerializer().serializeToString(clone);
+        try {
+            await navigator.clipboard.writeText(svgString);
+            new Notice('SVG copied to clipboard (transparent background).');
+        } catch {
+            new Notice('Could not copy SVG to the clipboard.');
+        }
+    }
+
+    private async copyPreviewAsPng() {
+        const clone = this.prepareSvgForExport();
+        if (!clone) {
+            new Notice('No graph to copy yet.');
+            return;
+        }
+        const svgString = new XMLSerializer().serializeToString(clone);
+        const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const width = parseFloat(clone.getAttribute('width') || '760');
+        const height = parseFloat(clone.getAttribute('height') || '532');
+
+        try {
+            const img = new Image();
+            await new Promise<void>((resolve, reject) => {
+                img.onload = () => resolve();
+                img.onerror = () => reject(new Error('Failed to rasterize SVG'));
+                img.src = url;
+            });
+
+            // 2x for a sharper result on Hi-DPI displays.
+            const scale = 2;
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(width * scale);
+            canvas.height = Math.round(height * scale);
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Canvas 2D context unavailable');
+            ctx.scale(scale, scale);
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const pngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+            if (!pngBlob) throw new Error('Could not encode PNG');
+
+            // Older lib.dom.d.ts in this toolchain requires Promise<Blob>; the runtime accepts a Blob too.
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': Promise.resolve(pngBlob) })]);
+            new Notice('PNG copied to clipboard (transparent background, 2x resolution).');
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'PNG copy failed';
+            new Notice(message);
+        } finally {
+            URL.revokeObjectURL(url);
+        }
     }
 
     /** Fresh TikZ code generated from the current settings. */

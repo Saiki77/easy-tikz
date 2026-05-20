@@ -27,18 +27,45 @@ const MATH_PRELUDE =
     '}=Math;';
 
 /**
- * Compile a math expression of one or two variables into a callable function.
- * Supports `^` as the power operator (rewritten to `**`) and exposes the
- * usual Math functions as bare names via the prelude.
+ * Cap on cached compiled functions. The Map's insertion order doubles as a
+ * cheap LRU, so the oldest entry is evicted when the cap is hit.
+ */
+const COMPILE_CACHE_MAX = 128;
+
+const COMPILE_CACHE_1D = new Map<string, (x: number) => number>();
+const COMPILE_CACHE_2D = new Map<string, (x: number, y: number) => number>();
+
+function pruneCache<K, V>(cache: Map<K, V>) {
+    while (cache.size > COMPILE_CACHE_MAX) {
+        const oldest = cache.keys().next().value;
+        if (oldest === undefined) break;
+        cache.delete(oldest);
+    }
+}
+
+/**
+ * Compile a one-variable math expression into a callable. Cached on the
+ * expression string so 500-sample render loops only call `new Function`
+ * once per unique expression, not once per sample.
  */
 function compile1D(expression: string): (x: number) => number {
+    const cached = COMPILE_CACHE_1D.get(expression);
+    if (cached) return cached;
     const body = expression.replace(/\^/g, '**');
-    return new Function('x', `${MATH_PRELUDE}return (${body});`) as (x: number) => number;
+    const fn = new Function('x', `${MATH_PRELUDE}return (${body});`) as (x: number) => number;
+    COMPILE_CACHE_1D.set(expression, fn);
+    pruneCache(COMPILE_CACHE_1D);
+    return fn;
 }
 
 function compile2D(expression: string): (x: number, y: number) => number {
+    const cached = COMPILE_CACHE_2D.get(expression);
+    if (cached) return cached;
     const body = expression.replace(/\^/g, '**');
-    return new Function('x', 'y', `${MATH_PRELUDE}return (${body});`) as (x: number, y: number) => number;
+    const fn = new Function('x', 'y', `${MATH_PRELUDE}return (${body});`) as (x: number, y: number) => number;
+    COMPILE_CACHE_2D.set(expression, fn);
+    pruneCache(COMPILE_CACHE_2D);
+    return fn;
 }
 
 export class MathHelper {
@@ -80,6 +107,20 @@ export class MathHelper {
         return x;
     }
 
+    /**
+     * Return the cached compiled function for a one-variable expression.
+     * Throws on syntax errors. Renderers should call this once per render
+     * and then invoke the returned function in tight loops.
+     */
+    static compile1D(expression: string): (x: number) => number {
+        return compile1D(expression);
+    }
+
+    /** Same as compile1D but for two-variable expressions. */
+    static compile2D(expression: string): (x: number, y: number) => number {
+        return compile2D(expression);
+    }
+
     /** Forward-difference numerical derivative of `expression` at `x`. */
     static calculateDerivative(expression: string, x: number): number {
         const f = compile1D(expression);
@@ -95,16 +136,14 @@ export class MathHelper {
         const step = (max - min) / EXTREMA_SAMPLES;
         const extrema: { x: number; y: number; type: string }[] = [];
         const f = compile1D(expression);
+        const deriv = (x: number) => (f(x + DERIVATIVE_STEP) - f(x)) / DERIVATIVE_STEP;
 
         for (let x = min + step; x < max - step; x += step) {
-            const deriv1 = this.calculateDerivative(expression, x - step);
-            const deriv2 = this.calculateDerivative(expression, x);
+            const deriv1 = deriv(x - step);
+            const deriv2 = deriv(x);
 
             if ((deriv1 < 0 && deriv2 > 0) || (deriv1 > 0 && deriv2 < 0)) {
-                const secondDeriv =
-                    (this.calculateDerivative(expression, x + DERIVATIVE_STEP) -
-                        this.calculateDerivative(expression, x)) /
-                    DERIVATIVE_STEP;
+                const secondDeriv = (deriv(x + DERIVATIVE_STEP) - deriv(x)) / DERIVATIVE_STEP;
                 const type = secondDeriv > 0 ? 'minimum' : 'maximum';
                 extrema.push({
                     x: Number(x.toFixed(3)),
