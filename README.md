@@ -1,7 +1,7 @@
-# TikZ Graph Helper
+# Easy TikZ
 
 <p align="center">
-  <img src="docs/logo.svg" width="160" alt="TikZ Graph Helper logo">
+  <img src="docs/logo.svg" width="160" alt="Easy TikZ logo">
 </p>
 
 <p align="center">
@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/screenshot-2d.png" alt="TikZ Graph Helper main window with a 2D plot" width="100%">
+  <img src="docs/screenshots/screenshot-2d.png" alt="Easy TikZ main window with a 2D plot" width="100%">
 </p>
 
 ## Features
@@ -39,34 +39,34 @@
 
 ## Why
 
-Hand-writing pgfplots options is finicky, the iteration loop is slow, and you cannot see what you are doing until you compile. This plugin gives you the visual editor and live preview that pgfplots itself lacks, then emits the LaTeX for you when you are happy with the result.
+Hand-writing pgfplots options is finicky, the iteration loop is slow, and you cannot see what you are doing until you compile. Easy TikZ gives you the visual editor and live preview that pgfplots itself lacks, then emits the LaTeX for you when you are happy with the result.
 
 ## Installation
 
 ### Community plugins (recommended, once approved)
 
 1. Open Obsidian Settings, Community plugins, Browse.
-2. Search for "TikZ Graph Helper".
+2. Search for "Easy TikZ".
 3. Install and enable.
 
 ### BRAT (beta channel)
 
 1. Install the [BRAT plugin](https://github.com/TfTHacker/obsidian42-brat).
-2. Add `Saiki77/tikz-graph-helper` as a beta plugin.
+2. Add `Saiki77/tikz-graph-help` as a beta plugin.
 3. Enable the plugin in Obsidian Settings.
 
 ### Manual install
 
 1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Saiki77/tikz-graph-help/releases).
-2. Place them in `<vault>/.obsidian/plugins/tikz-graph-helper/`.
+2. Place them in `<vault>/.obsidian/plugins/easy-tikz/`.
 3. Enable the plugin in Obsidian Settings.
 
 ### Migrating from 2.x
 
-The plugin id changed from `tikz_graph_helper` (snake_case) to `tikz-graph-helper` (kebab-case) in version 3.0.0 to match the Obsidian community convention. If you have a 2.x install via BRAT or manual:
+The plugin id changed from `tikz_graph_helper` to `easy-tikz` in version 3.0.0 (renamed and rebranded as Easy TikZ to match the Obsidian community convention). If you have a 2.x install via BRAT or manual:
 
 1. Disable the plugin in Settings, Community plugins.
-2. Rename `.obsidian/plugins/tikz_graph_helper/` to `.obsidian/plugins/tikz-graph-helper/`.
+2. Rename `.obsidian/plugins/tikz_graph_helper/` to `.obsidian/plugins/easy-tikz/`.
 3. Re-enable the plugin.
 
 Your settings carry over with the rename.

@@ -7,7 +7,7 @@ import { COLOR_OPTIONS, THICKNESS_OPTIONS, COLOR_MAP } from './colors';
 // @ts-ignore: inline import via esbuild plugin
 import styles from 'inline:./styles.css';
 
-const STYLE_ELEMENT_ID = 'tikz-graph-helper-styles';
+const STYLE_ELEMENT_ID = 'easy-tikz-styles';
 
 const PREVIEW_DEBOUNCE_MS = 150;
 

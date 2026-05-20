@@ -8,18 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Migration from 2.x
 
-The plugin folder name changed from `tikz_graph_helper` to `tikz-graph-helper`
-to follow the Obsidian community convention. Existing BRAT or manual users:
+The plugin was renamed from "Tikz Graph Helper" to "Easy TikZ" and the folder
+changed from `tikz_graph_helper` to `easy-tikz` to follow the Obsidian
+community convention. Existing BRAT or manual users:
 
 1. Disable the plugin in Settings, Community plugins.
-2. Rename `.obsidian/plugins/tikz_graph_helper/` to `.obsidian/plugins/tikz-graph-helper/`.
+2. Rename `.obsidian/plugins/tikz_graph_helper/` to `.obsidian/plugins/easy-tikz/`.
 3. Re-enable the plugin.
 
 Plugin settings carry over with the rename. No data is lost.
 
 ### Changed
 
-- Plugin id renamed to `tikz-graph-helper` (was `tikz_graph_helper`).
+- Plugin renamed to "Easy TikZ" with id `easy-tikz` (was "Tikz Graph Helper" / `tikz_graph_helper`).
 - Hardened release pipeline: tag-vs-manifest version check, build provenance attestation, Node 20, `npm ci`, release notes sourced from this changelog.
 - Consolidated three duplicate color maps into one shared `src/colors.ts` module.
 - Extracted `niceInterval`, `formatTick`, `stripLatex`, and color helpers into a shared `src/util.ts` module.
