@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.9.1] - 2026-05-21
+
+### Added
+
+- **Snap-to-extrema tangent.** Type `min` or `max` in a function card's Tangent point field, hit Enter (or click away), and the field snaps to the x value of the nearest local minimum or maximum on the domain. Append a digit (`min2`, `max3`) to pick the n-th. The Reference tab gains a paragraph describing the shortcut.
+
 ## [3.9.0] - 2026-05-21
 
 ### Added

@@ -727,12 +727,32 @@ export class TikzModal extends Modal {
             const row3 = card.createDiv({ cls: 'tikz-func-row tikz-toggle-row' });
 
             const tangentInput = card.createDiv({ cls: 'tikz-tangent-input' });
-            new Setting(tangentInput).setName('Tangent point (x)').addText((t) =>
-                t.setPlaceholder('x value').onChange((v) => {
-                    state.tangentPoint = v;
-                    updateFunctionValues();
-                })
-            );
+            new Setting(tangentInput)
+                .setName('Tangent point (x)')
+                .setDesc('A number, or "min" / "max" to snap to the nearest extremum. Append a digit (min2, max1) to pick the n-th.')
+                .addText((t) => {
+                    t.setPlaceholder('x value, min, or max').onChange((v) => {
+                        state.tangentPoint = v;
+                        updateFunctionValues();
+                    });
+                    const tryResolve = () => {
+                        const v = t.getValue();
+                        const resolved = this.resolveTangentKeyword(v, state.expression, state.domain);
+                        if (resolved !== null) {
+                            const text = String(parseFloat(resolved.toFixed(3)));
+                            state.tangentPoint = text;
+                            t.setValue(text);
+                            updateFunctionValues();
+                        }
+                    };
+                    t.inputEl.addEventListener('blur', tryResolve);
+                    t.inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
+                        if (e.key === 'Enter') {
+                            tryResolve();
+                            e.preventDefault();
+                        }
+                    });
+                });
 
             const fillOptions = card.createDiv({ cls: 'tikz-tangent-input' });
             new Setting(fillOptions)
@@ -1535,6 +1555,28 @@ export class TikzModal extends Modal {
         }
 
         return { scale, plotW, plotH, xFracInPlot, yFracInPlot };
+    }
+
+    /**
+     * If `input` looks like `min`, `max`, `min2`, `max3` etc., return the
+     * x value of the matching local extremum (nth by left-to-right order).
+     * Returns null for anything else, including unparseable input.
+     */
+    private resolveTangentKeyword(input: string, expression: string, domain: string): number | null {
+        if (!expression || !domain) return null;
+        const m = input.trim().toLowerCase().match(/^(min|max)(\d+)?$/);
+        if (!m) return null;
+        try {
+            const extrema = MathHelper.findExtrema(expression, domain);
+            const wanted = m[1] === 'min' ? 'minimum' : 'maximum';
+            const filtered = extrema.filter((e) => e.type === wanted);
+            const idx = m[2] ? Math.max(1, parseInt(m[2], 10)) - 1 : 0;
+            const chosen = filtered[idx];
+            if (!chosen) return null;
+            return chosen.x;
+        } catch {
+            return null;
+        }
     }
 
     /**
