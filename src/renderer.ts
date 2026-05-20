@@ -27,6 +27,9 @@ export class SVGRenderer {
     private config: RendererConfig;
     private plotWidth: number;
     private plotHeight: number;
+    private defs: SVGElement | null = null;
+    private patternIds: Map<string, string> = new Map();
+    private patternCounter = 0;
 
     constructor(config: RendererConfig) {
         this.config = config;
@@ -72,6 +75,7 @@ export class SVGRenderer {
         );
 
         const defs = this.el('defs');
+        this.defs = defs;
         const clipPath = this.el('clipPath', { id: 'plot-clip' });
         clipPath.appendChild(
             this.el('rect', {
@@ -103,9 +107,48 @@ export class SVGRenderer {
         this.drawGrid(svg);
         this.drawAxes(svg);
         this.drawFunctions(svg);
+        this.drawAnnotations(svg);
         this.drawTitle(svg);
 
         return svg;
+    }
+
+    /**
+     * Return an existing or freshly registered `<pattern>` def for the given
+     * pattern style and color. The pattern URL is suitable as a `fill` value.
+     * Returns null for the solid case so the caller falls back to a flat fill.
+     */
+    private getOrCreatePattern(style: string, color: string): string | null {
+        if (!style || style === 'solid' || !this.defs) return null;
+        const key = `${style}|${color}`;
+        if (this.patternIds.has(key)) return this.patternIds.get(key)!;
+        const id = `tikz-pattern-${++this.patternCounter}`;
+        const pattern = this.el('pattern', {
+            id,
+            patternUnits: 'userSpaceOnUse',
+            width: '8',
+            height: '8',
+        });
+        const stroke = color;
+        if (style === 'horizontal') {
+            pattern.appendChild(this.el('line', { x1: '0', y1: '4', x2: '8', y2: '4', stroke, 'stroke-width': '1.2' }));
+        } else if (style === 'vertical') {
+            pattern.appendChild(this.el('line', { x1: '4', y1: '0', x2: '4', y2: '8', stroke, 'stroke-width': '1.2' }));
+        } else if (style === 'crosshatch') {
+            pattern.appendChild(this.el('line', { x1: '0', y1: '0', x2: '8', y2: '8', stroke, 'stroke-width': '1' }));
+            pattern.appendChild(this.el('line', { x1: '8', y1: '0', x2: '0', y2: '8', stroke, 'stroke-width': '1' }));
+        } else if (style === 'dots') {
+            pattern.appendChild(this.el('circle', { cx: '4', cy: '4', r: '1.2', fill: stroke }));
+        } else if (style === 'north-east') {
+            pattern.appendChild(this.el('line', { x1: '0', y1: '8', x2: '8', y2: '0', stroke, 'stroke-width': '1.2' }));
+        } else if (style === 'north-west') {
+            pattern.appendChild(this.el('line', { x1: '0', y1: '0', x2: '8', y2: '8', stroke, 'stroke-width': '1.2' }));
+        } else {
+            return null;
+        }
+        this.defs.appendChild(pattern);
+        this.patternIds.set(key, `url(#${id})`);
+        return this.patternIds.get(key)!;
     }
 
     private drawGrid(svg: SVGElement) {
@@ -454,14 +497,15 @@ export class SVGRenderer {
                         fillD += `L${this.toScreenX(lastX).toFixed(2)},${yAxisScreen.toFixed(2)} Z`;
                     }
 
-                    funcGroup.appendChild(
-                        this.el('path', {
-                            d: fillD,
-                            fill: cssColor,
-                            'fill-opacity': '0.15',
-                            stroke: 'none',
-                        })
-                    );
+                    const opacity = typeof func.fillOpacity === 'number' ? func.fillOpacity : 0.15;
+                    const patternUrl = this.getOrCreatePattern(func.fillPattern || 'solid', cssColor);
+                    const fillAttrs: Record<string, string> = {
+                        d: fillD,
+                        fill: patternUrl || cssColor,
+                        'fill-opacity': String(opacity),
+                        stroke: 'none',
+                    };
+                    funcGroup.appendChild(this.el('path', fillAttrs));
                 }
 
                 const attrs: Record<string, string> = {
@@ -616,6 +660,46 @@ export class SVGRenderer {
         });
 
         svg.appendChild(legendGroup);
+    }
+
+    private drawAnnotations(svg: SVGElement) {
+        const annotations = this.config.annotations || [];
+        if (!annotations.length) return;
+        const group = this.el('g', { class: 'tikz-annotations' });
+        for (const a of annotations) {
+            if (!a.text) continue;
+            const x = parseFloat(a.x);
+            const y = parseFloat(a.y);
+            if (!isFinite(x) || !isFinite(y)) continue;
+            if (x < this.config.xmin || x > this.config.xmax) continue;
+            if (y < this.config.ymin || y > this.config.ymax) continue;
+            const sx = this.toScreenX(x);
+            const sy = this.toScreenY(y);
+            const color = COLOR_MAP[a.color] || a.color || 'var(--text-normal)';
+            const fontSize = a.size === 'small' ? '10' : a.size === 'large' ? '15' : '12';
+            let textAnchor = 'middle';
+            let dx = 0;
+            let dy = 4;
+            switch (a.anchor) {
+                case 'above': textAnchor = 'middle'; dy = -6; break;
+                case 'below': textAnchor = 'middle'; dy = 14; break;
+                case 'left': textAnchor = 'end'; dx = -6; dy = 4; break;
+                case 'right': textAnchor = 'start'; dx = 6; dy = 4; break;
+                case 'center': default: textAnchor = 'middle'; dy = 4; break;
+            }
+            const t = this.el('text', {
+                x: String(sx + dx),
+                y: String(sy + dy),
+                'text-anchor': textAnchor,
+                fill: color,
+                'font-size': fontSize,
+                'font-weight': '500',
+                'font-family': 'var(--font-text)',
+            });
+            t.textContent = a.text;
+            group.appendChild(t);
+        }
+        svg.appendChild(group);
     }
 
     private drawTitle(svg: SVGElement) {

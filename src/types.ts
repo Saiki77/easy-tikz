@@ -1,8 +1,22 @@
+export type FillPattern =
+    | 'solid'
+    | 'horizontal'
+    | 'vertical'
+    | 'crosshatch'
+    | 'dots'
+    | 'north-east'
+    | 'north-west';
+
+export type AnnotationAnchor = 'center' | 'above' | 'below' | 'left' | 'right';
+export type AnnotationSize = 'small' | 'normal' | 'large';
+
 export interface FunctionParameters {
     expression: string;
     domain: string;
     showLegend: boolean;
     fill: boolean;
+    fillOpacity: number;
+    fillPattern: FillPattern;
     tangent: boolean;
     color: string;
     dashed: boolean;
@@ -40,6 +54,17 @@ export interface Function3DParameters {
     color: string;
     wireframe: boolean;
     opacity: number;
+    samples: number;
+}
+
+export interface Annotation {
+    x: string;
+    y: string;
+    z?: string;
+    text: string;
+    color: string;
+    size: AnnotationSize;
+    anchor: AnnotationAnchor;
 }
 
 export interface RendererConfig {
@@ -59,6 +84,7 @@ export interface RendererConfig {
     minorTickNum: number;
     majorTickNum: number;
     functions: FunctionParameters[];
+    annotations: Annotation[];
     is3D: boolean;
     zmin: number;
     zmax: number;

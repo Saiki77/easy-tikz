@@ -17,8 +17,8 @@ const PADDING_LEFT = 40;
  */
 const VIEWPORT_SCALE = 0.28;
 
-/** Surface sampling resolution. Higher numbers give smoother surfaces but slow the live preview. */
-const GRID_SAMPLES = 40;
+/** Default surface sampling resolution per axis when the function does not set its own. */
+const DEFAULT_GRID_SAMPLES = 40;
 
 /** Default target number of major ticks per 3D axis. */
 const DEFAULT_TARGET_TICKS = 5;
@@ -174,9 +174,48 @@ export class SVG3DRenderer {
         svg.appendChild(surfaceGroup);
 
         this.drawAxes(svg, 'front');
+        this.drawAnnotations(svg);
         this.drawTitle(svg);
 
         return svg;
+    }
+
+    private drawAnnotations(svg: SVGElement) {
+        const annotations = this.config.annotations || [];
+        if (!annotations.length) return;
+        const group = this.el('g', { class: 'tikz-3d-annotations' });
+        for (const a of annotations) {
+            if (!a.text) continue;
+            const x = parseFloat(a.x);
+            const y = parseFloat(a.y);
+            const z = parseFloat(a.z ?? '0');
+            if (!isFinite(x) || !isFinite(y) || !isFinite(z)) continue;
+            const p = this.project(x, y, z);
+            const color = COLOR_MAP[a.color] || a.color || 'var(--text-normal)';
+            const fontSize = a.size === 'small' ? '10' : a.size === 'large' ? '15' : '12';
+            let textAnchor = 'middle';
+            let dx = 0;
+            let dy = 4;
+            switch (a.anchor) {
+                case 'above': textAnchor = 'middle'; dy = -6; break;
+                case 'below': textAnchor = 'middle'; dy = 14; break;
+                case 'left': textAnchor = 'end'; dx = -6; dy = 4; break;
+                case 'right': textAnchor = 'start'; dx = 6; dy = 4; break;
+                case 'center': default: textAnchor = 'middle'; dy = 4; break;
+            }
+            const t = this.el('text', {
+                x: String(p.sx + dx),
+                y: String(p.sy + dy),
+                'text-anchor': textAnchor,
+                fill: color,
+                'font-size': fontSize,
+                'font-weight': '500',
+                'font-family': 'var(--font-text)',
+            });
+            t.textContent = a.text;
+            group.appendChild(t);
+        }
+        svg.appendChild(group);
     }
 
     private sampleSurface(func: Function3DParameters): Quad[] {
@@ -186,13 +225,14 @@ export class SVG3DRenderer {
         const { zmin, zmax } = this.config;
         const zRange = zmax - zmin || 1;
 
-        const stepX = (xmax - xmin) / GRID_SAMPLES;
-        const stepY = (ymax - ymin) / GRID_SAMPLES;
+        const samples = Math.max(4, Math.min(120, func.samples || DEFAULT_GRID_SAMPLES));
+        const stepX = (xmax - xmin) / samples;
+        const stepY = (ymax - ymin) / samples;
 
         const zValues: (number | null)[][] = [];
-        for (let i = 0; i <= GRID_SAMPLES; i++) {
+        for (let i = 0; i <= samples; i++) {
             zValues[i] = [];
-            for (let j = 0; j <= GRID_SAMPLES; j++) {
+            for (let j = 0; j <= samples; j++) {
                 const x = xmin + i * stepX;
                 const y = ymin + j * stepY;
                 try {
@@ -204,8 +244,8 @@ export class SVG3DRenderer {
             }
         }
 
-        for (let i = 0; i < GRID_SAMPLES; i++) {
-            for (let j = 0; j < GRID_SAMPLES; j++) {
+        for (let i = 0; i < samples; i++) {
+            for (let j = 0; j < samples; j++) {
                 const z00 = zValues[i][j];
                 const z10 = zValues[i + 1][j];
                 const z01 = zValues[i][j + 1];

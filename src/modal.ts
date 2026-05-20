@@ -32,11 +32,11 @@ const RENDERER_PADDING = { top: 45, right: 30, bottom: 45, left: 55 };
 /** Scroll-wheel zoom factor per notch. > 1 zooms out, < 1 zooms in. */
 const WHEEL_ZOOM_FACTOR = 1.15;
 
-const TABS = ['Graph', 'Axis', 'Functions', 'Grid', 'Code', 'Reference'] as const;
+const TABS = ['Graph', 'Axis', 'Functions', 'Annotations', 'Grid', 'Code', 'Reference'] as const;
 type TabName = (typeof TABS)[number];
 
 /** Tabs that share the same scrollable settings column. Clicking jumps the scroll. */
-const SETTINGS_TABS = new Set<TabName>(['Graph', 'Axis', 'Functions', 'Grid']);
+const SETTINGS_TABS = new Set<TabName>(['Graph', 'Axis', 'Functions', 'Annotations', 'Grid']);
 
 interface AxisRange {
     key: string;
@@ -245,12 +245,13 @@ export class TikzModal extends Modal {
     // --- Tab contents ---
 
     private buildTabs(container: HTMLElement) {
-        // Single scrollable column shared by Graph, Axis, Functions, Grid.
+        // Single scrollable column shared by Graph, Axis, Functions, Annotations, Grid.
         this.settingsColumn = container.createDiv({ cls: 'tikz-settings-column' });
 
         this.buildGraphTab(this.settingsColumn);
         this.buildAxisTab(this.settingsColumn);
         this.buildFunctionsTab(this.settingsColumn);
+        this.buildAnnotationsTab(this.settingsColumn);
         this.buildGridTab(this.settingsColumn);
 
         // Standalone panels for the non-settings tabs.
@@ -515,6 +516,8 @@ export class TikzModal extends Modal {
                 domain: '-10:10',
                 showLegend: false,
                 fill: false,
+                fillOpacity: 0.2,
+                fillPattern: 'solid',
                 tangent: false,
                 dashed: false,
                 tangentPoint: '',
@@ -587,6 +590,35 @@ export class TikzModal extends Modal {
                 })
             );
 
+            const fillOptions = card.createDiv({ cls: 'tikz-tangent-input' });
+            new Setting(fillOptions)
+                .setName('Fill pattern')
+                .addDropdown((d) =>
+                    d.addOptions({
+                        solid: 'Solid',
+                        horizontal: 'Horizontal lines',
+                        vertical: 'Vertical lines',
+                        crosshatch: 'Crosshatch',
+                        dots: 'Dots',
+                        'north-east': 'NE diagonal',
+                        'north-west': 'NW diagonal',
+                    }).setValue(state.fillPattern).onChange((v) => {
+                        state.fillPattern = v as FunctionParameters['fillPattern'];
+                        updateFunctionValues();
+                    })
+                );
+            new Setting(fillOptions)
+                .setName('Fill opacity')
+                .addSlider((s) =>
+                    s.setLimits(0.05, 1.0, 0.05)
+                        .setValue(state.fillOpacity)
+                        .setDynamicTooltip()
+                        .onChange((v) => {
+                            state.fillOpacity = v;
+                            updateFunctionValues();
+                        })
+                );
+
             type BooleanKey = 'showLegend' | 'fill' | 'tangent' | 'dashed' | 'extrema';
             const toggles: { name: string; key: BooleanKey }[] = [
                 { name: 'Legend', key: 'showLegend' },
@@ -602,6 +634,7 @@ export class TikzModal extends Modal {
                     t.setValue(state[key]).onChange((v) => {
                         state[key] = v;
                         if (key === 'tangent') tangentInput.toggleClass('visible', v);
+                        if (key === 'fill') fillOptions.toggleClass('visible', v);
                         updateFunctionValues();
                     })
                 );
@@ -640,6 +673,7 @@ export class TikzModal extends Modal {
                 color: 'blue',
                 wireframe: false,
                 opacity: 0.7,
+                samples: 40,
             };
             rowStates.set(rowId, state);
 
@@ -714,6 +748,21 @@ export class TikzModal extends Modal {
                     updateFunctionValues();
                 })
             );
+
+            const row5 = card.createDiv({ cls: 'tikz-func-row' });
+            const samplesDiv = row5.createDiv({ cls: 'tikz-func-field wide' });
+            new Setting(samplesDiv)
+                .setName('Samples')
+                .setDesc('Grid density per axis. Higher = smoother surface but slower preview. Also drives pgfplots `samples=` in the exported code.')
+                .addSlider((s) =>
+                    s.setLimits(8, 80, 2)
+                        .setValue(state.samples)
+                        .setDynamicTooltip()
+                        .onChange((v) => {
+                            state.samples = v;
+                            updateFunctionValues();
+                        })
+                );
         };
 
         addFunctionCard();
@@ -721,6 +770,129 @@ export class TikzModal extends Modal {
         const addBtnDiv = tab.createDiv({ cls: 'tikz-add-func' });
         new Setting(addBtnDiv).addButton((btn) =>
             btn.setButtonText('+ Add surface').onClick(() => addFunctionCard())
+        );
+    }
+
+    private buildAnnotationsTab(container: HTMLElement) {
+        const tab = this.createTabContent(container, 'Annotations');
+
+        tab.createEl('p', {
+            cls: 'tikz-section-blurb',
+            text: 'Add text labels at any point in the coordinate system. Annotations are rendered in the live preview and emitted as \\node commands in the exported TikZ.',
+        });
+
+        const cardsContainer = tab.createDiv({ cls: 'tikz-func-cards' });
+        const rowStates = new Map<string, import('./types').Annotation>();
+
+        const update = () => {
+            const list: import('./types').Annotation[] = [];
+            rowStates.forEach((state) => {
+                if (state.text) list.push({ ...state });
+            });
+            this.settings.setValue('annotations', list);
+            this.requestPreviewUpdate();
+        };
+
+        const addCard = () => {
+            const rowId = `ann-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+            const state: import('./types').Annotation = {
+                x: '0',
+                y: '0',
+                z: this.is3D() ? '0' : undefined,
+                text: '',
+                color: 'black',
+                size: 'normal',
+                anchor: 'above',
+            };
+            rowStates.set(rowId, state);
+
+            const card = cardsContainer.createDiv({ cls: 'tikz-func-card' });
+            card.style.borderLeftColor = COLOR_MAP[state.color];
+
+            const header = card.createDiv({ cls: 'tikz-func-header' });
+            header.createSpan({ cls: 'tikz-func-label', text: `Label ${rowStates.size}` });
+            new Setting(header).addButton((btn) =>
+                btn
+                    .setIcon('trash')
+                    .setTooltip('Remove label')
+                    .then((b) => b.buttonEl.setAttr('aria-label', 'Remove label'))
+                    .onClick(() => {
+                        rowStates.delete(rowId);
+                        card.remove();
+                        update();
+                    })
+            );
+
+            const row1 = card.createDiv({ cls: 'tikz-func-row' });
+            const textDiv = row1.createDiv({ cls: 'tikz-func-field wide' });
+            new Setting(textDiv).setName('Text').addText((t) =>
+                t.setPlaceholder('Local max').onChange((v) => {
+                    state.text = v;
+                    update();
+                })
+            );
+
+            const row2 = card.createDiv({ cls: 'tikz-func-row' });
+            const xDiv = row2.createDiv({ cls: 'tikz-func-field' });
+            new Setting(xDiv).setName('x').addText((t) =>
+                t.setPlaceholder('0').setValue(state.x).onChange((v) => {
+                    state.x = v;
+                    update();
+                })
+            );
+            const yDiv = row2.createDiv({ cls: 'tikz-func-field' });
+            new Setting(yDiv).setName('y').addText((t) =>
+                t.setPlaceholder('0').setValue(state.y).onChange((v) => {
+                    state.y = v;
+                    update();
+                })
+            );
+            const zDiv = row2.createDiv({ cls: 'tikz-func-field' });
+            new Setting(zDiv).setName('z').addText((t) =>
+                t.setPlaceholder('0').setValue(state.z ?? '').onChange((v) => {
+                    state.z = v;
+                    update();
+                })
+            );
+
+            const row3 = card.createDiv({ cls: 'tikz-func-row' });
+            const colorDiv = row3.createDiv({ cls: 'tikz-func-field' });
+            new Setting(colorDiv).setName('Color').addDropdown((d) =>
+                d.addOptions(COLOR_OPTIONS).setValue(state.color).onChange((v) => {
+                    state.color = v;
+                    card.style.borderLeftColor = COLOR_MAP[v] || 'var(--text-muted)';
+                    update();
+                })
+            );
+            const sizeDiv = row3.createDiv({ cls: 'tikz-func-field' });
+            new Setting(sizeDiv).setName('Size').addDropdown((d) =>
+                d.addOptions({ small: 'Small', normal: 'Normal', large: 'Large' })
+                    .setValue(state.size)
+                    .onChange((v) => {
+                        state.size = v as import('./types').AnnotationSize;
+                        update();
+                    })
+            );
+            const anchorDiv = row3.createDiv({ cls: 'tikz-func-field' });
+            new Setting(anchorDiv).setName('Anchor').addDropdown((d) =>
+                d.addOptions({
+                    above: 'Above',
+                    below: 'Below',
+                    left: 'Left',
+                    right: 'Right',
+                    center: 'Center',
+                })
+                    .setValue(state.anchor)
+                    .onChange((v) => {
+                        state.anchor = v as import('./types').AnnotationAnchor;
+                        update();
+                    })
+            );
+        };
+
+        const addBtnDiv = tab.createDiv({ cls: 'tikz-add-func' });
+        new Setting(addBtnDiv).addButton((btn) =>
+            btn.setButtonText('+ Add label').onClick(() => addCard())
         );
     }
 
@@ -864,9 +1036,12 @@ export class TikzModal extends Modal {
             { name: 'Color', desc: 'Black, Red, Blue, Teal, Orange, Green, Purple. Black resolves to the theme text color so the curve is visible in both light and dark themes.' },
             { name: 'Thickness', desc: 'Very thin, Thin, Thick, Very thick. Affects the rendered TikZ output and the live preview equally.' },
             { name: 'Dashed', desc: 'Draws the curve as a dashed line rather than a solid stroke.' },
-            { name: 'Fill', desc: 'Shades the region between the curve and the x-axis with a low-opacity tint of the curve color.' },
+            { name: 'Fill', desc: 'Shades the region between the curve and the x-axis. When enabled, a Fill pattern dropdown (solid, horizontal/vertical lines, crosshatch, dots, diagonals) and a Fill opacity slider appear.' },
             { name: 'Legend', desc: 'Adds the expression to the legend box in the upper-right of the plot.' },
         ]);
+
+        section('Annotations');
+        para('The Annotations tab lets you place text labels at arbitrary points. Each label has x, y (and z in 3D), a color, a size (small/normal/large), and an anchor that controls which side of the point the text sits on. In the exported TikZ each label becomes a \\node command.');
 
         section('Tangent');
         para('Enable the Tangent toggle to draw the line tangent to the curve at a chosen x value. The Tangent point field appears once the toggle is on. The point must lie inside the domain. A small dot marks the touch point.');
@@ -887,11 +1062,15 @@ export class TikzModal extends Modal {
 
         section('3D surface options');
         list([
-            { name: 'X domain / Y domain', desc: 'Each axis gets its own range. The surface is sampled on a 40 by 40 grid across these ranges.' },
+            { name: 'X domain / Y domain', desc: 'Each axis gets its own range.' },
             { name: 'Color', desc: 'Same palette as 2D. The surface is shaded from the base color toward white based on z value.' },
             { name: 'Wireframe', desc: 'Renders only the grid lines of the surface, no fill. Useful when stacking multiple surfaces.' },
             { name: 'Opacity', desc: 'Slider from 0.1 to 1.0. Affects the filled surface; wireframes use the opacity for stroke transparency.' },
+            { name: 'Samples', desc: 'Grid density per axis (8 to 80). Higher = smoother surface, slower preview. Also drives pgfplots `samples=` in the exported code.' },
         ]);
+
+        section('Preview vs exported code');
+        para('The live preview is a custom SVG renderer; the exported code is pgfplots that you compile with a real TeX engine. They are necessarily two pipelines. The plugin keeps them as close as possible: the SVG aspect ratio now follows the Width/Height (cm) values on the Graph tab, and the same axis ranges, fill options, samples, and annotations are used by both.');
 
         section('Preview (2D)');
         para('The right-hand preview is a live SVG that always reflects the current settings. In 2D mode you can interact with it directly:');

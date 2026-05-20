@@ -122,6 +122,13 @@
     line-height: 1.2;
 }
 
+.tikz-section-blurb {
+    margin: 0 0 16px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
 /* Preview area */
 .tikz-preview-area {
     flex: 1;

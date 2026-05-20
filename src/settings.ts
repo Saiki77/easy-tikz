@@ -189,11 +189,30 @@ export const TIKZ_SETTINGS: TikzSetting[] = [
         type: 'text',
         defaultValue: [],
         insertText: (values: FunctionParameters[]) => {
+            const patternFor = (p?: string): string => {
+                switch (p) {
+                    case 'horizontal': return 'horizontal lines';
+                    case 'vertical': return 'vertical lines';
+                    case 'crosshatch': return 'crosshatch';
+                    case 'dots': return 'crosshatch dots';
+                    case 'north-east': return 'north east lines';
+                    case 'north-west': return 'north west lines';
+                    default: return '';
+                }
+            };
             return values
                 .map((func) => {
                     let style = [];
                     if (func.dashed) style.push('dashed');
-                    if (func.fill) style.push(`\nfill=${func.color}!20,\nfill opacity=0.3`);
+                    if (func.fill) {
+                        const opacity = typeof func.fillOpacity === 'number' ? func.fillOpacity : 0.15;
+                        const pattern = patternFor(func.fillPattern);
+                        if (pattern) {
+                            style.push(`fill=${func.color}, fill opacity=${opacity}, pattern=${pattern}, pattern color=${func.color}`);
+                        } else {
+                            style.push(`fill=${func.color}, fill opacity=${opacity}`);
+                        }
+                    }
                     style.push(`${func.color}`);
                     style.push(`${func.thickness}`);
 
@@ -261,8 +280,10 @@ export class SettingsManager {
         this.values.set('functions3D', []);
         // Grid density (live preview only; pgfplots picks its own ticks unless told otherwise).
         this.values.set('majorTickNum', 8);
-        // Live preview size in pixels (width). Height is derived as 0.7 * width.
+        // Live preview width in pixels. Height follows the size_y_cm / size_x_cm ratio.
         this.values.set('previewSize', 760);
+        // Annotations: text labels at arbitrary (x, y[, z]) coordinates.
+        this.values.set('annotations', []);
     }
 
     /** Look up the value for a setting id. Returns `undefined` if absent. */
@@ -292,6 +313,9 @@ export class SettingsManager {
             code += setting.insertText(this.getValue(setting.id));
         });
 
+        // Annotations live inside the axis environment, after functions.
+        code += this.generateAnnotationsCode(false);
+
         const closeSetting = TIKZ_SETTINGS.find((s) => s.id === 'documentClose');
         if (closeSetting && this.getValue('documentClose')) {
             code += closeSetting.insertText(true);
@@ -303,7 +327,12 @@ export class SettingsManager {
     toRendererConfig(): import('./types').RendererConfig {
         const previewSize = (this.getValue('previewSize') as number) || 760;
         const width = Math.max(320, Math.min(1600, Math.round(previewSize)));
-        const height = Math.round(width * 0.7);
+        // Match the live preview aspect ratio to the configured cm dimensions
+        // so the SVG roughly matches what pgfplots will render.
+        const cmX = Math.max(1, parseFloat(this.getValue('size_x_cm')) || 10);
+        const cmY = Math.max(1, parseFloat(this.getValue('size_y_cm')) || 10);
+        const ratio = Math.max(0.35, Math.min(1.8, cmY / cmX));
+        const height = Math.round(width * ratio);
         return {
             width,
             height,
@@ -328,6 +357,7 @@ export class SettingsManager {
             rotationX: this.getValue('rotationX') ?? 30,
             rotationZ: this.getValue('rotationZ') ?? 45,
             functions3D: this.getValue('functions3D') || [],
+            annotations: this.getValue('annotations') || [],
         };
     }
 
@@ -358,12 +388,52 @@ export class SettingsManager {
             if (!func.expression) continue;
             const surfType = func.wireframe ? 'mesh' : 'surf';
             const opacity = func.wireframe ? '' : `, opacity=${func.opacity}`;
-            code += `\n\\addplot3[${surfType}, domain=${func.xDomain}, y domain=${func.yDomain}, ${func.color}${opacity}, samples=30] {${func.expression}};`;
+            const samples = typeof func.samples === 'number' && func.samples > 0 ? func.samples : 30;
+            code += `\n\\addplot3[${surfType}, domain=${func.xDomain}, y domain=${func.yDomain}, ${func.color}${opacity}, samples=${samples}] {${func.expression}};`;
         }
+
+        code += this.generateAnnotationsCode(true);
 
         code += '\n\\end{axis}';
         code += '\n\\end{tikzpicture}';
         code += '\n\\end{document}';
         return code;
+    }
+
+    /**
+     * Append `\node` commands for each annotation. Used by both the 2D and 3D
+     * code generators. `is3D` controls whether the z coordinate is emitted.
+     */
+    generateAnnotationsCode(is3D: boolean): string {
+        const annotations = (this.getValue('annotations') as import('./types').Annotation[]) || [];
+        if (!annotations.length) return '';
+        const anchorFor = (a: string): string => {
+            switch (a) {
+                case 'above': return 'south';
+                case 'below': return 'north';
+                case 'left': return 'east';
+                case 'right': return 'west';
+                default: return 'center';
+            }
+        };
+        const sizeFor = (s: string): string => {
+            switch (s) {
+                case 'small': return 'font=\\footnotesize';
+                case 'large': return 'font=\\large';
+                default: return '';
+            }
+        };
+        let out = '';
+        for (const a of annotations) {
+            if (!a.text) continue;
+            const styles = [a.color, `anchor=${anchorFor(a.anchor)}`];
+            const fontStyle = sizeFor(a.size);
+            if (fontStyle) styles.push(fontStyle);
+            const coord = is3D
+                ? `(axis cs:${a.x},${a.y},${a.z ?? 0})`
+                : `(axis cs:${a.x},${a.y})`;
+            out += `\n\\node[${styles.join(', ')}] at ${coord} {${a.text}};`;
+        }
+        return out;
     }
 }
