@@ -67,9 +67,12 @@ export interface Annotation {
     anchor: AnnotationAnchor;
 }
 
+export type CoordinateSystem = 'cartesian' | 'polar';
+
 export interface RendererConfig {
     width: number;
     height: number;
+    coordinateSystem: CoordinateSystem;
     xmin: number;
     xmax: number;
     ymin: number;

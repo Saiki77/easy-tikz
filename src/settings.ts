@@ -284,6 +284,8 @@ export class SettingsManager {
         this.values.set('previewSize', 760);
         // Annotations: text labels at arbitrary (x, y[, z]) coordinates.
         this.values.set('annotations', []);
+        // Coordinate system for 2D plots. Polar treats the expression as r(theta).
+        this.values.set('coordinateSystem', 'cartesian');
     }
 
     /** Look up the value for a setting id. Returns `undefined` if absent. */
@@ -298,6 +300,7 @@ export class SettingsManager {
     }
 
     generateTikzCode(): string {
+        const isPolar = this.getValue('coordinateSystem') === 'polar';
         let code = '';
 
         const setupSetting = TIKZ_SETTINGS.find((s) => s.id === 'documentSetup');
@@ -310,6 +313,17 @@ export class SettingsManager {
             if (setting.id === 'gridSize' && !this.getValue('showSmallGrid')) return;
             if ((setting.id === 'axis_label_x' || setting.id === 'axis_label_y') && !this.getValue('show_axis_label'))
                 return;
+            // For polar mode emit a parametric Cartesian \addplot per function.
+            if (setting.id === 'functions' && isPolar) {
+                code += this.generatePolarFunctionsCode();
+                return;
+            }
+            // Inject `axis equal,` so the polar plot stays circular. This goes
+            // right before axis_allaround's closing `\n]` so it lands inside
+            // the axis options block.
+            if (setting.id === 'axis_allaround' && isPolar) {
+                code += '\n  axis equal,';
+            }
             code += setting.insertText(this.getValue(setting.id));
         });
 
@@ -322,6 +336,31 @@ export class SettingsManager {
         }
 
         return code;
+    }
+
+    /**
+     * Emit each 2D function as a parametric Cartesian \addplot:
+     *   \addplot[domain=...] ({r*cos(deg(t))}, {r*sin(deg(t))});
+     * where r is the user's expression with theta and x substituted to the
+     * pgfplots variable \t. This avoids the deg/rad ambiguity of polaraxis
+     * and works inside the existing axis environment.
+     */
+    private generatePolarFunctionsCode(): string {
+        const funcs: FunctionParameters[] = this.getValue('functions') || [];
+        let out = '';
+        for (const func of funcs) {
+            if (!func.expression || !func.domain) continue;
+            const expr = func.expression.replace(/\b(?:theta|x)\b/g, '\\t');
+            const styleParts: string[] = [];
+            if (func.dashed) styleParts.push('dashed');
+            styleParts.push(func.color);
+            styleParts.push(func.thickness);
+            out += `\n\\addplot[domain=${func.domain}, variable=\\t, ${styleParts.join(',')}, samples=300] ({(${expr})*cos(deg(\\t))}, {(${expr})*sin(deg(\\t))});`;
+            if (func.showLegend) {
+                out += `\n\\addlegendentry{\\(r = ${func.expression}\\)}`;
+            }
+        }
+        return out;
     }
 
     toRendererConfig(): import('./types').RendererConfig {
@@ -358,6 +397,7 @@ export class SettingsManager {
             rotationZ: this.getValue('rotationZ') ?? 45,
             functions3D: this.getValue('functions3D') || [],
             annotations: this.getValue('annotations') || [],
+            coordinateSystem: (this.getValue('coordinateSystem') as 'cartesian' | 'polar') || 'cartesian',
         };
     }
 

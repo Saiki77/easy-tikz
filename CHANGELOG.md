@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.11.0] - 2026-05-21
+
+### Added
+
+- **Polar coordinates.** A "Coordinate system" dropdown on the Graph tab toggles between Cartesian and Polar. In Polar mode the expression is interpreted as `r(theta)` and the domain is the theta range in radians. The preview transforms to Cartesian internally (so existing axes, ticks, annotations, and drag all keep working); the exported TikZ becomes a parametric `\addplot ({r*cos(deg(\t))}, {r*sin(deg(\t))})` with `axis equal`. The variable can be written as `theta` or `x`.
+- Reference tab gains a Polar section with copy-ready recipes: cardioid, rose curves, Archimedean and logarithmic spirals.
+
 ## [3.10.0] - 2026-05-21
 
 ### Added

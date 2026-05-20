@@ -393,6 +393,18 @@ export class TikzModal extends Modal {
             );
 
         new Setting(tab)
+            .setName('Coordinate system')
+            .setDesc('Cartesian uses f(x). Polar uses r(theta) and plots r in radians. Polar mode is 2D only.')
+            .addDropdown((d) =>
+                d.addOptions({ cartesian: 'Cartesian', polar: 'Polar' })
+                    .setValue(this.settings.getValue('coordinateSystem') ?? 'cartesian')
+                    .onChange((v) => {
+                        this.settings.setValue('coordinateSystem', v);
+                        this.requestPreviewUpdate();
+                    })
+            );
+
+        new Setting(tab)
             .setName('Preview size')
             .setDesc('Width of the live preview, in pixels. Does not affect the exported TikZ dimensions. Scroll on the preview to zoom and drag to pan.')
             .addSlider((s) =>
@@ -1329,6 +1341,17 @@ export class TikzModal extends Modal {
 
         section('Extrema');
         para('Enable the Extrema toggle to scan the domain for local minima and maxima. Detected points are marked with a dot and labelled "min" or "max". Resolution is 100 samples across the domain, so very sharp features inside a wide domain might be missed.');
+
+        section('Polar coordinates');
+        para('On the Graph tab, set Coordinate system to "Polar". The Functions tab\'s expression is then interpreted as r(theta) and the domain is the theta range in radians. The preview transforms to Cartesian internally; the exported TikZ uses a parametric `\\addplot ({r*cos(deg(\\t))}, {r*sin(deg(\\t))})` and adds `axis equal` so circles stay circular. You can write the variable as `theta` or `x`; both are accepted.');
+        code(
+            '1 + cos(theta)            cardioid           domain 0:2*PI\n' +
+            'sin(4*theta)              rose curve         domain 0:2*PI\n' +
+            'sin(2.5*theta)            5-petal rose       domain 0:4*PI\n' +
+            'theta                     Archimedean spiral domain 0:6*PI\n' +
+            '2 * sin(3*theta)          3-petal rose       domain 0:2*PI\n' +
+            'exp(theta/10)             logarithmic spiral domain 0:6*PI'
+        );
 
         section('3D surfaces');
         para('Switch the modal to 3D mode on the Graph tab. The Functions tab then accepts two-variable expressions.');

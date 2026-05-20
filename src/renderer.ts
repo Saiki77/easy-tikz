@@ -426,12 +426,19 @@ export class SVGRenderer {
             const cssColor = COLOR_MAP[func.color] || func.color;
             const strokeWidth = THICKNESS_MAP[func.thickness] || 1.5;
 
+            const isPolar = this.config.coordinateSystem === 'polar';
+
             let domMin: number;
             let domMax: number;
             let evalFn: (x: number) => number;
             try {
                 [domMin, domMax] = MathHelper.parseDomain(func.domain);
-                evalFn = MathHelper.compile1D(func.expression);
+                // Polar uses `theta` as the variable; rewrite to `x` so the
+                // compile cache stays unified.
+                const exprToCompile = isPolar
+                    ? func.expression.replace(/\btheta\b/g, 'x')
+                    : func.expression;
+                evalFn = MathHelper.compile1D(exprToCompile);
             } catch {
                 continue;
             }
@@ -454,17 +461,34 @@ export class SVGRenderer {
             const ys = new Float64Array(sampleCount);
             const step = (domMax - domMin) / SAMPLES_PER_FUNCTION;
             try {
-                for (let i = 0; i < sampleCount; i++) {
-                    const mx = domMin + i * step;
-                    xs[i] = mx;
-                    const my = evalFn(mx);
-                    ys[i] = my === my && my !== Infinity && my !== -Infinity ? my : NaN;
+                if (isPolar) {
+                    // The user's domain is in theta. Evaluate r = f(theta), then
+                    // emit Cartesian (r*cos(theta), r*sin(theta)) so the existing
+                    // path-builder code stays unchanged.
+                    for (let i = 0; i < sampleCount; i++) {
+                        const theta = domMin + i * step;
+                        const r = evalFn(theta);
+                        if (r === r && r !== Infinity && r !== -Infinity) {
+                            xs[i] = r * Math.cos(theta);
+                            ys[i] = r * Math.sin(theta);
+                        } else {
+                            xs[i] = NaN;
+                            ys[i] = NaN;
+                        }
+                    }
+                } else {
+                    for (let i = 0; i < sampleCount; i++) {
+                        const mx = domMin + i * step;
+                        xs[i] = mx;
+                        const my = evalFn(mx);
+                        ys[i] = my === my && my !== Infinity && my !== -Infinity ? my : NaN;
+                    }
                 }
             } catch {
-                // Expression threw at runtime for some sample. Mark remaining as NaN.
+                // Expression threw at runtime. Mark remaining as NaN.
                 for (let i = 0; i < sampleCount; i++) {
-                    if (xs[i] === 0 && i !== 0) xs[i] = domMin + i * step;
                     if (!(ys[i] === ys[i])) ys[i] = NaN;
+                    if (!(xs[i] === xs[i])) xs[i] = NaN;
                 }
             }
 
