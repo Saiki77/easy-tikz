@@ -63,7 +63,8 @@ export class TikzModal extends Modal {
     private onMouseUp: (() => void) | null = null;
 
     private settingsColumn: HTMLElement | null = null;
-    private sectionObserver: IntersectionObserver | null = null;
+    private onSettingsScroll: (() => void) | null = null;
+    private scrollRafId: number | null = null;
     private suspendObserverUntil = 0;
 
     constructor(app: App) {
@@ -112,10 +113,14 @@ export class TikzModal extends Modal {
             this.styleEl.parentNode.removeChild(this.styleEl);
         }
         this.styleEl = null;
-        if (this.sectionObserver) {
-            this.sectionObserver.disconnect();
-            this.sectionObserver = null;
+        if (this.settingsColumn && this.onSettingsScroll) {
+            this.settingsColumn.removeEventListener('scroll', this.onSettingsScroll);
         }
+        if (this.scrollRafId !== null) {
+            cancelAnimationFrame(this.scrollRafId);
+            this.scrollRafId = null;
+        }
+        this.onSettingsScroll = null;
         this.settingsColumn = null;
         this.tabContents.clear();
         this.tabButtons.clear();
@@ -177,31 +182,48 @@ export class TikzModal extends Modal {
         });
     }
 
+    /**
+     * Updates the active tab to match whichever section is currently at the
+     * "active line" (a fixed offset below the top of the scroll column).
+     * Driven by the scroll event and rAF-throttled.
+     */
     private setupSectionObserver() {
         if (!this.settingsColumn) return;
-        const sections = this.settingsColumn.querySelectorAll<HTMLElement>('[data-section]');
-        if (!sections.length) return;
+        const column = this.settingsColumn;
 
-        this.sectionObserver = new IntersectionObserver(
-            (entries) => {
-                if (Date.now() < this.suspendObserverUntil) return;
-                // Pick the section closest to the top of the viewport among the intersecting ones.
-                const visible = entries
-                    .filter((e) => e.isIntersecting)
-                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-                if (visible) {
-                    const name = visible.target.getAttribute('data-section') as TabName | null;
-                    if (name) this.setActiveTabButton(name);
+        // The active section is the last one whose top is at or above this
+        // many pixels from the top of the visible column.
+        const ACTIVE_LINE_OFFSET_PX = 80;
+
+        const updateActive = () => {
+            this.scrollRafId = null;
+            if (Date.now() < this.suspendObserverUntil) return;
+            const sections = Array.from(column.querySelectorAll<HTMLElement>('[data-section]'));
+            if (!sections.length) return;
+            const columnTop = column.getBoundingClientRect().top;
+
+            let active: HTMLElement = sections[0];
+            for (const section of sections) {
+                const top = section.getBoundingClientRect().top - columnTop;
+                if (top <= ACTIVE_LINE_OFFSET_PX) {
+                    active = section;
+                } else {
+                    break;
                 }
-            },
-            {
-                root: this.settingsColumn,
-                rootMargin: '0px 0px -65% 0px',
-                threshold: [0, 0.1, 0.5, 1],
             }
-        );
 
-        sections.forEach((s) => this.sectionObserver?.observe(s));
+            const name = active.getAttribute('data-section') as TabName | null;
+            if (name) this.setActiveTabButton(name);
+        };
+
+        this.onSettingsScroll = () => {
+            if (this.scrollRafId === null) {
+                this.scrollRafId = requestAnimationFrame(updateActive);
+            }
+        };
+
+        column.addEventListener('scroll', this.onSettingsScroll, { passive: true });
+        updateActive();
     }
 
     // --- Tab contents ---
