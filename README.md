@@ -28,18 +28,18 @@
   <tr>
     <td width="50%" valign="top">
       <img src="docs/screenshots/screenshot-settings.png" alt="Settings tab"><br>
-      <strong>Live, tabbed editor.</strong> A clean tabbed UI (Graph, Axis, Functions, Grid, Code) updates the preview as you type. Everything respects your Obsidian theme.
+      <strong>Live preview.</strong> Five tabs (Graph, Axis, Functions, Grid, Code) and a preview that updates as you type. Matches your Obsidian theme.
     </td>
     <td width="50%" valign="top">
       <img src="docs/screenshots/screenshot-settings.png" alt="Generated TikZ code"><br>
-      <strong>One-click code insertion.</strong> Generates valid TikZ and pgfplots code you can copy to the clipboard or drop straight into your active note.
+      <strong>One-click insertion.</strong> Copy the generated TikZ to the clipboard or insert it into the active note.
     </td>
   </tr>
 </table>
 
 ## Why
 
-Hand-writing pgfplots options is finicky, the iteration loop is slow, and you cannot see what you are doing until you compile. Easy TikZ gives you the visual editor and live preview that pgfplots itself lacks, then emits the LaTeX for you when you are happy with the result.
+Pgfplots is powerful but the syntax is fiddly and the feedback loop is "edit, recompile, squint". Easy TikZ is a visual editor with a live preview. Hit "Insert into note" when the plot looks right.
 
 ## Installation
 
@@ -63,13 +63,13 @@ Hand-writing pgfplots options is finicky, the iteration loop is slow, and you ca
 
 ### Migrating from 2.x
 
-The plugin id changed from `tikz_graph_helper` to `easy-tikz` in version 3.0.0 (renamed and rebranded as Easy TikZ to match the Obsidian community convention). If you have a 2.x install via BRAT or manual:
+The plugin id changed to `easy-tikz` in 3.0. If you have a 2.x install:
 
 1. Disable the plugin in Settings, Community plugins.
 2. Rename `.obsidian/plugins/tikz_graph_helper/` to `.obsidian/plugins/easy-tikz/`.
 3. Re-enable the plugin.
 
-Your settings carry over with the rename.
+Settings carry over.
 
 ## Usage
 
@@ -100,16 +100,14 @@ Use `x` and `y`:
 - `x^2 + y^2`
 - `Math.sin(Math.sqrt(x^2 + y^2))`
 
-## Permissions and data handling
+## Permissions
 
-Transparency matters. Here is what the plugin does and does not do:
-
-- **Clipboard:** writes the generated TikZ code to the clipboard when you click "Copy TikZ code". No reads.
-- **Active note:** inserts the generated TikZ code into the current Markdown view when you click "Insert into note". Nothing else is read or written.
-- **Network:** none. The plugin makes no network requests.
-- **Telemetry:** none. No analytics, no tracking, no remote logging.
-- **Files:** no access to the vault outside the active note's insertion point.
-- **Math evaluation:** expressions are compiled with the `Function` constructor and evaluated in the renderer to draw the preview. They are not persisted and not transmitted.
+- **Clipboard:** writes TikZ code on "Copy TikZ code". No reads.
+- **Active note:** inserts TikZ code on "Insert into note".
+- **Network:** none.
+- **Telemetry:** none.
+- **Files:** no vault access outside the active note's insertion point.
+- **Math evaluation:** expressions are compiled with `Function` and evaluated in-renderer to draw the preview. Not persisted, not transmitted.
 
 ## Development
 

@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.2] - 2026-05-20
+
+### Changed
+
+- Redrew the logo: downward parabola with sharp butt-cap line ends, larger arrowheads, no border.
+- Trimmed the README: shorter "Why" section, simpler Permissions list, tightened feature captions.
+
 ## [3.0.1] - 2026-05-20
 
 ### Fixed
