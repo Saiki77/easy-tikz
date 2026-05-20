@@ -41,6 +41,21 @@
 
 Pgfplots is powerful but the syntax is fiddly and the feedback loop is "edit, recompile, squint". Easy TikZ is a visual editor with a live preview. Hit "Insert into note" when the plot looks right.
 
+## Live rendering
+
+The preview is drawn in-process by a small custom pipeline, not by pgfplots itself. There is no shell-out, no LaTeX compile, no image round-trip, which is what lets the camera follow the cursor without lag.
+
+Rotation, drag, and wheel zoom are driven by `requestAnimationFrame`, so a typical surface (samples=40, 1,600 quads) sits at around 60 fps. Denser surfaces stay interactive too: a 6,400-quad surface (samples=80) hovers near 60 fps in canvas mode, and the slider's upper end (14,400 quads at samples=120) settles above 30 fps.
+
+Two output paths share a single sample cache and a single depth sort:
+
+- **SVG path.** Mutates a pool of pre-allocated `<polygon>` elements in place. The DOM at rest is queryable, so Copy SVG and Copy PNG serialise the live scene with theme colours resolved.
+- **Canvas2D path.** Engaged during drag, scroll, and slider events. No DOM ops in the inner loop, hi-DPI aware via `devicePixelRatio`. 180 ms after the last interaction the renderer falls back to SVG so exports stay fresh.
+
+Sampled surface data is cached per surface, keyed by expression, domain, sample count, and z-range. A pure camera change (rotation, view zoom) re-projects from the cache without re-evaluating the function. Expression compilation is cached too (LRU, 128 entries), so the 500 samples of a 2D curve or the 1,600+ vertices of a 3D surface compile their expression once per render, not once per sample.
+
+The exported pgfplots code is independent: a real TeX engine produces the final figure. The preview exists to make the iteration loop tight.
+
 ## Installation
 
 ### Community plugins (recommended, once approved)

@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.6.1] - 2026-05-21
+
+### Changed
+
+- README gains a "Live rendering" section that explains the in-process render pipeline, the two output paths (SVG for export, Canvas2D for interaction), the sample/compile caches, and the actual frame budgets at different sample densities.
+
 ## [3.6.0] - 2026-05-20
 
 ### Changed
