@@ -87,12 +87,24 @@ export default class EasyTikzPlugin extends Plugin {
         try {
             const manager = SettingsManager.fromJSON(data);
             const config = manager.toRendererConfig();
+            // Size the wrapper explicitly so the renderer has a real
+            // parent to fit-contain into. The markdown container's
+            // clientWidth is reliable; we cap at config.width so very
+            // wide notes don't blow up tiny plots.
+            const containerWidth = (el.clientWidth || 700);
+            const targetW = Math.max(200, Math.min(containerWidth, config.width));
+            const aspect = config.width / config.height || 1;
+            const targetH = Math.max(150, targetW / aspect);
+            wrapper.style.width = targetW + 'px';
+            wrapper.style.height = targetH + 'px';
+
             if (config.is3D) {
                 const renderer3d = new SVG3DRenderer();
                 wrapper.appendChild(renderer3d.getElement());
                 // renderSvg must run AFTER attachment so applyRootFitContain
-                // can measure the parent. The canvas-mode mid-drag swap
-                // doesn't apply here (no drag in static blocks).
+                // can measure the wrapper we just sized. The hidden canvas
+                // and the now-visible SVG (overridden by .tikz-rendered-chart
+                // CSS) share the same scene the renderer paints into.
                 renderer3d.renderSvg(config);
             } else {
                 const svg = new SVGRenderer(config).render();

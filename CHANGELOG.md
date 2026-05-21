@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.16.1] - 2026-05-21
+
+### Fixed
+
+- **Inline-rendered 3D charts were blank.** Two compounding issues:
+  1. The 3D `.tikz-3d-svg` is now `display: none` globally (canvas-only modal); the markdown processor calls `renderSvg`, which populates the (hidden) SVG, but `renderCanvas` is never called for inline blocks — so the visible canvas was empty.
+  2. The wrapper `.tikz-rendered-chart` had no explicit height when `applyRootFitContain` measured it, so the 3D root fell back to logical config dims with no parent measurement to refine them.
+
+  Fix: CSS in `.tikz-rendered-chart` now shows the SVG (already populated by `renderSvg`) and hides the empty canvas. The markdown processor also sizes the wrapper explicitly from the markdown container's width and the chart's aspect ratio, so the renderer's fit-contain math has a real parent to measure.
+
 ## [3.16.0] - 2026-05-21
 
 ### Added
