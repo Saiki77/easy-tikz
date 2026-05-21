@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.15.0] - 2026-05-21
+
+### Added
+
+- **3D box aspect setting** on the Graph tab (visible only in 3D mode). Two options:
+  - **Equal (cube)** — each axis spans the same screen length regardless of data range. The bounding box is a perfect cube. The exported pgfplots adds `axis equal image`.
+  - **True (proportional)** — edge lengths scale with the data ranges (`xmax-xmin`, `ymax-ymin`, `zmax-zmin`). An axis with a much larger range dominates the box, which is faithful to the data. Default.
+
+  Surfaces and box outline share the new per-axis normalization, so the two stay aligned no matter which mode is active.
+
+### Fixed
+
+- **First-render 3D fit-contain.** The renderer measures its parent element to compute fit-contain dimensions, but on the very first paint the 3D root hadn't been attached to the preview container yet — `applyRootFitContain` fell back to the configured logical size and only got the right dimensions after the first user interaction. The modal now attaches the root to the preview container before calling `renderCanvas`, so the first paint already fits.
+- **3D canvas now uses the full available preview area.** Previously `applyRootFitContain` capped at the configured logical size (`config.width` / `config.height`), so larger preview spaces left empty padding around the chart. The cap is gone; the canvas scales up to fill whatever space the preview area gives it while preserving aspect.
+
 ## [3.14.1] - 2026-05-21
 
 ### Fixed

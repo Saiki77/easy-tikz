@@ -286,6 +286,9 @@ export class SettingsManager {
         this.values.set('rotationX', 30);
         this.values.set('rotationZ', 45);
         this.values.set('zoom3D', 1);
+        // 3D box aspect ratio: 'true' (data-proportional, current
+        // behavior) or 'equal' (cube; each axis normalized to a unit).
+        this.values.set('boxAspect', 'true');
         this.values.set('functions3D', []);
         // Grid density (live preview only; pgfplots picks its own ticks unless told otherwise).
         this.values.set('majorTickNum', 8);
@@ -445,6 +448,7 @@ export class SettingsManager {
             rotationX: this.getValue('rotationX') ?? 30,
             rotationZ: this.getValue('rotationZ') ?? 45,
             zoom3D: this.getValue('zoom3D') ?? 1,
+            boxAspect: (this.getValue('boxAspect') as import('./types').BoxAspect) || 'true',
             functions3D: this.getValue('functions3D') || [],
             annotations: this.getValue('annotations') || [],
             coordinateSystem: (this.getValue('coordinateSystem') as 'cartesian' | 'polar') || 'cartesian',
@@ -472,6 +476,11 @@ export class SettingsManager {
         code += `\n  ymin=${this.getValue('ymin')}, ymax=${this.getValue('ymax')},`;
         code += `\n  zmin=${this.getValue('zmin')}, zmax=${this.getValue('zmax')},`;
         code += '\n  view={' + (this.getValue('rotationZ') || 45) + '}{' + (this.getValue('rotationX') || 30) + '},';
+        // `axis equal image` forces each axis to use the same units per
+        // length (cube). Default in pgfplots is data-proportional.
+        if (this.getValue('boxAspect') === 'equal') {
+            code += '\n  axis equal image,';
+        }
         code += '\n]';
 
         for (const func of funcs) {

@@ -115,6 +115,16 @@ export class SVG3DRenderer {
     private sinA = 0;
     private cosE = 1;
     private sinE = 0;
+    // Per-axis normalization (applied before rotation). Set by `prepareScene`
+    // based on `config.boxAspect`. In 'equal' mode each factor is 2/<axis range>
+    // so the box is a unit cube; in 'true' mode all three use 2/maxRange so the
+    // box reflects data proportions while still fitting the canvas.
+    private xCenter = 0;
+    private yCenter = 0;
+    private zCenter = 0;
+    private xNormFactor = 1;
+    private yNormFactor = 1;
+    private zNormFactor = 1;
 
     private sxBuf = new Float64Array(0);
     private syBuf = new Float64Array(0);
@@ -255,15 +265,21 @@ export class SVG3DRenderer {
             w = aspectW;
             h = aspectH;
         } else {
+            // Fit the largest possible box of the requested aspect into the
+            // parent's content area. Notably, we do NOT cap at the
+            // configured (aspectW, aspectH) — the canvas should scale UP to
+            // use the available preview space, not stay locked to the
+            // configured "logical" pixel size, which is purely an export
+            // hint via Width/Height (cm).
             const containerRatio = parentW / parentH;
             const configRatio = aspectW / aspectH;
             if (containerRatio > configRatio) {
                 // Container is wider than the chart aspect — height is the bottleneck.
-                h = Math.min(aspectH, parentH);
+                h = parentH;
                 w = h * configRatio;
             } else {
                 // Container is taller than the chart aspect — width is the bottleneck.
-                w = Math.min(aspectW, parentW);
+                w = parentW;
                 h = w / configRatio;
             }
             w = Math.max(100, w);
@@ -338,6 +354,29 @@ export class SVG3DRenderer {
         this.sinA = Math.sin(az);
         this.cosE = Math.cos(el);
         this.sinE = Math.sin(el);
+
+        // Per-axis normalization. The box and surfaces share this space.
+        //  - 'equal': each axis spans [-1, 1] independently — cube box.
+        //  - 'true':  divide every axis by the LARGEST range so the box's
+        //    edge lengths reflect data proportions while still fitting
+        //    the canvas (a non-normalising "true" projection would put
+        //    box corners far off-canvas for typical data ranges).
+        const xRange = config.xmax - config.xmin || 1;
+        const yRange = config.ymax - config.ymin || 1;
+        const zRange = config.zmax - config.zmin || 1;
+        this.xCenter = (config.xmin + config.xmax) / 2;
+        this.yCenter = (config.ymin + config.ymax) / 2;
+        this.zCenter = (config.zmin + config.zmax) / 2;
+        if (config.boxAspect === 'true') {
+            const maxRange = Math.max(xRange, yRange, zRange);
+            this.xNormFactor = 2 / maxRange;
+            this.yNormFactor = 2 / maxRange;
+            this.zNormFactor = 2 / maxRange;
+        } else {
+            this.xNormFactor = 2 / xRange;
+            this.yNormFactor = 2 / yRange;
+            this.zNormFactor = 2 / zRange;
+        }
 
         // Prune stale cache entries.
         const liveCount = config.functions3D.length;
@@ -512,9 +551,7 @@ export class SVG3DRenderer {
     /** Project cached samples and emit one Quad per grid cell. */
     private projectQuads(data: SurfaceData, func: Function3DParameters, out: Quad[]) {
         const cfg = this.config!;
-        const { xmin, xmax, ymin, ymax, zmin, zmax } = cfg;
-        const xRangeInv = 1 / (xmax - xmin);
-        const yRangeInv = 1 / (ymax - ymin);
+        const { zmin, zmax } = cfg;
         const zRange = zmax - zmin || 1;
         const zRangeInv = 1 / zRange;
 
@@ -538,6 +575,15 @@ export class SVG3DRenderer {
         const cx = this.centerX;
         const cy = this.centerY;
         const scl = this.scale;
+        // Per-axis normalization (shared with `project` so surfaces stay
+        // aligned with the box outline). See `prepareScene` for how these
+        // are set from `config.boxAspect`.
+        const xCenter = this.xCenter;
+        const yCenter = this.yCenter;
+        const zCenter = this.zCenter;
+        const xNF = this.xNormFactor;
+        const yNF = this.yNormFactor;
+        const zNF = this.zNormFactor;
 
         for (let k = 0; k < total; k++) {
             const z = data.zs[k];
@@ -547,9 +593,9 @@ export class SVG3DRenderer {
             }
             const x = data.xs[k];
             const y = data.ys[k];
-            const nx = (x - xmin) * xRangeInv * 2 - 1;
-            const ny = (y - ymin) * yRangeInv * 2 - 1;
-            const nz = (z - zmin) * zRangeInv * 2 - 1;
+            const nx = (x - xCenter) * xNF;
+            const ny = (y - yCenter) * yNF;
+            const nz = (z - zCenter) * zNF;
 
             const rx = nx * cosA - ny * sinA;
             const ry = nx * sinA + ny * cosA;
@@ -596,10 +642,13 @@ export class SVG3DRenderer {
     }
 
     private project(x: number, y: number, z: number): { sx: number; sy: number; depth: number } {
-        const cfg = this.config!;
-        const nx = ((x - cfg.xmin) / (cfg.xmax - cfg.xmin)) * 2 - 1;
-        const ny = ((y - cfg.ymin) / (cfg.ymax - cfg.ymin)) * 2 - 1;
-        const nz = ((z - cfg.zmin) / (cfg.zmax - cfg.zmin)) * 2 - 1;
+        // Use the per-axis normalization computed in prepareScene so the
+        // box and surfaces honour `boxAspect`: 'equal' uses each axis's own
+        // range (cube), 'true' uses the largest range for all axes (data
+        // proportions).
+        const nx = (x - this.xCenter) * this.xNormFactor;
+        const ny = (y - this.yCenter) * this.yNormFactor;
+        const nz = (z - this.zCenter) * this.zNormFactor;
         const rx = nx * this.cosA - ny * this.sinA;
         const ry = nx * this.sinA + ny * this.cosA;
         const ry2 = ry * this.cosE - nz * this.sinE;

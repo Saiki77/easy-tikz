@@ -74,6 +74,17 @@ export type CoordinateSystem = 'cartesian' | 'polar';
 
 export type AxisStyle = 'box' | 'middle' | 'axes';
 
+/**
+ * 3D bounding-box aspect ratio.
+ * - 'true': box edges scale with the data ranges (xmax-xmin, ymax-ymin,
+ *   zmax-zmin). Faithful to the data, but can look stretched if one
+ *   axis spans a much wider range than the others.
+ * - 'equal': each axis is normalized to a unit length, so the bounding
+ *   box is a perfect cube on screen regardless of the data ranges.
+ *   Equivalent to pgfplots' `axis equal image`.
+ */
+export type BoxAspect = 'true' | 'equal';
+
 export interface RendererConfig {
     width: number;
     height: number;
@@ -101,5 +112,7 @@ export interface RendererConfig {
     rotationZ: number;
     /** Multiplier on the 3D camera scale. 1.0 is the default fit-to-viewport. */
     zoom3D: number;
+    /** 3D bounding-box aspect: 'true' (data-proportional) or 'equal' (cube). */
+    boxAspect: BoxAspect;
     functions3D: Function3DParameters[];
 }

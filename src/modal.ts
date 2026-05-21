@@ -458,6 +458,22 @@ export class TikzModal extends Modal {
                 });
             });
 
+        new Setting(this.rotationContainer)
+            .setName('Box aspect')
+            .setDesc(
+                'Equal: each axis spans the same length on screen — the bounding box is a perfect cube. ' +
+                    'True: edge lengths scale with the data ranges (xmax-xmin, ymax-ymin, zmax-zmin), so an axis with a much larger range dominates the box. The exported pgfplots adds `axis equal image` when Equal is selected.'
+            )
+            .addDropdown((d) =>
+                d
+                    .addOptions({ equal: 'Equal (cube)', true: 'True (proportional)' })
+                    .setValue(this.settings.getValue('boxAspect') ?? 'true')
+                    .onChange((v) => {
+                        this.settings.setValue('boxAspect', v);
+                        this.requestPreviewUpdate();
+                    })
+            );
+
         this.update3DVisibility();
     }
 
@@ -2310,16 +2326,21 @@ export class TikzModal extends Modal {
             const config = this.settings.toRendererConfig();
             if (config.is3D) {
                 if (!this.svg3dRenderer) this.svg3dRenderer = new SVG3DRenderer();
-                // 3D is canvas-only on screen. The mode parameter is
-                // ignored here; the off-screen SVG is rendered on demand
-                // by `ensureSvgFresh` before Copy SVG / Copy PNG.
-                this.svg3dRenderer.renderCanvas(config);
+                // Attach the 3D root to the preview container BEFORE
+                // rendering, so `applyRootFitContain` inside prepareScene
+                // can measure the parent on the very first paint. If we
+                // rendered first, the root would still be orphaned and
+                // the fit-contain math would fall back to config dims.
                 const root = this.svg3dRenderer.getElement();
                 if (this.currentRenderMode !== '3d' || root.parentElement !== this.previewContainer) {
                     this.clearPreviewContent();
                     this.previewContainer.appendChild(root);
                     this.currentRenderMode = '3d';
                 }
+                // 3D is canvas-only on screen. The mode parameter is
+                // ignored here; the off-screen SVG is rendered on demand
+                // by `ensureSvgFresh` before Copy SVG / Copy PNG.
+                this.svg3dRenderer.renderCanvas(config);
             } else {
                 this.clearPreviewContent();
                 const svg = new SVGRenderer(config).render();
