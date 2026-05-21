@@ -1777,10 +1777,11 @@ export class TikzModal extends Modal {
                 //    pan is "related to the graph size" naturally — no
                 //    fixed step, the math unit per pixel shrinks with the
                 //    visible range).
-                //  - the plugin-wide sensitivity multiplier damps the rate
-                //    (default 0.5) so a mouse pixel moves the chart by
-                //    half a pixel — finer control without losing smoothness.
-                const sensitivity = this.plugin?.data?.dragSensitivity2D ?? 0.5;
+                //  - at sensitivity 1.0 the conversions cancel and the
+                //    chart pans by exactly the same number of screen pixels
+                //    as the mouse moved (direct manipulation). Lower the
+                //    multiplier to dampen the drag for finer control.
+                const sensitivity = this.plugin?.data?.dragSensitivity2D ?? 1.0;
                 const dxVb = dx * plot.scale;
                 const dyVb = dy * plot.scale;
                 const startXrange = this.dragStartXmax - this.dragStartXmin;

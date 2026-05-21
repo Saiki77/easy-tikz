@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.17.2] - 2026-05-21
+
+### Changed
+
+- **2D pan sensitivity default is now 1.0 (direct manipulation).** Moving the mouse by N pixels pans the chart by exactly N chart pixels. The slider range stays 0.1–2.0 so you can dampen below 1.0 for finer control or push above for faster pans. Previously the default was 0.5, which felt off when users expected mouse-and-chart to track 1:1.
+
 ## [3.17.1] - 2026-05-21
 
 ### Changed
