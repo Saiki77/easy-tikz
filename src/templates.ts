@@ -74,6 +74,15 @@ export interface PluginData {
      * code-block language.
      */
     renderTikzBlocks: boolean;
+    /**
+     * Multiplier on the 2D drag-pan rate. 1.0 is direct (1 mouse pixel
+     * pans the chart by 1 chart pixel). Lower values dampen the drag
+     * for finer control; higher values overshoot. Default 0.5 — gives
+     * smooth, half-step panning that feels less twitchy on dense plots.
+     * The pan amount also scales with the current axis range, so this
+     * multiplier stays consistent as the user zooms in or out.
+     */
+    dragSensitivity2D: number;
 }
 
 export const DEFAULT_PLUGIN_DATA: PluginData = {
@@ -81,4 +90,5 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     invertDrag3D: false,
     maxSamples3D: 80,
     renderTikzBlocks: false,
+    dragSensitivity2D: 0.5,
 };

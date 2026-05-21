@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.17.1] - 2026-05-21
+
+### Changed
+
+- **2D pan sensitivity is now configurable.** Default lowered from 1.0 (direct manipulation) to **0.5** — each mouse pixel moves the chart by half a chart pixel, giving smoother, finer pan control on dense plots. The plugin's settings tab gets a `2D pan sensitivity` slider (0.1–2.0, step 0.05) so you can tune it. The rate continues to scale with the current axis range, so the multiplier stays consistent as you zoom in or out.
+- **Pan precision bumped from 3 to 5 decimal places.** The stored `xmin / xmax / ymin / ymax` now have sub-pixel granularity even at extreme zoom levels, so the pan is continuous rather than snapping to 0.001-unit steps. Trailing zeros are trimmed so integer-ish range inputs (`-5`, `10`) still display compactly.
+
 ## [3.17.0] - 2026-05-21
 
 ### Added

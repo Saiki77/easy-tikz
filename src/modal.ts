@@ -9,7 +9,12 @@ import { MathHelper } from './math';
 
 // Loose type so we can keep importing the plugin without a circular dep.
 interface PluginHost {
-    data: { userTemplates: UserTemplate[]; invertDrag3D?: boolean; maxSamples3D?: number };
+    data: {
+        userTemplates: UserTemplate[];
+        invertDrag3D?: boolean;
+        maxSamples3D?: number;
+        dragSensitivity2D?: number;
+    };
     saveUserTemplates(templates: UserTemplate[]): Promise<void>;
 }
 
@@ -1762,12 +1767,26 @@ export class TikzModal extends Modal {
             } else {
                 const plot = this.getPlotMetricsFromSvg();
                 if (!plot) return;
+                // 2D pan math:
+                //  - dxVb/dyVb convert mouse pixels into the SVG's viewBox
+                //    units so the rate stays consistent if the SVG was
+                //    scaled by CSS (smaller display = bigger conversion).
+                //  - dividing by plotW/plotH and multiplying by the axis
+                //    range remaps from viewBox units into math units, which
+                //    means the pan stays smooth as the user zooms in (the
+                //    pan is "related to the graph size" naturally — no
+                //    fixed step, the math unit per pixel shrinks with the
+                //    visible range).
+                //  - the plugin-wide sensitivity multiplier damps the rate
+                //    (default 0.5) so a mouse pixel moves the chart by
+                //    half a pixel — finer control without losing smoothness.
+                const sensitivity = this.plugin?.data?.dragSensitivity2D ?? 0.5;
                 const dxVb = dx * plot.scale;
                 const dyVb = dy * plot.scale;
                 const startXrange = this.dragStartXmax - this.dragStartXmin;
                 const startYrange = this.dragStartYmax - this.dragStartYmin;
-                const dxMath = -dxVb / plot.plotW * startXrange;
-                const dyMath = dyVb / plot.plotH * startYrange;
+                const dxMath = (-dxVb / plot.plotW) * startXrange * sensitivity;
+                const dyMath = (dyVb / plot.plotH) * startYrange * sensitivity;
                 this.applyAxisRange(
                     this.dragStartXmin + dxMath,
                     this.dragStartXmax + dxMath,
@@ -2047,9 +2066,15 @@ export class TikzModal extends Modal {
         this.requestPreviewUpdateFast();
     }
 
-    /** Trim trailing zeros and cap to 3 decimals so the inputs stay readable. */
+    /**
+     * Trim trailing zeros and cap to 5 decimals so storage has sub-pixel
+     * pan granularity. parseFloat strips the trailing zeros so the
+     * Axis-tab range inputs still look short for integer-ish values
+     * (e.g. "-5" rather than "-5.00000"). Five decimals is overkill for
+     * typical math ranges but keeps the pan smooth at extreme zoom.
+     */
     private formatRange(value: number): string {
-        return String(parseFloat(value.toFixed(3)));
+        return String(parseFloat(value.toFixed(5)));
     }
 
     private refreshRangeInputs() {

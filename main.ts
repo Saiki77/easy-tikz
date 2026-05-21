@@ -303,6 +303,24 @@ class EasyTikzSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
+            .setName('2D pan sensitivity')
+            .setDesc(
+                '1.0 is direct manipulation (1 mouse pixel pans the chart by 1 chart pixel). ' +
+                    'Lower values dampen the drag for finer control on dense plots; higher values overshoot. ' +
+                    'Default 0.5. The pan rate also scales with the current axis range, so this multiplier stays consistent as you zoom in or out.'
+            )
+            .addSlider((s) =>
+                s
+                    .setLimits(0.1, 2.0, 0.05)
+                    .setValue(this.plugin.data.dragSensitivity2D ?? 0.5)
+                    .setDynamicTooltip()
+                    .onChange(async (v) => {
+                        this.plugin.data.dragSensitivity2D = v;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        new Setting(containerEl)
             .setName('Also render plain `tikz` blocks')
             .setDesc(
                 'Off by default. When on, the plugin renders blocks tagged plain ```tikz the same way it renders ```easy-tikz blocks. ' +
