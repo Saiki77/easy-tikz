@@ -295,6 +295,10 @@ export class SettingsManager {
         this.values.set('annotations', []);
         // Coordinate system for 2D plots. Polar treats the expression as r(theta).
         this.values.set('coordinateSystem', 'cartesian');
+        // Separate axis labels for polar mode so toggling Cartesian <-> Polar
+        // doesn't trample the user's customised cartesian labels.
+        this.values.set('axis_label_x_polar', '');
+        this.values.set('axis_label_y_polar', '');
     }
 
     /** Look up the value for a setting id. Returns `undefined` if absent. */
@@ -322,6 +326,16 @@ export class SettingsManager {
             if (setting.id === 'gridSize' && !this.getValue('showSmallGrid')) return;
             if ((setting.id === 'axis_label_x' || setting.id === 'axis_label_y') && !this.getValue('show_axis_label'))
                 return;
+            // In polar mode, swap the X/Y label values for the polar-specific
+            // ones so the user's cartesian labels stay untouched.
+            if (setting.id === 'axis_label_x' && isPolar) {
+                code += setting.insertText(this.getValue('axis_label_x_polar') ?? '');
+                return;
+            }
+            if (setting.id === 'axis_label_y' && isPolar) {
+                code += setting.insertText(this.getValue('axis_label_y_polar') ?? '');
+                return;
+            }
             // Functions are emitted by our own per-function method so polar and
             // parametric branches stay in one place.
             if (setting.id === 'functions') {
@@ -400,6 +414,13 @@ export class SettingsManager {
         const cmY = Math.max(1, parseFloat(this.getValue('size_y_cm')) || 10);
         const ratio = Math.max(0.35, Math.min(1.8, cmY / cmX));
         const height = Math.round(width * ratio);
+        const isPolar = this.getValue('coordinateSystem') === 'polar';
+        const xLabel = isPolar
+            ? (this.getValue('axis_label_x_polar') ?? '')
+            : (this.getValue('axis_label_x') || 'x');
+        const yLabel = isPolar
+            ? (this.getValue('axis_label_y_polar') ?? '')
+            : (this.getValue('axis_label_y') || 'y');
         return {
             width,
             height,
@@ -408,8 +429,8 @@ export class SettingsManager {
             ymin: parseFloat(this.getValue('ymin')) || -0.5,
             ymax: parseFloat(this.getValue('ymax')) || 5,
             title: this.getValue('title') || '',
-            xLabel: this.getValue('axis_label_x') || 'x',
-            yLabel: this.getValue('axis_label_y') || 'y',
+            xLabel,
+            yLabel,
             showAxisLabels: this.getValue('show_axis_label') ?? true,
             axisStyle: (this.getValue('axis_style') as import('./types').AxisStyle) || 'box',
             gridMajor: this.getValue('showLargeGrid') ?? false,

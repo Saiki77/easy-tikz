@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.13.3] - 2026-05-21
+
+### Fixed
+
+- **Floating action icons and 3D zoom buttons no longer disappear after the first render.** `previewContainer.empty()` was wiping every child element on every render — including the overlays added at modal open. Replaced with `clearPreviewContent()` that only removes the SVG / 3D root, leaving overlays intact.
+
+### Added
+
+- **Per-coordinate-system axis labels.** Polar and Cartesian modes now have separate X/Y label storage (`axis_label_x_polar`, `axis_label_y_polar`), so customising one set doesn't trample the other. The Axis tab's label inputs swap to the right pair when you toggle Coordinate system, and the exported pgfplots emits the polar labels when polar is selected.
+
 ## [3.13.2] - 2026-05-21
 
 ### Added

@@ -84,6 +84,8 @@ export class TikzModal extends Modal {
     private leftPanel: HTMLElement;
     private zoom3DOverlay: HTMLElement | null = null;
     private floatingActionsOverlay: HTMLElement | null = null;
+    private xLabelInput: TextComponent | null = null;
+    private yLabelInput: TextComponent | null = null;
 
     private elevationSlider: SliderComponent | null = null;
     private azimuthSlider: SliderComponent | null = null;
@@ -404,6 +406,9 @@ export class TikzModal extends Modal {
                     .setValue(this.settings.getValue('coordinateSystem') ?? 'cartesian')
                     .onChange((v) => {
                         this.settings.setValue('coordinateSystem', v);
+                        // Axis labels are stored per-coordinate-system; refresh
+                        // the inputs so the user sees the right pair after toggling.
+                        this.refreshAxisLabelInputs();
                         this.requestPreviewUpdate();
                     })
             );
@@ -462,21 +467,25 @@ export class TikzModal extends Modal {
 
         new Setting(tab)
             .setName('X-axis label')
-            .addText((text) =>
-                text.setValue(this.settings.getValue('axis_label_x')).onChange((v) => {
-                    this.settings.setValue('axis_label_x', v);
+            .setDesc('In polar mode this edits a separate polar X label so your cartesian label stays intact.')
+            .addText((text) => {
+                this.xLabelInput = text;
+                text.setValue(this.currentXLabelValue()).onChange((v) => {
+                    this.settings.setValue(this.currentXLabelKey(), v);
                     this.requestPreviewUpdate();
-                })
-            );
+                });
+            });
 
         new Setting(tab)
             .setName('Y-axis label')
-            .addText((text) =>
-                text.setValue(this.settings.getValue('axis_label_y')).onChange((v) => {
-                    this.settings.setValue('axis_label_y', v);
+            .setDesc('In polar mode this edits a separate polar Y label so your cartesian label stays intact.')
+            .addText((text) => {
+                this.yLabelInput = text;
+                text.setValue(this.currentYLabelValue()).onChange((v) => {
+                    this.settings.setValue(this.currentYLabelKey(), v);
                     this.requestPreviewUpdate();
-                })
-            );
+                });
+            });
 
         this.zAxisContainer = tab.createDiv({ cls: 'tikz-3d-controls' });
 
@@ -1533,6 +1542,27 @@ export class TikzModal extends Modal {
         this.zoom3DOverlay = overlay;
     }
 
+    private currentXLabelKey(): string {
+        return this.settings.getValue('coordinateSystem') === 'polar' ? 'axis_label_x_polar' : 'axis_label_x';
+    }
+
+    private currentYLabelKey(): string {
+        return this.settings.getValue('coordinateSystem') === 'polar' ? 'axis_label_y_polar' : 'axis_label_y';
+    }
+
+    private currentXLabelValue(): string {
+        return String(this.settings.getValue(this.currentXLabelKey()) ?? '');
+    }
+
+    private currentYLabelValue(): string {
+        return String(this.settings.getValue(this.currentYLabelKey()) ?? '');
+    }
+
+    private refreshAxisLabelInputs() {
+        if (this.xLabelInput) this.xLabelInput.setValue(this.currentXLabelValue());
+        if (this.yLabelInput) this.yLabelInput.setValue(this.currentYLabelValue());
+    }
+
     private adjust3DZoom(factor: number) {
         const current = (this.settings.getValue('zoom3D') as number) || 1;
         const next = Math.max(0.3, Math.min(4, current * factor));
@@ -2199,6 +2229,21 @@ export class TikzModal extends Modal {
         }, 180) as unknown as number;
     }
 
+    /**
+     * Remove only the SVG / 3D root from the preview container, keeping
+     * the floating overlays (3D zoom buttons, action icons) in place.
+     * `previewContainer.empty()` would wipe them out on every render.
+     */
+    private clearPreviewContent() {
+        const children = Array.from(this.previewContainer.children);
+        for (const child of children) {
+            const tag = child.tagName.toLowerCase();
+            if (tag === 'svg' || child.classList.contains('tikz-3d-root')) {
+                this.previewContainer.removeChild(child);
+            }
+        }
+    }
+
     private updatePreview(mode: 'svg' | 'canvas' = 'svg') {
         if (this.previewTimer) {
             window.clearTimeout(this.previewTimer);
@@ -2222,12 +2267,12 @@ export class TikzModal extends Modal {
                 }
                 const root = this.svg3dRenderer.getElement();
                 if (this.currentRenderMode !== '3d' || root.parentElement !== this.previewContainer) {
-                    this.previewContainer.empty();
+                    this.clearPreviewContent();
                     this.previewContainer.appendChild(root);
                     this.currentRenderMode = '3d';
                 }
             } else {
-                this.previewContainer.empty();
+                this.clearPreviewContent();
                 const svg = new SVGRenderer(config).render();
                 this.previewContainer.appendChild(svg);
                 this.currentRenderMode = '2d';
