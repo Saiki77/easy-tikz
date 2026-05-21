@@ -54,5 +54,22 @@ class EasyTikzSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 })
             );
+
+        new Setting(containerEl)
+            .setName('Max 3D samples per axis')
+            .setDesc(
+                'Upper bound of the Samples slider on each 3D surface card. Default 80. ' +
+                    'Higher values draw smoother surfaces but each axis step squares the work, so the preview will slow noticeably above ~200. Re-open the Easy TikZ modal after changing this.'
+            )
+            .addSlider((s) =>
+                s
+                    .setLimits(40, 400, 10)
+                    .setValue(this.plugin.data.maxSamples3D ?? 80)
+                    .setDynamicTooltip()
+                    .onChange(async (v) => {
+                        this.plugin.data.maxSamples3D = v;
+                        await this.plugin.saveSettings();
+                    })
+            );
     }
 }

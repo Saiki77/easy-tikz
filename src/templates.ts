@@ -61,9 +61,16 @@ export interface PluginData {
      * elevation).
      */
     invertDrag3D: boolean;
+    /**
+     * Upper bound of the Samples slider on each 3D surface card.
+     * Default 80. Higher values let you draw smoother surfaces but
+     * each step doubles the grid cells, so the preview will slow.
+     */
+    maxSamples3D: number;
 }
 
 export const DEFAULT_PLUGIN_DATA: PluginData = {
     userTemplates: [],
     invertDrag3D: false,
+    maxSamples3D: 80,
 };

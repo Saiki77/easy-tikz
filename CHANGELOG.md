@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.14.0] - 2026-05-21
+
+### Added
+
+- **Configurable 3D sample cap.** The Samples slider on each 3D surface card was hardcoded to a maximum of 80. A new plugin setting (Settings → Easy TikZ → "Max 3D samples per axis") raises that cap up to 400, in steps of 10. The Samples slider reads the cap each time the Easy TikZ modal opens; existing surfaces are clamped to the new cap if it was lowered.
+
 ## [3.13.5] - 2026-05-21
 
 ### Fixed

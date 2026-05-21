@@ -9,7 +9,7 @@ import { MathHelper } from './math';
 
 // Loose type so we can keep importing the plugin without a circular dep.
 interface PluginHost {
-    data: { userTemplates: UserTemplate[]; invertDrag3D?: boolean };
+    data: { userTemplates: UserTemplate[]; invertDrag3D?: boolean; maxSamples3D?: number };
     saveUserTemplates(templates: UserTemplate[]): Promise<void>;
 }
 
@@ -1065,12 +1065,16 @@ export class TikzModal extends Modal {
 
             const row5 = card.createDiv({ cls: 'tikz-func-row' });
             const samplesDiv = row5.createDiv({ cls: 'tikz-func-field wide' });
+            // Slider upper bound is configurable via the plugin's settings tab.
+            // Defaults to 80; advanced users can raise it to draw smoother
+            // surfaces at the cost of preview FPS.
+            const maxSamples = Math.max(40, Math.min(400, this.plugin?.data?.maxSamples3D ?? 80));
             new Setting(samplesDiv)
                 .setName('Samples')
-                .setDesc('Grid density per axis. Higher = smoother surface but slower preview. Also drives pgfplots `samples=` in the exported code.')
+                .setDesc(`Grid density per axis (8 to ${maxSamples}). Higher = smoother surface but slower preview. Also drives pgfplots \`samples=\` in the exported code.`)
                 .addSlider((s) =>
-                    s.setLimits(8, 80, 2)
-                        .setValue(state.samples)
+                    s.setLimits(8, maxSamples, 2)
+                        .setValue(Math.min(state.samples, maxSamples))
                         .setDynamicTooltip()
                         .onChange((v) => {
                             state.samples = v;
