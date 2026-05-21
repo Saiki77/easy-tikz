@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.13.0] - 2026-05-21
+
+### Added
+
+- **"Axes" axis style.** The Axis tab's "Axis style" dropdown now offers a third option, "Axes (no box)", which renders the x and y axes as an L-shape at the lower-left of the plot with arrowheads, instead of an enclosing rectangle. The exported TikZ emits `axis lines = left`.
+- **3D zoom buttons.** A small overlay in the top-right of the preview area exposes +, −, and reset buttons in 3D mode. Each click scales the projected box by 1.25x (clamped to 0.3–4.0). Useful since scroll-wheel zoom is disabled in 3D.
+
+### Changed
+
+- **Box axis style** now renders the top and bottom horizontal bars as explicit lines mirroring the left and right verticals, with tick marks on all four sides for symmetry.
+- The previous `axis_allaround` boolean setting is now a tri-state `axis_style` dropdown (`box` | `middle` | `axes`).
+
 ## [3.12.0] - 2026-05-21
 
 ### Added

@@ -82,6 +82,7 @@ export class TikzModal extends Modal {
     private axisStyleContainer: HTMLElement;
     private functionsTabContent: HTMLElement;
     private leftPanel: HTMLElement;
+    private zoom3DOverlay: HTMLElement | null = null;
 
     private elevationSlider: SliderComponent | null = null;
     private azimuthSlider: SliderComponent | null = null;
@@ -156,6 +157,7 @@ export class TikzModal extends Modal {
         this.previewContainer.setAttr('tabindex', '0');
         this.previewContainer.setAttr('role', 'img');
         this.previewContainer.setAttr('aria-label', 'Graph preview. Use arrow keys in 3D mode to rotate.');
+        this.buildZoom3DOverlay();
         this.setupMouseDragRotation();
         this.setupKeyboardRotation();
         this.buildActionBar(rightPanel);
@@ -511,13 +513,13 @@ export class TikzModal extends Modal {
         this.axisStyleContainer = tab.createDiv();
         new Setting(this.axisStyleContainer)
             .setName('Axis style')
-            .setDesc('Box: axes around the plot. Middle: axes cross at origin.')
+            .setDesc('Box: full rectangle around the plot. Middle: axes cross at origin. Axes: L-shape (x at bottom, y at left) with no enclosing box.')
             .addDropdown((d) =>
                 d
-                    .addOptions({ box: 'Box (all around)', middle: 'Middle (crossing)' })
-                    .setValue(this.settings.getValue('axis_allaround') ? 'box' : 'middle')
+                    .addOptions({ box: 'Box (all around)', middle: 'Middle (crossing)', axes: 'Axes (no box)' })
+                    .setValue(this.settings.getValue('axis_style') ?? 'box')
                     .onChange((v) => {
-                        this.settings.setValue('axis_allaround', v === 'box');
+                        this.settings.setValue('axis_style', v);
                         this.requestPreviewUpdate();
                     })
             );
@@ -1487,6 +1489,53 @@ export class TikzModal extends Modal {
         if (this.zAxisContainer) this.zAxisContainer.style.display = show3D ? 'block' : 'none';
         if (this.axisStyleContainer) this.axisStyleContainer.style.display = show3D ? 'none' : 'block';
         if (this.previewContainer) this.previewContainer.toggleClass('is-3d', show3D);
+        if (this.zoom3DOverlay) this.zoom3DOverlay.style.display = show3D ? 'flex' : 'none';
+    }
+
+    private buildZoom3DOverlay() {
+        const overlay = this.previewContainer.createDiv({ cls: 'tikz-3d-zoom-overlay' });
+        overlay.setAttr('aria-hidden', 'true');
+        overlay.style.display = 'none';
+
+        const plus = overlay.createEl('button', { cls: 'tikz-3d-zoom-btn', text: '+' });
+        plus.setAttr('type', 'button');
+        plus.setAttr('aria-label', 'Zoom in');
+        plus.setAttr('title', 'Zoom in');
+        plus.onclick = (e) => {
+            e.stopPropagation();
+            this.adjust3DZoom(1.25);
+        };
+
+        const minus = overlay.createEl('button', { cls: 'tikz-3d-zoom-btn', text: '−' });
+        minus.setAttr('type', 'button');
+        minus.setAttr('aria-label', 'Zoom out');
+        minus.setAttr('title', 'Zoom out');
+        minus.onclick = (e) => {
+            e.stopPropagation();
+            this.adjust3DZoom(1 / 1.25);
+        };
+
+        const reset = overlay.createEl('button', { cls: 'tikz-3d-zoom-btn tikz-3d-zoom-reset', text: '↻' });
+        reset.setAttr('type', 'button');
+        reset.setAttr('aria-label', 'Reset zoom');
+        reset.setAttr('title', 'Reset zoom');
+        reset.onclick = (e) => {
+            e.stopPropagation();
+            this.settings.setValue('zoom3D', 1);
+            this.requestPreviewUpdateFast();
+        };
+
+        // Mouse-down on the overlay shouldn't trigger the drag-rotate handler.
+        overlay.addEventListener('mousedown', (e) => e.stopPropagation());
+
+        this.zoom3DOverlay = overlay;
+    }
+
+    private adjust3DZoom(factor: number) {
+        const current = (this.settings.getValue('zoom3D') as number) || 1;
+        const next = Math.max(0.3, Math.min(4, current * factor));
+        this.settings.setValue('zoom3D', next);
+        this.requestPreviewUpdateFast();
     }
 
     private setupMouseDragRotation() {

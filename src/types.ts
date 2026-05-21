@@ -72,6 +72,8 @@ export interface Annotation {
 
 export type CoordinateSystem = 'cartesian' | 'polar';
 
+export type AxisStyle = 'box' | 'middle' | 'axes';
+
 export interface RendererConfig {
     width: number;
     height: number;
@@ -84,7 +86,7 @@ export interface RendererConfig {
     xLabel: string;
     yLabel: string;
     showAxisLabels: boolean;
-    axisMiddle: boolean;
+    axisStyle: AxisStyle;
     gridMajor: boolean;
     gridMinor: boolean;
     minorTickNum: number;
@@ -97,5 +99,7 @@ export interface RendererConfig {
     zLabel: string;
     rotationX: number;
     rotationZ: number;
+    /** Multiplier on the 3D camera scale. 1.0 is the default fit-to-viewport. */
+    zoom3D: number;
     functions3D: Function3DParameters[];
 }

@@ -240,17 +240,23 @@ export class SVGRenderer {
         const majorIntervalX = niceInterval(xmax - xmin, targetX);
         const majorIntervalY = niceInterval(ymax - ymin, targetY);
 
-        if (this.config.axisMiddle) {
+        const style = this.config.axisStyle;
+        const left = PADDING_LEFT;
+        const right = this.config.width - PADDING_RIGHT;
+        const top = PADDING_TOP;
+        const bottom = this.config.height - PADDING_BOTTOM;
+
+        if (style === 'middle') {
             const originX = this.toScreenX(0);
             const originY = this.toScreenY(0);
-            const clampedOX = Math.max(PADDING_LEFT, Math.min(this.config.width - PADDING_RIGHT, originX));
-            const clampedOY = Math.max(PADDING_TOP, Math.min(this.config.height - PADDING_BOTTOM, originY));
+            const clampedOX = Math.max(left, Math.min(right, originX));
+            const clampedOY = Math.max(top, Math.min(bottom, originY));
 
             axisGroup.appendChild(
                 this.el('line', {
-                    x1: String(PADDING_LEFT),
+                    x1: String(left),
                     y1: String(clampedOY),
-                    x2: String(this.config.width - PADDING_RIGHT),
+                    x2: String(right),
                     y2: String(clampedOY),
                     stroke: 'var(--text-muted)',
                     'stroke-width': '1.5',
@@ -260,9 +266,9 @@ export class SVGRenderer {
             axisGroup.appendChild(
                 this.el('line', {
                     x1: String(clampedOX),
-                    y1: String(this.config.height - PADDING_BOTTOM),
+                    y1: String(bottom),
                     x2: String(clampedOX),
-                    y2: String(PADDING_TOP),
+                    y2: String(top),
                     stroke: 'var(--text-muted)',
                     'stroke-width': '1.5',
                     'marker-end': 'url(#arrowhead)',
@@ -320,16 +326,29 @@ export class SVGRenderer {
                 label.textContent = formatTick(y);
                 axisGroup.appendChild(label);
             }
-        } else {
+        } else if (style === 'axes') {
+            // L-shaped axes at the lower-left corner of the plot region, with
+            // arrowheads. No top/right bars.
             axisGroup.appendChild(
-                this.el('rect', {
-                    x: String(PADDING_LEFT),
-                    y: String(PADDING_TOP),
-                    width: String(this.plotWidth),
-                    height: String(this.plotHeight),
-                    fill: 'none',
+                this.el('line', {
+                    x1: String(left),
+                    y1: String(bottom),
+                    x2: String(right),
+                    y2: String(bottom),
                     stroke: 'var(--text-muted)',
                     'stroke-width': '1.5',
+                    'marker-end': 'url(#arrowhead)',
+                })
+            );
+            axisGroup.appendChild(
+                this.el('line', {
+                    x1: String(left),
+                    y1: String(bottom),
+                    x2: String(left),
+                    y2: String(top),
+                    stroke: 'var(--text-muted)',
+                    'stroke-width': '1.5',
+                    'marker-end': 'url(#arrowhead)',
                 })
             );
 
@@ -339,16 +358,16 @@ export class SVGRenderer {
                 axisGroup.appendChild(
                     this.el('line', {
                         x1: String(sx),
-                        y1: String(this.config.height - PADDING_BOTTOM),
+                        y1: String(bottom),
                         x2: String(sx),
-                        y2: String(this.config.height - PADDING_BOTTOM + 5),
+                        y2: String(bottom + 5),
                         stroke: 'var(--text-muted)',
                         'stroke-width': '1',
                     })
                 );
                 const label = this.el('text', {
                     x: String(sx),
-                    y: String(this.config.height - PADDING_BOTTOM + 18),
+                    y: String(bottom + 18),
                     'text-anchor': 'middle',
                     fill: 'var(--text-muted)',
                     'font-size': '11',
@@ -363,16 +382,106 @@ export class SVGRenderer {
                 const sy = this.toScreenY(y);
                 axisGroup.appendChild(
                     this.el('line', {
-                        x1: String(PADDING_LEFT - 5),
+                        x1: String(left - 5),
                         y1: String(sy),
-                        x2: String(PADDING_LEFT),
+                        x2: String(left),
                         y2: String(sy),
                         stroke: 'var(--text-muted)',
                         'stroke-width': '1',
                     })
                 );
                 const label = this.el('text', {
-                    x: String(PADDING_LEFT - 8),
+                    x: String(left - 8),
+                    y: String(sy + 4),
+                    'text-anchor': 'end',
+                    fill: 'var(--text-muted)',
+                    'font-size': '11',
+                    'font-family': 'var(--font-monospace)',
+                });
+                label.textContent = formatTick(y);
+                axisGroup.appendChild(label);
+            }
+        } else {
+            // Box: draw the four border lines explicitly so top and bottom
+            // bars are unambiguous siblings of the left and right verticals.
+            const borderAttrs = {
+                stroke: 'var(--text-muted)',
+                'stroke-width': '1.5',
+                'stroke-linecap': 'square',
+            } as Record<string, string>;
+            // Bottom
+            axisGroup.appendChild(this.el('line', { ...borderAttrs, x1: String(left), y1: String(bottom), x2: String(right), y2: String(bottom) }));
+            // Top
+            axisGroup.appendChild(this.el('line', { ...borderAttrs, x1: String(left), y1: String(top), x2: String(right), y2: String(top) }));
+            // Left
+            axisGroup.appendChild(this.el('line', { ...borderAttrs, x1: String(left), y1: String(top), x2: String(left), y2: String(bottom) }));
+            // Right
+            axisGroup.appendChild(this.el('line', { ...borderAttrs, x1: String(right), y1: String(top), x2: String(right), y2: String(bottom) }));
+
+            const startX = Math.ceil(xmin / majorIntervalX) * majorIntervalX;
+            for (let x = startX; x <= xmax; x += majorIntervalX) {
+                const sx = this.toScreenX(x);
+                // Bottom tick (outside)
+                axisGroup.appendChild(
+                    this.el('line', {
+                        x1: String(sx),
+                        y1: String(bottom),
+                        x2: String(sx),
+                        y2: String(bottom + 5),
+                        stroke: 'var(--text-muted)',
+                        'stroke-width': '1',
+                    })
+                );
+                // Top tick (mirrored, points inward off the top bar)
+                axisGroup.appendChild(
+                    this.el('line', {
+                        x1: String(sx),
+                        y1: String(top - 5),
+                        x2: String(sx),
+                        y2: String(top),
+                        stroke: 'var(--text-muted)',
+                        'stroke-width': '1',
+                    })
+                );
+                const label = this.el('text', {
+                    x: String(sx),
+                    y: String(bottom + 18),
+                    'text-anchor': 'middle',
+                    fill: 'var(--text-muted)',
+                    'font-size': '11',
+                    'font-family': 'var(--font-monospace)',
+                });
+                label.textContent = formatTick(x);
+                axisGroup.appendChild(label);
+            }
+
+            const startY = Math.ceil(ymin / majorIntervalY) * majorIntervalY;
+            for (let y = startY; y <= ymax; y += majorIntervalY) {
+                const sy = this.toScreenY(y);
+                // Left tick
+                axisGroup.appendChild(
+                    this.el('line', {
+                        x1: String(left - 5),
+                        y1: String(sy),
+                        x2: String(left),
+                        y2: String(sy),
+                        stroke: 'var(--text-muted)',
+                        'stroke-width': '1',
+                    })
+                );
+                // Right tick (mirrored)
+                axisGroup.appendChild(
+                    this.el('line', {
+                        x1: String(right),
+                        y1: String(sy),
+                        x2: String(right + 5),
+                        y2: String(sy),
+                        stroke: 'var(--text-muted)',
+                        'stroke-width': '1',
+                    })
+                );
+                const label = this.el('text', {
+                    x: String(left - 8),
                     y: String(sy + 4),
                     'text-anchor': 'end',
                     fill: 'var(--text-muted)',

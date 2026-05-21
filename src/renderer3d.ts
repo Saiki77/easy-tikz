@@ -255,7 +255,8 @@ export class SVG3DRenderer {
         this.centerY = config.height / 2 + 20;
         const availW = config.width - PADDING_LEFT - PADDING_RIGHT;
         const availH = config.height - PADDING_TOP - PADDING_BOTTOM;
-        this.scale = Math.min(availW, availH) * VIEWPORT_SCALE;
+        const zoom = Math.max(0.1, Math.min(10, config.zoom3D || 1));
+        this.scale = Math.min(availW, availH) * VIEWPORT_SCALE * zoom;
         const az = (config.rotationZ * Math.PI) / 180;
         const el = (config.rotationX * Math.PI) / 180;
         this.cosA = Math.cos(az);

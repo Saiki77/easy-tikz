@@ -173,13 +173,21 @@ export const TIKZ_SETTINGS: TikzSetting[] = [
         insertText: (value) => `\n  ymax=${value},`,
     },
     {
-        id: 'axis_allaround',
-        name: 'Axis all around',
-        description: 'Whether to have the axis go all around the graph',
+        id: 'axis_style',
+        name: 'Axis style',
+        description: 'Box (all around), Middle (crossing at origin), or Axes (L-shape at lower-left)',
         category: 'axis',
-        type: 'toggle',
-        defaultValue: true,
-        insertText: (value) => (value ? '\n]' : ' \n  axis lines = middle,\n]'),
+        type: 'dropdown',
+        defaultValue: 'box',
+        options: ['box', 'middle', 'axes'],
+        insertText: (value) => {
+            switch (value) {
+                case 'middle': return ' \n  axis lines = middle,\n]';
+                case 'axes': return ' \n  axis lines = left,\n]';
+                case 'box':
+                default: return '\n]';
+            }
+        },
     },
     {
         id: 'functions',
@@ -277,6 +285,7 @@ export class SettingsManager {
         this.values.set('axis_label_z', 'z');
         this.values.set('rotationX', 30);
         this.values.set('rotationZ', 45);
+        this.values.set('zoom3D', 1);
         this.values.set('functions3D', []);
         // Grid density (live preview only; pgfplots picks its own ticks unless told otherwise).
         this.values.set('majorTickNum', 8);
@@ -323,7 +332,7 @@ export class SettingsManager {
             // matters when at least one function is non-parametric (polar
             // coordinate system applies). Parametric plots already fix their
             // own coordinates so it does no harm.
-            if (setting.id === 'axis_allaround' && isPolar) {
+            if (setting.id === 'axis_style' && isPolar) {
                 code += '\n  axis equal,';
             }
             code += setting.insertText(this.getValue(setting.id));
@@ -402,7 +411,7 @@ export class SettingsManager {
             xLabel: this.getValue('axis_label_x') || 'x',
             yLabel: this.getValue('axis_label_y') || 'y',
             showAxisLabels: this.getValue('show_axis_label') ?? true,
-            axisMiddle: !(this.getValue('axis_allaround') ?? true),
+            axisStyle: (this.getValue('axis_style') as import('./types').AxisStyle) || 'box',
             gridMajor: this.getValue('showLargeGrid') ?? false,
             gridMinor: this.getValue('showSmallGrid') ?? false,
             minorTickNum: this.getValue('gridSize') ?? 5,
@@ -414,6 +423,7 @@ export class SettingsManager {
             zLabel: this.getValue('axis_label_z') || 'z',
             rotationX: this.getValue('rotationX') ?? 30,
             rotationZ: this.getValue('rotationZ') ?? 45,
+            zoom3D: this.getValue('zoom3D') ?? 1,
             functions3D: this.getValue('functions3D') || [],
             annotations: this.getValue('annotations') || [],
             coordinateSystem: (this.getValue('coordinateSystem') as 'cartesian' | 'polar') || 'cartesian',

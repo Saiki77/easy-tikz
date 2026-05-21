@@ -139,6 +139,49 @@
     padding: 20px;
     background: var(--background-primary);
     outline: none;
+    position: relative;
+}
+
+/* 3D zoom controls overlay (only shown in 3D mode). */
+.tikz-3d-zoom-overlay {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 5;
+    pointer-events: auto;
+}
+
+.tikz-3d-zoom-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--background-modifier-border) 80%, transparent);
+    background: color-mix(in srgb, var(--background-primary) 90%, transparent);
+    color: var(--text-normal);
+    font-size: 18px;
+    line-height: 1;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--background-modifier-border) 50%, transparent);
+    padding: 0;
+}
+
+.tikz-3d-zoom-btn:hover {
+    background: var(--background-modifier-hover);
+}
+
+.tikz-3d-zoom-btn:active {
+    transform: translateY(1px);
+}
+
+.tikz-3d-zoom-reset {
+    font-size: 14px;
 }
 
 .tikz-preview-area:focus-visible {
