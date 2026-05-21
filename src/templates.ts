@@ -53,8 +53,17 @@ export interface UserTemplate {
 
 export interface PluginData {
     userTemplates: UserTemplate[];
+    /**
+     * When true, vertical drag in the 3D preview is inverted: dragging
+     * down tilts the camera DOWN (lowers elevation), dragging up tilts
+     * the camera UP (raises elevation). When false (default), it's the
+     * trackball convention: drag down tilts the scene up (raises
+     * elevation).
+     */
+    invertDrag3D: boolean;
 }
 
 export const DEFAULT_PLUGIN_DATA: PluginData = {
     userTemplates: [],
+    invertDrag3D: false,
 };

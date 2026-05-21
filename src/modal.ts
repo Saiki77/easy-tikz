@@ -9,7 +9,7 @@ import { MathHelper } from './math';
 
 // Loose type so we can keep importing the plugin without a circular dep.
 interface PluginHost {
-    data: { userTemplates: UserTemplate[] };
+    data: { userTemplates: UserTemplate[]; invertDrag3D?: boolean };
     saveUserTemplates(templates: UserTemplate[]): Promise<void>;
 }
 
@@ -1672,7 +1672,14 @@ export class TikzModal extends Modal {
 
             if (this.is3D()) {
                 let newAzimuth = this.dragStartAzimuth + dx * AZIMUTH_DRAG_RATE;
-                let newElevation = this.dragStartElevation - dy * ELEVATION_DRAG_RATE;
+                // Vertical drag direction follows the plugin setting. Default
+                // (invertDrag3D: false): drag down RAISES elevation
+                // (trackball-style — you're "pulling the floor up").
+                // invertDrag3D: true: drag down LOWERS elevation (direct
+                // manipulation — the camera follows your finger).
+                const invert = !!this.plugin?.data?.invertDrag3D;
+                const elevationDelta = (invert ? dy : -dy) * ELEVATION_DRAG_RATE;
+                let newElevation = this.dragStartElevation + elevationDelta;
                 newAzimuth = ((newAzimuth % 360) + 360) % 360;
                 newElevation = Math.max(0, Math.min(90, newElevation));
                 this.applyRotation(Math.round(newAzimuth), Math.round(newElevation));

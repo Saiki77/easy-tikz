@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.13.4] - 2026-05-21
+
+### Fixed
+
+- **3D preview no longer "zooms in" while dragging.** Root cause: the canvas had inline `style.width` / `style.height` in CSS pixels, which overrode the CSS `width: 100%` rule. When the preview area was narrower than the configured canvas width, the canvas stayed at its full pixel width and visibly overflowed the `max-width`-clamped 3D root, while the SVG (sized via CSS) shrank to fit. Releasing the drag swapped to SVG and the chart visibly snapped smaller. The renderer no longer sets the canvas's inline width/height — only the internal pixel buffer — so the canvas tracks the same box as the SVG.
+
+### Added
+
+- **Plugin setting: "Invert vertical drag in 3D"** (Settings → Easy TikZ). Off (default) keeps the existing trackball convention — drag down raises the camera elevation, drag up lowers it. On flips it to direct manipulation — drag down lowers the camera, drag up raises it. Setting persists with the rest of the plugin data.
+
 ## [3.13.3] - 2026-05-21
 
 ### Fixed

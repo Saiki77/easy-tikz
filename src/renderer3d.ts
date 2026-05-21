@@ -240,7 +240,12 @@ export class SVG3DRenderer {
         this.root.style.width = config.width + 'px';
         this.root.style.height = config.height + 'px';
 
-        // Canvas dimensions, hi-DPI aware.
+        // Canvas dimensions, hi-DPI aware. The internal pixel buffer is the
+        // hi-DPI size; CSS sizing is left to the .tikz-3d-canvas rule
+        // (width: 100% / height: 100% of the root) so the canvas tracks
+        // whatever box the SVG would occupy. Otherwise an inline pixel
+        // width would over-ride CSS and the canvas would visibly clip /
+        // appear larger than the SVG once the root hit its max-width.
         const dpr = window.devicePixelRatio || 1;
         const pxW = Math.round(config.width * dpr);
         const pxH = Math.round(config.height * dpr);
@@ -248,8 +253,6 @@ export class SVG3DRenderer {
             this.canvas.width = pxW;
             this.canvas.height = pxH;
         }
-        this.canvas.style.width = config.width + 'px';
-        this.canvas.style.height = config.height + 'px';
 
         this.centerX = config.width / 2;
         this.centerY = config.height / 2 + 20;
