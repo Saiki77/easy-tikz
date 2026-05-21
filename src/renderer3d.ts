@@ -138,9 +138,17 @@ export class SVG3DRenderer {
         bgPrimary: '#fff',
     };
 
+    /** Memoized fit-contain result so we don't write to the root's style on every drag frame. */
+    private lastFit: { parentW: number; parentH: number; configW: number; configH: number; w: number; h: number } | null = null;
+
     constructor() {
         this.root = document.createElement('div');
-        this.root.className = 'tikz-3d-root tikz-3d-mode-svg';
+        // Single static class. The renderer used to toggle between
+        // `tikz-3d-mode-svg` and `tikz-3d-mode-canvas` to swap which
+        // sibling was visible; canvas is now the only display path, and
+        // the SVG (kept for export) is hidden via a CSS `display: none`
+        // rule on `.tikz-3d-svg`.
+        this.root.className = 'tikz-3d-root';
 
         this.svg = document.createElementNS(SVG_NS, 'svg') as SVGSVGElement;
         this.svg.setAttribute('class', 'tikz-3d-svg');
@@ -189,8 +197,9 @@ export class SVG3DRenderer {
     }
 
     /**
-     * Update the persistent SVG to reflect `config`. Sets the root into
-     * "SVG mode" so the SVG shows and the canvas is hidden.
+     * Update the off-screen SVG to reflect `config`. The SVG is hidden via
+     * CSS (`display: none` on `.tikz-3d-svg`); only the export path calls
+     * this method, then reads the now-fresh SVG via `querySelector`.
      */
     renderSvg(config: RendererConfig) {
         this.prepareScene(config);
@@ -203,24 +212,80 @@ export class SVG3DRenderer {
         this.drawBoxToSvg('front');
         this.drawAnnotationsToSvg();
         this.updateTitleSvg();
-
-        if (this.root.className !== 'tikz-3d-root tikz-3d-mode-svg') {
-            this.root.className = 'tikz-3d-root tikz-3d-mode-svg';
-        }
     }
 
     /**
-     * Paint to the canvas to reflect `config`. Sets the root into "canvas
-     * mode" so the canvas shows and the SVG is hidden. The SVG keeps its
-     * last state until renderSvg is called again.
+     * Paint to the canvas to reflect `config`. The canvas is the only
+     * visible render path now (the SVG is kept for export only), so this
+     * is what `updatePreview` calls every frame.
      */
     renderCanvas(config: RendererConfig) {
         this.prepareScene(config);
         this.paintCanvas();
+    }
 
-        if (this.root.className !== 'tikz-3d-root tikz-3d-mode-canvas') {
-            this.root.className = 'tikz-3d-root tikz-3d-mode-canvas';
+    /**
+     * Compute the largest box that fits in the parent's content area with
+     * the configured `aspectW / aspectH` ratio, and write it to the root's
+     * inline width/height. Memoized: skips the DOM write when parent /
+     * config dimensions are unchanged, so a 60fps drag does not write
+     * inline styles each frame. If the parent measures 0 (modal hasn't
+     * finished laying out yet), falls back to the configured size.
+     */
+    private applyRootFitContain(aspectW: number, aspectH: number) {
+        const parent = this.root.parentElement;
+        let parentW = 0;
+        let parentH = 0;
+        if (parent) {
+            const rect = parent.getBoundingClientRect();
+            const style = getComputedStyle(parent);
+            const padX = parseFloat(style.paddingLeft || '0') + parseFloat(style.paddingRight || '0');
+            const padY = parseFloat(style.paddingTop || '0') + parseFloat(style.paddingBottom || '0');
+            parentW = Math.max(0, rect.width - padX);
+            parentH = Math.max(0, rect.height - padY);
         }
+
+        let w: number;
+        let h: number;
+        if (parentW < 1 || parentH < 1) {
+            // Layout not settled yet (first paint inside `onOpen` before
+            // the modal has fully sized itself). Use the configured logical
+            // size as a sensible fallback; the next render after layout
+            // settles will measure properly.
+            w = aspectW;
+            h = aspectH;
+        } else {
+            const containerRatio = parentW / parentH;
+            const configRatio = aspectW / aspectH;
+            if (containerRatio > configRatio) {
+                // Container is wider than the chart aspect — height is the bottleneck.
+                h = Math.min(aspectH, parentH);
+                w = h * configRatio;
+            } else {
+                // Container is taller than the chart aspect — width is the bottleneck.
+                w = Math.min(aspectW, parentW);
+                h = w / configRatio;
+            }
+            w = Math.max(100, w);
+            h = Math.max(100, h);
+        }
+
+        const last = this.lastFit;
+        if (
+            last &&
+            last.parentW === parentW &&
+            last.parentH === parentH &&
+            last.configW === aspectW &&
+            last.configH === aspectH
+        ) {
+            // Inputs unchanged; previous (w, h) already on the element.
+            return;
+        }
+        this.lastFit = { parentW, parentH, configW: aspectW, configH: aspectH, w, h };
+        this.root.style.width = w + 'px';
+        this.root.style.height = h + 'px';
+        // Clear any aspect-ratio inline style left over from previous versions.
+        this.root.style.aspectRatio = '';
     }
 
     /**
@@ -237,17 +302,15 @@ export class SVG3DRenderer {
         this.svg.setAttribute('viewBox', `0 0 ${config.width} ${config.height}`);
         this.backgroundRect.setAttribute('width', String(config.width));
         this.backgroundRect.setAttribute('height', String(config.height));
-        // Set width and aspect-ratio (not height) so the root maintains
-        // its configured aspect ratio when `max-width: 100%` shrinks it to
-        // fit a narrower preview area. If we set both width AND height in
-        // pixels, max-width clamps the width but leaves the explicit
-        // height alone, producing a non-square root. The canvas (CSS
-        // width/height: 100% of root) then stretched non-proportionally
-        // mid-drag, while the SVG (with preserveAspectRatio) letter-boxed
-        // — the two paths diverged visibly each time the user dragged.
-        this.root.style.width = config.width + 'px';
-        this.root.style.height = 'auto';
-        this.root.style.aspectRatio = `${config.width} / ${config.height}`;
+        // Fit-contain the root inside the preview area. Measure the parent
+        // each render and write explicit pixel width/height that preserve
+        // the configured aspect ratio. Previously we relied on CSS
+        // `aspect-ratio` + `max-width: 100%` + `max-height: 100%`, but
+        // when both axes were constrained the aspect-ratio rule was
+        // ignored and the root went rectangular — canvas (CSS 100%/100%)
+        // then stretched while SVG (`preserveAspectRatio` default)
+        // letter-boxed, causing a visible flash between the two paths.
+        this.applyRootFitContain(config.width, config.height);
 
         // Canvas dimensions, hi-DPI aware. The internal pixel buffer is the
         // hi-DPI size; CSS sizing is left to the .tikz-3d-canvas rule

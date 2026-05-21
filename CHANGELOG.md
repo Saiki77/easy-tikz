@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.14.1] - 2026-05-21
+
+### Fixed
+
+- **3D preview now uses a single render path.** Previously the renderer painted to a `<canvas>` during drag and to an `<svg>` at rest (~180 ms after the last interaction). When the preview area was narrower than the chart's natural size, the canvas filled the (mis-shaped) root while the SVG letter-boxed via its default `preserveAspectRatio`, so dragging visibly stretched the chart and releasing snapped it smaller. The on-screen output is now always the canvas; the SVG is kept in the DOM (hidden via `display: none`) and re-rendered on demand by Copy SVG / Copy PNG. No flash on drag start or release.
+- **3D root fits the preview area properly.** The CSS `max-width: 100% / max-height: 100% / aspect-ratio` combo failed under both-axis clamping (the aspect rule was overridden). The renderer now measures the preview area each render and writes explicit pixel width/height to the root for fit-contain. Memoized so dragging doesn't write inline styles every frame.
+- **Preview re-fits on modal/window resize.** A `ResizeObserver` on the preview area triggers a re-render when the available space changes, so the chart stays sized correctly without needing to interact with it.
+
 ## [3.14.0] - 2026-05-21
 
 ### Added

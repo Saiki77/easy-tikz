@@ -86,6 +86,8 @@ export class TikzModal extends Modal {
     private floatingActionsOverlay: HTMLElement | null = null;
     private xLabelInput: TextComponent | null = null;
     private yLabelInput: TextComponent | null = null;
+    private previewResizeObserver: ResizeObserver | null = null;
+    private lastObservedPreviewSize: { w: number; h: number } | null = null;
 
     private elevationSlider: SliderComponent | null = null;
     private azimuthSlider: SliderComponent | null = null;
@@ -167,6 +169,7 @@ export class TikzModal extends Modal {
         this.buildActionBar(rightPanel);
 
         this.setupSectionObserver();
+        this.setupPreviewResizeObserver();
         this.updatePreview();
     }
 
@@ -181,6 +184,11 @@ export class TikzModal extends Modal {
         if (this.onMouseUp) window.removeEventListener('mouseup', this.onMouseUp);
         this.onMouseMove = null;
         this.onMouseUp = null;
+        if (this.previewResizeObserver) {
+            this.previewResizeObserver.disconnect();
+            this.previewResizeObserver = null;
+        }
+        this.lastObservedPreviewSize = null;
         this.rangeInputs.clear();
         this.svg3dRenderer = null;
         this.currentRenderMode = null;
@@ -1507,6 +1515,30 @@ export class TikzModal extends Modal {
         if (this.zoom3DOverlay) this.zoom3DOverlay.style.display = show3D ? 'flex' : 'none';
     }
 
+    /**
+     * Watch the preview area for size changes (modal/window resize) and
+     * re-render so the 3D fit-contain sizing updates. Guarded against
+     * self-trigger from our own style writes by only firing when the
+     * dimensions moved by more than 0.5px since the last paint.
+     */
+    private setupPreviewResizeObserver() {
+        if (typeof ResizeObserver === 'undefined') return;
+        const observer = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry) return;
+            const w = entry.contentRect.width;
+            const h = entry.contentRect.height;
+            const last = this.lastObservedPreviewSize;
+            if (last && Math.abs(last.w - w) < 0.5 && Math.abs(last.h - h) < 0.5) {
+                return;
+            }
+            this.lastObservedPreviewSize = { w, h };
+            this.requestPreviewUpdate();
+        });
+        observer.observe(this.previewContainer);
+        this.previewResizeObserver = observer;
+    }
+
     private buildZoom3DOverlay() {
         const overlay = this.previewContainer.createDiv({ cls: 'tikz-3d-zoom-overlay' });
         overlay.setAttr('aria-hidden', 'true');
@@ -2084,9 +2116,10 @@ export class TikzModal extends Modal {
      * the background rect for transparency.
      */
     private prepareSvgForExport(): SVGElement | null {
-        // If we're showing the canvas (mid-rotation), force a fresh SVG render
-        // so the export captures the current scene.
-        this.ensureSvgMode();
+        // 3D's on-screen view is canvas-only; the off-screen SVG holds the
+        // exportable DOM and is refreshed here just before we read it.
+        // No-op in 2D (the live SVG is already in the DOM).
+        this.ensureSvgFresh();
         const svg = this.previewContainer.querySelector('svg');
         if (!svg) return null;
         const clone = svg.cloneNode(true) as SVGElement;
@@ -2233,11 +2266,17 @@ export class TikzModal extends Modal {
                 this.updatePreview('canvas');
             });
         }
+        // For 3D the on-screen view is canvas-only, so no trailing SVG
+        // render is needed (the SVG is rebuilt on demand for export by
+        // `ensureSvgFresh`). For 2D the live SVG is always shown, so the
+        // trailing render keeps it queryable.
         if (this.trailingSvgTimer) window.clearTimeout(this.trailingSvgTimer);
-        this.trailingSvgTimer = window.setTimeout(() => {
-            this.trailingSvgTimer = null;
-            this.updatePreview('svg');
-        }, 180) as unknown as number;
+        if (!this.is3D()) {
+            this.trailingSvgTimer = window.setTimeout(() => {
+                this.trailingSvgTimer = null;
+                this.updatePreview('svg');
+            }, 180) as unknown as number;
+        }
     }
 
     /**
@@ -2271,11 +2310,10 @@ export class TikzModal extends Modal {
             const config = this.settings.toRendererConfig();
             if (config.is3D) {
                 if (!this.svg3dRenderer) this.svg3dRenderer = new SVG3DRenderer();
-                if (mode === 'canvas') {
-                    this.svg3dRenderer.renderCanvas(config);
-                } else {
-                    this.svg3dRenderer.renderSvg(config);
-                }
+                // 3D is canvas-only on screen. The mode parameter is
+                // ignored here; the off-screen SVG is rendered on demand
+                // by `ensureSvgFresh` before Copy SVG / Copy PNG.
+                this.svg3dRenderer.renderCanvas(config);
                 const root = this.svg3dRenderer.getElement();
                 if (this.currentRenderMode !== '3d' || root.parentElement !== this.previewContainer) {
                     this.clearPreviewContent();
@@ -2297,11 +2335,12 @@ export class TikzModal extends Modal {
     }
 
     /**
-     * Force the 3D preview into SVG mode immediately. Used before Copy SVG /
-     * Copy PNG so the export sees a fresh, queryable SVG even if the user
-     * just released a drag (where we may still be showing the canvas).
+     * Render the 3D scene to the off-screen SVG synchronously, so the
+     * export path can clone a fresh SVG node. Called before Copy SVG /
+     * Copy PNG; no-op when the modal is in 2D mode (the 2D path always
+     * has a live SVG already mounted).
      */
-    private ensureSvgMode() {
+    private ensureSvgFresh() {
         if (!this.is3D() || !this.svg3dRenderer) return;
         if (this.trailingSvgTimer) {
             window.clearTimeout(this.trailingSvgTimer);

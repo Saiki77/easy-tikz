@@ -263,7 +263,10 @@
     max-height: 100%;
 }
 
-/* 3D renderer root: holds both SVG and canvas, swaps which is visible. */
+/* 3D renderer root: holds the visible canvas plus an off-screen SVG that
+   is rendered on demand for Copy SVG / Copy PNG. Explicit width/height
+   are written by the renderer per frame for fit-contain sizing; the
+   max-* rules are a safety net for the brief pre-layout window. */
 .tikz-3d-root {
     position: relative;
     border-radius: 6px;
@@ -273,7 +276,6 @@
     max-height: 100%;
 }
 
-.tikz-3d-root .tikz-3d-svg,
 .tikz-3d-root .tikz-3d-canvas {
     position: absolute;
     top: 0;
@@ -283,11 +285,10 @@
     border-radius: 6px;
 }
 
-.tikz-3d-root.tikz-3d-mode-svg .tikz-3d-canvas {
-    display: none;
-}
-
-.tikz-3d-root.tikz-3d-mode-canvas .tikz-3d-svg {
+/* The SVG is kept in the DOM (rendered fresh before Copy SVG / Copy PNG)
+   but never shown — the canvas is the single display path, so there is
+   no SVG-vs-canvas visual flash on drag start / release. */
+.tikz-3d-root .tikz-3d-svg {
     display: none;
 }
 
