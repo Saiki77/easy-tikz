@@ -404,9 +404,12 @@ export class SVGRenderer {
         } else {
             // Box: draw the four border lines explicitly so top and bottom
             // bars are unambiguous siblings of the left and right verticals.
+            // Uses --text-normal (full-contrast) rather than --text-muted so
+            // the top and bottom bars read clearly against the canvas in
+            // both light and dark themes.
             const borderAttrs = {
-                stroke: 'var(--text-muted)',
-                'stroke-width': '1.5',
+                stroke: 'var(--text-normal)',
+                'stroke-width': '2',
                 'stroke-linecap': 'square',
             } as Record<string, string>;
             // Bottom

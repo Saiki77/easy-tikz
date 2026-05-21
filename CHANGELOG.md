@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.13.2] - 2026-05-21
+
+### Added
+
+- **Floating action icons on the preview.** A small vertical strip of icons sits on the right edge of the preview, vertically centered: Fit (auto-fit axis ranges to the live functions/surfaces), Reset (restore default axis ranges + reset 3D zoom), and Toggle major grid. Surfaces the most-used commands without diving into the Axis or Grid tabs.
+
+### Changed
+
+- **Box axis borders are now drawn with `--text-normal` and stroke-width 2** (previously `--text-muted` at 1.5), so the top and bottom horizontal bars read clearly against the canvas in both light and dark themes.
+- **SVG preview now caps at `max-width: 100%` / `max-height: 100%`** so the chart always fits inside the preview area. Previously, a large preview width could push the bottom border and X-axis tick labels below the visible region.
+
 ## [3.13.1] - 2026-05-21
 
 ### Fixed

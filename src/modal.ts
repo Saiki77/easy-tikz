@@ -1,4 +1,4 @@
-import { Modal, Setting, SliderComponent, TextComponent, MarkdownView, Notice, App } from 'obsidian';
+import { Modal, Setting, SliderComponent, TextComponent, MarkdownView, Notice, App, setIcon } from 'obsidian';
 import { FunctionParameters, Function3DParameters } from './types';
 import { SettingsManager } from './settings';
 import { SVGRenderer } from './renderer';
@@ -83,6 +83,7 @@ export class TikzModal extends Modal {
     private functionsTabContent: HTMLElement;
     private leftPanel: HTMLElement;
     private zoom3DOverlay: HTMLElement | null = null;
+    private floatingActionsOverlay: HTMLElement | null = null;
 
     private elevationSlider: SliderComponent | null = null;
     private azimuthSlider: SliderComponent | null = null;
@@ -158,6 +159,7 @@ export class TikzModal extends Modal {
         this.previewContainer.setAttr('role', 'img');
         this.previewContainer.setAttr('aria-label', 'Graph preview. Use arrow keys in 3D mode to rotate.');
         this.buildZoom3DOverlay();
+        this.buildFloatingActions();
         this.setupMouseDragRotation();
         this.setupKeyboardRotation();
         this.buildActionBar(rightPanel);
@@ -1536,6 +1538,58 @@ export class TikzModal extends Modal {
         const next = Math.max(0.3, Math.min(4, current * factor));
         this.settings.setValue('zoom3D', next);
         this.requestPreviewUpdateFast();
+    }
+
+    /**
+     * Vertical strip of floating action icons on the right edge of the
+     * preview area. Surfaces commands that would otherwise be buried in
+     * the settings tabs (auto-fit, reset axes, toggle major grid).
+     */
+    private buildFloatingActions() {
+        const overlay = this.previewContainer.createDiv({ cls: 'tikz-floating-actions' });
+        overlay.setAttr('aria-hidden', 'false');
+        overlay.addEventListener('mousedown', (e) => e.stopPropagation());
+
+        const addAction = (icon: string, label: string, onClick: () => void) => {
+            const btn = overlay.createEl('button', { cls: 'tikz-floating-btn' });
+            btn.setAttr('type', 'button');
+            btn.setAttr('aria-label', label);
+            btn.setAttr('title', label);
+            setIcon(btn, icon);
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                onClick();
+            };
+            return btn;
+        };
+
+        addAction('maximize-2', 'Fit to functions', () => this.autoFitRanges());
+        addAction('rotate-ccw', 'Reset axis ranges', () => this.resetAxisRanges());
+        addAction('grid-3x3', 'Toggle major grid', () => this.toggleMajorGrid());
+
+        this.floatingActionsOverlay = overlay;
+    }
+
+    private resetAxisRanges() {
+        this.settings.setValue('xmin', '-0.5');
+        this.settings.setValue('xmax', '10');
+        this.settings.setValue('ymin', '-0.5');
+        this.settings.setValue('ymax', '5');
+        if (this.is3D()) {
+            this.settings.setValue('zmin', '-5');
+            this.settings.setValue('zmax', '5');
+            this.settings.setValue('zoom3D', 1);
+        }
+        this.refreshRangeInputs();
+        this.requestPreviewUpdate();
+        new Notice('Axis ranges reset.');
+    }
+
+    private toggleMajorGrid() {
+        const current = !!this.settings.getValue('showLargeGrid');
+        this.settings.setValue('showLargeGrid', !current);
+        this.requestPreviewUpdate();
+        new Notice(current ? 'Major grid off.' : 'Major grid on.');
     }
 
     private setupMouseDragRotation() {
