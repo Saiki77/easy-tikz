@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.18.1] - 2026-05-21
+
+### Fixed
+
+- **2D drag really is 1:1 now.** The per-frame `applyAxisRange` math chained viewBox / plotW / range conversions every move event; even small float drift compounded into the felt "too fast" pan that lingered at every sensitivity setting. Replaced with a `transform: translate(dx * sensitivity, dy * sensitivity)` on the SVG element — provably 1:1 with the pointer because it IS the pointer delta. The axis range commits once on mouseup, then the SVG re-renders with the new range and the transform clears. Side benefit: drag is smoother (no ~60 SVG rebuilds per second) and the GPU-composited `will-change: transform` hint keeps it that way on heavy plots.
+
 ## [3.18.0] - 2026-05-21
 
 ### Added

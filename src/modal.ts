@@ -121,6 +121,18 @@ export class TikzModal extends Modal {
     private dragStartXmax = 0;
     private dragStartYmin = 0;
     private dragStartYmax = 0;
+    /**
+     * 2D drag mode: the SVG element captured on mousedown plus the
+     * latest pointer delta. During mousemove we just apply a CSS
+     * `translate` to the SVG — provably 1:1 with the pointer because
+     * it IS the pointer delta — and on mouseup commit the new axis
+     * range exactly once. Skipping `applyAxisRange` per-frame avoids
+     * the cascading scale/viewBox/plotW math (which was the source
+     * of the felt over-sensitivity) and the per-frame re-render.
+     */
+    private dragSvg: SVGElement | null = null;
+    private dragLastDx = 0;
+    private dragLastDy = 0;
 
     private rangeInputs: Map<string, TextComponent> = new Map();
 
@@ -2120,6 +2132,15 @@ export class TikzModal extends Modal {
                 this.dragStartXmax = parseFloat(this.settings.getValue('xmax')) || 10;
                 this.dragStartYmin = parseFloat(this.settings.getValue('ymin')) || -0.5;
                 this.dragStartYmax = parseFloat(this.settings.getValue('ymax')) || 5;
+                // Capture the SVG element we'll translate during the drag.
+                // null if no SVG is mounted yet — onMouseMove guards against that.
+                this.dragSvg = this.previewContainer.querySelector('svg') as SVGElement | null;
+                this.dragLastDx = 0;
+                this.dragLastDy = 0;
+                if (this.dragSvg) {
+                    // Hint the compositor so the per-frame transform is GPU-accelerated.
+                    (this.dragSvg as unknown as HTMLElement).style.willChange = 'transform';
+                }
             }
 
             el.addClass('tikz-preview-dragging');
@@ -2149,35 +2170,19 @@ export class TikzModal extends Modal {
                 newElevation = Math.max(0, Math.min(90, newElevation));
                 this.applyRotation(Math.round(newAzimuth), Math.round(newElevation));
             } else {
-                const plot = this.getPlotMetricsFromSvg();
-                if (!plot) return;
-                // 2D pan math:
-                //  - dxVb/dyVb convert mouse pixels into the SVG's viewBox
-                //    units so the rate stays consistent if the SVG was
-                //    scaled by CSS (smaller display = bigger conversion).
-                //  - dividing by plotW/plotH and multiplying by the axis
-                //    range remaps from viewBox units into math units, which
-                //    means the pan stays smooth as the user zooms in (the
-                //    pan is "related to the graph size" naturally — no
-                //    fixed step, the math unit per pixel shrinks with the
-                //    visible range).
-                //  - at sensitivity 1.0 the conversions cancel and the
-                //    chart pans by exactly the same number of screen pixels
-                //    as the mouse moved (direct manipulation). Lower the
-                //    multiplier to dampen the drag for finer control.
+                // 2D drag: translate the SVG element by the exact pointer
+                // delta (optionally scaled by the user's sensitivity).
+                // This is provably 1:1 with the pointer — there's no
+                // viewBox / plotW / range math in the loop to drift. The
+                // actual axis range is committed once on mouseup.
                 const sensitivity = this.plugin?.data?.dragSensitivity2D ?? 1.0;
-                const dxVb = dx * plot.scale;
-                const dyVb = dy * plot.scale;
-                const startXrange = this.dragStartXmax - this.dragStartXmin;
-                const startYrange = this.dragStartYmax - this.dragStartYmin;
-                const dxMath = (-dxVb / plot.plotW) * startXrange * sensitivity;
-                const dyMath = (dyVb / plot.plotH) * startYrange * sensitivity;
-                this.applyAxisRange(
-                    this.dragStartXmin + dxMath,
-                    this.dragStartXmax + dxMath,
-                    this.dragStartYmin + dyMath,
-                    this.dragStartYmax + dyMath
-                );
+                const tx = dx * sensitivity;
+                const ty = dy * sensitivity;
+                this.dragLastDx = tx;
+                this.dragLastDy = ty;
+                if (this.dragSvg) {
+                    (this.dragSvg as unknown as HTMLElement).style.transform = `translate(${tx}px, ${ty}px)`;
+                }
             }
         };
 
@@ -2189,6 +2194,38 @@ export class TikzModal extends Modal {
             if (this.isDragging) {
                 this.isDragging = false;
                 el.removeClass('tikz-preview-dragging');
+                if (!this.is3D()) {
+                    // Commit the drag: convert the final pixel delta into
+                    // a math-axis shift, apply it once, and clear the
+                    // transform — the re-render replaces the SVG anyway,
+                    // but resetting style guards against a brief flash
+                    // if the same element is reused.
+                    const plot = this.getPlotMetricsFromSvg();
+                    const dx = this.dragLastDx;
+                    const dy = this.dragLastDy;
+                    if (plot && (dx !== 0 || dy !== 0)) {
+                        const dxVb = dx * plot.scale;
+                        const dyVb = dy * plot.scale;
+                        const startXrange = this.dragStartXmax - this.dragStartXmin;
+                        const startYrange = this.dragStartYmax - this.dragStartYmin;
+                        const dxMath = (-dxVb / plot.plotW) * startXrange;
+                        const dyMath = (dyVb / plot.plotH) * startYrange;
+                        this.applyAxisRange(
+                            this.dragStartXmin + dxMath,
+                            this.dragStartXmax + dxMath,
+                            this.dragStartYmin + dyMath,
+                            this.dragStartYmax + dyMath
+                        );
+                    }
+                    if (this.dragSvg) {
+                        const styleEl = this.dragSvg as unknown as HTMLElement;
+                        styleEl.style.transform = '';
+                        styleEl.style.willChange = '';
+                    }
+                    this.dragSvg = null;
+                    this.dragLastDx = 0;
+                    this.dragLastDy = 0;
+                }
             }
         };
 
