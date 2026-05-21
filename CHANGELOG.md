@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.17.0] - 2026-05-21
+
+### Added
+
+- **In-note hover controls on rendered charts.** Hover (or focus) a rendered `easy-tikz` chart and overlay controls fade in:
+  - **Size slider** along the bottom — drags the chart width, height follows the chart's aspect ratio. Live during drag, persisted to the source block on release (so dragging stays smooth — only one re-render per gesture).
+  - **Align buttons** on the left (left / center / right) — sets the chart's block alignment in the note. One click, one save, one re-render.
+- Both options live next to the rest of the plot settings inside the `easy-tikz` JSON (`displayWidth`, `displayAlign`), so they survive editing the chart from the modal and travel with the note.
+
 ## [3.16.1] - 2026-05-21
 
 ### Fixed

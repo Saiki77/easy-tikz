@@ -1,4 +1,4 @@
-import { App, MarkdownPostProcessorContext, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import { App, MarkdownPostProcessorContext, Plugin, PluginSettingTab, Setting, TFile, setIcon } from 'obsidian';
 import { TikzModal } from './src/modal';
 import { SettingsManager } from './src/settings';
 import { SVGRenderer } from './src/renderer';
@@ -84,16 +84,26 @@ export default class EasyTikzPlugin extends Plugin {
         wrapper.setAttr('tabindex', '0');
         wrapper.setAttr('aria-label', 'Easy TikZ chart. Click to edit.');
 
+        // Persisted display options (live next to the chart settings inside the JSON).
+        const persistedAlign = (data.displayAlign as 'left' | 'center' | 'right') || 'center';
+        const persistedWidth = typeof data.displayWidth === 'number' ? (data.displayWidth as number) : null;
+        this.applyAlign(wrapper, persistedAlign);
+
+        let aspect = 1;
+        let containerWidth = el.clientWidth || 700;
+
         try {
             const manager = SettingsManager.fromJSON(data);
             const config = manager.toRendererConfig();
+            aspect = (config.width / config.height) || 1;
             // Size the wrapper explicitly so the renderer has a real
-            // parent to fit-contain into. The markdown container's
-            // clientWidth is reliable; we cap at config.width so very
-            // wide notes don't blow up tiny plots.
-            const containerWidth = (el.clientWidth || 700);
-            const targetW = Math.max(200, Math.min(containerWidth, config.width));
-            const aspect = config.width / config.height || 1;
+            // parent to fit-contain into. If the user has saved a custom
+            // displayWidth use it (clamped to the container width);
+            // otherwise default to fit-contain inside the container,
+            // capped at config.width.
+            containerWidth = el.clientWidth || 700;
+            const naturalCap = Math.min(containerWidth, config.width);
+            const targetW = Math.max(200, Math.min(containerWidth, persistedWidth ?? naturalCap));
             const targetH = Math.max(150, targetW / aspect);
             wrapper.style.width = targetW + 'px';
             wrapper.style.height = targetH + 'px';
@@ -117,6 +127,10 @@ export default class EasyTikzPlugin extends Plugin {
             return;
         }
 
+        // Hover controls: align buttons on the left, size slider at the bottom.
+        const fenceTag: 'easy-tikz' | 'tikz' = fromTikzTag ? 'tikz' : 'easy-tikz';
+        this.buildHoverControls(wrapper, data, ctx, fenceTag, source, aspect, containerWidth);
+
         // Click → open the modal pre-filled with this block's settings.
         // We store the raw source so the modal can locate and replace
         // the block by content match (more robust than line numbers
@@ -124,7 +138,6 @@ export default class EasyTikzPlugin extends Plugin {
         const openEditor = () => {
             const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
             const tfile = file instanceof TFile ? file : null;
-            const fenceTag = fromTikzTag ? 'tikz' : 'easy-tikz';
             const originalBlockText = '```' + fenceTag + '\n' + source.replace(/\s+$/, '') + '\n```';
             new TikzModal(this.app, this, {
                 data,
@@ -133,13 +146,117 @@ export default class EasyTikzPlugin extends Plugin {
                 fenceTag,
             }).open();
         };
-        wrapper.addEventListener('click', openEditor);
+        wrapper.addEventListener('click', (e) => {
+            // Clicks on overlay controls bubble here too — they call
+            // stopPropagation so this only fires for clicks on the chart.
+            openEditor();
+        });
         wrapper.addEventListener('keydown', (e: KeyboardEvent) => {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 openEditor();
             }
         });
+    }
+
+    private applyAlign(wrapper: HTMLElement, align: 'left' | 'center' | 'right') {
+        wrapper.removeClass('align-left');
+        wrapper.removeClass('align-center');
+        wrapper.removeClass('align-right');
+        wrapper.addClass('align-' + align);
+    }
+
+    /**
+     * Add the floating overlay controls — vertical align buttons on the
+     * left, horizontal size slider along the bottom. Both fade in on
+     * hover via CSS. The slider updates wrapper CSS live during input
+     * for smooth dragging, and writes the new `displayWidth` back to
+     * the source block on `change` (release) so only one re-render
+     * fires per drag. Align clicks save immediately — one click, one
+     * re-render.
+     */
+    private buildHoverControls(
+        wrapper: HTMLElement,
+        data: Record<string, unknown>,
+        ctx: MarkdownPostProcessorContext,
+        fenceTag: 'easy-tikz' | 'tikz',
+        source: string,
+        aspect: number,
+        containerWidth: number
+    ) {
+        const alignBar = wrapper.createDiv({ cls: 'tikz-rendered-controls tikz-rendered-align' });
+        const makeAlignBtn = (key: 'left' | 'center' | 'right', icon: string, label: string) => {
+            const btn = alignBar.createEl('button', { cls: 'tikz-rendered-btn' });
+            btn.setAttr('type', 'button');
+            btn.setAttr('aria-label', label);
+            btn.setAttr('title', label);
+            setIcon(btn, icon);
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                this.applyAlign(wrapper, key);
+                await this.persistDisplayPatch(data, ctx, fenceTag, source, { displayAlign: key });
+            });
+        };
+        makeAlignBtn('left', 'align-left', 'Align left');
+        makeAlignBtn('center', 'align-center', 'Center');
+        makeAlignBtn('right', 'align-right', 'Align right');
+
+        const sliderBar = wrapper.createDiv({ cls: 'tikz-rendered-controls tikz-rendered-size' });
+        const slider = sliderBar.createEl('input', {
+            cls: 'tikz-rendered-slider',
+        }) as HTMLInputElement;
+        slider.type = 'range';
+        slider.min = '200';
+        slider.max = String(Math.max(400, Math.min(2000, Math.round(containerWidth))));
+        slider.step = '10';
+        const initialW = parseFloat(wrapper.style.width) || 700;
+        slider.value = String(Math.round(initialW));
+        slider.setAttr('aria-label', 'Chart width');
+        slider.setAttr('title', 'Width — drag to resize, releases save to the note');
+
+        const stop = (e: Event) => e.stopPropagation();
+        sliderBar.addEventListener('click', stop);
+        sliderBar.addEventListener('mousedown', stop);
+        slider.addEventListener('click', stop);
+        slider.addEventListener('mousedown', stop);
+
+        slider.addEventListener('input', () => {
+            const w = parseInt(slider.value, 10);
+            wrapper.style.width = w + 'px';
+            wrapper.style.height = w / aspect + 'px';
+        });
+        slider.addEventListener('change', async () => {
+            const w = parseInt(slider.value, 10);
+            await this.persistDisplayPatch(data, ctx, fenceTag, source, { displayWidth: w });
+        });
+    }
+
+    /**
+     * Merge a partial display patch into the block's JSON and write
+     * the file. The markdown post-processor will re-fire on the next
+     * vault tick with the new source — the chart, align class, and
+     * slider position all rebuild from the persisted JSON.
+     */
+    private async persistDisplayPatch(
+        data: Record<string, unknown>,
+        ctx: MarkdownPostProcessorContext,
+        fenceTag: 'easy-tikz' | 'tikz',
+        source: string,
+        patch: Partial<{ displayWidth: number; displayAlign: 'left' | 'center' | 'right' }>
+    ) {
+        const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
+        if (!(file instanceof TFile)) return;
+        const merged = { ...data, ...patch };
+        const trimmedSource = source.replace(/\s+$/, '');
+        const original = '```' + fenceTag + '\n' + trimmedSource + '\n```';
+        const updated = '```' + fenceTag + '\n' + JSON.stringify(merged, null, 2) + '\n```';
+        try {
+            const content = await this.app.vault.read(file);
+            if (!content.includes(original)) return;
+            await this.app.vault.modify(file, content.replace(original, updated));
+        } catch {
+            // Vault read/write race — silently ignore; user can retry.
+        }
     }
 }
 

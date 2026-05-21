@@ -25,6 +25,96 @@
     height: auto;
 }
 
+/* Block-level alignment of the rendered chart inside its markdown
+   container. The chart itself is display: block with an explicit
+   width, so margin: auto handles centering / right-align. */
+.tikz-rendered-chart.align-left {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+.tikz-rendered-chart.align-center {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.tikz-rendered-chart.align-right {
+    margin-left: auto;
+    margin-right: 0;
+}
+
+/* Hover overlays: align buttons (left) + size slider (bottom). Hidden
+   until the user hovers (or focuses) the chart so the static reading
+   experience stays clean. */
+.tikz-rendered-controls {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+    z-index: 5;
+}
+
+.tikz-rendered-chart:hover .tikz-rendered-controls,
+.tikz-rendered-chart:focus-within .tikz-rendered-controls {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.tikz-rendered-align {
+    top: 50%;
+    left: 8px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tikz-rendered-size {
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(70%, 320px);
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+    border-radius: 999px;
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--background-modifier-border) 60%, transparent);
+}
+
+.tikz-rendered-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--background-modifier-border) 80%, transparent);
+    background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+    color: var(--text-normal);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--background-modifier-border) 50%, transparent);
+    transition: background 0.1s ease, color 0.1s ease;
+}
+
+.tikz-rendered-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--interactive-accent);
+}
+
+.tikz-rendered-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.tikz-rendered-slider {
+    flex: 1;
+    width: 100%;
+    cursor: ew-resize;
+    accent-color: var(--interactive-accent);
+}
+
 .tikz-block-error {
     margin: 8px 0;
     padding: 10px 12px;
