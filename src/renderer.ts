@@ -1,4 +1,4 @@
-import { RendererConfig } from './types';
+import { RendererConfig, Tool, FunctionParameters, ArrowStyle } from './types';
 import { MathHelper } from './math';
 import { COLOR_MAP, THICKNESS_MAP } from './colors';
 import { niceInterval, formatTick, stripLatex } from './util';
@@ -107,6 +107,7 @@ export class SVGRenderer {
         this.drawGrid(svg);
         this.drawAxes(svg);
         this.drawFunctions(svg);
+        this.drawTools(svg);
         this.drawAnnotations(svg);
         this.drawTitle(svg);
 
@@ -830,6 +831,418 @@ export class SVGRenderer {
         });
 
         svg.appendChild(legendGroup);
+    }
+
+    /**
+     * Render the tool list — composable overlays that either reference
+     * existing functions (areaBetween, intersection) or define
+     * stand-alone shapes / reference lines. Each tool dispatches by
+     * `type`; unknown / 3D-only types are skipped silently.
+     */
+    private drawTools(svg: SVGElement) {
+        const tools = (this.config.tools as Tool[] | undefined) || [];
+        if (!tools.length) return;
+        const group = this.el('g', { class: 'tikz-tools' });
+        const funcs = this.config.functions || [];
+        const byName = new Map<string, { func: FunctionParameters; idx: number }>();
+        funcs.forEach((f, idx) => {
+            const n = (f.name && f.name.trim()) || `f${idx + 1}`;
+            byName.set(n, { func: f, idx });
+        });
+
+        for (const tool of tools) {
+            switch (tool.type) {
+                case 'areaBetween':
+                    this.drawAreaBetween(group, tool, byName);
+                    break;
+                case 'intersection':
+                    this.drawIntersection(group, tool, byName);
+                    break;
+                case 'verticalLine':
+                    this.drawVerticalLine(group, tool);
+                    break;
+                case 'horizontalLine':
+                    this.drawHorizontalLine(group, tool);
+                    break;
+                case 'rectangle':
+                    this.drawRectangleTool(group, tool);
+                    break;
+                case 'circle':
+                    this.drawCircleTool(group, tool);
+                    break;
+                case 'segment':
+                    this.drawSegment(group, tool);
+                    break;
+                case 'brace':
+                    this.drawBrace(group, tool);
+                    break;
+                default:
+                    // 3D-only tools (plane3D / point3D / segment3D) ignored in 2D.
+                    break;
+            }
+        }
+        svg.appendChild(group);
+    }
+
+    private parseCoord(v: string, fallback: number): number {
+        if (v === undefined || v === null) return fallback;
+        const s = String(v).trim();
+        if (s === '') return fallback;
+        const direct = parseFloat(s);
+        if (Number.isFinite(direct) && /^[-+]?\d/.test(s)) return direct;
+        try {
+            return MathHelper.evaluateExpression(s, 0);
+        } catch {
+            return fallback;
+        }
+    }
+
+    private drawAreaBetween(
+        group: SVGElement,
+        tool: Extract<Tool, { type: 'areaBetween' }>,
+        byName: Map<string, { func: FunctionParameters; idx: number }>
+    ) {
+        const a = byName.get(tool.func1Name);
+        const b = byName.get(tool.func2Name);
+        if (!a || !b) return;
+        let lo: number;
+        let hi: number;
+        try {
+            const [a1, a2] = MathHelper.parseDomain(a.func.domain);
+            const [b1, b2] = MathHelper.parseDomain(b.func.domain);
+            lo = Math.max(a1, b1);
+            hi = Math.min(a2, b2);
+            if (tool.domain && tool.domain.trim()) {
+                const [t1, t2] = MathHelper.parseDomain(tool.domain);
+                lo = Math.max(lo, t1);
+                hi = Math.min(hi, t2);
+            }
+        } catch {
+            return;
+        }
+        if (!(hi > lo)) return;
+
+        let fA: (x: number) => number;
+        let fB: (x: number) => number;
+        try {
+            fA = MathHelper.compile1D(a.func.expression);
+            fB = MathHelper.compile1D(b.func.expression);
+        } catch {
+            return;
+        }
+
+        const N = 300;
+        const step = (hi - lo) / N;
+        const cssColor = COLOR_MAP[tool.color] || tool.color;
+        const opacity = typeof tool.fillOpacity === 'number' ? tool.fillOpacity : 0.3;
+        const patternUrl = this.getOrCreatePattern(tool.fillPattern || 'solid', cssColor);
+        const yClamp = (this.config.ymax - this.config.ymin) * 10;
+
+        const topPts: { x: number; y: number }[] = [];
+        const botPts: { x: number; y: number }[] = [];
+        for (let i = 0; i <= N; i++) {
+            const x = lo + i * step;
+            const ya = fA(x);
+            const yb = fB(x);
+            if (!Number.isFinite(ya) || !Number.isFinite(yb)) continue;
+            if (Math.abs(ya) > yClamp || Math.abs(yb) > yClamp) continue;
+            topPts.push({ x, y: Math.max(ya, yb) });
+            botPts.push({ x, y: Math.min(ya, yb) });
+        }
+        if (topPts.length < 2) return;
+
+        const path: string[] = [];
+        for (let i = 0; i < topPts.length; i++) {
+            const sx = this.toScreenX(topPts[i].x);
+            const sy = this.toScreenY(topPts[i].y);
+            path.push(`${i === 0 ? 'M' : 'L'}${sx.toFixed(2)},${sy.toFixed(2)}`);
+        }
+        for (let i = botPts.length - 1; i >= 0; i--) {
+            const sx = this.toScreenX(botPts[i].x);
+            const sy = this.toScreenY(botPts[i].y);
+            path.push(`L${sx.toFixed(2)},${sy.toFixed(2)}`);
+        }
+        path.push('Z');
+        group.appendChild(
+            this.el('path', {
+                d: path.join(' '),
+                fill: patternUrl || cssColor,
+                'fill-opacity': String(opacity),
+                stroke: 'none',
+                'clip-path': 'url(#plot-clip)',
+            })
+        );
+    }
+
+    private drawIntersection(
+        group: SVGElement,
+        tool: Extract<Tool, { type: 'intersection' }>,
+        byName: Map<string, { func: FunctionParameters; idx: number }>
+    ) {
+        const a = byName.get(tool.func1Name);
+        const b = byName.get(tool.func2Name);
+        if (!a || !b) return;
+        let lo: number;
+        let hi: number;
+        try {
+            const [a1, a2] = MathHelper.parseDomain(a.func.domain);
+            const [b1, b2] = MathHelper.parseDomain(b.func.domain);
+            lo = Math.max(a1, b1);
+            hi = Math.min(a2, b2);
+        } catch {
+            return;
+        }
+        if (!(hi > lo)) return;
+        let roots: { x: number; y: number }[];
+        try {
+            roots = MathHelper.findIntersections(a.func.expression, b.func.expression, [lo, hi]);
+        } catch {
+            return;
+        }
+        const cssColor = COLOR_MAP[tool.color] || tool.color;
+        for (const r of roots) {
+            if (
+                r.x < this.config.xmin || r.x > this.config.xmax ||
+                r.y < this.config.ymin || r.y > this.config.ymax
+            ) {
+                continue;
+            }
+            const sx = this.toScreenX(r.x);
+            const sy = this.toScreenY(r.y);
+            group.appendChild(
+                this.el('circle', {
+                    cx: String(sx.toFixed(2)),
+                    cy: String(sy.toFixed(2)),
+                    r: '4',
+                    fill: cssColor,
+                    stroke: 'var(--background-primary)',
+                    'stroke-width': '1.5',
+                })
+            );
+            if (tool.showLabels) {
+                const label = this.el('text', {
+                    x: String((sx + 8).toFixed(2)),
+                    y: String((sy - 6).toFixed(2)),
+                    fill: cssColor,
+                    'font-size': '11',
+                    'font-family': 'var(--font-monospace)',
+                });
+                label.textContent = `(${r.x.toFixed(2)}, ${r.y.toFixed(2)})`;
+                group.appendChild(label);
+            }
+        }
+    }
+
+    private drawVerticalLine(group: SVGElement, tool: Extract<Tool, { type: 'verticalLine' }>) {
+        const x = this.parseCoord(tool.x, 0);
+        if (x < this.config.xmin || x > this.config.xmax) return;
+        const sx = this.toScreenX(x);
+        const cssColor = COLOR_MAP[tool.color] || tool.color;
+        const sw = THICKNESS_MAP[tool.thickness] || 1.5;
+        const attrs: Record<string, string> = {
+            x1: String(sx),
+            y1: String(PADDING_TOP),
+            x2: String(sx),
+            y2: String(this.config.height - PADDING_BOTTOM),
+            stroke: cssColor,
+            'stroke-width': String(sw),
+            'stroke-linecap': 'round',
+        };
+        if (tool.dashed) attrs['stroke-dasharray'] = '6 4';
+        group.appendChild(this.el('line', attrs));
+        if (tool.label) {
+            const labelEl = this.el('text', {
+                x: String(sx + 6),
+                y: String(PADDING_TOP + 12),
+                fill: cssColor,
+                'font-size': '12',
+                'font-weight': '500',
+            });
+            labelEl.textContent = tool.label;
+            group.appendChild(labelEl);
+        }
+    }
+
+    private drawHorizontalLine(group: SVGElement, tool: Extract<Tool, { type: 'horizontalLine' }>) {
+        const y = this.parseCoord(tool.y, 0);
+        if (y < this.config.ymin || y > this.config.ymax) return;
+        const sy = this.toScreenY(y);
+        const cssColor = COLOR_MAP[tool.color] || tool.color;
+        const sw = THICKNESS_MAP[tool.thickness] || 1.5;
+        const attrs: Record<string, string> = {
+            x1: String(PADDING_LEFT),
+            y1: String(sy),
+            x2: String(this.config.width - PADDING_RIGHT),
+            y2: String(sy),
+            stroke: cssColor,
+            'stroke-width': String(sw),
+            'stroke-linecap': 'round',
+        };
+        if (tool.dashed) attrs['stroke-dasharray'] = '6 4';
+        group.appendChild(this.el('line', attrs));
+        if (tool.label) {
+            const labelEl = this.el('text', {
+                x: String(this.config.width - PADDING_RIGHT - 6),
+                y: String(sy - 6),
+                'text-anchor': 'end',
+                fill: cssColor,
+                'font-size': '12',
+                'font-weight': '500',
+            });
+            labelEl.textContent = tool.label;
+            group.appendChild(labelEl);
+        }
+    }
+
+    private drawRectangleTool(group: SVGElement, tool: Extract<Tool, { type: 'rectangle' }>) {
+        const x1 = this.parseCoord(tool.x1, 0);
+        const y1 = this.parseCoord(tool.y1, 0);
+        const x2 = this.parseCoord(tool.x2, 0);
+        const y2 = this.parseCoord(tool.y2, 0);
+        const sx1 = this.toScreenX(Math.min(x1, x2));
+        const sx2 = this.toScreenX(Math.max(x1, x2));
+        const sy1 = this.toScreenY(Math.max(y1, y2));
+        const sy2 = this.toScreenY(Math.min(y1, y2));
+        const cssColor = COLOR_MAP[tool.color] || tool.color;
+        const sw = THICKNESS_MAP[tool.thickness] || 1.5;
+        const attrs: Record<string, string> = {
+            x: String(sx1.toFixed(2)),
+            y: String(sy1.toFixed(2)),
+            width: String((sx2 - sx1).toFixed(2)),
+            height: String((sy2 - sy1).toFixed(2)),
+            stroke: cssColor,
+            'stroke-width': String(sw),
+        };
+        if (tool.fill) {
+            const opacity = typeof tool.fillOpacity === 'number' ? tool.fillOpacity : 0.2;
+            const patternUrl = this.getOrCreatePattern(tool.fillPattern || 'solid', cssColor);
+            attrs.fill = patternUrl || cssColor;
+            attrs['fill-opacity'] = String(opacity);
+        } else {
+            attrs.fill = 'none';
+        }
+        group.appendChild(this.el('rect', attrs));
+    }
+
+    private drawCircleTool(group: SVGElement, tool: Extract<Tool, { type: 'circle' }>) {
+        const cx = this.parseCoord(tool.cx, 0);
+        const cy = this.parseCoord(tool.cy, 0);
+        const r = this.parseCoord(tool.r, 1);
+        if (!(r > 0)) return;
+        // Build the circle as a sampled polygon in math space so the
+        // radius scales correctly with the axes (SVG's `circle` would
+        // give a screen-radius, ignoring data scaling).
+        const N = 96;
+        const pts: string[] = [];
+        for (let i = 0; i <= N; i++) {
+            const a = (i / N) * Math.PI * 2;
+            const x = cx + r * Math.cos(a);
+            const y = cy + r * Math.sin(a);
+            const sx = this.toScreenX(x);
+            const sy = this.toScreenY(y);
+            pts.push(`${i === 0 ? 'M' : 'L'}${sx.toFixed(2)},${sy.toFixed(2)}`);
+        }
+        pts.push('Z');
+        const cssColor = COLOR_MAP[tool.color] || tool.color;
+        const sw = THICKNESS_MAP[tool.thickness] || 1.5;
+        const attrs: Record<string, string> = {
+            d: pts.join(' '),
+            stroke: cssColor,
+            'stroke-width': String(sw),
+        };
+        if (tool.fill) {
+            const opacity = typeof tool.fillOpacity === 'number' ? tool.fillOpacity : 0.2;
+            const patternUrl = this.getOrCreatePattern(tool.fillPattern || 'solid', cssColor);
+            attrs.fill = patternUrl || cssColor;
+            attrs['fill-opacity'] = String(opacity);
+        } else {
+            attrs.fill = 'none';
+        }
+        group.appendChild(this.el('path', attrs));
+    }
+
+    private drawSegment(group: SVGElement, tool: Extract<Tool, { type: 'segment' }>) {
+        const x1 = this.parseCoord(tool.x1, 0);
+        const y1 = this.parseCoord(tool.y1, 0);
+        const x2 = this.parseCoord(tool.x2, 0);
+        const y2 = this.parseCoord(tool.y2, 0);
+        const sx1 = this.toScreenX(x1);
+        const sy1 = this.toScreenY(y1);
+        const sx2 = this.toScreenX(x2);
+        const sy2 = this.toScreenY(y2);
+        const cssColor = COLOR_MAP[tool.color] || tool.color;
+        const sw = THICKNESS_MAP[tool.thickness] || 1.5;
+        const attrs: Record<string, string> = {
+            x1: String(sx1.toFixed(2)),
+            y1: String(sy1.toFixed(2)),
+            x2: String(sx2.toFixed(2)),
+            y2: String(sy2.toFixed(2)),
+            stroke: cssColor,
+            'stroke-width': String(sw),
+            'stroke-linecap': 'round',
+        };
+        if (tool.dashed) attrs['stroke-dasharray'] = '6 4';
+        const arrows = tool.arrow as ArrowStyle;
+        if (arrows === 'forward' || arrows === 'both') attrs['marker-end'] = 'url(#arrowhead)';
+        if (arrows === 'backward' || arrows === 'both') attrs['marker-start'] = 'url(#arrowhead)';
+        group.appendChild(this.el('line', attrs));
+    }
+
+    private drawBrace(group: SVGElement, tool: Extract<Tool, { type: 'brace' }>) {
+        const x1 = this.parseCoord(tool.x1, 0);
+        const y1 = this.parseCoord(tool.y1, 0);
+        const x2 = this.parseCoord(tool.x2, 0);
+        const y2 = this.parseCoord(tool.y2, 0);
+        const sx1 = this.toScreenX(x1);
+        const sy1 = this.toScreenY(y1);
+        const sx2 = this.toScreenX(x2);
+        const sy2 = this.toScreenY(y2);
+        // Compute a perpendicular offset for the bracket "opening".
+        const dx = sx2 - sx1;
+        const dy = sy2 - sy1;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        const AMP = 10; // bracket depth in screen pixels
+        const NOTCH = 6;
+        const mx = (sx1 + sx2) / 2;
+        const my = (sy1 + sy2) / 2;
+        const tipX = mx + nx * (AMP + NOTCH);
+        const tipY = my + ny * (AMP + NOTCH);
+        const p1ax = sx1 + nx * AMP;
+        const p1ay = sy1 + ny * AMP;
+        const p2ax = sx2 + nx * AMP;
+        const p2ay = sy2 + ny * AMP;
+        const cssColor = COLOR_MAP[tool.color] || tool.color;
+        const d = [
+            `M${sx1.toFixed(2)},${sy1.toFixed(2)}`,
+            `Q${p1ax.toFixed(2)},${p1ay.toFixed(2)} ${mx.toFixed(2)},${my.toFixed(2)}`,
+            `Q${(mx + nx * NOTCH).toFixed(2)},${(my + ny * NOTCH).toFixed(2)} ${tipX.toFixed(2)},${tipY.toFixed(2)}`,
+            `Q${(mx + nx * NOTCH).toFixed(2)},${(my + ny * NOTCH).toFixed(2)} ${mx.toFixed(2)},${my.toFixed(2)}`,
+            `Q${p2ax.toFixed(2)},${p2ay.toFixed(2)} ${sx2.toFixed(2)},${sy2.toFixed(2)}`,
+        ].join(' ');
+        group.appendChild(
+            this.el('path', {
+                d,
+                fill: 'none',
+                stroke: cssColor,
+                'stroke-width': '1.5',
+                'stroke-linecap': 'round',
+                'stroke-linejoin': 'round',
+            })
+        );
+        if (tool.label) {
+            const labelEl = this.el('text', {
+                x: String((tipX + nx * 14).toFixed(2)),
+                y: String((tipY + ny * 14).toFixed(2)),
+                'text-anchor': 'middle',
+                fill: cssColor,
+                'font-size': '12',
+                'font-weight': '500',
+            });
+            labelEl.textContent = tool.label;
+            group.appendChild(labelEl);
+        }
     }
 
     private drawAnnotations(svg: SVGElement) {

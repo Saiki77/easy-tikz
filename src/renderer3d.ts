@@ -1,6 +1,6 @@
-import { RendererConfig, Function3DParameters } from './types';
+import { RendererConfig, Function3DParameters, Tool, ArrowStyle } from './types';
 import { MathHelper } from './math';
-import { COLOR_MAP, resolveCssColor } from './colors';
+import { COLOR_MAP, THICKNESS_MAP, resolveCssColor } from './colors';
 import { niceInterval, formatTick, stripLatex, hexToRgb, rgbStringToRgb } from './util';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -219,6 +219,7 @@ export class SVG3DRenderer {
         clearChildren(this.frontAxesGroup);
         clearChildren(this.annotationsGroup);
         this.drawBoxToSvg('back');
+        this.drawToolsToSvg();
         this.drawBoxToSvg('front');
         this.drawAnnotationsToSvg();
         this.updateTitleSvg();
@@ -863,9 +864,10 @@ export class SVG3DRenderer {
         roundedRectPath(ctx, 0, 0, cfg.width, cfg.height, 4);
         ctx.fill();
 
-        // Back axes -> surface -> front axes -> annotations -> title.
+        // Back axes -> surface -> tools -> front axes -> annotations -> title.
         this.drawBoxToCanvas('back');
         this.drawQuadsToCanvas(this.quads);
+        this.drawToolsToCanvas();
         this.drawBoxToCanvas('front');
         this.drawAnnotationsToCanvas();
         this.drawTitleToCanvas();
@@ -1032,6 +1034,251 @@ export class SVG3DRenderer {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'alphabetic';
         ctx.fillText(stripLatex(cfg.title), cfg.width / 2, PADDING_TOP - 10);
+    }
+
+    private parseCoord3D(v: string, fallback: number): number {
+        if (v === undefined || v === null) return fallback;
+        const s = String(v).trim();
+        if (s === '') return fallback;
+        const direct = parseFloat(s);
+        if (Number.isFinite(direct) && /^[-+]?\d/.test(s)) return direct;
+        try {
+            return MathHelper.evaluateExpression(s, 0);
+        } catch {
+            return fallback;
+        }
+    }
+
+    /** Collect the 3D tools that apply to the current scene. */
+    private gatherTools3D(): Tool[] {
+        const cfg = this.config;
+        if (!cfg) return [];
+        const all = cfg.tools || [];
+        return all.filter(
+            (t) => t.type === 'plane3D' || t.type === 'point3D' || t.type === 'segment3D'
+        );
+    }
+
+    private drawToolsToSvg() {
+        const cfg = this.config;
+        if (!cfg) return;
+        const tools = this.gatherTools3D();
+        if (!tools.length) return;
+        for (const tool of tools) {
+            if (tool.type === 'plane3D') {
+                this.drawPlane3DSvg(tool);
+            } else if (tool.type === 'point3D') {
+                this.drawPoint3DSvg(tool);
+            } else if (tool.type === 'segment3D') {
+                this.drawSegment3DSvg(tool);
+            }
+        }
+    }
+
+    private drawToolsToCanvas() {
+        const cfg = this.config;
+        if (!cfg) return;
+        const tools = this.gatherTools3D();
+        if (!tools.length) return;
+        for (const tool of tools) {
+            if (tool.type === 'plane3D') {
+                this.drawPlane3DCanvas(tool);
+            } else if (tool.type === 'point3D') {
+                this.drawPoint3DCanvas(tool);
+            } else if (tool.type === 'segment3D') {
+                this.drawSegment3DCanvas(tool);
+            }
+        }
+    }
+
+    private planeCorners(tool: Extract<Tool, { type: 'plane3D' }>): { sx: number; sy: number }[] {
+        const cfg = this.config!;
+        const c = this.parseCoord3D(tool.value, 0);
+        let corners: ProjectedPoint[];
+        if (tool.axis === 'x') {
+            corners = [
+                this.project(c, cfg.ymin, cfg.zmin),
+                this.project(c, cfg.ymax, cfg.zmin),
+                this.project(c, cfg.ymax, cfg.zmax),
+                this.project(c, cfg.ymin, cfg.zmax),
+            ];
+        } else if (tool.axis === 'y') {
+            corners = [
+                this.project(cfg.xmin, c, cfg.zmin),
+                this.project(cfg.xmax, c, cfg.zmin),
+                this.project(cfg.xmax, c, cfg.zmax),
+                this.project(cfg.xmin, c, cfg.zmax),
+            ];
+        } else {
+            corners = [
+                this.project(cfg.xmin, cfg.ymin, c),
+                this.project(cfg.xmax, cfg.ymin, c),
+                this.project(cfg.xmax, cfg.ymax, c),
+                this.project(cfg.xmin, cfg.ymax, c),
+            ];
+        }
+        return corners.map((p) => ({ sx: p.sx, sy: p.sy }));
+    }
+
+    private drawPlane3DSvg(tool: Extract<Tool, { type: 'plane3D' }>) {
+        const pts = this.planeCorners(tool);
+        const opacity = typeof tool.fillOpacity === 'number' ? tool.fillOpacity : 0.2;
+        const cssColor = resolveCssColor(COLOR_MAP[tool.color] || tool.color);
+        const points = pts.map((p) => `${p.sx.toFixed(2)},${p.sy.toFixed(2)}`).join(' ');
+        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        poly.setAttribute('points', points);
+        poly.setAttribute('fill', cssColor);
+        poly.setAttribute('fill-opacity', String(opacity));
+        poly.setAttribute('stroke', cssColor);
+        poly.setAttribute('stroke-opacity', String(Math.min(1, opacity + 0.3)));
+        poly.setAttribute('stroke-width', '1');
+        this.annotationsGroup.appendChild(poly);
+    }
+
+    private drawPlane3DCanvas(tool: Extract<Tool, { type: 'plane3D' }>) {
+        const pts = this.planeCorners(tool);
+        const opacity = typeof tool.fillOpacity === 'number' ? tool.fillOpacity : 0.2;
+        const cssColor = resolveCssColor(COLOR_MAP[tool.color] || tool.color);
+        const ctx = this.ctx;
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+            if (i === 0) ctx.moveTo(p.sx, p.sy);
+            else ctx.lineTo(p.sx, p.sy);
+        });
+        ctx.closePath();
+        ctx.fillStyle = cssColor;
+        ctx.globalAlpha = opacity;
+        ctx.fill();
+        ctx.globalAlpha = Math.min(1, opacity + 0.3);
+        ctx.strokeStyle = cssColor;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    private drawPoint3DSvg(tool: Extract<Tool, { type: 'point3D' }>) {
+        const x = this.parseCoord3D(tool.x, 0);
+        const y = this.parseCoord3D(tool.y, 0);
+        const z = this.parseCoord3D(tool.z, 0);
+        const p = this.project(x, y, z);
+        const cssColor = resolveCssColor(COLOR_MAP[tool.color] || tool.color);
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', p.sx.toFixed(2));
+        circle.setAttribute('cy', p.sy.toFixed(2));
+        circle.setAttribute('r', '4');
+        circle.setAttribute('fill', cssColor);
+        circle.setAttribute('stroke', this.themeColors.bgPrimary);
+        circle.setAttribute('stroke-width', '1.5');
+        this.annotationsGroup.appendChild(circle);
+        if (tool.label) {
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', (p.sx + 6).toFixed(2));
+            text.setAttribute('y', (p.sy - 6).toFixed(2));
+            text.setAttribute('fill', cssColor);
+            text.setAttribute('font-size', '11');
+            text.setAttribute('font-family', 'var(--font-monospace)');
+            text.textContent = tool.label;
+            this.annotationsGroup.appendChild(text);
+        }
+    }
+
+    private drawPoint3DCanvas(tool: Extract<Tool, { type: 'point3D' }>) {
+        const x = this.parseCoord3D(tool.x, 0);
+        const y = this.parseCoord3D(tool.y, 0);
+        const z = this.parseCoord3D(tool.z, 0);
+        const p = this.project(x, y, z);
+        const cssColor = resolveCssColor(COLOR_MAP[tool.color] || tool.color);
+        const ctx = this.ctx;
+        ctx.beginPath();
+        ctx.arc(p.sx, p.sy, 4, 0, Math.PI * 2);
+        ctx.fillStyle = cssColor;
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = this.themeColors.bgPrimary;
+        ctx.stroke();
+        if (tool.label) {
+            ctx.fillStyle = cssColor;
+            ctx.font = '11px var(--font-monospace, monospace)';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(tool.label, p.sx + 6, p.sy - 6);
+        }
+    }
+
+    private drawSegment3DSvg(tool: Extract<Tool, { type: 'segment3D' }>) {
+        const p1 = this.project(
+            this.parseCoord3D(tool.x1, 0),
+            this.parseCoord3D(tool.y1, 0),
+            this.parseCoord3D(tool.z1, 0)
+        );
+        const p2 = this.project(
+            this.parseCoord3D(tool.x2, 0),
+            this.parseCoord3D(tool.y2, 0),
+            this.parseCoord3D(tool.z2, 0)
+        );
+        const cssColor = resolveCssColor(COLOR_MAP[tool.color] || tool.color);
+        const sw = THICKNESS_MAP[tool.thickness] || 1.5;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', p1.sx.toFixed(2));
+        line.setAttribute('y1', p1.sy.toFixed(2));
+        line.setAttribute('x2', p2.sx.toFixed(2));
+        line.setAttribute('y2', p2.sy.toFixed(2));
+        line.setAttribute('stroke', cssColor);
+        line.setAttribute('stroke-width', String(sw));
+        line.setAttribute('stroke-linecap', 'round');
+        if (tool.dashed) line.setAttribute('stroke-dasharray', '6 4');
+        const arrows = tool.arrow as ArrowStyle;
+        if (arrows === 'forward' || arrows === 'both') line.setAttribute('marker-end', 'url(#arrowhead)');
+        if (arrows === 'backward' || arrows === 'both') line.setAttribute('marker-start', 'url(#arrowhead)');
+        this.annotationsGroup.appendChild(line);
+    }
+
+    private drawSegment3DCanvas(tool: Extract<Tool, { type: 'segment3D' }>) {
+        const p1 = this.project(
+            this.parseCoord3D(tool.x1, 0),
+            this.parseCoord3D(tool.y1, 0),
+            this.parseCoord3D(tool.z1, 0)
+        );
+        const p2 = this.project(
+            this.parseCoord3D(tool.x2, 0),
+            this.parseCoord3D(tool.y2, 0),
+            this.parseCoord3D(tool.z2, 0)
+        );
+        const cssColor = resolveCssColor(COLOR_MAP[tool.color] || tool.color);
+        const sw = THICKNESS_MAP[tool.thickness] || 1.5;
+        const ctx = this.ctx;
+        ctx.beginPath();
+        ctx.moveTo(p1.sx, p1.sy);
+        ctx.lineTo(p2.sx, p2.sy);
+        ctx.strokeStyle = cssColor;
+        ctx.lineWidth = sw;
+        ctx.lineCap = 'round';
+        if (tool.dashed) ctx.setLineDash([6, 4]);
+        else ctx.setLineDash([]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Simple arrowhead at p2 if needed.
+        const arrows = tool.arrow as ArrowStyle;
+        const drawHead = (from: { sx: number; sy: number }, to: { sx: number; sy: number }) => {
+            const dx = to.sx - from.sx;
+            const dy = to.sy - from.sy;
+            const len = Math.hypot(dx, dy) || 1;
+            const ux = dx / len;
+            const uy = dy / len;
+            const HL = 8;
+            const HW = 5;
+            const baseX = to.sx - ux * HL;
+            const baseY = to.sy - uy * HL;
+            ctx.beginPath();
+            ctx.moveTo(to.sx, to.sy);
+            ctx.lineTo(baseX + uy * HW, baseY - ux * HW);
+            ctx.lineTo(baseX - uy * HW, baseY + ux * HW);
+            ctx.closePath();
+            ctx.fillStyle = cssColor;
+            ctx.fill();
+        };
+        if (arrows === 'forward' || arrows === 'both') drawHead(p1, p2);
+        if (arrows === 'backward' || arrows === 'both') drawHead(p2, p1);
     }
 }
 

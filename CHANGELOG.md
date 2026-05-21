@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.18.0] - 2026-05-21
+
+### Added
+
+- **Composable graph tools** — a new **Tools** tab in the modal (visible in both 2D and 3D). Each tool is independent so you can stack them freely.
+  - **2D, function-referencing:** Area between two curves, Intersection points. Both look up functions by their new **Name** field (defaults to `f1`, `f2`, …).
+  - **2D, reference lines:** Vertical line `x = c`, Horizontal line `y = c`. Both support color, thickness, dashed style, and an optional label.
+  - **2D, free shapes:** Rectangle (with optional fill + pattern), Circle (drawn in axis coordinates so the radius scales with the data), Line segment (with optional forward / backward / both arrows), Brace with label (curly brace spanning two points).
+  - **3D:** Plane at constant x / y / z, 3D point marker, 3D line segment with arrows.
+- **Function Name field** on every 2D and 3D function card. Auto-defaulted to `f1`, `f2`, …; the user-facing label in the card header tracks the Name. Tools use the same Name as their reference.
+- **Bisection root-finder** in `MathHelper.findIntersections(expr1, expr2, domain)` — 200-sample sign-change scan + 40-iter bisection per crossing, with de-duplication for tangent intersections.
+- **Reference tab** gains a Tools section documenting every tool type with one-line recipes.
+
+### Changed
+
+- Exported pgfplots conditionally adds `\usepgfplotslibrary{fillbetween}` (when at least one area-between tool exists) and `\usetikzlibrary{decorations.pathreplacing}` (for braces). Plots without these tools are unchanged.
+
+### Backward compatibility
+
+- The new `tools` and per-function `name` fields are optional in the `easy-tikz` JSON block. Old blocks without them render unchanged; first-time round-trip through the modal auto-populates the Name fields.
+
 ## [3.17.2] - 2026-05-21
 
 ### Changed

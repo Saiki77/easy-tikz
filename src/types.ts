@@ -26,6 +26,12 @@ export interface FunctionParameters {
     /** When true, `expression` is x(t) and `expressionY` is y(t). Domain is t-range. */
     parametric: boolean;
     expressionY: string;
+    /**
+     * Optional user-readable name (e.g. "f", "g", "left curve"). Tools
+     * reference functions by name. Auto-defaulted in the modal to
+     * "f1", "f2", … when blank.
+     */
+    name?: string;
 }
 
 export interface TikzSetting {
@@ -58,6 +64,8 @@ export interface Function3DParameters {
     wireframe: boolean;
     opacity: number;
     samples: number;
+    /** Optional user-readable name. Mirrors `FunctionParameters.name`. */
+    name?: string;
 }
 
 export interface Annotation {
@@ -85,6 +93,124 @@ export type AxisStyle = 'box' | 'middle' | 'axes';
  */
 export type BoxAspect = 'true' | 'equal';
 
+export type ArrowStyle = 'none' | 'forward' | 'backward' | 'both';
+
+/**
+ * Discriminated union of "tools" — overlays that either reference
+ * existing functions by name (areaBetween, intersection) or stand
+ * alone (reference lines, free shapes, 3D plane / point / segment).
+ *
+ * Coordinate fields are kept as strings (matching xmin/xmax /
+ * annotations) so users can write expressions like `pi/2` or
+ * `2*sqrt(3)` and have them parsed at render time.
+ */
+export type Tool =
+    | {
+          type: 'areaBetween';
+          func1Name: string;
+          func2Name: string;
+          domain: string;
+          color: string;
+          fillOpacity: number;
+          fillPattern: FillPattern;
+      }
+    | {
+          type: 'intersection';
+          func1Name: string;
+          func2Name: string;
+          color: string;
+          showLabels: boolean;
+      }
+    | {
+          type: 'verticalLine';
+          x: string;
+          color: string;
+          thickness: string;
+          dashed: boolean;
+          label: string;
+      }
+    | {
+          type: 'horizontalLine';
+          y: string;
+          color: string;
+          thickness: string;
+          dashed: boolean;
+          label: string;
+      }
+    | {
+          type: 'rectangle';
+          x1: string;
+          y1: string;
+          x2: string;
+          y2: string;
+          color: string;
+          thickness: string;
+          fill: boolean;
+          fillOpacity: number;
+          fillPattern: FillPattern;
+      }
+    | {
+          type: 'circle';
+          cx: string;
+          cy: string;
+          r: string;
+          color: string;
+          thickness: string;
+          fill: boolean;
+          fillOpacity: number;
+          fillPattern: FillPattern;
+      }
+    | {
+          type: 'segment';
+          x1: string;
+          y1: string;
+          x2: string;
+          y2: string;
+          color: string;
+          thickness: string;
+          dashed: boolean;
+          arrow: ArrowStyle;
+      }
+    | {
+          type: 'brace';
+          x1: string;
+          y1: string;
+          x2: string;
+          y2: string;
+          color: string;
+          label: string;
+      }
+    | {
+          type: 'plane3D';
+          axis: 'x' | 'y' | 'z';
+          value: string;
+          color: string;
+          fillOpacity: number;
+      }
+    | {
+          type: 'point3D';
+          x: string;
+          y: string;
+          z: string;
+          color: string;
+          label: string;
+      }
+    | {
+          type: 'segment3D';
+          x1: string;
+          y1: string;
+          z1: string;
+          x2: string;
+          y2: string;
+          z2: string;
+          color: string;
+          thickness: string;
+          dashed: boolean;
+          arrow: ArrowStyle;
+      };
+
+export type ToolType = Tool['type'];
+
 export interface RendererConfig {
     width: number;
     height: number;
@@ -104,6 +230,7 @@ export interface RendererConfig {
     majorTickNum: number;
     functions: FunctionParameters[];
     annotations: Annotation[];
+    tools: Tool[];
     is3D: boolean;
     zmin: number;
     zmax: number;

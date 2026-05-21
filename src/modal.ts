@@ -1,5 +1,5 @@
 import { Modal, Setting, SliderComponent, TextComponent, MarkdownView, Notice, App, TFile, setIcon } from 'obsidian';
-import { FunctionParameters, Function3DParameters } from './types';
+import { FunctionParameters, Function3DParameters, Tool, ArrowStyle, FillPattern } from './types';
 import { SettingsManager } from './settings';
 import { SVGRenderer } from './renderer';
 import { SVG3DRenderer } from './renderer3d';
@@ -72,11 +72,11 @@ const RENDERER_PADDING = { top: 45, right: 30, bottom: 45, left: 55 };
 /** Scroll-wheel zoom factor per notch. > 1 zooms out, < 1 zooms in. */
 const WHEEL_ZOOM_FACTOR = 1.15;
 
-const TABS = ['Graph', 'Axis', 'Functions', 'Annotations', 'Grid', 'Code', 'Reference'] as const;
+const TABS = ['Graph', 'Axis', 'Functions', 'Tools', 'Annotations', 'Grid', 'Code', 'Reference'] as const;
 type TabName = (typeof TABS)[number];
 
 /** Tabs that share the same scrollable settings column. Clicking jumps the scroll. */
-const SETTINGS_TABS = new Set<TabName>(['Graph', 'Axis', 'Functions', 'Annotations', 'Grid']);
+const SETTINGS_TABS = new Set<TabName>(['Graph', 'Axis', 'Functions', 'Tools', 'Annotations', 'Grid']);
 
 interface AxisRange {
     key: string;
@@ -100,6 +100,7 @@ export class TikzModal extends Modal {
     private zAxisContainer: HTMLElement;
     private axisStyleContainer: HTMLElement;
     private functionsTabContent: HTMLElement;
+    private toolsTabContent: HTMLElement;
     private leftPanel: HTMLElement;
     private zoom3DOverlay: HTMLElement | null = null;
     private floatingActionsOverlay: HTMLElement | null = null;
@@ -347,6 +348,7 @@ export class TikzModal extends Modal {
         this.buildGraphTab(this.settingsColumn);
         this.buildAxisTab(this.settingsColumn);
         this.buildFunctionsTab(this.settingsColumn);
+        this.buildToolsTab(this.settingsColumn);
         this.buildAnnotationsTab(this.settingsColumn);
         this.buildGridTab(this.settingsColumn);
 
@@ -388,6 +390,7 @@ export class TikzModal extends Modal {
                     this.settings.setValue('dimension', v);
                     this.update3DVisibility();
                     this.rebuildFunctionsTab();
+                    this.rebuildToolsTab();
                     this.requestPreviewUpdate();
                 })
             );
@@ -651,7 +654,8 @@ export class TikzModal extends Modal {
         };
 
         const addFunctionCard = () => {
-            const rowId = `func-${Date.now()}`;
+            const rowId = `func-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+            const ordinal = rowStates.size + 1;
             const state: FunctionParameters = {
                 expression: '',
                 domain: '-10:10',
@@ -667,6 +671,7 @@ export class TikzModal extends Modal {
                 thickness: 'thin',
                 parametric: false,
                 expressionY: '',
+                name: `f${ordinal}`,
             };
             rowStates.set(rowId, state);
 
@@ -674,7 +679,7 @@ export class TikzModal extends Modal {
             card.style.borderLeftColor = COLOR_MAP[state.color];
 
             const header = card.createDiv({ cls: 'tikz-func-header' });
-            header.createSpan({ cls: 'tikz-func-label', text: `Function ${rowStates.size}` });
+            const headerLabel = header.createSpan({ cls: 'tikz-func-label', text: state.name || `Function ${ordinal}` });
             new Setting(header).addButton((btn) =>
                 btn
                     .setIcon('trash')
@@ -795,6 +800,19 @@ export class TikzModal extends Modal {
                     updateFunctionValues();
                 });
             });
+
+            const nameRow = card.createDiv({ cls: 'tikz-func-row' });
+            const nameDiv = nameRow.createDiv({ cls: 'tikz-func-field wide' });
+            new Setting(nameDiv)
+                .setName('Name')
+                .setDesc('Used to reference this function from Tools (e.g. area between curves). Defaults to f1, f2, …')
+                .addText((t) => {
+                    t.setPlaceholder(state.name || `f${ordinal}`).setValue(state.name || '').onChange((v) => {
+                        state.name = v;
+                        if (headerLabel) headerLabel.textContent = (v && v.trim()) || `Function ${ordinal}`;
+                        updateFunctionValues();
+                    });
+                });
 
             const row2 = card.createDiv({ cls: 'tikz-func-row' });
             const colorDiv = row2.createDiv({ cls: 'tikz-func-field' });
@@ -1144,6 +1162,351 @@ export class TikzModal extends Modal {
         );
     }
 
+    private buildToolsTab(container: HTMLElement) {
+        this.toolsTabContent = this.createTabContent(container, 'Tools');
+        this.populateToolsTab();
+    }
+
+    private rebuildToolsTab() {
+        if (!this.toolsTabContent) return;
+        this.toolsTabContent.empty();
+        this.populateToolsTab();
+    }
+
+    private populateToolsTab() {
+        const tab = this.toolsTabContent;
+        const is3D = this.is3D();
+        tab.createEl('p', { cls: 'tikz-section-blurb' }).setText(
+            'Composable overlays. Combine functions (area between, intersections), draw reference lines, and add free shapes — each independent of the others, so you can stack them freely. ' +
+                'Function-referencing tools use the Name field on each function card (defaults to f1, f2, …).'
+        );
+
+        const toolList: Tool[] = ((this.settings.getValue('tools') as Tool[]) || []).map((t) => ({ ...t }));
+        const cardsContainer = tab.createDiv({ cls: 'tikz-tool-cards' });
+
+        const save = () => {
+            this.settings.setValue('tools', toolList);
+            this.requestPreviewUpdate();
+        };
+        const renderAll = () => {
+            cardsContainer.empty();
+            toolList.forEach((t, i) => this.renderToolCard(cardsContainer, t, i, toolList, save, renderAll, is3D));
+        };
+        renderAll();
+
+        const addRow = tab.createDiv({ cls: 'tikz-add-func' });
+        new Setting(addRow)
+            .setName('Add tool')
+            .setDesc(is3D ? 'Pick a 3D tool type.' : 'Pick a tool type.')
+            .addDropdown((d) => {
+                d.addOption('', '— select type —');
+                if (!is3D) {
+                    d.addOption('areaBetween', 'Area between two curves');
+                    d.addOption('intersection', 'Intersection points');
+                    d.addOption('verticalLine', 'Vertical line (x = c)');
+                    d.addOption('horizontalLine', 'Horizontal line (y = c)');
+                    d.addOption('rectangle', 'Rectangle');
+                    d.addOption('circle', 'Circle');
+                    d.addOption('segment', 'Line segment');
+                    d.addOption('brace', 'Brace with label');
+                } else {
+                    d.addOption('plane3D', 'Plane (constant x / y / z)');
+                    d.addOption('point3D', '3D point marker');
+                    d.addOption('segment3D', '3D line segment');
+                }
+                d.setValue('').onChange((v) => {
+                    if (!v) return;
+                    const next = this.createDefaultTool(v as Tool['type']);
+                    if (!next) return;
+                    toolList.push(next);
+                    save();
+                    renderAll();
+                    d.setValue('');
+                });
+            });
+    }
+
+    private createDefaultTool(type: Tool['type']): Tool | null {
+        const c = 'blue';
+        switch (type) {
+            case 'areaBetween':
+                return { type, func1Name: 'f1', func2Name: 'f2', domain: '', color: c, fillOpacity: 0.3, fillPattern: 'solid' };
+            case 'intersection':
+                return { type, func1Name: 'f1', func2Name: 'f2', color: 'red', showLabels: true };
+            case 'verticalLine':
+                return { type, x: '0', color: c, thickness: 'thin', dashed: true, label: '' };
+            case 'horizontalLine':
+                return { type, y: '0', color: c, thickness: 'thin', dashed: true, label: '' };
+            case 'rectangle':
+                return { type, x1: '0', y1: '0', x2: '1', y2: '1', color: c, thickness: 'thin', fill: true, fillOpacity: 0.2, fillPattern: 'solid' };
+            case 'circle':
+                return { type, cx: '0', cy: '0', r: '1', color: c, thickness: 'thin', fill: false, fillOpacity: 0.2, fillPattern: 'solid' };
+            case 'segment':
+                return { type, x1: '0', y1: '0', x2: '1', y2: '1', color: c, thickness: 'thin', dashed: false, arrow: 'forward' };
+            case 'brace':
+                return { type, x1: '0', y1: '0', x2: '1', y2: '0', color: c, label: '' };
+            case 'plane3D':
+                return { type, axis: 'z', value: '0', color: c, fillOpacity: 0.25 };
+            case 'point3D':
+                return { type, x: '0', y: '0', z: '0', color: 'red', label: '' };
+            case 'segment3D':
+                return { type, x1: '0', y1: '0', z1: '0', x2: '1', y2: '1', z2: '1', color: c, thickness: 'thin', dashed: false, arrow: 'forward' };
+            default:
+                return null;
+        }
+    }
+
+    private toolLabel(type: Tool['type']): string {
+        switch (type) {
+            case 'areaBetween': return 'Area between curves';
+            case 'intersection': return 'Intersection points';
+            case 'verticalLine': return 'Vertical line';
+            case 'horizontalLine': return 'Horizontal line';
+            case 'rectangle': return 'Rectangle';
+            case 'circle': return 'Circle';
+            case 'segment': return 'Line segment';
+            case 'brace': return 'Brace';
+            case 'plane3D': return '3D plane';
+            case 'point3D': return '3D point';
+            case 'segment3D': return '3D segment';
+        }
+    }
+
+    private renderToolCard(
+        container: HTMLElement,
+        tool: Tool,
+        idx: number,
+        toolList: Tool[],
+        save: () => void,
+        renderAll: () => void,
+        is3D: boolean
+    ) {
+        const card = container.createDiv({ cls: 'tikz-func-card' });
+        const header = card.createDiv({ cls: 'tikz-func-header' });
+        header.createSpan({ cls: 'tikz-func-label', text: `${idx + 1}. ${this.toolLabel(tool.type)}` });
+        new Setting(header).addButton((btn) =>
+            btn.setIcon('trash').setTooltip('Remove tool').onClick(() => {
+                toolList.splice(idx, 1);
+                save();
+                renderAll();
+            })
+        );
+
+        // Function-name dropdown options pulled fresh from settings each render.
+        const fnNames = (): { value: string; label: string }[] => {
+            type Named = { expression?: string; name?: string };
+            const raw = is3D
+                ? (this.settings.getValue('functions3D') as Named[] | undefined)
+                : (this.settings.getValue('functions') as Named[] | undefined);
+            const list: Named[] = Array.isArray(raw) ? raw : [];
+            const out: { value: string; label: string }[] = [];
+            list.forEach((f, i) => {
+                if (!f || !f.expression) return;
+                const name = (f.name && f.name.trim()) || `f${i + 1}`;
+                out.push({ value: name, label: name });
+            });
+            return out;
+        };
+
+        const textField = (parent: HTMLElement, label: string, value: string, onChange: (v: string) => void) => {
+            const div = parent.createDiv({ cls: 'tikz-func-field' });
+            new Setting(div).setName(label).addText((t) => t.setValue(String(value ?? '')).onChange(onChange));
+        };
+        const colorField = (parent: HTMLElement, value: string, onChange: (v: string) => void) => {
+            const div = parent.createDiv({ cls: 'tikz-func-field' });
+            new Setting(div).setName('Color').addDropdown((d) => {
+                for (const [k, v] of Object.entries(COLOR_OPTIONS)) d.addOption(k, v);
+                d.setValue(value).onChange(onChange);
+            });
+        };
+        const thicknessField = (parent: HTMLElement, value: string, onChange: (v: string) => void) => {
+            const div = parent.createDiv({ cls: 'tikz-func-field' });
+            new Setting(div).setName('Thickness').addDropdown((d) => {
+                for (const [k, v] of Object.entries(THICKNESS_OPTIONS)) d.addOption(k, v);
+                d.setValue(value).onChange(onChange);
+            });
+        };
+        const toggleField = (parent: HTMLElement, label: string, value: boolean, onChange: (v: boolean) => void) => {
+            const div = parent.createDiv({ cls: 'tikz-func-field' });
+            new Setting(div).setName(label).addToggle((t) => t.setValue(!!value).onChange(onChange));
+        };
+        const sliderField = (parent: HTMLElement, label: string, value: number, onChange: (v: number) => void) => {
+            const div = parent.createDiv({ cls: 'tikz-func-field' });
+            new Setting(div).setName(label).addSlider((s) =>
+                s.setLimits(0.05, 1, 0.05).setValue(value).setDynamicTooltip().onChange(onChange)
+            );
+        };
+        const dropdownField = (parent: HTMLElement, label: string, value: string, options: Record<string, string>, onChange: (v: string) => void) => {
+            const div = parent.createDiv({ cls: 'tikz-func-field' });
+            new Setting(div).setName(label).addDropdown((d) => {
+                for (const [k, v] of Object.entries(options)) d.addOption(k, v);
+                d.setValue(value).onChange(onChange);
+            });
+        };
+        const fnNameField = (parent: HTMLElement, label: string, value: string, onChange: (v: string) => void) => {
+            const div = parent.createDiv({ cls: 'tikz-func-field' });
+            const names = fnNames();
+            new Setting(div).setName(label).addDropdown((d) => {
+                d.addOption('', '— select function —');
+                for (const n of names) d.addOption(n.value, n.label);
+                d.setValue(value).onChange(onChange);
+            });
+        };
+        const patternField = (parent: HTMLElement, value: FillPattern, onChange: (v: FillPattern) => void) => {
+            const div = parent.createDiv({ cls: 'tikz-func-field' });
+            new Setting(div).setName('Pattern').addDropdown((d) => {
+                d.addOption('solid', 'Solid');
+                d.addOption('horizontal', 'Horizontal lines');
+                d.addOption('vertical', 'Vertical lines');
+                d.addOption('crosshatch', 'Crosshatch');
+                d.addOption('dots', 'Dots');
+                d.addOption('north-east', 'NE diagonal');
+                d.addOption('north-west', 'NW diagonal');
+                d.setValue(value).onChange((v) => onChange(v as FillPattern));
+            });
+        };
+        const arrowField = (parent: HTMLElement, value: ArrowStyle, onChange: (v: ArrowStyle) => void) => {
+            dropdownField(parent, 'Arrow', value, {
+                none: 'None',
+                forward: 'Forward (→)',
+                backward: 'Backward (←)',
+                both: 'Both (↔)',
+            }, (v) => onChange(v as ArrowStyle));
+        };
+
+        // Type-specific form.
+        switch (tool.type) {
+            case 'areaBetween': {
+                const row1 = card.createDiv({ cls: 'tikz-func-row' });
+                fnNameField(row1, 'Function A', tool.func1Name, (v) => { tool.func1Name = v; save(); });
+                fnNameField(row1, 'Function B', tool.func2Name, (v) => { tool.func2Name = v; save(); });
+                textField(row1, 'Domain (optional)', tool.domain, (v) => { tool.domain = v; save(); });
+                const row2 = card.createDiv({ cls: 'tikz-func-row' });
+                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
+                sliderField(row2, 'Opacity', tool.fillOpacity, (v) => { tool.fillOpacity = v; save(); });
+                patternField(row2, tool.fillPattern, (v) => { tool.fillPattern = v; save(); });
+                break;
+            }
+            case 'intersection': {
+                const row1 = card.createDiv({ cls: 'tikz-func-row' });
+                fnNameField(row1, 'Function A', tool.func1Name, (v) => { tool.func1Name = v; save(); });
+                fnNameField(row1, 'Function B', tool.func2Name, (v) => { tool.func2Name = v; save(); });
+                const row2 = card.createDiv({ cls: 'tikz-func-row' });
+                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
+                toggleField(row2, 'Show (x, y) labels', tool.showLabels, (v) => { tool.showLabels = v; save(); });
+                break;
+            }
+            case 'verticalLine': {
+                const row1 = card.createDiv({ cls: 'tikz-func-row' });
+                textField(row1, 'x =', tool.x, (v) => { tool.x = v; save(); });
+                textField(row1, 'Label (optional)', tool.label, (v) => { tool.label = v; save(); });
+                const row2 = card.createDiv({ cls: 'tikz-func-row' });
+                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
+                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
+                toggleField(row2, 'Dashed', tool.dashed, (v) => { tool.dashed = v; save(); });
+                break;
+            }
+            case 'horizontalLine': {
+                const row1 = card.createDiv({ cls: 'tikz-func-row' });
+                textField(row1, 'y =', tool.y, (v) => { tool.y = v; save(); });
+                textField(row1, 'Label (optional)', tool.label, (v) => { tool.label = v; save(); });
+                const row2 = card.createDiv({ cls: 'tikz-func-row' });
+                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
+                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
+                toggleField(row2, 'Dashed', tool.dashed, (v) => { tool.dashed = v; save(); });
+                break;
+            }
+            case 'rectangle': {
+                const row1 = card.createDiv({ cls: 'tikz-func-row' });
+                textField(row1, 'x₁', tool.x1, (v) => { tool.x1 = v; save(); });
+                textField(row1, 'y₁', tool.y1, (v) => { tool.y1 = v; save(); });
+                textField(row1, 'x₂', tool.x2, (v) => { tool.x2 = v; save(); });
+                textField(row1, 'y₂', tool.y2, (v) => { tool.y2 = v; save(); });
+                const row2 = card.createDiv({ cls: 'tikz-func-row' });
+                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
+                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
+                toggleField(row2, 'Fill', tool.fill, (v) => { tool.fill = v; save(); });
+                sliderField(row2, 'Fill opacity', tool.fillOpacity, (v) => { tool.fillOpacity = v; save(); });
+                patternField(row2, tool.fillPattern, (v) => { tool.fillPattern = v; save(); });
+                break;
+            }
+            case 'circle': {
+                const row1 = card.createDiv({ cls: 'tikz-func-row' });
+                textField(row1, 'Center x', tool.cx, (v) => { tool.cx = v; save(); });
+                textField(row1, 'Center y', tool.cy, (v) => { tool.cy = v; save(); });
+                textField(row1, 'Radius', tool.r, (v) => { tool.r = v; save(); });
+                const row2 = card.createDiv({ cls: 'tikz-func-row' });
+                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
+                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
+                toggleField(row2, 'Fill', tool.fill, (v) => { tool.fill = v; save(); });
+                sliderField(row2, 'Fill opacity', tool.fillOpacity, (v) => { tool.fillOpacity = v; save(); });
+                patternField(row2, tool.fillPattern, (v) => { tool.fillPattern = v; save(); });
+                break;
+            }
+            case 'segment': {
+                const row1 = card.createDiv({ cls: 'tikz-func-row' });
+                textField(row1, 'x₁', tool.x1, (v) => { tool.x1 = v; save(); });
+                textField(row1, 'y₁', tool.y1, (v) => { tool.y1 = v; save(); });
+                textField(row1, 'x₂', tool.x2, (v) => { tool.x2 = v; save(); });
+                textField(row1, 'y₂', tool.y2, (v) => { tool.y2 = v; save(); });
+                const row2 = card.createDiv({ cls: 'tikz-func-row' });
+                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
+                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
+                toggleField(row2, 'Dashed', tool.dashed, (v) => { tool.dashed = v; save(); });
+                arrowField(row2, tool.arrow, (v) => { tool.arrow = v; save(); });
+                break;
+            }
+            case 'brace': {
+                const row1 = card.createDiv({ cls: 'tikz-func-row' });
+                textField(row1, 'x₁', tool.x1, (v) => { tool.x1 = v; save(); });
+                textField(row1, 'y₁', tool.y1, (v) => { tool.y1 = v; save(); });
+                textField(row1, 'x₂', tool.x2, (v) => { tool.x2 = v; save(); });
+                textField(row1, 'y₂', tool.y2, (v) => { tool.y2 = v; save(); });
+                const row2 = card.createDiv({ cls: 'tikz-func-row' });
+                textField(row2, 'Label', tool.label, (v) => { tool.label = v; save(); });
+                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
+                break;
+            }
+            case 'plane3D': {
+                const row1 = card.createDiv({ cls: 'tikz-func-row' });
+                dropdownField(row1, 'Constant axis', tool.axis, { x: 'x', y: 'y', z: 'z' }, (v) => {
+                    tool.axis = v as 'x' | 'y' | 'z';
+                    save();
+                });
+                textField(row1, 'Value', tool.value, (v) => { tool.value = v; save(); });
+                const row2 = card.createDiv({ cls: 'tikz-func-row' });
+                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
+                sliderField(row2, 'Opacity', tool.fillOpacity, (v) => { tool.fillOpacity = v; save(); });
+                break;
+            }
+            case 'point3D': {
+                const row1 = card.createDiv({ cls: 'tikz-func-row' });
+                textField(row1, 'x', tool.x, (v) => { tool.x = v; save(); });
+                textField(row1, 'y', tool.y, (v) => { tool.y = v; save(); });
+                textField(row1, 'z', tool.z, (v) => { tool.z = v; save(); });
+                const row2 = card.createDiv({ cls: 'tikz-func-row' });
+                textField(row2, 'Label', tool.label, (v) => { tool.label = v; save(); });
+                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
+                break;
+            }
+            case 'segment3D': {
+                const row1 = card.createDiv({ cls: 'tikz-func-row' });
+                textField(row1, 'x₁', tool.x1, (v) => { tool.x1 = v; save(); });
+                textField(row1, 'y₁', tool.y1, (v) => { tool.y1 = v; save(); });
+                textField(row1, 'z₁', tool.z1, (v) => { tool.z1 = v; save(); });
+                textField(row1, 'x₂', tool.x2, (v) => { tool.x2 = v; save(); });
+                textField(row1, 'y₂', tool.y2, (v) => { tool.y2 = v; save(); });
+                textField(row1, 'z₂', tool.z2, (v) => { tool.z2 = v; save(); });
+                const row2 = card.createDiv({ cls: 'tikz-func-row' });
+                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
+                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
+                toggleField(row2, 'Dashed', tool.dashed, (v) => { tool.dashed = v; save(); });
+                arrowField(row2, tool.arrow, (v) => { tool.arrow = v; save(); });
+                break;
+            }
+        }
+    }
+
     private buildAnnotationsTab(container: HTMLElement) {
         const tab = this.createTabContent(container, 'Annotations');
 
@@ -1419,6 +1782,27 @@ export class TikzModal extends Modal {
             { name: 'Fill', desc: 'Shades the region between the curve and the x-axis. When enabled, a Fill pattern dropdown (solid, horizontal/vertical lines, crosshatch, dots, diagonals) and a Fill opacity slider appear.' },
             { name: 'Legend', desc: 'Adds the expression to the legend box in the upper-right of the plot.' },
         ]);
+
+        section('Tools');
+        para(
+            'The Tools tab adds composable overlays on top of functions. Each tool is independent — stack them freely to build the diagram you want. ' +
+                'Function-referencing tools (area between, intersection) look up your functions by the Name field on each function card (defaults to f1, f2, …).'
+        );
+        list([
+            { name: 'Area between two curves', desc: 'Picks two functions by name and shades the region between them. Optional domain override (defaults to the overlap of both function domains). Color, opacity, pattern.' },
+            { name: 'Intersection points', desc: 'Bisection root-finder on f - g across the overlap of both function domains. Each crossing gets a dot; optional (x, y) label.' },
+            { name: 'Vertical / horizontal reference line', desc: 'Line at x = c or y = c spanning the plot. Color, thickness, dashed, optional label.' },
+            { name: 'Rectangle', desc: 'Outline + optional fill between (x₁, y₁) and (x₂, y₂). Patterns supported.' },
+            { name: 'Circle', desc: 'Center (cx, cy), radius r. Drawn in axis coordinates so the radius scales with the axes.' },
+            { name: 'Line segment', desc: 'Straight line between two points with optional forward / backward / both arrows.' },
+            { name: 'Brace with label', desc: 'Curly brace between two points with optional label centered above. Useful for marking intervals.' },
+            { name: '3D plane', desc: 'Flat plane at constant x, y, or z. Color + opacity.' },
+            { name: '3D point / segment', desc: 'Single point at (x, y, z) with optional label, or a line segment between two 3D points with optional arrows.' },
+        ]);
+        para(
+            'Exported TikZ uses real pgfplots semantics — `\\addplot fill between [of=A and B]` for area-between, ' +
+                '`\\draw` for shapes, `\\node` for labels, `decorate / decoration={brace}` for braces. The `fillbetween` and `decorations.pathreplacing` libraries are added to the document setup only when a tool needs them.'
+        );
 
         section('Annotations');
         para('The Annotations tab lets you place text labels at arbitrary points. Each label has x, y (and z in 3D), a color, a size (small/normal/large), and an anchor that controls which side of the point the text sits on. In the exported TikZ each label becomes a \\node command.');

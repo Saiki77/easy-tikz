@@ -173,4 +173,78 @@ export class MathHelper {
     static evaluateExpression2D(expression: string, x: number, y: number): number {
         return compile2D(expression)(x, y);
     }
+
+    /**
+     * Find all `x` values on `[domMin, domMax]` where `f(x) = g(x)`.
+     * Coarse-scans the domain in `INTERSECTION_SAMPLES` steps looking for
+     * sign changes in `f - g`; each sign-change interval is then refined
+     * with 40 iterations of bisection. Returns the resulting `(x, y)`
+     * pairs where `y = f(x)`. Intervals where either function is
+     * non-finite are skipped so vertical asymptotes do not produce
+     * spurious roots.
+     */
+    static findIntersections(
+        expr1: string,
+        expr2: string,
+        domain: [number, number]
+    ): { x: number; y: number }[] {
+        const f = compile1D(expr1);
+        const g = compile1D(expr2);
+        const [domMin, domMax] = domain;
+        const N = 200;
+        const step = (domMax - domMin) / N;
+        const roots: { x: number; y: number }[] = [];
+
+        const diff = (x: number): number => f(x) - g(x);
+
+        let prevX = domMin;
+        let prevD = diff(prevX);
+        for (let i = 1; i <= N; i++) {
+            const x = domMin + i * step;
+            const d = diff(x);
+            if (!isFinite(prevD) || !isFinite(d)) {
+                prevX = x;
+                prevD = d;
+                continue;
+            }
+            if (prevD === 0) {
+                roots.push({ x: Number(prevX.toFixed(5)), y: Number(f(prevX).toFixed(5)) });
+            } else if (prevD * d < 0) {
+                // Bisect between prevX and x.
+                let lo = prevX;
+                let hi = x;
+                let dLo = prevD;
+                for (let k = 0; k < 40; k++) {
+                    const mid = (lo + hi) / 2;
+                    const dMid = diff(mid);
+                    if (!isFinite(dMid)) break;
+                    if (dLo * dMid <= 0) {
+                        hi = mid;
+                    } else {
+                        lo = mid;
+                        dLo = dMid;
+                    }
+                }
+                const root = (lo + hi) / 2;
+                if (isFinite(root)) {
+                    const y = f(root);
+                    if (isFinite(y)) {
+                        roots.push({ x: Number(root.toFixed(5)), y: Number(y.toFixed(5)) });
+                    }
+                }
+            }
+            prevX = x;
+            prevD = d;
+        }
+
+        // De-duplicate near-coincident roots (e.g. tangent intersections found twice).
+        const TOL = (domMax - domMin) * 1e-4;
+        const deduped: { x: number; y: number }[] = [];
+        for (const r of roots) {
+            if (!deduped.some((d) => Math.abs(d.x - r.x) < TOL)) {
+                deduped.push(r);
+            }
+        }
+        return deduped;
+    }
 }
