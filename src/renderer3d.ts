@@ -237,8 +237,17 @@ export class SVG3DRenderer {
         this.svg.setAttribute('viewBox', `0 0 ${config.width} ${config.height}`);
         this.backgroundRect.setAttribute('width', String(config.width));
         this.backgroundRect.setAttribute('height', String(config.height));
+        // Set width and aspect-ratio (not height) so the root maintains
+        // its configured aspect ratio when `max-width: 100%` shrinks it to
+        // fit a narrower preview area. If we set both width AND height in
+        // pixels, max-width clamps the width but leaves the explicit
+        // height alone, producing a non-square root. The canvas (CSS
+        // width/height: 100% of root) then stretched non-proportionally
+        // mid-drag, while the SVG (with preserveAspectRatio) letter-boxed
+        // — the two paths diverged visibly each time the user dragged.
         this.root.style.width = config.width + 'px';
-        this.root.style.height = config.height + 'px';
+        this.root.style.height = 'auto';
+        this.root.style.aspectRatio = `${config.width} / ${config.height}`;
 
         // Canvas dimensions, hi-DPI aware. The internal pixel buffer is the
         // hi-DPI size; CSS sizing is left to the .tikz-3d-canvas rule

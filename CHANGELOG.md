@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.13.5] - 2026-05-21
+
+### Fixed
+
+- **3D preview no longer distorts mid-drag.** The 3D root had both `style.width` and `style.height` set in pixels with `max-width: 100%` / `max-height: 100%` clamps. When the preview area was narrower than the configured size, max-width shrank the width while the explicit pixel height stayed put — the root became a rectangle. The canvas (CSS `width: 100%; height: 100%`) then stretched non-proportionally during drag, while the SVG (`preserveAspectRatio` default) letter-boxed on release, so toggling between the two paths visibly changed the chart's aspect, title size, and edge positions. Replaced with `style.width` + `style.aspectRatio` + `style.height: auto`, so the root scales proportionally and both render paths occupy an identical box.
+
 ## [3.13.4] - 2026-05-21
 
 ### Fixed
