@@ -49,10 +49,22 @@
     border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 70%, transparent);
     background: var(--background-primary);
     flex-shrink: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+}
+
+.tikz-tab-bar::-webkit-scrollbar {
+    height: 6px;
+}
+
+.tikz-tab-bar::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--background-modifier-border) 80%, transparent);
+    border-radius: 3px;
 }
 
 .tikz-tab-btn {
-    padding: 10px 20px;
+    padding: 10px 14px;
     border: none;
     background: transparent;
     box-shadow: none;
@@ -66,6 +78,19 @@
     white-space: nowrap;
     margin: 0;
     line-height: 1.2;
+    flex-shrink: 0;
+}
+
+/* Narrower screens (MacBook Air-ish): tighten tab padding so all tabs fit. */
+@media (max-width: 1280px) {
+    .tikz-tab-btn {
+        padding: 10px 10px;
+        font-size: 12.5px;
+    }
+    .tikz-tab-bar {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
 }
 
 .tikz-tab-btn:hover {
@@ -484,6 +509,14 @@
     color: var(--text-normal);
     font-size: 13px;
     line-height: 1.55;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+}
+
+.tikz-reference * {
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 .tikz-ref-heading {
@@ -542,4 +575,7 @@
     overflow-x: auto;
     line-height: 1.6;
     flex-shrink: 0;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
 }
