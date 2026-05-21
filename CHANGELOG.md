@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.16.0] - 2026-05-21
+
+### Added
+
+- **Inline rendering of plots in notes — no external TikZ plugin required.** The modal's "Insert into note" button now emits an `easy-tikz` JSON code block which the plugin renders inline using the same `SVGRenderer` / `SVG3DRenderer` that drives the live preview. The chart you see in the modal is exactly the chart that ends up in the note.
+- **Click-to-edit.** Clicking a rendered chart reopens the modal pre-filled with the chart's settings (functions, ranges, title, labels, 3D rotation, polar, box aspect — everything). Hitting "Save changes" replaces the block in the source file in place; opening Easy TikZ from the ribbon icon still inserts a brand-new block at the cursor.
+- **Optional `tikz` block rendering.** New plugin setting "Also render plain `tikz` blocks". Off by default to coexist with `obsidian-tikzjax` and friends. When on, `tikz` blocks that contain Easy TikZ JSON render the same way as `easy-tikz`; blocks that look like real LaTeX get a small "install obsidian-tikzjax" note instead of silent failure.
+- **SettingsManager serialisation.** New `serialize()` / `static fromJSON(data)` round-trip every setting to a plain JSON object. This is the on-disk format inside `easy-tikz` code blocks and what makes click-to-edit possible.
+
+### Changed
+
+- **The Copy TikZ code button still produces pgfplots** for users who want to export to a real TeX install — the in-Obsidian rendering does NOT touch that path. Inline rendering and TikZ export are two independent outputs from the same model.
+
 ## [3.15.0] - 2026-05-21
 
 ### Added

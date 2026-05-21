@@ -67,10 +67,18 @@ export interface PluginData {
      * each step doubles the grid cells, so the preview will slow.
      */
     maxSamples3D: number;
+    /**
+     * When true, the plugin also renders blocks tagged plain `tikz`
+     * (not just `easy-tikz`). Off by default to avoid conflicting
+     * with `obsidian-tikzjax` and other plugins that claim the same
+     * code-block language.
+     */
+    renderTikzBlocks: boolean;
 }
 
 export const DEFAULT_PLUGIN_DATA: PluginData = {
     userTemplates: [],
     invertDrag3D: false,
     maxSamples3D: 80,
+    renderTikzBlocks: false,
 };

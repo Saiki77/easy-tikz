@@ -1,5 +1,42 @@
 /* TikZ Graph Helper: dashboard styles */
 
+/* Inline-rendered easy-tikz code blocks (markdown post-processor). */
+.tikz-rendered-chart {
+    display: block;
+    position: relative;
+    margin: 8px 0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: outline-color 0.12s ease, box-shadow 0.12s ease;
+    outline: 1px solid transparent;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.tikz-rendered-chart:hover,
+.tikz-rendered-chart:focus-visible {
+    outline-color: var(--interactive-accent);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--interactive-accent) 30%, transparent);
+}
+
+.tikz-rendered-chart svg,
+.tikz-rendered-chart .tikz-3d-root {
+    max-width: 100%;
+    height: auto;
+}
+
+.tikz-block-error {
+    margin: 8px 0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--text-error) 50%, transparent);
+    background: color-mix(in srgb, var(--background-modifier-error) 50%, transparent);
+    color: var(--text-error);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+
 .tikz-modal {
     display: flex;
     flex-direction: column;

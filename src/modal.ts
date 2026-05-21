@@ -1,4 +1,4 @@
-import { Modal, Setting, SliderComponent, TextComponent, MarkdownView, Notice, App, setIcon } from 'obsidian';
+import { Modal, Setting, SliderComponent, TextComponent, MarkdownView, Notice, App, TFile, setIcon } from 'obsidian';
 import { FunctionParameters, Function3DParameters } from './types';
 import { SettingsManager } from './settings';
 import { SVGRenderer } from './renderer';
@@ -11,6 +11,20 @@ import { MathHelper } from './math';
 interface PluginHost {
     data: { userTemplates: UserTemplate[]; invertDrag3D?: boolean; maxSamples3D?: number };
     saveUserTemplates(templates: UserTemplate[]): Promise<void>;
+}
+
+/**
+ * Optional state passed when the modal is opened by clicking an
+ * already-rendered easy-tikz block: pre-fills the SettingsManager and
+ * remembers the source location so "Insert into note" can replace the
+ * block in place instead of inserting at the cursor.
+ */
+export interface TikzModalInitialState {
+    data: Record<string, unknown>;
+    sourceFile?: TFile | null;
+    originalBlockText?: string;
+    /** Either 'easy-tikz' (default emit) or 'tikz' (when re-rendering an existing tikz-tagged block). */
+    fenceTag?: 'easy-tikz' | 'tikz';
 }
 
 /**
@@ -124,11 +138,21 @@ export class TikzModal extends Modal {
     private suspendObserverUntil = 0;
 
     private plugin: PluginHost | null = null;
+    private sourceFile: TFile | null = null;
+    private originalBlockText: string | null = null;
+    private fenceTag: 'easy-tikz' | 'tikz' = 'easy-tikz';
 
-    constructor(app: App, plugin?: PluginHost) {
+    constructor(app: App, plugin?: PluginHost, initialState?: TikzModalInitialState) {
         super(app);
-        this.settings = new SettingsManager();
         this.plugin = plugin ?? null;
+        if (initialState && initialState.data) {
+            this.settings = SettingsManager.fromJSON(initialState.data);
+            this.sourceFile = initialState.sourceFile ?? null;
+            this.originalBlockText = initialState.originalBlockText ?? null;
+            this.fenceTag = initialState.fenceTag ?? 'easy-tikz';
+        } else {
+            this.settings = new SettingsManager();
+        }
     }
 
     private getUserTemplates(): UserTemplate[] {
@@ -1452,7 +1476,7 @@ export class TikzModal extends Modal {
             { name: 'Copy TikZ code', desc: 'The default. Copies the pgfplots source to the clipboard.' },
             { name: 'Copy SVG', desc: 'Copies the live SVG with a transparent background. Paste into Inkscape, Figma, or directly into Obsidian as <img src="...">. CSS variables are resolved so the file renders correctly outside the plugin.' },
             { name: 'Copy PNG', desc: 'Rasterises the SVG at 2x resolution and copies a PNG to the clipboard, also with a transparent background. Paste into any image-aware app.' },
-            { name: 'Insert into note', desc: 'Inserts a `tikz` code block into the active note.' },
+            { name: 'Insert into note', desc: 'Inserts an `easy-tikz` JSON code block into the active note; the plugin renders it inline via its own SVG renderer — no external TikZ plugin required. Clicking the rendered chart reopens this modal pre-filled.' },
         ]);
 
         section('Preview (2D)');
@@ -2110,20 +2134,65 @@ export class TikzModal extends Modal {
             )
             .addButton((btn) =>
                 btn
-                    .setButtonText('Insert into note')
+                    .setButtonText(this.sourceFile ? 'Save changes' : 'Insert into note')
                     .setCta()
-                    .then((b) => b.buttonEl.setAttr('aria-label', 'Insert generated TikZ code into the current note'))
-                    .onClick(() => {
-                        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-                        if (!view) {
-                            new Notice('No active note to insert into.');
-                            return;
-                        }
-                        const code = this.getCurrentTikzCode();
-                        view.editor.replaceSelection('```tikz\n' + code + '\n```\n');
-                        this.close();
+                    .then((b) =>
+                        b.buttonEl.setAttr(
+                            'aria-label',
+                            this.sourceFile
+                                ? 'Save the edited chart back into the source note'
+                                : 'Insert this chart as an easy-tikz block in the current note'
+                        )
+                    )
+                    .onClick(async () => {
+                        await this.emitEasyTikzBlock();
                     })
             );
+    }
+
+    /**
+     * Emit the current settings as an `easy-tikz` JSON code block. If the
+     * modal was opened by clicking an existing rendered chart, replace
+     * that block in its source file; otherwise insert a new block at the
+     * active editor's cursor.
+     */
+    private async emitEasyTikzBlock() {
+        const json = JSON.stringify(this.settings.serialize(), null, 2);
+        const newBlock = '```' + this.fenceTag + '\n' + json + '\n```';
+
+        if (this.sourceFile && this.originalBlockText) {
+            try {
+                const content = await this.app.vault.read(this.sourceFile);
+                if (!content.includes(this.originalBlockText)) {
+                    new Notice(
+                        'Could not locate the original chart in the source file (it may have been edited). Inserting at the cursor instead.'
+                    );
+                    this.insertAtCursor(newBlock);
+                    return;
+                }
+                const updated = content.replace(this.originalBlockText, newBlock);
+                await this.app.vault.modify(this.sourceFile, updated);
+                // Update originalBlockText so subsequent saves still find the block.
+                this.originalBlockText = newBlock;
+                this.close();
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : 'unknown error';
+                new Notice('Could not save the chart to the file: ' + msg);
+            }
+            return;
+        }
+
+        this.insertAtCursor(newBlock);
+    }
+
+    private insertAtCursor(blockText: string) {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view) {
+            new Notice('No active note to insert into.');
+            return;
+        }
+        view.editor.replaceSelection(blockText + '\n');
+        this.close();
     }
 
     /**

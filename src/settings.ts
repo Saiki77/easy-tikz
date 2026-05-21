@@ -315,6 +315,33 @@ export class SettingsManager {
         this.values.set(id, value);
     }
 
+    /**
+     * Round-trip all settings as a plain JSON-safe object. Used to persist
+     * a chart inside an `easy-tikz` code block and to feed
+     * `SettingsManager.fromJSON` when the user clicks a rendered chart to
+     * edit it. All values held by the manager are already plain types
+     * (strings, numbers, booleans, plain objects/arrays of those), so a
+     * shallow Object.fromEntries is enough.
+     */
+    serialize(): Record<string, unknown> {
+        return Object.fromEntries(this.values.entries());
+    }
+
+    /**
+     * Rebuild a SettingsManager from a serialized object. Missing keys
+     * fall back to the constructor's defaults so older blocks keep
+     * working when new fields are added.
+     */
+    static fromJSON(data: Record<string, unknown>): SettingsManager {
+        const mgr = new SettingsManager();
+        if (data && typeof data === 'object') {
+            for (const [key, value] of Object.entries(data)) {
+                mgr.setValue(key, value);
+            }
+        }
+        return mgr;
+    }
+
     generateTikzCode(): string {
         const isPolar = this.getValue('coordinateSystem') === 'polar';
         let code = '';
