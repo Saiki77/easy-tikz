@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.13.1] - 2026-05-21
+
+### Fixed
+
+- **Tab bar overflow on narrow screens (e.g. 13" MacBook Air).** The tab bar now scrolls horizontally with a thin styled scrollbar, and tab button padding tightens under 1280px viewport width so all seven tabs fit without scrolling in the common case.
+- **Reference tab text was not selectable on macOS.** Obsidian's modal applies `user-select: none` to descendants, so the recipes and code examples couldn't be highlighted to copy. Force `user-select: text` and a text cursor on the Reference content (including `<pre>` code blocks) so paragraphs, list items, and code samples can all be copied.
+
 ## [3.13.0] - 2026-05-21
 
 ### Added
