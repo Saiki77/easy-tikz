@@ -13,6 +13,11 @@
   </tr>
 </table>
 
+<p align="center">
+  <img src="docs/screenshots/demo.gif" alt="End-to-end: open the modal, edit a plot, pan / drag, insert into the note, click the rendered chart to re-edit" width="960">
+</p>
+<p align="center"><sub>End-to-end: open the modal, edit, pan / drag, insert, click the rendered chart to re-edit. <a href="docs/screenshots/demo.mp4">(MP4)</a></sub></p>
+
 ## Why
 
 Pgfplots is powerful but the syntax is fiddly and the feedback loop is "edit, recompile, squint". Easy TikZ is a visual editor with a live preview that renders the chart in your note directly — no TeX install needed for in-vault use, and the same model exports clean pgfplots when you want to publish.
