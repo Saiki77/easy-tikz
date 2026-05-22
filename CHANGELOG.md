@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.19.2] - 2026-05-22
+
+### Changed
+
+- Minor wording cleanup across the README, CHANGELOG, release-post templates, marketing card text, and source-file comments. No runtime change.
+
 ## [3.19.1] - 2026-05-22
 
 ### Changed
