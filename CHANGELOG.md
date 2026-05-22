@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.19.1] - 2026-05-22
+
+### Changed
+
+- **Dropped the `builtin-modules` dev dependency.** Replaced with the Node standard-library import `import { builtinModules as builtins } from "node:module"` inside `esbuild.config.mjs`. The package was a thin wrapper around a list Node already exposes; one fewer dependency to audit. Resolves the Obsidian community-plugin validator's "*'builtin-modules' should be replaced with an alternative package*" warning.
+
+### Fixed
+
+- **Removed `::-webkit-scrollbar` from the tab bar styling.** The standard `scrollbar-width: thin` rule already does the job in every modern browser Obsidian ships on; the WebKit-prefixed selectors only customised the colour and added an Obsidian-validator warning about partial support.
+- **Replaced `!important` with chained-class specificity** in the three modal-overriding rules. `.tikz-modal.tikz-modal { … }` and `.tikz-modal.tikz-modal .modal-content { … }` (0,2,0 / 0,3,0) reliably beat Obsidian's default `.modal` / `.modal-content` (0,1,0) selectors without `!important`, which is the recommended pattern.
+
 ## [3.19.0] - 2026-05-22
 
 ### Changed

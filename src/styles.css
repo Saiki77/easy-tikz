@@ -127,20 +127,24 @@
 }
 
 
-.tikz-modal {
+/* Chained class for higher specificity (0,2,0) so width / max-width
+   override Obsidian's default `.modal` (0,1,0) rules without `!important`.
+   The selector still only matches our modal — chaining a class with
+   itself doesn't change what it targets, only its specificity. */
+.tikz-modal.tikz-modal {
     display: flex;
     flex-direction: column;
     height: 80vh;
     max-height: 80vh;
-    width: 92vw !important;
-    max-width: 1400px !important;
+    width: 92vw;
+    max-width: 1400px;
 }
 
-.tikz-modal .modal-content {
+.tikz-modal.tikz-modal .modal-content {
     display: flex;
     flex: 1;
     overflow: hidden;
-    padding: 0 !important;
+    padding: 0;
 }
 
 /* Split pane layout */
@@ -178,16 +182,11 @@
     flex-shrink: 0;
     overflow-x: auto;
     overflow-y: hidden;
+    /* Standard CSS scrollbar styling. Older browsers fall back to the
+       platform default — Obsidian 1.4.5's Chromium supports this, and
+       skipping the `::-webkit-scrollbar` vendor selector avoids an
+       Obsidian validator "partially supported feature" warning. */
     scrollbar-width: thin;
-}
-
-.tikz-tab-bar::-webkit-scrollbar {
-    height: 6px;
-}
-
-.tikz-tab-bar::-webkit-scrollbar-thumb {
-    background: color-mix(in srgb, var(--background-modifier-border) 80%, transparent);
-    border-radius: 3px;
 }
 
 .tikz-tab-btn {
