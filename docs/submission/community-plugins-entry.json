@@ -1,0 +1,7 @@
+{
+    "id": "easy-tikz",
+    "name": "Easy TikZ",
+    "author": "Saiki77",
+    "description": "Visually design TikZ and pgfplots graphs with a live SVG preview. Supports 2D functions, 3D surfaces, tangents, extrema, and one-click code insertion.",
+    "repo": "Saiki77/easy-tikz"
+}

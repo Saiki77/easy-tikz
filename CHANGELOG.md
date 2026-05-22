@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.19.0] - 2026-05-22
+
+### Changed
+
+- **`minAppVersion` bumped from `0.15.0` to `1.4.0`.** The plugin's styling relies on CSS `color-mix()` (Chromium 111+), the 3D renderer on `aspect-ratio` and `ResizeObserver`, and the modal on Obsidian's `setIcon` Lucide icons — all available in Obsidian 1.4 and later. The old floor was vestigial and would have caused the community-plugin submission validator to reject the manifest as incompatible with declared APIs.
+
+### Added
+
+- **`docs/submission/` directory** with everything needed to open the
+  Community Plugin submission PR against `obsidianmd/obsidian-releases` —
+  step-by-step guide, the exact `community-plugins.json` entry to paste,
+  and a pre-filled PR description with all the checklist boxes pre-ticked.
+  Closes the "Could not find or validate a manifest" loop with explicit
+  troubleshooting for the most common rejections.
+
 ## [3.18.8] - 2026-05-22
 
 ### Changed
