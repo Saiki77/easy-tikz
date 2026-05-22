@@ -14,9 +14,14 @@
 </table>
 
 <p align="center">
-  <img src="docs/screenshots/demo.gif" alt="End-to-end: open the modal, edit a plot, pan / drag, insert into the note, click the rendered chart to re-edit" width="960">
+  <img src="docs/screenshots/demo-overview.gif" alt="One-minute overview: every tab, function and tool flowing end-to-end" width="960">
 </p>
-<p align="center"><sub>End-to-end: open the modal, edit, pan / drag, insert, click the rendered chart to re-edit. <a href="docs/screenshots/demo.mp4">(MP4)</a></sub></p>
+<p align="center"><sub>One-minute walkthrough — every tab, function, and tool end-to-end. <a href="docs/screenshots/demo-overview.mp4">(MP4)</a></sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/demo.gif" alt="Tighter clip: open the modal, edit a plot, pan / drag, insert into the note, click the rendered chart to re-edit" width="960">
+</p>
+<p align="center"><sub>Tighter clip — open the modal, edit, pan / drag, insert, click the rendered chart to re-edit. <a href="docs/screenshots/demo.mp4">(MP4)</a></sub></p>
 
 ## Why
 
