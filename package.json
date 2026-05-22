@@ -1,6 +1,6 @@
 {
     "name": "easy-tikz",
-    "version": "3.18.5",
+    "version": "3.18.6",
     "description": "Visually design TikZ and pgfplots graphs with a live SVG preview.",
     "main": "main.js",
     "scripts": {
