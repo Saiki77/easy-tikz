@@ -200,6 +200,10 @@ export class TikzModal extends Modal {
 
         this.setupSectionObserver();
         this.setupPreviewResizeObserver();
+        // Re-run visibility now that every panel and overlay exists. Earlier
+        // calls fired during tab construction before right-panel overlays
+        // were attached; this second pass picks them up.
+        this.update3DVisibility();
         this.updatePreview();
     }
 
@@ -1971,7 +1975,11 @@ export class TikzModal extends Modal {
     private buildZoom3DOverlay() {
         const overlay = this.previewContainer.createDiv({ cls: 'tikz-3d-zoom-overlay' });
         overlay.setAttr('aria-hidden', 'true');
-        overlay.style.display = 'none';
+        // Initial display follows the current 2D/3D state. update3DVisibility
+        // also flips this, but buildGraphTab calls update3DVisibility BEFORE
+        // this overlay is built (panel-left is constructed before panel-right),
+        // so opening the modal in 3D mode would otherwise leave it hidden.
+        overlay.style.display = this.is3D() ? 'flex' : 'none';
 
         const plus = overlay.createEl('button', { cls: 'tikz-3d-zoom-btn', text: '+' });
         plus.setAttr('type', 'button');

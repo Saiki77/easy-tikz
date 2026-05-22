@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.18.4] - 2026-05-21
+
+### Fixed
+
+- **3D +/− zoom overlay reappears when opening the modal in 3D mode.** The overlay's initial `display: none` was set in its builder, but `update3DVisibility` had already run during left-panel construction (before the right-panel overlays existed) so its visibility flip never reached this element. Now the builder reads `is3D()` directly when creating the overlay, and `onOpen` calls `update3DVisibility` one more time after every panel and overlay is built. Click-to-edit on a saved 3D chart now shows the zoom buttons from the first frame.
+
 ## [3.18.3] - 2026-05-21
 
 ### Fixed
