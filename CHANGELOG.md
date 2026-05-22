@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.18.3] - 2026-05-21
+
+### Fixed
+
+- **2D drag panes inside the box again, like 3D rotation does.** The 3.18.1 CSS-transform approach translated the entire SVG element, which made the whole chart slide around (axes, labels, box edges and all) — the box appeared to "drag off" and the chart only snapped to the new range on release. Now that 3.18.2 fixed the icon-SVG mix-up, the original per-frame `applyAxisRange` path gives correct 1:1 panning: the chart pans inside its fixed axes each move, tick labels update live, the bounding box stays put. Same behaviour the 3D drag has always had.
+
 ## [3.18.2] - 2026-05-21
 
 ### Fixed
