@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.18.7] - 2026-05-22
+
+### Fixed
+
+- **Domains like `0:2*PI`, `-PI:PI`, `0:sqrt(3)` now actually work.** `MathHelper.parseDomain` was using `Number()` to parse each bound, and `Number('2*PI')` is `NaN` — so every built-in template that uses `2*PI` (Sine wave, Cosine, Damped oscillation, …) silently failed with "Could not evaluate any function" and produced an empty chart. That's why `sin(x)` looked broken even though `sin` itself was fine — the renderer never sampled it because the domain throw happened first. New `parseBound` helper tries `Number()` first (cheap fast path for `-10`, `3.14`, `1e3`), then falls back to the same `compile1D` pipeline that plotted expressions use, so anything that evaluates to a finite scalar (`PI`, `2*PI`, `sqrt(3)`, `log(10)`, etc.) works. Same upgrade for `parseTangentPoint`, so tangent point values can be `PI/2`, `pi/4`, etc.
+
 ## [3.18.6] - 2026-05-22
 
 ### Fixed

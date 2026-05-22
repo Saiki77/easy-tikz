@@ -44,6 +44,35 @@ function pruneCache<K, V>(cache: Map<K, V>) {
 }
 
 /**
+ * Parse a single domain bound or tangent-point value. Accepts plain
+ * numbers ("3", "-0.5", "1e3") and any expression that evaluates to a
+ * finite scalar ("PI", "2*PI", "sqrt(3)", "log(10)"). The expression
+ * path runs through the same MATH_PRELUDE as plotted functions, so
+ * the exact same syntax works everywhere.
+ *
+ * Returns NaN for unparseable input; the caller decides whether that
+ * is fatal.
+ */
+function parseBound(text: string): number {
+    if (text === undefined || text === null) return NaN;
+    const s = String(text).trim();
+    if (s === '') return NaN;
+    // Plain-number fast path. Avoids the `new Function` cost for the
+    // overwhelming-majority case where the user typed a literal like
+    // `-10` or `3.14`.
+    const direct = Number(s);
+    if (Number.isFinite(direct)) return direct;
+    try {
+        // Reuse the 1D compile cache: the expression is independent of
+        // x, so any value for x works; we pass 0.
+        const value = compile1D(s)(0);
+        return Number.isFinite(value) ? value : NaN;
+    } catch {
+        return NaN;
+    }
+}
+
+/**
  * Compile a one-variable math expression into a callable. Cached on the
  * expression string so 500-sample render loops only call `new Function`
  * once per unique expression, not once per sample.
@@ -81,10 +110,10 @@ export class MathHelper {
         if (parts.length !== 2) {
             throw new Error('Domain must look like "min:max", e.g. -10:10');
         }
-        const min = Number(parts[0]);
-        const max = Number(parts[1]);
+        const min = parseBound(parts[0]);
+        const max = parseBound(parts[1]);
         if (!isFinite(min) || !isFinite(max)) {
-            throw new Error('Domain bounds must be finite numbers');
+            throw new Error('Domain bounds must be finite numbers (or finite-valued expressions like 2*PI, sqrt(3))');
         }
         if (min >= max) {
             throw new Error('Domain min must be less than max');
@@ -94,9 +123,10 @@ export class MathHelper {
 
     /**
      * Parse a tangent-point string and verify it lies inside the given domain.
+     * Accepts plain numbers or expressions that evaluate to one (e.g. `PI/2`).
      */
     static parseTangentPoint(point: string, domain: [number, number]): number {
-        const x = Number(point);
+        const x = parseBound(point);
         if (!isFinite(x)) {
             throw new Error('Tangent point must be a number');
         }
