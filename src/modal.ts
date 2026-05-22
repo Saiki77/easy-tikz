@@ -657,9 +657,13 @@ export class TikzModal extends Modal {
             this.requestPreviewUpdate();
         };
 
-        const addFunctionCard = () => {
+        const addFunctionCard = (seed?: FunctionParameters) => {
             const rowId = `func-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
             const ordinal = rowStates.size + 1;
+            // Default state used for a brand-new card. If a seed is supplied
+            // (modal opened from click-to-edit on an existing chart) we
+            // merge the saved values on top so every input below shows what
+            // was persisted, not the placeholder defaults.
             const state: FunctionParameters = {
                 expression: '',
                 domain: '-10:10',
@@ -676,6 +680,7 @@ export class TikzModal extends Modal {
                 parametric: false,
                 expressionY: '',
                 name: `f${ordinal}`,
+                ...(seed || {}),
             };
             rowStates.set(rowId, state);
 
@@ -791,7 +796,7 @@ export class TikzModal extends Modal {
                 .setDesc('Use x. Supports +, -, *, /, ^, parentheses, and Math.* functions.')
                 .addText((t) => {
                     expressionInput = t;
-                    t.setPlaceholder('x^2').onChange((v) => {
+                    t.setPlaceholder('x^2').setValue(state.expression || '').onChange((v) => {
                         state.expression = v;
                         updateFunctionValues();
                     });
@@ -845,7 +850,7 @@ export class TikzModal extends Modal {
                 .setName('y(t)')
                 .setDesc('Second component when parametric. The Expression field above becomes x(t). Domain is the t range.')
                 .addText((t) =>
-                    t.setPlaceholder('sin(t)').onChange((v) => {
+                    t.setPlaceholder('sin(t)').setValue(state.expressionY || '').onChange((v) => {
                         state.expressionY = v;
                         updateFunctionValues();
                     })
@@ -856,7 +861,7 @@ export class TikzModal extends Modal {
                 .setName('Tangent point (x)')
                 .setDesc('A number, or "min" / "max" to snap to the nearest extremum. Append a digit (min2, max1) to pick the n-th.')
                 .addText((t) => {
-                    t.setPlaceholder('x value, min, or max').onChange((v) => {
+                    t.setPlaceholder('x value, min, or max').setValue(state.tangentPoint || '').onChange((v) => {
                         state.tangentPoint = v;
                         updateFunctionValues();
                     });
@@ -930,9 +935,21 @@ export class TikzModal extends Modal {
                     })
                 );
             });
+            // If the seed had these toggles on, reveal the dependent sub-rows
+            // now — the onChange handler above only fires on user input.
+            if (state.tangent) tangentInput.addClass('visible');
+            if (state.fill) fillOptions.addClass('visible');
+            if (state.parametric) parametricInput.addClass('visible');
         };
 
-        addFunctionCard();
+        // Hydrate from existing functions if any were persisted (click-to-edit).
+        // Falls through to a single blank card on fresh modals.
+        const existing = (this.settings.getValue('functions') as FunctionParameters[]) || [];
+        if (existing.length > 0) {
+            for (const fn of existing) addFunctionCard(fn);
+        } else {
+            addFunctionCard();
+        }
 
         const addBtnDiv = tab.createDiv({ cls: 'tikz-add-func' });
         new Setting(addBtnDiv).addButton((btn) =>
@@ -955,8 +972,10 @@ export class TikzModal extends Modal {
             this.requestPreviewUpdate();
         };
 
-        const addFunctionCard = () => {
-            const rowId = `func3d-${Date.now()}`;
+        const addFunctionCard = (seed?: Function3DParameters) => {
+            const rowId = `func3d-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+            // Like the 2D card, accept a seed so click-to-edit reopens the
+            // modal with the persisted surface, not a blank one.
             const state: Function3DParameters = {
                 expression: '',
                 xDomain: '-5:5',
@@ -965,6 +984,7 @@ export class TikzModal extends Modal {
                 wireframe: false,
                 opacity: 0.7,
                 samples: 40,
+                ...(seed || {}),
             };
             rowStates.set(rowId, state);
 
@@ -1086,7 +1106,7 @@ export class TikzModal extends Modal {
                 .setDesc('Use x and y. Supports +, -, *, /, ^, parentheses, and Math.* functions.')
                 .addText((t) => {
                     expressionInput = t;
-                    t.setPlaceholder('sin(x)*cos(y)').onChange((v) => {
+                    t.setPlaceholder('sin(x)*cos(y)').setValue(state.expression || '').onChange((v) => {
                         state.expression = v;
                         updateFunctionValues();
                     });
@@ -1158,7 +1178,13 @@ export class TikzModal extends Modal {
                 );
         };
 
-        addFunctionCard();
+        // Hydrate from existing 3D surfaces when the modal opens with state.
+        const existing3D = (this.settings.getValue('functions3D') as Function3DParameters[]) || [];
+        if (existing3D.length > 0) {
+            for (const fn of existing3D) addFunctionCard(fn);
+        } else {
+            addFunctionCard();
+        }
 
         const addBtnDiv = tab.createDiv({ cls: 'tikz-add-func' });
         new Setting(addBtnDiv).addButton((btn) =>

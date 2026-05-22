@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.18.6] - 2026-05-22
+
+### Fixed
+
+- **Click-to-edit no longer loses your functions.** When the modal opened from an inline `easy-tikz` chart, the Functions tab created a fresh blank card every time instead of populating cards from the saved state. The chart kept rendering correctly (the persisted `functions` were still in `SettingsManager`), but the Expression / y(t) / Tangent-point inputs were empty — so if you touched any field, the now-blank Expression got committed and wiped the function. Fixed both 2D and 3D:
+  - `addFunctionCard(seed?)` accepts a saved function and merges it on top of the defaults.
+  - The Expression, y(t), and Tangent-point inputs now call `setValue(state.…)` (they only had `setPlaceholder` before).
+  - `populateFunctionsTab` loops `settings.functions` / `settings.functions3D` and creates one card per saved entry, falling through to a single blank card on a fresh modal.
+  - Fill / Tangent / Parametric reveal their sub-rows when the seed has those toggles on (previously the toggle showed on but the dependent inputs stayed hidden until you flipped it off and back on).
+
 ## [3.18.5] - 2026-05-22
 
 ### Fixed
