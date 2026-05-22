@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Easy TikZ — composable tools">
+  <defs>
+    <style>
+      .bg { fill: #F4F5F7; }
+      .frame { stroke: #E2E5EA; stroke-width: 1.25; fill: none; }
+      .title { font: 700 78px/1.0 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #0F172A; letter-spacing: -0.02em; }
+      .sub { font: 400 22px/1.45 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #334155; }
+      .pill { font: 500 13px/1 ui-monospace, "SF Mono", Menlo, monospace; fill: #475569; }
+      .crumb { font: 400 16px/1 ui-monospace, "SF Mono", Menlo, monospace; fill: #64748B; letter-spacing: 0.04em; }
+      .brand { font: 700 22px/1 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #0F172A; }
+      .axislbl { font: 500 14px/1 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #475569; }
+      .toollbl { font: 500 13px/1 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #0F172A; }
+      .accent { fill: #2563EB; }
+      .grid { stroke: #E5E8EE; stroke-width: 1; }
+      .axis { stroke: #0F172A; stroke-width: 2; fill: none; stroke-linecap: square; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1200" height="800"/>
+  <line class="frame" x1="60" y1="80" x2="1140" y2="80"/>
+  <line class="frame" x1="60" y1="720" x2="1140" y2="720"/>
+
+  <g transform="translate(60 40)">
+    <rect width="40" height="40" rx="8" fill="#0F172A"/>
+    <g stroke="#FFFFFF" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 28 L31 28"/>
+      <path d="M9 28 L9 10"/>
+      <path d="M11 24 Q20 -2 29 24"/>
+    </g>
+    <text class="brand" x="56" y="27">Easy TikZ</text>
+  </g>
+  <text class="crumb" x="1140" y="50" text-anchor="end">05 / 05</text>
+
+  <g transform="translate(80 220)">
+    <text class="title" x="0" y="0">Compose</text>
+    <text class="title accent" x="0" y="88">tools.</text>
+    <text class="sub" x="0" y="160">Area between curves. Intersections. Reference</text>
+    <text class="sub" x="0" y="190">lines. Free shapes &amp; braces. Stack any number</text>
+    <text class="sub" x="0" y="220">on top of any function — by name, not index.</text>
+
+    <g transform="translate(0 270)">
+      <rect width="490" height="32" rx="6" fill="#EAECF1"/>
+      <text class="pill" x="14" y="21">areaBetween · intersection · vline · hline · brace · …</text>
+    </g>
+  </g>
+
+  <!-- Right column: chart with tools overlaid -->
+  <g transform="translate(640 145)">
+    <rect width="470" height="470" rx="14" fill="#FFFFFF" stroke="#E2E5EA"/>
+    <g transform="translate(50 35)">
+      <g class="grid">
+        <line x1="0" y1="60" x2="370" y2="60"/>
+        <line x1="0" y1="135" x2="370" y2="135"/>
+        <line x1="0" y1="285" x2="370" y2="285"/>
+        <line x1="0" y1="360" x2="370" y2="360"/>
+      </g>
+      <!-- axes -->
+      <line class="axis" x1="0" y1="210" x2="370" y2="210"/>
+      <line class="axis" x1="40" y1="0" x2="40" y2="400"/>
+      <polygon points="370,210 360,205 360,215" fill="#0F172A"/>
+      <polygon points="40,0 35,12 45,12" fill="#0F172A"/>
+
+      <!-- AREA BETWEEN two curves: f(x) = x and g(x) = sqrt(x), 0..1.4 -->
+      <path d="M 40 210 L 305 60 L 305 210 Z" fill="#3B82F6" fill-opacity="0.18"/>
+      <path d="M 40 210 Q 170 100, 305 60 L 305 210 L 40 210 Z" fill="#3B82F6" fill-opacity="0.12"/>
+
+      <!-- f(x) = x (straight line) -->
+      <line x1="40" y1="210" x2="305" y2="60" stroke="#2563EB" stroke-width="2.6"/>
+      <!-- g(x) = sqrt(x) (curved) -->
+      <path d="M 40 210 Q 110 130, 305 60" stroke="#0F172A" stroke-width="2.6" fill="none"/>
+
+      <!-- intersection markers -->
+      <circle cx="40" cy="210" r="6" fill="#FFFFFF" stroke="#2563EB" stroke-width="2.6"/>
+      <circle cx="305" cy="60" r="6" fill="#FFFFFF" stroke="#2563EB" stroke-width="2.6"/>
+
+      <!-- intersection labels -->
+      <g font-family="ui-monospace, monospace" font-size="11" fill="#475569">
+        <text x="22" y="232">(0,0)</text>
+        <text x="290" y="50">(1,1)</text>
+      </g>
+
+      <!-- vertical reference line at x = 0.5 -->
+      <line x1="170" y1="0" x2="170" y2="400" stroke="#A855F7" stroke-width="1.6" stroke-dasharray="6 4"/>
+      <text class="toollbl" x="176" y="20" fill="#A855F7">x = 0.5</text>
+
+      <!-- brace label, drawn ABOVE the area (between the two curves) -->
+      <text x="172" y="135" text-anchor="middle" font-size="13" fill="#0F172A" font-family="-apple-system, Inter, sans-serif" font-weight="500">∫(x − √x) dx</text>
+      <path d="M 60 150 Q 100 155, 120 155 L 168 155 Q 178 155, 178 165 Q 178 155, 188 155 L 240 155 Q 260 155, 290 145"
+            fill="none" stroke="#0F172A" stroke-width="1.3"/>
+
+      <text class="axislbl" x="365" y="232">x</text>
+    </g>
+    <text class="pill" x="235" y="455" text-anchor="middle">f(x)=x · g(x)=√x · area between · intersection markers</text>
+  </g>
+
+  <text class="crumb" x="60" y="760">github.com/Saiki77/easy-tikz</text>
+  <text class="crumb" x="1140" y="760" text-anchor="end">MIT licensed</text>
+</svg>

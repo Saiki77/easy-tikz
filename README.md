@@ -1,123 +1,111 @@
-# Easy TikZ
-
 <p align="center">
-  <img src="docs/logo.svg" width="160" alt="Easy TikZ logo">
+  <img src="docs/screenshots/marketing-1-hero.png" alt="Easy TikZ: design TikZ & pgfplots charts in Obsidian" width="100%">
 </p>
-
-<p align="center">
-  <strong>Visually design TikZ and pgfplots graphs in Obsidian with a live SVG preview.</strong>
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/screenshot-2d.png" alt="Easy TikZ main window with a 2D plot" width="100%">
-</p>
-
-## Features
 
 <table>
   <tr>
-    <td width="50%" valign="top">
-      <img src="docs/screenshots/screenshot-2d.png" alt="2D function plot with tangent and extrema markers"><br>
-      <strong>2D function plots.</strong> Plot any one-variable expression with customizable color, thickness, dashing, and fill. Tangent lines and automatic extrema detection are one toggle away.
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/screenshots/screenshot-3d.png" alt="3D surface plot mid-rotation"><br>
-      <strong>3D surface plots.</strong> Render f(x, y) surfaces with wireframe or filled mode, adjustable opacity, and interactive mouse-drag or arrow-key rotation.
-    </td>
+    <td width="50%"><img src="docs/screenshots/marketing-2-2d.png" alt="2D plots: any expression, live preview, tangents and extrema" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/marketing-3-3d.png" alt="3D surfaces: f(x, y) at 60 fps, drag to rotate" width="100%"></td>
   </tr>
   <tr>
-    <td width="50%" valign="top">
-      <img src="docs/screenshots/screenshot-settings.png" alt="Settings tab"><br>
-      <strong>Live preview.</strong> Five tabs (Graph, Axis, Functions, Grid, Code) and a preview that updates as you type. Matches your Obsidian theme.
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/screenshots/screenshot-settings.png" alt="Generated TikZ code"><br>
-      <strong>One-click insertion.</strong> Copy the generated TikZ to the clipboard or insert it into the active note.
-    </td>
+    <td width="50%"><img src="docs/screenshots/marketing-4-inline.png" alt="Renders inline in your notes — no external TikZ plugin" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/marketing-5-tools.png" alt="Composable tools: area between, intersections, reference lines, free shapes" width="100%"></td>
   </tr>
 </table>
 
 ## Why
 
-Pgfplots is powerful but the syntax is fiddly and the feedback loop is "edit, recompile, squint". Easy TikZ is a visual editor with a live preview. Hit "Insert into note" when the plot looks right.
+Pgfplots is powerful but the syntax is fiddly and the feedback loop is "edit, recompile, squint". Easy TikZ is a visual editor with a live preview that renders the chart in your note directly — no TeX install needed for in-vault use, and the same model exports clean pgfplots when you want to publish.
 
-## Live rendering
+## Install
 
-The preview is drawn in-process by a small custom pipeline, not by pgfplots itself. There is no shell-out, no LaTeX compile, no image round-trip, which is what lets the camera follow the cursor without lag.
+**From inside Obsidian** (recommended)
 
-Rotation, drag, and wheel zoom are driven by `requestAnimationFrame`, so a typical surface (samples=40, 1,600 quads) sits at around 60 fps. Denser surfaces stay interactive too: a 6,400-quad surface (samples=80) hovers near 60 fps in canvas mode, and the slider's upper end (14,400 quads at samples=120) settles above 30 fps.
+1. Settings → Community plugins → **Browse**.
+2. Search **Easy TikZ** and click **Install**, then **Enable**.
 
-Two output paths share a single sample cache and a single depth sort:
+**Via BRAT** (early-access builds between releases)
 
-- **SVG path.** Mutates a pool of pre-allocated `<polygon>` elements in place. The DOM at rest is queryable, so Copy SVG and Copy PNG serialise the live scene with theme colours resolved.
-- **Canvas2D path.** Engaged during drag, scroll, and slider events. No DOM ops in the inner loop, hi-DPI aware via `devicePixelRatio`. 180 ms after the last interaction the renderer falls back to SVG so exports stay fresh.
+1. Install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin.
+2. BRAT settings → **Add Beta Plugin** → paste `Saiki77/easy-tikz`.
+3. Enable **Easy TikZ** under Settings → Community plugins.
 
-Sampled surface data is cached per surface, keyed by expression, domain, sample count, and z-range. A pure camera change (rotation, view zoom) re-projects from the cache without re-evaluating the function. Expression compilation is cached too (LRU, 128 entries), so the 500 samples of a 2D curve or the 1,600+ vertices of a 3D surface compile their expression once per render, not once per sample.
+**Manual:** download `main.js`, `manifest.json`, `styles.css` from the [latest release](../../releases) into `<your vault>/.obsidian/plugins/easy-tikz/`.
 
-The exported pgfplots code is independent: a real TeX engine produces the final figure. The preview exists to make the iteration loop tight.
+**Migrating from 2.x.** The plugin id changed to `easy-tikz` in 3.0. Rename `.obsidian/plugins/tikz_graph_helper/` to `.obsidian/plugins/easy-tikz/`, then re-enable. Settings carry over.
 
-## Installation
+## Quick start
 
-### Community plugins (recommended, once approved)
+1. Click the function icon in the ribbon (or run *Easy TikZ: open* from the palette).
+2. Type an expression on the **Functions** tab — `sin(x)`, `x^2 - 3*x`, `sin(sqrt(x^2 + y^2))` in 3D. The preview updates as you type.
+3. **Insert into note**. The plugin emits an `easy-tikz` code block which it renders inline.
 
-1. Open Obsidian Settings, Community plugins, Browse.
-2. Search for "Easy TikZ".
-3. Install and enable.
+Open an existing chart by clicking it in your note — the modal re-opens with every setting filled in, and saving replaces the source block in place.
 
-### BRAT (beta channel)
+## Plot
 
-1. Install the [BRAT plugin](https://github.com/TfTHacker/obsidian42-brat).
-2. Add `Saiki77/easy-tikz` as a beta plugin.
-3. Enable the plugin in Obsidian Settings.
+**2D.** Any one-variable expression. `^` is power, `Math.*` helpers are bare names, `PI` and `E` are constants. Toggle per-function: legend, fill (solid or pattern), dashed, tangent at a given x, automatic extrema markers, parametric (`x(t), y(t)`), or polar (`r(θ)`).
 
-### Manual install
+**3D.** Two-variable expressions over `(x, y)`. Wireframe or filled with adjustable opacity. Drag the preview to rotate, scroll to zoom, arrow keys for fine adjustments. Plugin setting controls the maximum samples-per-axis slider (default cap 80, raise up to 400 for export-quality surfaces).
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Saiki77/easy-tikz/releases).
-2. Place them in `<vault>/.obsidian/plugins/easy-tikz/`.
-3. Enable the plugin in Obsidian Settings.
+```
+sin(x)                       sin(x) * exp(-x/5)            r = 1 + cos(θ)
+x^3 - 3*x                    1/(1 + x^2)                   (cos t, sin t)
+sin(sqrt(x^2 + y^2))         exp(-(x^2 + y^2)/4)           x*y
+```
 
-### Migrating from 2.x
+The Reference tab inside the modal lists everything supported with examples.
 
-The plugin id changed to `easy-tikz` in 3.0. If you have a 2.x install:
+## Tools
 
-1. Disable the plugin in Settings, Community plugins.
-2. Rename `.obsidian/plugins/tikz_graph_helper/` to `.obsidian/plugins/easy-tikz/`.
-3. Re-enable the plugin.
+On top of your functions you can stack composable tools — these render alongside the curves in the preview and emit native pgfplots in the export:
 
-Settings carry over.
+| Tool             | What it draws                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `areaBetween`    | Filled region between two functions by **name** over an optional sub-domain.               |
+| `intersection`   | Dots (and optional `(x, y)` labels) at every crossing of two functions on the visible range. |
+| `verticalLine`   | Vertical reference at `x = c`, optional label near the top.                                |
+| `horizontalLine` | Horizontal reference at `y = c`, same knobs.                                               |
+| `rectangle`      | Free rectangle with stroke + optional fill pattern.                                        |
+| `circle`         | Free circle by center and radius.                                                          |
+| `segment`        | Line segment with arrow style `none / forward / backward / both`.                          |
+| `brace`          | Curly brace between two points with optional centered label.                               |
+| `plane3D`        | Slice plane at `axis = constant` in 3D, with chosen opacity.                               |
+| `point3D`        | Marker at `(x, y, z)` with optional label.                                                 |
+| `segment3D`      | 3D line between two points, optional arrow.                                                |
 
-## Usage
+Function references use a **Name** field on each function card (auto-populated as `f1, f2, …`, user-editable). That means "area between `f` and `g`" is stable across edits even if you reorder the functions.
 
-1. Click the function icon in the ribbon, or run the command from the palette.
-2. Configure your graph using the tabbed panel on the left:
-   - **Graph:** title, dimensions, 2D or 3D mode, camera controls.
-   - **Axis:** labels, ranges, axis style.
-   - **Functions:** expressions, domains, styling, tangents, extrema.
-   - **Grid:** major and minor grid lines.
-   - **Code:** the generated TikZ output.
-3. The live preview on the right updates as you edit.
-4. In 3D mode, drag the preview to rotate, or focus it and use the arrow keys.
-5. Click **Copy TikZ code** or **Insert into note** when done.
+## Inline rendering in notes
 
-### Function syntax
+The plugin registers an `easy-tikz` markdown code-block processor. **Insert into note** writes a JSON block; the same `SVGRenderer` / `SVG3DRenderer` that powers the modal preview renders the chart in your note. Click the rendered chart to re-open the modal pre-filled with every setting — change something, **Save changes**, the block in the source file is replaced in place.
 
-Use `x` (2D) or `x` and `y` (3D). `^` is the power operator. All `Math.*` helpers are available as bare names, plus the constants `PI` and `E`.
+Plugin setting **"Also render plain `tikz` blocks"** opts in to claim the `tikz` language tag as well; off by default to coexist peacefully with `obsidian-tikzjax` and similar.
 
-- `x^2`, `x^3 - 3*x`, `1/(1 + x^2)`
-- `sin(x)`, `cos(x)`, `tan(x)`, `tanh(x)`, `exp(x)`, `log(x)`, `sqrt(x)`
-- Combinations: `sin(x) * exp(-x/5)`
-- 3D: `sin(x) * cos(y)`, `x^2 + y^2`, `sin(sqrt(x^2 + y^2))`
+## Export
 
-The Reference tab inside the modal lists everything supported, with examples.
+`Copy TikZ code` produces standalone pgfplots that compiles with any TeX install — `\usepgfplotslibrary{fillbetween}` is injected automatically when an `areaBetween` tool is in use, the polar code path emits `axis equal`, `axis equal image` lights up when **Box aspect** is set to *Equal*. The inline render and the exported TikZ share one in-memory model, so what you see in the modal is what pgfplots draws — and the modal's `Copy SVG` and `Copy PNG` buttons each serialize the live scene with theme colours already resolved.
+
+## Plugin settings
+
+Settings → Community plugins → **Easy TikZ**:
+
+- **Invert vertical drag in 3D.** Trackball convention by default (drag down tilts the scene up); flip for direct manipulation (camera follows finger).
+- **Max 3D samples per axis.** Upper bound of the per-surface Samples slider. Default 80; can go up to 400 for export-quality meshes.
+- **Also render plain `tikz` blocks.** Off by default; on if you want one tag for everything (conflicts with obsidian-tikzjax).
+- **2D pan sensitivity.** Default 1.0 (direct: 1 mouse pixel = 1 chart pixel). 0.1–2.0.
+
+## Live rendering, briefly
+
+The preview is drawn in-process by a small custom pipeline — no shell-out, no LaTeX compile, no image round-trip — which is what lets the camera follow the cursor without lag. A typical 3D surface (samples=40, 1,600 quads) sits at ~60 fps; the slider's upper end (samples=120, 14,400 quads) settles above 30 fps. Sampled surface data is cached per-surface, keyed by expression + domain + sample count + z-range, so a pure camera change (rotation, zoom) re-projects from the cache without re-evaluating the function. Expression compilation is cached (LRU, 128 entries) so the 500 samples of a 2D curve compile their expression once per render, not once per sample.
 
 ## Permissions
 
-- **Clipboard:** writes TikZ code on "Copy TikZ code". No reads.
-- **Active note:** inserts TikZ code on "Insert into note".
+- **Clipboard:** writes TikZ code / SVG / PNG on the *Copy …* buttons. No reads.
+- **Active note:** inserts an `easy-tikz` block on **Insert into note**, replaces an existing block when saving from click-to-edit.
 - **Network:** none.
 - **Telemetry:** none.
-- **Files:** no vault access outside the active note's insertion point.
-- **Math evaluation:** expressions are compiled with `Function` and evaluated in-renderer to draw the preview. Not persisted, not transmitted.
+- **Math evaluation:** user expressions are compiled with `Function` and evaluated in-renderer to draw the preview. Nothing is persisted or transmitted.
 
 ## Development
 
@@ -127,19 +115,18 @@ npm run dev    # watch mode
 npm run build  # production build
 ```
 
-Source layout:
-
 ```
 src/
-  modal.ts         # main modal UI
-  renderer.ts      # 2D SVG renderer
-  renderer3d.ts    # 3D SVG renderer
-  settings.ts      # state and TikZ code generation
-  math.ts          # expression evaluation, derivatives, extrema
-  colors.ts        # shared color palette
-  util.ts          # shared rendering helpers (tick formatting, etc.)
-  styles.css       # all dashboard styling
-  types.ts         # shared interfaces
+  modal.ts         # main modal UI + click-to-edit lifecycle
+  renderer.ts      # 2D SVG renderer (functions + tools)
+  renderer3d.ts    # 3D SVG / canvas renderer
+  settings.ts      # state, serialisation, TikZ code generation
+  math.ts          # expression evaluation, extrema, intersections
+  colors.ts        # shared palette
+  templates.ts     # built-in function templates + plugin data shape
+  util.ts          # tick formatting, latex stripping
+  styles.css       # all UI styling
+  types.ts         # shared interfaces and the Tool union
 ```
 
 ## License

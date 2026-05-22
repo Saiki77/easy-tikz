@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.18.8] - 2026-05-22
+
+### Changed
+
+- **README + docs refresh.** Replaced the stale 2.x screenshots with five SVG-rendered marketing cards (hero, 2D plots, 3D surfaces, inline rendering, composable tools) matching the look of the Easy Git README. Restructured the README around quick-start → plot → tools → inline rendering → export → plugin settings, dropped the redundant Features grid, and added a clear "click any rendered chart to edit" loop description.
+
 ## [3.18.7] - 2026-05-22
 
 ### Fixed

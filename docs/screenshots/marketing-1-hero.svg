@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Easy TikZ — hero card">
+  <defs>
+    <style>
+      .bg { fill: #F4F5F7; }
+      .frame { stroke: #E2E5EA; stroke-width: 1.25; fill: none; }
+      .grid { stroke: #ECEEF1; stroke-width: 1; fill: none; }
+      .title { font: 700 96px/1.05 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #0F172A; letter-spacing: -0.02em; }
+      .sub { font: 400 28px/1.4 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #334155; }
+      .meta { font: 400 16px/1.2 ui-monospace, "SF Mono", Menlo, monospace; fill: #64748B; }
+      .brand { font: 700 22px/1 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #0F172A; }
+      .crumb { font: 400 16px/1 ui-monospace, "SF Mono", Menlo, monospace; fill: #64748B; letter-spacing: 0.04em; }
+      .accent { fill: #2563EB; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1200" height="800"/>
+
+  <!-- Top + bottom dividers -->
+  <line class="frame" x1="60" y1="80" x2="1140" y2="80"/>
+  <line class="frame" x1="60" y1="720" x2="1140" y2="720"/>
+
+  <!-- Brand strip -->
+  <g transform="translate(60 40)">
+    <rect width="40" height="40" rx="8" fill="#0F172A"/>
+    <g stroke="#FFFFFF" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 28 L31 28"/>
+      <path d="M9 28 L9 10"/>
+      <path d="M11 24 Q20 -2 29 24"/>
+    </g>
+    <text class="brand" x="56" y="27">Easy TikZ</text>
+  </g>
+  <text class="crumb" x="1140" y="50" text-anchor="end">01 / 05</text>
+
+  <!-- Logo card (centered, large) -->
+  <g transform="translate(465 165)">
+    <rect width="270" height="270" rx="46" fill="#FFFFFF" stroke="#E2E5EA"/>
+    <!-- mini chart -->
+    <g transform="translate(40 45)">
+      <g class="grid">
+        <line x1="0" y1="40" x2="190" y2="40"/>
+        <line x1="0" y1="90" x2="190" y2="90"/>
+        <line x1="0" y1="140" x2="190" y2="140"/>
+        <line x1="50" y1="0" x2="50" y2="180"/>
+        <line x1="100" y1="0" x2="100" y2="180"/>
+        <line x1="150" y1="0" x2="150" y2="180"/>
+      </g>
+      <g stroke="#0F172A" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M0 180 L0 0"/>
+        <path d="M0 180 L200 180"/>
+        <polygon points="0,-2 -5,12 5,12" fill="#0F172A"/>
+        <polygon points="200,180 188,175 188,185" fill="#0F172A"/>
+      </g>
+      <path d="M5 165 Q 95 -55 185 165" stroke="#2563EB" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- Title + tagline -->
+  <text class="title" x="600" y="520" text-anchor="middle">Easy <tspan class="accent">TikZ</tspan></text>
+  <text class="sub" x="600" y="568" text-anchor="middle">Design TikZ &amp; pgfplots charts without leaving Obsidian.</text>
+
+  <!-- Feature dots -->
+  <text class="meta" x="600" y="630" text-anchor="middle">Live preview &#160;·&#160; 2D &amp; 3D &#160;·&#160; Inline rendering &#160;·&#160; No TeX install</text>
+
+  <!-- Footer -->
+  <text class="crumb" x="60" y="760">github.com/Saiki77/easy-tikz</text>
+  <text class="crumb" x="1140" y="760" text-anchor="end">MIT licensed</text>
+</svg>

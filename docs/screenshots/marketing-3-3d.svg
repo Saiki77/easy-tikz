@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Easy TikZ — 3D surfaces">
+  <defs>
+    <style>
+      .bg { fill: #F4F5F7; }
+      .frame { stroke: #E2E5EA; stroke-width: 1.25; fill: none; }
+      .title { font: 700 78px/1.0 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #0F172A; letter-spacing: -0.02em; }
+      .sub { font: 400 22px/1.45 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #334155; }
+      .pill { font: 500 13px/1 ui-monospace, "SF Mono", Menlo, monospace; fill: #475569; }
+      .crumb { font: 400 16px/1 ui-monospace, "SF Mono", Menlo, monospace; fill: #64748B; letter-spacing: 0.04em; }
+      .brand { font: 700 22px/1 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #0F172A; }
+      .axislbl { font: 500 14px/1 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #475569; }
+      .accent { fill: #2563EB; }
+    </style>
+    <linearGradient id="surf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1E40AF"/>
+      <stop offset="50%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#93C5FD"/>
+    </linearGradient>
+  </defs>
+
+  <rect class="bg" width="1200" height="800"/>
+  <line class="frame" x1="60" y1="80" x2="1140" y2="80"/>
+  <line class="frame" x1="60" y1="720" x2="1140" y2="720"/>
+
+  <g transform="translate(60 40)">
+    <rect width="40" height="40" rx="8" fill="#0F172A"/>
+    <g stroke="#FFFFFF" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 28 L31 28"/>
+      <path d="M9 28 L9 10"/>
+      <path d="M11 24 Q20 -2 29 24"/>
+    </g>
+    <text class="brand" x="56" y="27">Easy TikZ</text>
+  </g>
+  <text class="crumb" x="1140" y="50" text-anchor="end">03 / 05</text>
+
+  <g transform="translate(80 220)">
+    <text class="title" x="0" y="0">3D surfaces.</text>
+    <text class="title accent" x="0" y="88">Spin them.</text>
+    <text class="sub" x="0" y="160">Render f(x, y) at 60 fps. Mouse-drag rotates,</text>
+    <text class="sub" x="0" y="190">wheel zooms, arrow keys nudge. Equal-aspect</text>
+    <text class="sub" x="0" y="220">cube or data-proportional — your call.</text>
+
+    <g transform="translate(0 270)">
+      <rect width="500" height="32" rx="6" fill="#EAECF1"/>
+      <text class="pill" x="14" y="21">sin(sqrt(x^2 + y^2)) · exp(-(x^2 + y^2)/4) · x·y</text>
+    </g>
+  </g>
+
+  <!-- Right column: 3D box + surface -->
+  <g transform="translate(640 145)">
+    <rect width="470" height="470" rx="14" fill="#FFFFFF" stroke="#E2E5EA"/>
+
+    <!-- 3D box (perspective wireframe) -->
+    <g transform="translate(80 80)" stroke="#0F172A" stroke-width="1.6" fill="none">
+      <!-- back face -->
+      <polygon points="80,40 280,5 280,200 80,235" fill="#FAFBFC" stroke="#CBD5E1" stroke-dasharray="4 4"/>
+      <!-- bottom face -->
+      <polygon points="20,260 220,225 280,200 80,235" fill="#F1F4F8" stroke="#CBD5E1"/>
+      <!-- left face -->
+      <polygon points="20,80 80,40 80,235 20,260" fill="#F8FAFC" stroke="#CBD5E1"/>
+
+      <!-- gridded surface (mesh approximation of a bell / saddle) -->
+      <g stroke="url(#surf)" stroke-width="1.4" fill="none" opacity="0.95">
+        <!-- "u" lines -->
+        <path d="M 38 110 Q 100 30, 168 60 T 270 92"/>
+        <path d="M 36 138 Q 100 60, 168 88 T 270 122"/>
+        <path d="M 34 165 Q 100 95, 168 118 T 270 152"/>
+        <path d="M 32 192 Q 100 130, 168 148 T 270 182"/>
+        <path d="M 30 218 Q 100 168, 168 182 T 270 212"/>
+
+        <!-- "v" lines (cross-direction) -->
+        <path d="M 38 110 Q 80 130, 60 195 T 30 218"/>
+        <path d="M 76 95 Q 110 120, 90 180 T 60 218"/>
+        <path d="M 116 78 Q 142 110, 122 168 T 95 215"/>
+        <path d="M 158 62 Q 180 100, 158 155 T 130 210"/>
+        <path d="M 200 56 Q 215 95, 195 150 T 170 207"/>
+        <path d="M 240 70 Q 250 105, 230 150 T 205 200"/>
+        <path d="M 270 92 Q 268 130, 250 165 T 225 200"/>
+      </g>
+
+      <!-- bounding box front edges -->
+      <polygon points="20,80 220,45 220,225 20,260" fill="none" stroke="#0F172A" stroke-width="1.8"/>
+      <line x1="20" y1="80" x2="80" y2="40"/>
+      <line x1="220" y1="45" x2="280" y2="5"/>
+      <line x1="220" y1="225" x2="280" y2="200"/>
+      <line x1="20" y1="260" x2="80" y2="235"/>
+
+      <!-- axis labels -->
+      <text class="axislbl" x="148" y="288" text-anchor="middle">x</text>
+      <text class="axislbl" x="-5" y="170" text-anchor="end">z</text>
+      <text class="axislbl" x="305" y="105" text-anchor="start">y</text>
+    </g>
+
+    <text class="pill" x="235" y="445" text-anchor="middle">sin(sqrt(x²+y²)) · samples 80 · drag to rotate</text>
+  </g>
+
+  <text class="crumb" x="60" y="760">github.com/Saiki77/easy-tikz</text>
+  <text class="crumb" x="1140" y="760" text-anchor="end">MIT licensed</text>
+</svg>

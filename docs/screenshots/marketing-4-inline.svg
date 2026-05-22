@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Easy TikZ — inline rendering in notes">
+  <defs>
+    <style>
+      .bg { fill: #F4F5F7; }
+      .frame { stroke: #E2E5EA; stroke-width: 1.25; fill: none; }
+      .title { font: 700 78px/1.0 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #0F172A; letter-spacing: -0.02em; }
+      .sub { font: 400 22px/1.45 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #334155; }
+      .crumb { font: 400 16px/1 ui-monospace, "SF Mono", Menlo, monospace; fill: #64748B; letter-spacing: 0.04em; }
+      .brand { font: 700 22px/1 -apple-system, "SF Pro Display", Inter, system-ui, sans-serif; fill: #0F172A; }
+      .accent { fill: #2563EB; }
+      .code { font: 400 14px/1.55 ui-monospace, "SF Mono", Menlo, monospace; fill: #CBD5E1; white-space: pre; }
+      .key { font: 400 14px/1.55 ui-monospace, "SF Mono", Menlo, monospace; fill: #93C5FD; }
+      .str { font: 400 14px/1.55 ui-monospace, "SF Mono", Menlo, monospace; fill: #86EFAC; }
+      .num { font: 400 14px/1.55 ui-monospace, "SF Mono", Menlo, monospace; fill: #FCD34D; }
+      .punc { font: 400 14px/1.55 ui-monospace, "SF Mono", Menlo, monospace; fill: #64748B; }
+      .fence { font: 600 13px/1 ui-monospace, "SF Mono", Menlo, monospace; fill: #64748B; }
+      .tickmini { font: 400 10px/1 ui-monospace, "SF Mono", Menlo, monospace; fill: #94A3B8; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1200" height="800"/>
+  <line class="frame" x1="60" y1="80" x2="1140" y2="80"/>
+  <line class="frame" x1="60" y1="720" x2="1140" y2="720"/>
+
+  <g transform="translate(60 40)">
+    <rect width="40" height="40" rx="8" fill="#0F172A"/>
+    <g stroke="#FFFFFF" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 28 L31 28"/>
+      <path d="M9 28 L9 10"/>
+      <path d="M11 24 Q20 -2 29 24"/>
+    </g>
+    <text class="brand" x="56" y="27">Easy TikZ</text>
+  </g>
+  <text class="crumb" x="1140" y="50" text-anchor="end">04 / 05</text>
+
+  <g transform="translate(80 200)">
+    <text class="title" x="0" y="0">Renders in</text>
+    <text class="title accent" x="0" y="88">your notes.</text>
+    <text class="sub" x="0" y="160">No external TikZ plugin required. The plugin</text>
+    <text class="sub" x="0" y="190">parses `easy-tikz` JSON blocks and draws the</text>
+    <text class="sub" x="0" y="220">chart inline. Click the chart to edit it.</text>
+  </g>
+
+  <!-- Source code block (top right) -->
+  <g transform="translate(620 150)">
+    <rect width="500" height="240" rx="14" fill="#0F172A"/>
+    <text class="fence" x="20" y="32">```easy-tikz</text>
+    <g transform="translate(20 56)">
+      <text class="code" x="0" y="0"><tspan class="punc">{</tspan></text>
+      <text class="code" x="14" y="22"><tspan class="key">"functions"</tspan><tspan class="punc">:</tspan> <tspan class="punc">[{</tspan></text>
+      <text class="code" x="28" y="44"><tspan class="key">"expression"</tspan><tspan class="punc">:</tspan> <tspan class="str">"sin(x)*exp(-x/5)"</tspan><tspan class="punc">,</tspan></text>
+      <text class="code" x="28" y="66"><tspan class="key">"domain"</tspan><tspan class="punc">:</tspan> <tspan class="str">"0:20"</tspan><tspan class="punc">,</tspan></text>
+      <text class="code" x="28" y="88"><tspan class="key">"color"</tspan><tspan class="punc">:</tspan> <tspan class="str">"purple"</tspan><tspan class="punc">,</tspan></text>
+      <text class="code" x="28" y="110"><tspan class="key">"fill"</tspan><tspan class="punc">:</tspan> <tspan class="num">true</tspan></text>
+      <text class="code" x="14" y="132"><tspan class="punc">}],</tspan></text>
+      <text class="code" x="14" y="154"><tspan class="key">"xmin"</tspan><tspan class="punc">:</tspan> <tspan class="num">0</tspan><tspan class="punc">,</tspan> <tspan class="key">"xmax"</tspan><tspan class="punc">:</tspan> <tspan class="num">20</tspan></text>
+      <text class="code" x="0" y="176"><tspan class="punc">}</tspan></text>
+    </g>
+  </g>
+
+  <!-- Arrow -->
+  <g transform="translate(840 420)">
+    <line x1="0" y1="0" x2="0" y2="36" stroke="#0F172A" stroke-width="2"/>
+    <polygon points="0,44 -7,32 7,32" fill="#0F172A"/>
+  </g>
+
+  <!-- Rendered chart (bottom right) -->
+  <g transform="translate(620 480)">
+    <rect width="500" height="200" rx="14" fill="#FFFFFF" stroke="#E2E5EA"/>
+    <g transform="translate(38 30)">
+      <!-- axes -->
+      <line x1="0" y1="80" x2="430" y2="80" stroke="#0F172A" stroke-width="1.6"/>
+      <line x1="0" y1="0" x2="0" y2="140" stroke="#0F172A" stroke-width="1.6"/>
+      <polygon points="430,80 420,75 420,85" fill="#0F172A"/>
+      <polygon points="0,0 -5,12 5,12" fill="#0F172A"/>
+
+      <!-- ticks -->
+      <text class="tickmini" x="100" y="98" text-anchor="middle">5</text>
+      <text class="tickmini" x="195" y="98" text-anchor="middle">10</text>
+      <text class="tickmini" x="290" y="98" text-anchor="middle">15</text>
+      <text class="tickmini" x="385" y="98" text-anchor="middle">20</text>
+
+      <!-- filled damped sine -->
+      <path d="M 0 80 C 20 -10, 50 -10, 80 80 C 110 170, 145 165, 175 80 C 200 22, 235 22, 260 80 C 285 130, 315 128, 340 80 C 360 50, 390 50, 410 80 L 410 80 L 0 80 Z"
+            fill="#A855F7" fill-opacity="0.22"/>
+      <path d="M 0 80 C 20 -10, 50 -10, 80 80 C 110 170, 145 165, 175 80 C 200 22, 235 22, 260 80 C 285 130, 315 128, 340 80 C 360 50, 390 50, 410 80"
+            stroke="#A855F7" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <text class="crumb" x="60" y="760">github.com/Saiki77/easy-tikz</text>
+  <text class="crumb" x="1140" y="760" text-anchor="end">MIT licensed</text>
+</svg>
