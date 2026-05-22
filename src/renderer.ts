@@ -888,13 +888,20 @@ export class SVGRenderer {
         if (v === undefined || v === null) return fallback;
         const s = String(v).trim();
         if (s === '') return fallback;
-        const direct = parseFloat(s);
-        if (Number.isFinite(direct) && /^[-+]?\d/.test(s)) return direct;
+        // Try the expression evaluator first so `2*pi`, `sin(pi/4)`, `-x`
+        // (evaluated at x = 0), etc. work. The previous parseFloat-first
+        // path silently truncated expressions like `-1*x` to `-1`, which
+        // explained the long-standing "sin / cos / -x don't work" reports
+        // — parseFloat read the leading number and stopped, never
+        // reaching the evaluator.
         try {
-            return MathHelper.evaluateExpression(s, 0);
+            const v = MathHelper.evaluateExpression(s, 0);
+            if (Number.isFinite(v)) return v;
         } catch {
-            return fallback;
+            // fall through to parseFloat
         }
+        const direct = parseFloat(s);
+        return Number.isFinite(direct) ? direct : fallback;
     }
 
     private drawAreaBetween(
@@ -938,40 +945,60 @@ export class SVGRenderer {
         const patternUrl = this.getOrCreatePattern(tool.fillPattern || 'solid', cssColor);
         const yClamp = (this.config.ymax - this.config.ymin) * 10;
 
-        const topPts: { x: number; y: number }[] = [];
-        const botPts: { x: number; y: number }[] = [];
+        // Walk the domain and break into contiguous "segments" wherever a
+        // sample is non-finite or clamped out (asymptotes, divisions by
+        // zero). Each segment becomes its own closed polygon — the old
+        // path-builder skipped bad samples but then connected the next
+        // good sample to the previous one with a straight line, drawing
+        // a diagonal across the gap.
+        type Seg = { top: { x: number; y: number }[]; bot: { x: number; y: number }[] };
+        const segments: Seg[] = [];
+        let cur: Seg | null = null;
         for (let i = 0; i <= N; i++) {
             const x = lo + i * step;
             const ya = fA(x);
             const yb = fB(x);
-            if (!Number.isFinite(ya) || !Number.isFinite(yb)) continue;
-            if (Math.abs(ya) > yClamp || Math.abs(yb) > yClamp) continue;
-            topPts.push({ x, y: Math.max(ya, yb) });
-            botPts.push({ x, y: Math.min(ya, yb) });
+            const bad =
+                !Number.isFinite(ya) ||
+                !Number.isFinite(yb) ||
+                Math.abs(ya) > yClamp ||
+                Math.abs(yb) > yClamp;
+            if (bad) {
+                cur = null;
+                continue;
+            }
+            if (!cur) {
+                cur = { top: [], bot: [] };
+                segments.push(cur);
+            }
+            cur.top.push({ x, y: Math.max(ya, yb) });
+            cur.bot.push({ x, y: Math.min(ya, yb) });
         }
-        if (topPts.length < 2) return;
 
-        const path: string[] = [];
-        for (let i = 0; i < topPts.length; i++) {
-            const sx = this.toScreenX(topPts[i].x);
-            const sy = this.toScreenY(topPts[i].y);
-            path.push(`${i === 0 ? 'M' : 'L'}${sx.toFixed(2)},${sy.toFixed(2)}`);
+        for (const seg of segments) {
+            if (seg.top.length < 2) continue;
+            const path: string[] = [];
+            for (let i = 0; i < seg.top.length; i++) {
+                const sx = this.toScreenX(seg.top[i].x);
+                const sy = this.toScreenY(seg.top[i].y);
+                path.push(`${i === 0 ? 'M' : 'L'}${sx.toFixed(2)},${sy.toFixed(2)}`);
+            }
+            for (let i = seg.bot.length - 1; i >= 0; i--) {
+                const sx = this.toScreenX(seg.bot[i].x);
+                const sy = this.toScreenY(seg.bot[i].y);
+                path.push(`L${sx.toFixed(2)},${sy.toFixed(2)}`);
+            }
+            path.push('Z');
+            group.appendChild(
+                this.el('path', {
+                    d: path.join(' '),
+                    fill: patternUrl || cssColor,
+                    'fill-opacity': String(opacity),
+                    stroke: 'none',
+                    'clip-path': 'url(#plot-clip)',
+                })
+            );
         }
-        for (let i = botPts.length - 1; i >= 0; i--) {
-            const sx = this.toScreenX(botPts[i].x);
-            const sy = this.toScreenY(botPts[i].y);
-            path.push(`L${sx.toFixed(2)},${sy.toFixed(2)}`);
-        }
-        path.push('Z');
-        group.appendChild(
-            this.el('path', {
-                d: path.join(' '),
-                fill: patternUrl || cssColor,
-                'fill-opacity': String(opacity),
-                stroke: 'none',
-                'clip-path': 'url(#plot-clip)',
-            })
-        );
     }
 
     private drawIntersection(

@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.18.5] - 2026-05-22
+
+### Fixed
+
+- **Expressions like `-1*x`, `2*pi`, `sin(pi/4)`, `-x` now work in tool coordinate fields.** `parseCoord` (used by every Tools-tab numeric field — vertical/horizontal line, rectangle, circle, segment, brace, 3D point/plane) was running `parseFloat` first and accepting any prefix that parsed as a number — so `-1*x` returned `-1`, `2*pi` returned `2`, etc. The expression evaluator was never reached. Now we evaluate as a math expression first and only fall back to `parseFloat` if evaluation fails.
+- **"Area between" no longer connects across asymptotes with a diagonal line.** When either function went non-finite (or beyond the y-clamp) inside the requested domain, `drawAreaBetween` skipped the bad samples but the resulting polygon still drew a line between the last good point and the next one — visible as a stray diagonal cutting through the plot. The renderer now splits the fill into separate closed polygons, one per contiguous finite segment.
+
 ## [3.18.4] - 2026-05-21
 
 ### Fixed
