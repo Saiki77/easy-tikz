@@ -6,7 +6,7 @@ Use this as the body when creating the GitHub Release for the latest tag (e.g. `
 
 ## Easy TikZ 3.18.8
 
-Visual TikZ / pgfplots editor for Obsidian with inline rendering — no external TeX install needed for in-vault use.
+Visual TikZ / pgfplots editor for Obsidian with inline rendering - no external TeX install needed for in-vault use.
 
 ### Highlights since the last release
 
@@ -18,11 +18,11 @@ Visual TikZ / pgfplots editor for Obsidian with inline rendering — no external
 
 ### Fixes since the last release
 
-- 2D drag is now provably 1:1 with the pointer. The old `querySelector('svg')` was grabbing the first Lucide icon SVG from the floating action overlay instead of the chart — `plot.scale` came out ~40× too large and every drag / wheel-zoom / export pulled from the wrong element. New `getChartSvg()` helper picks the chart in 2D and the off-screen SVG in 3D.
+- 2D drag is now provably 1:1 with the pointer. The old `querySelector('svg')` was grabbing the first Lucide icon SVG from the floating action overlay instead of the chart - `plot.scale` came out ~40× too large and every drag / wheel-zoom / export pulled from the wrong element. New `getChartSvg()` helper picks the chart in 2D and the off-screen SVG in 3D.
 - 3D `+ / − / ↻` overlay now shows up on the first paint when the modal opens from an existing chart.
 - 3D canvas no longer changes aspect mid-drag (canvas was carrying an inline `style.width` that beat the CSS `width: 100%`; removed so both render paths occupy the same box).
-- `parseDomain` accepts expressions like `0:2*PI`, `-PI:PI`, `0:sqrt(3)` — `Number('2*PI')` is `NaN` so every built-in template using `2*PI` was silently producing "Could not evaluate any function" errors. Same upgrade for `parseTangentPoint`.
-- `parseCoord` (Tools-tab numeric fields) evaluates expressions instead of short-circuiting on `parseFloat` — `2*pi`, `sin(pi/4)`, `-x` now all work where `-1*x` used to be the only thing that "worked" (because parseFloat ate the `-1`).
+- `parseDomain` accepts expressions like `0:2*PI`, `-PI:PI`, `0:sqrt(3)` - `Number('2*PI')` is `NaN` so every built-in template using `2*PI` was silently producing "Could not evaluate any function" errors. Same upgrade for `parseTangentPoint`.
+- `parseCoord` (Tools-tab numeric fields) evaluates expressions instead of short-circuiting on `parseFloat` - `2*pi`, `sin(pi/4)`, `-x` now all work where `-1*x` used to be the only thing that "worked" (because parseFloat ate the `-1`).
 - Click-to-edit hydrates the function cards properly. Previously the Expression / y(t) / Tangent-point inputs had `setPlaceholder` but no `setValue`, so editing an existing chart presented blank inputs and any field change committed an empty expression.
 - "Area between" splits its fill polygon at NaN gaps so asymptotes don't produce a diagonal connector across the chart.
 

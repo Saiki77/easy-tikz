@@ -96,7 +96,7 @@ export type BoxAspect = 'true' | 'equal';
 export type ArrowStyle = 'none' | 'forward' | 'backward' | 'both';
 
 /**
- * Discriminated union of "tools" — overlays that either reference
+ * Discriminated union of "tools" - overlays that either reference
  * existing functions by name (areaBetween, intersection) or stand
  * alone (reference lines, free shapes, 3D plane / point / segment).
  *

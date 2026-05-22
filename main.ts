@@ -21,7 +21,7 @@ export default class EasyTikzPlugin extends Plugin {
         });
 
         // Render `easy-tikz` blocks inline via the same SVG renderers the
-        // modal uses for its live preview — no external TeX engine needed.
+        // modal uses for its live preview - no external TeX engine needed.
         this.registerMarkdownCodeBlockProcessor('easy-tikz', (source, el, ctx) => {
             this.renderEasyTikzBlock(source, el, ctx);
         });
@@ -147,7 +147,7 @@ export default class EasyTikzPlugin extends Plugin {
             }).open();
         };
         wrapper.addEventListener('click', (e) => {
-            // Clicks on overlay controls bubble here too — they call
+            // Clicks on overlay controls bubble here too - they call
             // stopPropagation so this only fires for clicks on the chart.
             openEditor();
         });
@@ -167,12 +167,12 @@ export default class EasyTikzPlugin extends Plugin {
     }
 
     /**
-     * Add the floating overlay controls — vertical align buttons on the
+     * Add the floating overlay controls - vertical align buttons on the
      * left, horizontal size slider along the bottom. Both fade in on
      * hover via CSS. The slider updates wrapper CSS live during input
      * for smooth dragging, and writes the new `displayWidth` back to
      * the source block on `change` (release) so only one re-render
-     * fires per drag. Align clicks save immediately — one click, one
+     * fires per drag. Align clicks save immediately - one click, one
      * re-render.
      */
     private buildHoverControls(
@@ -212,7 +212,7 @@ export default class EasyTikzPlugin extends Plugin {
         const initialW = parseFloat(wrapper.style.width) || 700;
         slider.value = String(Math.round(initialW));
         slider.setAttr('aria-label', 'Chart width');
-        slider.setAttr('title', 'Width — drag to resize, releases save to the note');
+        slider.setAttr('title', 'Width - drag to resize, releases save to the note');
 
         const stop = (e: Event) => e.stopPropagation();
         sliderBar.addEventListener('click', stop);
@@ -234,7 +234,7 @@ export default class EasyTikzPlugin extends Plugin {
     /**
      * Merge a partial display patch into the block's JSON and write
      * the file. The markdown post-processor will re-fire on the next
-     * vault tick with the new source — the chart, align class, and
+     * vault tick with the new source - the chart, align class, and
      * slider position all rebuild from the persisted JSON.
      */
     private async persistDisplayPatch(
@@ -255,7 +255,7 @@ export default class EasyTikzPlugin extends Plugin {
             if (!content.includes(original)) return;
             await this.app.vault.modify(file, content.replace(original, updated));
         } catch {
-            // Vault read/write race — silently ignore; user can retry.
+            // Vault read/write race - silently ignore; user can retry.
         }
     }
 }
@@ -275,8 +275,8 @@ class EasyTikzSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName('Invert vertical drag in 3D')
             .setDesc(
-                'Off (default): drag down tilts the scene up (camera elevation rises), drag up tilts the scene down — the trackball convention. ' +
-                    'On: drag down lowers the camera, drag up raises it — direct manipulation.'
+                'Off (default): drag down tilts the scene up (camera elevation rises), drag up tilts the scene down - the trackball convention. ' +
+                    'On: drag down lowers the camera, drag up raises it - direct manipulation.'
             )
             .addToggle((t) =>
                 t.setValue(this.plugin.data.invertDrag3D).onChange(async (v) => {
@@ -305,7 +305,7 @@ class EasyTikzSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName('2D pan sensitivity')
             .setDesc(
-                'Default 1.0 — direct manipulation: moving the mouse by N pixels pans the chart by exactly N chart pixels. ' +
+                'Default 1.0 - direct manipulation: moving the mouse by N pixels pans the chart by exactly N chart pixels. ' +
                     'Lower values dampen the drag for finer control on dense plots (e.g. 0.5 = half-step pan); higher values overshoot. ' +
                     'The pan rate also scales with the current axis range, so this multiplier stays consistent as you zoom in or out.'
             )

@@ -50,8 +50,8 @@ Highlights:
 ### Notes for the reviewer
 
 - `minAppVersion` is set to **1.4.0** because the styling uses `color-mix()`, which needs Chromium 111+ (Obsidian 1.4.0 onwards).
-- The plugin compiles user math expressions with `new Function(...)` so the live preview can sample them at 500+ points per render without per-sample overhead. Compiled functions are LRU-cached (128 entries). This is in-renderer only — never persisted, never transmitted. Discussed in `README.md` → Permissions.
-- All built-in icons are Lucide via `setIcon` — no bundled font assets.
+- The plugin compiles user math expressions with `new Function(...)` so the live preview can sample them at 500+ points per render without per-sample overhead. Compiled functions are LRU-cached (128 entries). This is in-renderer only - never persisted, never transmitted. Discussed in `README.md` → Permissions.
+- All built-in icons are Lucide via `setIcon` - no bundled font assets.
 - License: MIT.
 
 Happy to answer any questions or push fixes if anything needs adjusting.

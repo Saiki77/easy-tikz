@@ -129,7 +129,7 @@
 
 /* Chained class for higher specificity (0,2,0) so width / max-width
    override Obsidian's default `.modal` (0,1,0) rules without `!important`.
-   The selector still only matches our modal — chaining a class with
+   The selector still only matches our modal - chaining a class with
    itself doesn't change what it targets, only its specificity. */
 .tikz-modal.tikz-modal {
     display: flex;
@@ -183,7 +183,7 @@
     overflow-x: auto;
     overflow-y: hidden;
     /* Standard CSS scrollbar styling. Older browsers fall back to the
-       platform default — Obsidian 1.4.5's Chromium supports this, and
+       platform default - Obsidian 1.4.5's Chromium supports this, and
        skipping the `::-webkit-scrollbar` vendor selector avoids an
        Obsidian validator "partially supported feature" warning. */
     scrollbar-width: thin;
@@ -412,7 +412,7 @@
 }
 
 /* The SVG is kept in the DOM (rendered fresh before Copy SVG / Copy PNG)
-   but never shown inside the modal — the canvas is the modal's single
+   but never shown inside the modal - the canvas is the modal's single
    display path, so there is no SVG-vs-canvas visual flash on drag start
    / release. CSS sizing is shared with the canvas so it matches the
    visible chart pixel-for-pixel when exported. */

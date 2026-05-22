@@ -268,18 +268,18 @@ export class SVG3DRenderer {
         } else {
             // Fit the largest possible box of the requested aspect into the
             // parent's content area. Notably, we do NOT cap at the
-            // configured (aspectW, aspectH) — the canvas should scale UP to
+            // configured (aspectW, aspectH) - the canvas should scale UP to
             // use the available preview space, not stay locked to the
             // configured "logical" pixel size, which is purely an export
             // hint via Width/Height (cm).
             const containerRatio = parentW / parentH;
             const configRatio = aspectW / aspectH;
             if (containerRatio > configRatio) {
-                // Container is wider than the chart aspect — height is the bottleneck.
+                // Container is wider than the chart aspect - height is the bottleneck.
                 h = parentH;
                 w = h * configRatio;
             } else {
-                // Container is taller than the chart aspect — width is the bottleneck.
+                // Container is taller than the chart aspect - width is the bottleneck.
                 w = parentW;
                 h = w / configRatio;
             }
@@ -324,7 +324,7 @@ export class SVG3DRenderer {
         // the configured aspect ratio. Previously we relied on CSS
         // `aspect-ratio` + `max-width: 100%` + `max-height: 100%`, but
         // when both axes were constrained the aspect-ratio rule was
-        // ignored and the root went rectangular — canvas (CSS 100%/100%)
+        // ignored and the root went rectangular - canvas (CSS 100%/100%)
         // then stretched while SVG (`preserveAspectRatio` default)
         // letter-boxed, causing a visible flash between the two paths.
         this.applyRootFitContain(config.width, config.height);
@@ -357,7 +357,7 @@ export class SVG3DRenderer {
         this.sinE = Math.sin(el);
 
         // Per-axis normalization. The box and surfaces share this space.
-        //  - 'equal': each axis spans [-1, 1] independently — cube box.
+        //  - 'equal': each axis spans [-1, 1] independently - cube box.
         //  - 'true':  divide every axis by the LARGEST range so the box's
         //    edge lengths reflect data proportions while still fitting
         //    the canvas (a non-normalising "true" projection would put

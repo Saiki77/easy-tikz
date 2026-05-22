@@ -8,7 +8,7 @@
     <td width="50%"><img src="docs/screenshots/marketing-3-3d.png" alt="3D surfaces: f(x, y) at 60 fps, drag to rotate" width="100%"></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/marketing-4-inline.png" alt="Renders inline in your notes — no external TikZ plugin" width="100%"></td>
+    <td width="50%"><img src="docs/screenshots/marketing-4-inline.png" alt="Renders inline in your notes - no external TikZ plugin" width="100%"></td>
     <td width="50%"><img src="docs/screenshots/marketing-5-tools.png" alt="Composable tools: area between, intersections, reference lines, free shapes" width="100%"></td>
   </tr>
 </table>
@@ -16,16 +16,16 @@
 <p align="center">
   <img src="docs/screenshots/demo-overview.gif" alt="One-minute overview: every tab, function and tool flowing end-to-end" width="960">
 </p>
-<p align="center"><sub>One-minute walkthrough — every tab, function, and tool end-to-end. <a href="docs/screenshots/demo-overview.mp4">(MP4)</a></sub></p>
+<p align="center"><sub>One-minute walkthrough - every tab, function, and tool end-to-end. <a href="docs/screenshots/demo-overview.mp4">(MP4)</a></sub></p>
 
 <p align="center">
   <img src="docs/screenshots/demo.gif" alt="Tighter clip: open the modal, edit a plot, pan / drag, insert into the note, click the rendered chart to re-edit" width="960">
 </p>
-<p align="center"><sub>Tighter clip — open the modal, edit, pan / drag, insert, click the rendered chart to re-edit. <a href="docs/screenshots/demo.mp4">(MP4)</a></sub></p>
+<p align="center"><sub>Tighter clip - open the modal, edit, pan / drag, insert, click the rendered chart to re-edit. <a href="docs/screenshots/demo.mp4">(MP4)</a></sub></p>
 
 ## Why
 
-Pgfplots is powerful but the syntax is fiddly and the feedback loop is "edit, recompile, squint". Easy TikZ is a visual editor with a live preview that renders the chart in your note directly — no TeX install needed for in-vault use, and the same model exports clean pgfplots when you want to publish.
+Pgfplots is powerful but the syntax is fiddly and the feedback loop is "edit, recompile, squint". Easy TikZ is a visual editor with a live preview that renders the chart in your note directly - no TeX install needed for in-vault use, and the same model exports clean pgfplots when you want to publish.
 
 ## Install
 
@@ -47,10 +47,10 @@ Pgfplots is powerful but the syntax is fiddly and the feedback loop is "edit, re
 ## Quick start
 
 1. Click the function icon in the ribbon (or run *Easy TikZ: open* from the palette).
-2. Type an expression on the **Functions** tab — `sin(x)`, `x^2 - 3*x`, `sin(sqrt(x^2 + y^2))` in 3D. The preview updates as you type.
+2. Type an expression on the **Functions** tab - `sin(x)`, `x^2 - 3*x`, `sin(sqrt(x^2 + y^2))` in 3D. The preview updates as you type.
 3. **Insert into note**. The plugin emits an `easy-tikz` code block which it renders inline.
 
-Open an existing chart by clicking it in your note — the modal re-opens with every setting filled in, and saving replaces the source block in place.
+Open an existing chart by clicking it in your note - the modal re-opens with every setting filled in, and saving replaces the source block in place.
 
 ## Plot
 
@@ -68,7 +68,7 @@ The Reference tab inside the modal lists everything supported with examples.
 
 ## Tools
 
-On top of your functions you can stack composable tools — these render alongside the curves in the preview and emit native pgfplots in the export:
+On top of your functions you can stack composable tools - these render alongside the curves in the preview and emit native pgfplots in the export:
 
 | Tool             | What it draws                                                                              |
 | ---------------- | ------------------------------------------------------------------------------------------ |
@@ -88,13 +88,13 @@ Function references use a **Name** field on each function card (auto-populated a
 
 ## Inline rendering in notes
 
-The plugin registers an `easy-tikz` markdown code-block processor. **Insert into note** writes a JSON block; the same `SVGRenderer` / `SVG3DRenderer` that powers the modal preview renders the chart in your note. Click the rendered chart to re-open the modal pre-filled with every setting — change something, **Save changes**, the block in the source file is replaced in place.
+The plugin registers an `easy-tikz` markdown code-block processor. **Insert into note** writes a JSON block; the same `SVGRenderer` / `SVG3DRenderer` that powers the modal preview renders the chart in your note. Click the rendered chart to re-open the modal pre-filled with every setting - change something, **Save changes**, the block in the source file is replaced in place.
 
 Plugin setting **"Also render plain `tikz` blocks"** opts in to claim the `tikz` language tag as well; off by default to coexist peacefully with `obsidian-tikzjax` and similar.
 
 ## Export
 
-`Copy TikZ code` produces standalone pgfplots that compiles with any TeX install — `\usepgfplotslibrary{fillbetween}` is injected automatically when an `areaBetween` tool is in use, the polar code path emits `axis equal`, `axis equal image` lights up when **Box aspect** is set to *Equal*. The inline render and the exported TikZ share one in-memory model, so what you see in the modal is what pgfplots draws — and the modal's `Copy SVG` and `Copy PNG` buttons each serialize the live scene with theme colours already resolved.
+`Copy TikZ code` produces standalone pgfplots that compiles with any TeX install - `\usepgfplotslibrary{fillbetween}` is injected automatically when an `areaBetween` tool is in use, the polar code path emits `axis equal`, `axis equal image` lights up when **Box aspect** is set to *Equal*. The inline render and the exported TikZ share one in-memory model, so what you see in the modal is what pgfplots draws - and the modal's `Copy SVG` and `Copy PNG` buttons each serialize the live scene with theme colours already resolved.
 
 ## Plugin settings
 
@@ -107,7 +107,7 @@ Settings → Community plugins → **Easy TikZ**:
 
 ## Live rendering, briefly
 
-The preview is drawn in-process by a small custom pipeline — no shell-out, no LaTeX compile, no image round-trip — which is what lets the camera follow the cursor without lag. A typical 3D surface (samples=40, 1,600 quads) sits at ~60 fps; the slider's upper end (samples=120, 14,400 quads) settles above 30 fps. Sampled surface data is cached per-surface, keyed by expression + domain + sample count + z-range, so a pure camera change (rotation, zoom) re-projects from the cache without re-evaluating the function. Expression compilation is cached (LRU, 128 entries) so the 500 samples of a 2D curve compile their expression once per render, not once per sample.
+The preview is drawn in-process by a small custom pipeline - no shell-out, no LaTeX compile, no image round-trip - which is what lets the camera follow the cursor without lag. A typical 3D surface (samples=40, 1,600 quads) sits at ~60 fps; the slider's upper end (samples=120, 14,400 quads) settles above 30 fps. Sampled surface data is cached per-surface, keyed by expression + domain + sample count + z-range, so a pure camera change (rotation, zoom) re-projects from the cache without re-evaluating the function. Expression compilation is cached (LRU, 128 entries) so the 500 samples of a 2D curve compile their expression once per render, not once per sample.
 
 ## Permissions
 

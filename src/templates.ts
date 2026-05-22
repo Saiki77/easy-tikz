@@ -76,7 +76,7 @@ export interface PluginData {
     renderTikzBlocks: boolean;
     /**
      * Multiplier on the 2D drag-pan rate. 1.0 (default) is direct
-     * manipulation — moving the mouse by N pixels pans the chart by
+     * manipulation - moving the mouse by N pixels pans the chart by
      * exactly N chart pixels. Lower values dampen the drag for finer
      * control (e.g. 0.5 = half-step panning); higher values overshoot.
      * The pan amount also scales with the current axis range so the

@@ -19,12 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **`minAppVersion` bumped from `0.15.0` to `1.4.0`.** The plugin's styling relies on CSS `color-mix()` (Chromium 111+), the 3D renderer on `aspect-ratio` and `ResizeObserver`, and the modal on Obsidian's `setIcon` Lucide icons — all available in Obsidian 1.4 and later. The old floor was vestigial and would have caused the community-plugin submission validator to reject the manifest as incompatible with declared APIs.
+- **`minAppVersion` bumped from `0.15.0` to `1.4.0`.** The plugin's styling relies on CSS `color-mix()` (Chromium 111+), the 3D renderer on `aspect-ratio` and `ResizeObserver`, and the modal on Obsidian's `setIcon` Lucide icons - all available in Obsidian 1.4 and later. The old floor was vestigial and would have caused the community-plugin submission validator to reject the manifest as incompatible with declared APIs.
 
 ### Added
 
 - **`docs/submission/` directory** with everything needed to open the
-  Community Plugin submission PR against `obsidianmd/obsidian-releases` —
+  Community Plugin submission PR against `obsidianmd/obsidian-releases` -
   step-by-step guide, the exact `community-plugins.json` entry to paste,
   and a pre-filled PR description with all the checklist boxes pre-ticked.
   Closes the "Could not find or validate a manifest" loop with explicit
@@ -40,13 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **Domains like `0:2*PI`, `-PI:PI`, `0:sqrt(3)` now actually work.** `MathHelper.parseDomain` was using `Number()` to parse each bound, and `Number('2*PI')` is `NaN` — so every built-in template that uses `2*PI` (Sine wave, Cosine, Damped oscillation, …) silently failed with "Could not evaluate any function" and produced an empty chart. That's why `sin(x)` looked broken even though `sin` itself was fine — the renderer never sampled it because the domain throw happened first. New `parseBound` helper tries `Number()` first (cheap fast path for `-10`, `3.14`, `1e3`), then falls back to the same `compile1D` pipeline that plotted expressions use, so anything that evaluates to a finite scalar (`PI`, `2*PI`, `sqrt(3)`, `log(10)`, etc.) works. Same upgrade for `parseTangentPoint`, so tangent point values can be `PI/2`, `pi/4`, etc.
+- **Domains like `0:2*PI`, `-PI:PI`, `0:sqrt(3)` now actually work.** `MathHelper.parseDomain` was using `Number()` to parse each bound, and `Number('2*PI')` is `NaN` - so every built-in template that uses `2*PI` (Sine wave, Cosine, Damped oscillation, …) silently failed with "Could not evaluate any function" and produced an empty chart. That's why `sin(x)` looked broken even though `sin` itself was fine - the renderer never sampled it because the domain throw happened first. New `parseBound` helper tries `Number()` first (cheap fast path for `-10`, `3.14`, `1e3`), then falls back to the same `compile1D` pipeline that plotted expressions use, so anything that evaluates to a finite scalar (`PI`, `2*PI`, `sqrt(3)`, `log(10)`, etc.) works. Same upgrade for `parseTangentPoint`, so tangent point values can be `PI/2`, `pi/4`, etc.
 
 ## [3.18.6] - 2026-05-22
 
 ### Fixed
 
-- **Click-to-edit no longer loses your functions.** When the modal opened from an inline `easy-tikz` chart, the Functions tab created a fresh blank card every time instead of populating cards from the saved state. The chart kept rendering correctly (the persisted `functions` were still in `SettingsManager`), but the Expression / y(t) / Tangent-point inputs were empty — so if you touched any field, the now-blank Expression got committed and wiped the function. Fixed both 2D and 3D:
+- **Click-to-edit no longer loses your functions.** When the modal opened from an inline `easy-tikz` chart, the Functions tab created a fresh blank card every time instead of populating cards from the saved state. The chart kept rendering correctly (the persisted `functions` were still in `SettingsManager`), but the Expression / y(t) / Tangent-point inputs were empty - so if you touched any field, the now-blank Expression got committed and wiped the function. Fixed both 2D and 3D:
   - `addFunctionCard(seed?)` accepts a saved function and merges it on top of the defaults.
   - The Expression, y(t), and Tangent-point inputs now call `setValue(state.…)` (they only had `setPlaceholder` before).
   - `populateFunctionsTab` loops `settings.functions` / `settings.functions3D` and creates one card per saved entry, falling through to a single blank card on a fresh modal.
@@ -56,8 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **Expressions like `-1*x`, `2*pi`, `sin(pi/4)`, `-x` now work in tool coordinate fields.** `parseCoord` (used by every Tools-tab numeric field — vertical/horizontal line, rectangle, circle, segment, brace, 3D point/plane) was running `parseFloat` first and accepting any prefix that parsed as a number — so `-1*x` returned `-1`, `2*pi` returned `2`, etc. The expression evaluator was never reached. Now we evaluate as a math expression first and only fall back to `parseFloat` if evaluation fails.
-- **"Area between" no longer connects across asymptotes with a diagonal line.** When either function went non-finite (or beyond the y-clamp) inside the requested domain, `drawAreaBetween` skipped the bad samples but the resulting polygon still drew a line between the last good point and the next one — visible as a stray diagonal cutting through the plot. The renderer now splits the fill into separate closed polygons, one per contiguous finite segment.
+- **Expressions like `-1*x`, `2*pi`, `sin(pi/4)`, `-x` now work in tool coordinate fields.** `parseCoord` (used by every Tools-tab numeric field - vertical/horizontal line, rectangle, circle, segment, brace, 3D point/plane) was running `parseFloat` first and accepting any prefix that parsed as a number - so `-1*x` returned `-1`, `2*pi` returned `2`, etc. The expression evaluator was never reached. Now we evaluate as a math expression first and only fall back to `parseFloat` if evaluation fails.
+- **"Area between" no longer connects across asymptotes with a diagonal line.** When either function went non-finite (or beyond the y-clamp) inside the requested domain, `drawAreaBetween` skipped the bad samples but the resulting polygon still drew a line between the last good point and the next one - visible as a stray diagonal cutting through the plot. The renderer now splits the fill into separate closed polygons, one per contiguous finite segment.
 
 ## [3.18.4] - 2026-05-21
 
@@ -69,31 +69,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **2D drag panes inside the box again, like 3D rotation does.** The 3.18.1 CSS-transform approach translated the entire SVG element, which made the whole chart slide around (axes, labels, box edges and all) — the box appeared to "drag off" and the chart only snapped to the new range on release. Now that 3.18.2 fixed the icon-SVG mix-up, the original per-frame `applyAxisRange` path gives correct 1:1 panning: the chart pans inside its fixed axes each move, tick labels update live, the bounding box stays put. Same behaviour the 3D drag has always had.
+- **2D drag panes inside the box again, like 3D rotation does.** The 3.18.1 CSS-transform approach translated the entire SVG element, which made the whole chart slide around (axes, labels, box edges and all) - the box appeared to "drag off" and the chart only snapped to the new range on release. Now that 3.18.2 fixed the icon-SVG mix-up, the original per-frame `applyAxisRange` path gives correct 1:1 panning: the chart pans inside its fixed axes each move, tick labels update live, the bounding box stays put. Same behaviour the 3D drag has always had.
 
 ## [3.18.2] - 2026-05-21
 
 ### Fixed
 
-- **The real reason 2D drag felt 40× too sensitive.** `previewContainer.querySelector('svg')` was finding the **first** SVG in the preview area — which is one of the Lucide icons that `setIcon` injected into the floating-action buttons (Fit / Reset / Toggle grid), not the chart. Its bounding rect was ~18 px wide, so `plot.scale = config.width / rect.width` came out around 40× the real value — every drag, wheel zoom, and Copy SVG / PNG export was reading off that icon. New `getChartSvg()` helper iterates direct children (2D) or looks inside `.tikz-3d-root` (3D) so we always get the chart, never an overlay icon. Drag now visibly tracks the pointer in real time (no jump-at-the-end), the Fit icon stays put, and Copy SVG / PNG export the actual chart.
+- **The real reason 2D drag felt 40× too sensitive.** `previewContainer.querySelector('svg')` was finding the **first** SVG in the preview area - which is one of the Lucide icons that `setIcon` injected into the floating-action buttons (Fit / Reset / Toggle grid), not the chart. Its bounding rect was ~18 px wide, so `plot.scale = config.width / rect.width` came out around 40× the real value - every drag, wheel zoom, and Copy SVG / PNG export was reading off that icon. New `getChartSvg()` helper iterates direct children (2D) or looks inside `.tikz-3d-root` (3D) so we always get the chart, never an overlay icon. Drag now visibly tracks the pointer in real time (no jump-at-the-end), the Fit icon stays put, and Copy SVG / PNG export the actual chart.
 
 ## [3.18.1] - 2026-05-21
 
 ### Fixed
 
-- **2D drag really is 1:1 now.** The per-frame `applyAxisRange` math chained viewBox / plotW / range conversions every move event; even small float drift compounded into the felt "too fast" pan that lingered at every sensitivity setting. Replaced with a `transform: translate(dx * sensitivity, dy * sensitivity)` on the SVG element — provably 1:1 with the pointer because it IS the pointer delta. The axis range commits once on mouseup, then the SVG re-renders with the new range and the transform clears. Side benefit: drag is smoother (no ~60 SVG rebuilds per second) and the GPU-composited `will-change: transform` hint keeps it that way on heavy plots.
+- **2D drag really is 1:1 now.** The per-frame `applyAxisRange` math chained viewBox / plotW / range conversions every move event; even small float drift compounded into the felt "too fast" pan that lingered at every sensitivity setting. Replaced with a `transform: translate(dx * sensitivity, dy * sensitivity)` on the SVG element - provably 1:1 with the pointer because it IS the pointer delta. The axis range commits once on mouseup, then the SVG re-renders with the new range and the transform clears. Side benefit: drag is smoother (no ~60 SVG rebuilds per second) and the GPU-composited `will-change: transform` hint keeps it that way on heavy plots.
 
 ## [3.18.0] - 2026-05-21
 
 ### Added
 
-- **Composable graph tools** — a new **Tools** tab in the modal (visible in both 2D and 3D). Each tool is independent so you can stack them freely.
+- **Composable graph tools** - a new **Tools** tab in the modal (visible in both 2D and 3D). Each tool is independent so you can stack them freely.
   - **2D, function-referencing:** Area between two curves, Intersection points. Both look up functions by their new **Name** field (defaults to `f1`, `f2`, …).
   - **2D, reference lines:** Vertical line `x = c`, Horizontal line `y = c`. Both support color, thickness, dashed style, and an optional label.
   - **2D, free shapes:** Rectangle (with optional fill + pattern), Circle (drawn in axis coordinates so the radius scales with the data), Line segment (with optional forward / backward / both arrows), Brace with label (curly brace spanning two points).
   - **3D:** Plane at constant x / y / z, 3D point marker, 3D line segment with arrows.
 - **Function Name field** on every 2D and 3D function card. Auto-defaulted to `f1`, `f2`, …; the user-facing label in the card header tracks the Name. Tools use the same Name as their reference.
-- **Bisection root-finder** in `MathHelper.findIntersections(expr1, expr2, domain)` — 200-sample sign-change scan + 40-iter bisection per crossing, with de-duplication for tangent intersections.
+- **Bisection root-finder** in `MathHelper.findIntersections(expr1, expr2, domain)` - 200-sample sign-change scan + 40-iter bisection per crossing, with de-duplication for tangent intersections.
 - **Reference tab** gains a Tools section documenting every tool type with one-line recipes.
 
 ### Changed
@@ -114,7 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **2D pan sensitivity is now configurable.** Default lowered from 1.0 (direct manipulation) to **0.5** — each mouse pixel moves the chart by half a chart pixel, giving smoother, finer pan control on dense plots. The plugin's settings tab gets a `2D pan sensitivity` slider (0.1–2.0, step 0.05) so you can tune it. The rate continues to scale with the current axis range, so the multiplier stays consistent as you zoom in or out.
+- **2D pan sensitivity is now configurable.** Default lowered from 1.0 (direct manipulation) to **0.5** - each mouse pixel moves the chart by half a chart pixel, giving smoother, finer pan control on dense plots. The plugin's settings tab gets a `2D pan sensitivity` slider (0.1–2.0, step 0.05) so you can tune it. The rate continues to scale with the current axis range, so the multiplier stays consistent as you zoom in or out.
 - **Pan precision bumped from 3 to 5 decimal places.** The stored `xmin / xmax / ymin / ymax` now have sub-pixel granularity even at extreme zoom levels, so the pan is continuous rather than snapping to 0.001-unit steps. Trailing zeros are trimmed so integer-ish range inputs (`-5`, `10`) still display compactly.
 
 ## [3.17.0] - 2026-05-21
@@ -122,8 +122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **In-note hover controls on rendered charts.** Hover (or focus) a rendered `easy-tikz` chart and overlay controls fade in:
-  - **Size slider** along the bottom — drags the chart width, height follows the chart's aspect ratio. Live during drag, persisted to the source block on release (so dragging stays smooth — only one re-render per gesture).
-  - **Align buttons** on the left (left / center / right) — sets the chart's block alignment in the note. One click, one save, one re-render.
+  - **Size slider** along the bottom - drags the chart width, height follows the chart's aspect ratio. Live during drag, persisted to the source block on release (so dragging stays smooth - only one re-render per gesture).
+  - **Align buttons** on the left (left / center / right) - sets the chart's block alignment in the note. One click, one save, one re-render.
 - Both options live next to the rest of the plot settings inside the `easy-tikz` JSON (`displayWidth`, `displayAlign`), so they survive editing the chart from the modal and travel with the note.
 
 ## [3.16.1] - 2026-05-21
@@ -131,7 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - **Inline-rendered 3D charts were blank.** Two compounding issues:
-  1. The 3D `.tikz-3d-svg` is now `display: none` globally (canvas-only modal); the markdown processor calls `renderSvg`, which populates the (hidden) SVG, but `renderCanvas` is never called for inline blocks — so the visible canvas was empty.
+  1. The 3D `.tikz-3d-svg` is now `display: none` globally (canvas-only modal); the markdown processor calls `renderSvg`, which populates the (hidden) SVG, but `renderCanvas` is never called for inline blocks - so the visible canvas was empty.
   2. The wrapper `.tikz-rendered-chart` had no explicit height when `applyRootFitContain` measured it, so the 3D root fell back to logical config dims with no parent measurement to refine them.
 
   Fix: CSS in `.tikz-rendered-chart` now shows the SVG (already populated by `renderSvg`) and hides the empty canvas. The markdown processor also sizes the wrapper explicitly from the markdown container's width and the chart's aspect ratio, so the renderer's fit-contain math has a real parent to measure.
@@ -140,28 +140,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Inline rendering of plots in notes — no external TikZ plugin required.** The modal's "Insert into note" button now emits an `easy-tikz` JSON code block which the plugin renders inline using the same `SVGRenderer` / `SVG3DRenderer` that drives the live preview. The chart you see in the modal is exactly the chart that ends up in the note.
-- **Click-to-edit.** Clicking a rendered chart reopens the modal pre-filled with the chart's settings (functions, ranges, title, labels, 3D rotation, polar, box aspect — everything). Hitting "Save changes" replaces the block in the source file in place; opening Easy TikZ from the ribbon icon still inserts a brand-new block at the cursor.
+- **Inline rendering of plots in notes - no external TikZ plugin required.** The modal's "Insert into note" button now emits an `easy-tikz` JSON code block which the plugin renders inline using the same `SVGRenderer` / `SVG3DRenderer` that drives the live preview. The chart you see in the modal is exactly the chart that ends up in the note.
+- **Click-to-edit.** Clicking a rendered chart reopens the modal pre-filled with the chart's settings (functions, ranges, title, labels, 3D rotation, polar, box aspect - everything). Hitting "Save changes" replaces the block in the source file in place; opening Easy TikZ from the ribbon icon still inserts a brand-new block at the cursor.
 - **Optional `tikz` block rendering.** New plugin setting "Also render plain `tikz` blocks". Off by default to coexist with `obsidian-tikzjax` and friends. When on, `tikz` blocks that contain Easy TikZ JSON render the same way as `easy-tikz`; blocks that look like real LaTeX get a small "install obsidian-tikzjax" note instead of silent failure.
 - **SettingsManager serialisation.** New `serialize()` / `static fromJSON(data)` round-trip every setting to a plain JSON object. This is the on-disk format inside `easy-tikz` code blocks and what makes click-to-edit possible.
 
 ### Changed
 
-- **The Copy TikZ code button still produces pgfplots** for users who want to export to a real TeX install — the in-Obsidian rendering does NOT touch that path. Inline rendering and TikZ export are two independent outputs from the same model.
+- **The Copy TikZ code button still produces pgfplots** for users who want to export to a real TeX install - the in-Obsidian rendering does NOT touch that path. Inline rendering and TikZ export are two independent outputs from the same model.
 
 ## [3.15.0] - 2026-05-21
 
 ### Added
 
 - **3D box aspect setting** on the Graph tab (visible only in 3D mode). Two options:
-  - **Equal (cube)** — each axis spans the same screen length regardless of data range. The bounding box is a perfect cube. The exported pgfplots adds `axis equal image`.
-  - **True (proportional)** — edge lengths scale with the data ranges (`xmax-xmin`, `ymax-ymin`, `zmax-zmin`). An axis with a much larger range dominates the box, which is faithful to the data. Default.
+  - **Equal (cube)** - each axis spans the same screen length regardless of data range. The bounding box is a perfect cube. The exported pgfplots adds `axis equal image`.
+  - **True (proportional)** - edge lengths scale with the data ranges (`xmax-xmin`, `ymax-ymin`, `zmax-zmin`). An axis with a much larger range dominates the box, which is faithful to the data. Default.
 
   Surfaces and box outline share the new per-axis normalization, so the two stay aligned no matter which mode is active.
 
 ### Fixed
 
-- **First-render 3D fit-contain.** The renderer measures its parent element to compute fit-contain dimensions, but on the very first paint the 3D root hadn't been attached to the preview container yet — `applyRootFitContain` fell back to the configured logical size and only got the right dimensions after the first user interaction. The modal now attaches the root to the preview container before calling `renderCanvas`, so the first paint already fits.
+- **First-render 3D fit-contain.** The renderer measures its parent element to compute fit-contain dimensions, but on the very first paint the 3D root hadn't been attached to the preview container yet - `applyRootFitContain` fell back to the configured logical size and only got the right dimensions after the first user interaction. The modal now attaches the root to the preview container before calling `renderCanvas`, so the first paint already fits.
 - **3D canvas now uses the full available preview area.** Previously `applyRootFitContain` capped at the configured logical size (`config.width` / `config.height`), so larger preview spaces left empty padding around the chart. The cap is gone; the canvas scales up to fill whatever space the preview area gives it while preserving aspect.
 
 ## [3.14.1] - 2026-05-21
@@ -182,23 +182,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **3D preview no longer distorts mid-drag.** The 3D root had both `style.width` and `style.height` set in pixels with `max-width: 100%` / `max-height: 100%` clamps. When the preview area was narrower than the configured size, max-width shrank the width while the explicit pixel height stayed put — the root became a rectangle. The canvas (CSS `width: 100%; height: 100%`) then stretched non-proportionally during drag, while the SVG (`preserveAspectRatio` default) letter-boxed on release, so toggling between the two paths visibly changed the chart's aspect, title size, and edge positions. Replaced with `style.width` + `style.aspectRatio` + `style.height: auto`, so the root scales proportionally and both render paths occupy an identical box.
+- **3D preview no longer distorts mid-drag.** The 3D root had both `style.width` and `style.height` set in pixels with `max-width: 100%` / `max-height: 100%` clamps. When the preview area was narrower than the configured size, max-width shrank the width while the explicit pixel height stayed put - the root became a rectangle. The canvas (CSS `width: 100%; height: 100%`) then stretched non-proportionally during drag, while the SVG (`preserveAspectRatio` default) letter-boxed on release, so toggling between the two paths visibly changed the chart's aspect, title size, and edge positions. Replaced with `style.width` + `style.aspectRatio` + `style.height: auto`, so the root scales proportionally and both render paths occupy an identical box.
 
 ## [3.13.4] - 2026-05-21
 
 ### Fixed
 
-- **3D preview no longer "zooms in" while dragging.** Root cause: the canvas had inline `style.width` / `style.height` in CSS pixels, which overrode the CSS `width: 100%` rule. When the preview area was narrower than the configured canvas width, the canvas stayed at its full pixel width and visibly overflowed the `max-width`-clamped 3D root, while the SVG (sized via CSS) shrank to fit. Releasing the drag swapped to SVG and the chart visibly snapped smaller. The renderer no longer sets the canvas's inline width/height — only the internal pixel buffer — so the canvas tracks the same box as the SVG.
+- **3D preview no longer "zooms in" while dragging.** Root cause: the canvas had inline `style.width` / `style.height` in CSS pixels, which overrode the CSS `width: 100%` rule. When the preview area was narrower than the configured canvas width, the canvas stayed at its full pixel width and visibly overflowed the `max-width`-clamped 3D root, while the SVG (sized via CSS) shrank to fit. Releasing the drag swapped to SVG and the chart visibly snapped smaller. The renderer no longer sets the canvas's inline width/height - only the internal pixel buffer - so the canvas tracks the same box as the SVG.
 
 ### Added
 
-- **Plugin setting: "Invert vertical drag in 3D"** (Settings → Easy TikZ). Off (default) keeps the existing trackball convention — drag down raises the camera elevation, drag up lowers it. On flips it to direct manipulation — drag down lowers the camera, drag up raises it. Setting persists with the rest of the plugin data.
+- **Plugin setting: "Invert vertical drag in 3D"** (Settings → Easy TikZ). Off (default) keeps the existing trackball convention - drag down raises the camera elevation, drag up lowers it. On flips it to direct manipulation - drag down lowers the camera, drag up raises it. Setting persists with the rest of the plugin data.
 
 ## [3.13.3] - 2026-05-21
 
 ### Fixed
 
-- **Floating action icons and 3D zoom buttons no longer disappear after the first render.** `previewContainer.empty()` was wiping every child element on every render — including the overlays added at modal open. Replaced with `clearPreviewContent()` that only removes the SVG / 3D root, leaving overlays intact.
+- **Floating action icons and 3D zoom buttons no longer disappear after the first render.** `previewContainer.empty()` was wiping every child element on every render - including the overlays added at modal open. Replaced with `clearPreviewContent()` that only removes the SVG / 3D root, leaving overlays intact.
 
 ### Added
 

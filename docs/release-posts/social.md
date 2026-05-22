@@ -23,7 +23,7 @@ github.com/Saiki77/easy-tikz
 ```
 Just shipped Easy TikZ for Obsidian 📈
 
-A visual editor for TikZ / pgfplots charts that renders them inline in your notes — no external TeX install or third-party TikZ plugin needed for in-vault use.
+A visual editor for TikZ / pgfplots charts that renders them inline in your notes - no external TeX install or third-party TikZ plugin needed for in-vault use.
 
 → 2D, 3D, parametric, polar
 → Composable tools layer (area between curves by name, intersections, reference lines, free shapes, 3D primitives)
@@ -40,7 +40,7 @@ github.com/Saiki77/easy-tikz
 ## Bluesky (300 chars)
 
 ```
-Just shipped Easy TikZ for Obsidian — a visual editor for TikZ / pgfplots charts that renders inline in your notes. No TeX install needed. 2D, 3D, polar, parametric, plus a composable tools layer (area between curves, intersections, braces, ref lines).
+Just shipped Easy TikZ for Obsidian - a visual editor for TikZ / pgfplots charts that renders inline in your notes. No TeX install needed. 2D, 3D, polar, parametric, plus a composable tools layer (area between curves, intersections, braces, ref lines).
 
 github.com/Saiki77/easy-tikz
 ```
@@ -50,5 +50,5 @@ github.com/Saiki77/easy-tikz
 ## Reply hooks (if people ask "how is this different from obsidian-tikzjax?")
 
 ```
-TikZJax is great if you want to compile arbitrary TikZ inside Obsidian — it ships a WebAssembly LaTeX engine. Easy TikZ is the opposite trade-off: it's a visual editor with its own SVG renderer for the chart subset (functions + tools), so the in-vault render is instant and the plugin's footprint is small. It still exports clean pgfplots when you want to compile elsewhere. The two coexist — Easy TikZ only claims the `easy-tikz` code-block tag by default, so your `tikz` blocks stay with tikzjax.
+TikZJax is great if you want to compile arbitrary TikZ inside Obsidian - it ships a WebAssembly LaTeX engine. Easy TikZ is the opposite trade-off: it's a visual editor with its own SVG renderer for the chart subset (functions + tools), so the in-vault render is instant and the plugin's footprint is small. It still exports clean pgfplots when you want to compile elsewhere. The two coexist - Easy TikZ only claims the `easy-tikz` code-block tag by default, so your `tikz` blocks stay with tikzjax.
 ```

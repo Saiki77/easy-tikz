@@ -16,6 +16,6 @@ Everything needed to open the submission PR against
 latest GitHub Release tag. Both already line up.
 
 If the validator throws **"Could not find or validate a manifest
-(manifest.json) in the repository"** — the most likely cause is a
+(manifest.json) in the repository"** - the most likely cause is a
 typo in the `repo` field of the JSON snippet. See the troubleshooting
 table in `SUBMISSION.md`.

@@ -834,7 +834,7 @@ export class SVGRenderer {
     }
 
     /**
-     * Render the tool list — composable overlays that either reference
+     * Render the tool list - composable overlays that either reference
      * existing functions (areaBetween, intersection) or define
      * stand-alone shapes / reference lines. Each tool dispatches by
      * `type`; unknown / 3D-only types are skipped silently.
@@ -892,7 +892,7 @@ export class SVGRenderer {
         // (evaluated at x = 0), etc. work. The previous parseFloat-first
         // path silently truncated expressions like `-1*x` to `-1`, which
         // explained the long-standing "sin / cos / -x don't work" reports
-        // — parseFloat read the leading number and stopped, never
+        // - parseFloat read the leading number and stopped, never
         // reaching the evaluator.
         try {
             const v = MathHelper.evaluateExpression(s, 0);
@@ -947,7 +947,7 @@ export class SVGRenderer {
 
         // Walk the domain and break into contiguous "segments" wherever a
         // sample is non-finite or clamped out (asymptotes, divisions by
-        // zero). Each segment becomes its own closed polygon — the old
+        // zero). Each segment becomes its own closed polygon - the old
         // path-builder skipped bad samples but then connected the next
         // good sample to the previous one with a straight line, drawing
         // a diagonal across the gap.

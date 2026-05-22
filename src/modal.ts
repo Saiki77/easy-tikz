@@ -497,7 +497,7 @@ export class TikzModal extends Modal {
         new Setting(this.rotationContainer)
             .setName('Box aspect')
             .setDesc(
-                'Equal: each axis spans the same length on screen — the bounding box is a perfect cube. ' +
+                'Equal: each axis spans the same length on screen - the bounding box is a perfect cube. ' +
                     'True: edge lengths scale with the data ranges (xmax-xmin, ymax-ymin, zmax-zmin), so an axis with a much larger range dominates the box. The exported pgfplots adds `axis equal image` when Equal is selected.'
             )
             .addDropdown((d) =>
@@ -936,7 +936,7 @@ export class TikzModal extends Modal {
                 );
             });
             // If the seed had these toggles on, reveal the dependent sub-rows
-            // now — the onChange handler above only fires on user input.
+            // now - the onChange handler above only fires on user input.
             if (state.tangent) tangentInput.addClass('visible');
             if (state.fill) fillOptions.addClass('visible');
             if (state.parametric) parametricInput.addClass('visible');
@@ -1207,7 +1207,7 @@ export class TikzModal extends Modal {
         const tab = this.toolsTabContent;
         const is3D = this.is3D();
         tab.createEl('p', { cls: 'tikz-section-blurb' }).setText(
-            'Composable overlays. Combine functions (area between, intersections), draw reference lines, and add free shapes — each independent of the others, so you can stack them freely. ' +
+            'Composable overlays. Combine functions (area between, intersections), draw reference lines, and add free shapes - each independent of the others, so you can stack them freely. ' +
                 'Function-referencing tools use the Name field on each function card (defaults to f1, f2, …).'
         );
 
@@ -1229,7 +1229,7 @@ export class TikzModal extends Modal {
             .setName('Add tool')
             .setDesc(is3D ? 'Pick a 3D tool type.' : 'Pick a tool type.')
             .addDropdown((d) => {
-                d.addOption('', '— select type —');
+                d.addOption('', '- select type -');
                 if (!is3D) {
                     d.addOption('areaBetween', 'Area between two curves');
                     d.addOption('intersection', 'Intersection points');
@@ -1377,7 +1377,7 @@ export class TikzModal extends Modal {
             const div = parent.createDiv({ cls: 'tikz-func-field' });
             const names = fnNames();
             new Setting(div).setName(label).addDropdown((d) => {
-                d.addOption('', '— select function —');
+                d.addOption('', '- select function -');
                 for (const n of names) d.addOption(n.value, n.label);
                 d.setValue(value).onChange(onChange);
             });
@@ -1815,7 +1815,7 @@ export class TikzModal extends Modal {
 
         section('Tools');
         para(
-            'The Tools tab adds composable overlays on top of functions. Each tool is independent — stack them freely to build the diagram you want. ' +
+            'The Tools tab adds composable overlays on top of functions. Each tool is independent - stack them freely to build the diagram you want. ' +
                 'Function-referencing tools (area between, intersection) look up your functions by the Name field on each function card (defaults to f1, f2, …).'
         );
         list([
@@ -1830,7 +1830,7 @@ export class TikzModal extends Modal {
             { name: '3D point / segment', desc: 'Single point at (x, y, z) with optional label, or a line segment between two 3D points with optional arrows.' },
         ]);
         para(
-            'Exported TikZ uses real pgfplots semantics — `\\addplot fill between [of=A and B]` for area-between, ' +
+            'Exported TikZ uses real pgfplots semantics - `\\addplot fill between [of=A and B]` for area-between, ' +
                 '`\\draw` for shapes, `\\node` for labels, `decorate / decoration={brace}` for braces. The `fillbetween` and `decorations.pathreplacing` libraries are added to the document setup only when a tool needs them.'
         );
 
@@ -1895,7 +1895,7 @@ export class TikzModal extends Modal {
             { name: 'Copy TikZ code', desc: 'The default. Copies the pgfplots source to the clipboard.' },
             { name: 'Copy SVG', desc: 'Copies the live SVG with a transparent background. Paste into Inkscape, Figma, or directly into Obsidian as <img src="...">. CSS variables are resolved so the file renders correctly outside the plugin.' },
             { name: 'Copy PNG', desc: 'Rasterises the SVG at 2x resolution and copies a PNG to the clipboard, also with a transparent background. Paste into any image-aware app.' },
-            { name: 'Insert into note', desc: 'Inserts an `easy-tikz` JSON code block into the active note; the plugin renders it inline via its own SVG renderer — no external TikZ plugin required. Clicking the rendered chart reopens this modal pre-filled.' },
+            { name: 'Insert into note', desc: 'Inserts an `easy-tikz` JSON code block into the active note; the plugin renders it inline via its own SVG renderer - no external TikZ plugin required. Clicking the rendered chart reopens this modal pre-filled.' },
         ]);
 
         section('Preview (2D)');
@@ -2173,9 +2173,9 @@ export class TikzModal extends Modal {
                 let newAzimuth = this.dragStartAzimuth + dx * AZIMUTH_DRAG_RATE;
                 // Vertical drag direction follows the plugin setting. Default
                 // (invertDrag3D: false): drag down RAISES elevation
-                // (trackball-style — you're "pulling the floor up").
+                // (trackball-style - you're "pulling the floor up").
                 // invertDrag3D: true: drag down LOWERS elevation (direct
-                // manipulation — the camera follows your finger).
+                // manipulation - the camera follows your finger).
                 const invert = !!this.plugin?.data?.invertDrag3D;
                 const elevationDelta = (invert ? dy : -dy) * ELEVATION_DRAG_RATE;
                 let newElevation = this.dragStartElevation + elevationDelta;
@@ -2186,7 +2186,7 @@ export class TikzModal extends Modal {
                 // 2D drag: pan the visible axis range each frame and let
                 // the renderer redraw the chart in place. The chart pans
                 // inside its fixed axes (the box doesn't move), the tick
-                // labels update with the new range — same idea as the
+                // labels update with the new range - same idea as the
                 // 3D drag which re-renders with new camera rotation
                 // each move. The scale math is correct since 3.18.2
                 // fixed `getPlotMetricsFromSvg` to read the chart SVG
@@ -2821,7 +2821,7 @@ export class TikzModal extends Modal {
      * Find the chart's SVG element inside the preview container. We can't
      * use `previewContainer.querySelector('svg')` because Obsidian's
      * `setIcon` injects Lucide SVGs into our floating overlay buttons,
-     * and those come earlier in the DOM than the chart — every drag,
+     * and those come earlier in the DOM than the chart - every drag,
      * wheel, and export call was accidentally grabbing the first Fit /
      * Reset / Toggle-grid icon (~18 px), which made `plot.scale`
      * ~40× too large and the whole drag pipeline feel runaway.

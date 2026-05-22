@@ -580,7 +580,7 @@ export class SettingsManager {
                             }
                         }
                     } catch {
-                        // Bad domain on one of the functions — skip silently.
+                        // Bad domain on one of the functions - skip silently.
                     }
                     break;
                 }

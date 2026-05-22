@@ -2,7 +2,7 @@
 
 End-to-end checklist for getting the plugin listed under **Settings → Community plugins → Browse**.
 
-## Prerequisites — already done
+## Prerequisites - already done
 
 - [x] `manifest.json` at the repo root with all required fields
   (`id`, `name`, `version`, `minAppVersion`, `description`, `author`,
@@ -13,7 +13,7 @@ End-to-end checklist for getting the plugin listed under **Settings → Communit
 - [x] GitHub Releases workflow that attaches `main.js`, `manifest.json`,
       `styles.css` as raw assets (not zipped) on every tag push
 - [x] Latest release tag (`3.19.0` at the time of writing) matches the
-      `version` field in `manifest.json` — without a leading `v`
+      `version` field in `manifest.json` - without a leading `v`
 
 Verify the latest release one more time before opening the PR:
 
@@ -36,7 +36,7 @@ That URL is what Obsidian's submission validator fetches; if it errors,
 the PR validator surfaces it as **"Could not find or validate a manifest
 (manifest.json) in the repository."**
 
-## Step-by-step — open the submission PR
+## Step-by-step - open the submission PR
 
 1. Fork [`obsidianmd/obsidian-releases`](https://github.com/obsidianmd/obsidian-releases).
 2. Pull your fork locally, create a branch named after the plugin id:
@@ -60,7 +60,7 @@ the PR validator surfaces it as **"Could not find or validate a manifest
    The reviewer bot checks alphabetical-by-`id` ordering loosely; just
    append at the end and the maintainers sort if needed.
 4. Commit + push + open the PR against `obsidianmd/obsidian-releases:master`.
-   Use the PR template — body from
+   Use the PR template - body from
    [`pr-description.md`](pr-description.md).
 
 ## When the validator runs
@@ -75,7 +75,7 @@ The bot runs a workflow that:
    release assets (not inside a zip).
 
 If any step fails it leaves a comment like *"Could not find or validate
-a manifest (manifest.json) in the repository."* — fix the underlying
+a manifest (manifest.json) in the repository."* - fix the underlying
 issue, push another commit to the PR branch, and the workflow re-runs.
 
 ## Common rejections, and how each one looks
@@ -84,9 +84,9 @@ issue, push another commit to the PR branch, and the workflow re-runs.
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | "Could not find or validate a manifest (manifest.json)…"            | The `repo` field in `community-plugins.json` is wrong, or `manifest.json` isn't on the default branch | Fix the `repo` field, or push `manifest.json` to the default branch.                                                                               |
 | "Latest GitHub release tag does not match `manifest.version`."      | You tagged `v1.2.0` (with the `v`) or your `version` field is out of sync                          | Re-tag without the `v` prefix; ensure `manifest.version` equals the tag name exactly.                                                              |
-| "Release is missing one of: main.js, manifest.json, styles.css."    | Your release attached a zip, or skipped `styles.css`                                               | Re-run the release workflow so the three files are individual release assets. (Our workflow already does this — `release.yml`.)                    |
-| "Plugin id contains 'obsidian' or 'plugin'."                        | Naming convention. We're fine — `easy-tikz`.                                                       | n/a                                                                                                                                                |
-| "Plugin name starts with 'Obsidian'."                               | Naming convention. We're fine — `Easy TikZ`.                                                       | n/a                                                                                                                                                |
+| "Release is missing one of: main.js, manifest.json, styles.css."    | Your release attached a zip, or skipped `styles.css`                                               | Re-run the release workflow so the three files are individual release assets. (Our workflow already does this - `release.yml`.)                    |
+| "Plugin id contains 'obsidian' or 'plugin'."                        | Naming convention. We're fine - `easy-tikz`.                                                       | n/a                                                                                                                                                |
+| "Plugin name starts with 'Obsidian'."                               | Naming convention. We're fine - `Easy TikZ`.                                                       | n/a                                                                                                                                                |
 | Manual: "`fundingUrl` link is broken / unrelated to the author."    | A real human reviewer hit a broken link.                                                           | Remove the field or fix the URL.                                                                                                                   |
 | Manual: "`minAppVersion` is older than the version that ships APIs you use." | The plugin uses an API the declared min version doesn't have.                                      | Bump `minAppVersion` to the floor that actually works. We use `color-mix()` CSS (Chromium 111 → Obsidian ≥ 1.4) and `setIcon` etc.; **1.4.0** is the safe floor we set. |
 
@@ -117,4 +117,4 @@ To ship a new version after the plugin is listed:
 3. The release workflow attaches `main.js`/`manifest.json`/`styles.css`
    to the GitHub Release.
 4. Obsidian's auto-updater picks up the new release without any further
-   PR — `community-plugins.json` only needs the initial entry.
+   PR - `community-plugins.json` only needs the initial entry.
