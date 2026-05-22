@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.18.2] - 2026-05-21
+
+### Fixed
+
+- **The real reason 2D drag felt 40× too sensitive.** `previewContainer.querySelector('svg')` was finding the **first** SVG in the preview area — which is one of the Lucide icons that `setIcon` injected into the floating-action buttons (Fit / Reset / Toggle grid), not the chart. Its bounding rect was ~18 px wide, so `plot.scale = config.width / rect.width` came out around 40× the real value — every drag, wheel zoom, and Copy SVG / PNG export was reading off that icon. New `getChartSvg()` helper iterates direct children (2D) or looks inside `.tikz-3d-root` (3D) so we always get the chart, never an overlay icon. Drag now visibly tracks the pointer in real time (no jump-at-the-end), the Fit icon stays put, and Copy SVG / PNG export the actual chart.
+
 ## [3.18.1] - 2026-05-21
 
 ### Fixed

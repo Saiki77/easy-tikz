@@ -2134,7 +2134,10 @@ export class TikzModal extends Modal {
                 this.dragStartYmax = parseFloat(this.settings.getValue('ymax')) || 5;
                 // Capture the SVG element we'll translate during the drag.
                 // null if no SVG is mounted yet — onMouseMove guards against that.
-                this.dragSvg = this.previewContainer.querySelector('svg') as SVGElement | null;
+                // getChartSvg() avoids the floating-overlay icon SVGs that
+                // setIcon injects, which would otherwise be picked up first
+                // and dragged around instead of the actual chart.
+                this.dragSvg = this.getChartSvg();
                 this.dragLastDx = 0;
                 this.dragLastDy = 0;
                 if (this.dragSvg) {
@@ -2289,7 +2292,7 @@ export class TikzModal extends Modal {
         xFracInPlot: number;
         yFracInPlot: number;
     } | null {
-        const svg = this.previewContainer.querySelector('svg');
+        const svg = this.getChartSvg();
         if (!svg) return null;
         const rect = svg.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return null;
@@ -2652,7 +2655,7 @@ export class TikzModal extends Modal {
         // exportable DOM and is refreshed here just before we read it.
         // No-op in 2D (the live SVG is already in the DOM).
         this.ensureSvgFresh();
-        const svg = this.previewContainer.querySelector('svg');
+        const svg = this.getChartSvg();
         if (!svg) return null;
         const clone = svg.cloneNode(true) as SVGElement;
         const computed = getComputedStyle(document.body);
@@ -2824,6 +2827,31 @@ export class TikzModal extends Modal {
                 this.previewContainer.removeChild(child);
             }
         }
+    }
+
+    /**
+     * Find the chart's SVG element inside the preview container. We can't
+     * use `previewContainer.querySelector('svg')` because Obsidian's
+     * `setIcon` injects Lucide SVGs into our floating overlay buttons,
+     * and those come earlier in the DOM than the chart — every drag,
+     * wheel, and export call was accidentally grabbing the first Fit /
+     * Reset / Toggle-grid icon (~18 px), which made `plot.scale`
+     * ~40× too large and the whole drag pipeline feel runaway.
+     *
+     * In 2D the chart SVG is a direct child of `previewContainer`. In 3D
+     * the SVG lives inside `.tikz-3d-root` (off-screen, used for export).
+     */
+    private getChartSvg(): SVGElement | null {
+        if (this.is3D()) {
+            const root = this.previewContainer.querySelector('.tikz-3d-root');
+            return (root?.querySelector(':scope > svg') as SVGElement | null) ?? null;
+        }
+        for (const child of Array.from(this.previewContainer.children)) {
+            if (child.tagName.toLowerCase() === 'svg') {
+                return child as unknown as SVGElement;
+            }
+        }
+        return null;
     }
 
     private updatePreview(mode: 'svg' | 'canvas' = 'svg') {
