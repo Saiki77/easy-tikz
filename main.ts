@@ -20,6 +20,16 @@ export default class EasyTikzPlugin extends Plugin {
             new TikzModal(this.app, this).open();
         });
 
+        // Command palette entry so users who hide the ribbon (or prefer
+        // Cmd/Ctrl+P) can still launch the editor. Reported in #2.
+        this.addCommand({
+            id: 'open-editor',
+            name: 'Open editor',
+            callback: () => {
+                new TikzModal(this.app, this).open();
+            },
+        });
+
         // Render `easy-tikz` blocks inline via the same SVG renderers the
         // modal uses for its live preview - no external TeX engine needed.
         this.registerMarkdownCodeBlockProcessor('easy-tikz', (source, el, ctx) => {

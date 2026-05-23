@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.19.3] - 2026-05-22
+
+### Fixed
+
+- **Command palette entry registered.** Previously the plugin only added a ribbon icon, so users who hide the ribbon (or just prefer Cmd/Ctrl+P) had no way to launch the editor. Adds an `Easy TikZ: Open editor` command via `addCommand({ id: 'open-editor', ... })`. Reported in #2 by @playerofgames.
+
 ## [3.19.2] - 2026-05-22
 
 ### Changed
