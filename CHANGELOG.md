@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.19.4] - 2026-07-02
+
+### Fixed
+
+- **Annotation text now renders LaTeX markup instead of showing it literally.** Labels entered on the Annotations tab (2D and 3D, SVG and canvas) were inserted as raw text, so expressions like `$f(x,y,\mu)$` showed up with the dollar signs and backslashes still in them. They now run through `stripLatex()`, the same helper already used for chart titles.
+- **Expanded `stripLatex()` LaTeX coverage.** Beyond the original handful of Greek-letter macros, it now expands `\frac{}{}` and `\sqrt[n]{}`, converts `^`/`_` to Unicode super/subscripts where a mapping exists, resolves a large set of operator/relation/arrow/set-theory symbol macros (`\times`, `\leq`, `\to`, `\in`, …), special-cases `^\circ` as a degree sign, and strips `\left`/`\right` sizing and `$` math-mode delimiters.
+- **Axis range fields (xmin/xmax/ymin/ymax/…) rejected every attempt to type a leading `-`.** The field validated and reverted its value on every keystroke, so the instant you typed `-` to start a negative bound, `Number("-")` failed the check and the input was wiped before the next digit landed - negative bounds could only be pasted in, never typed. Validation now only reverts invalid input on blur, matching the pattern already used for the tangent-point field.
+- **All plot text now uses a single consistent font.** Axis tick numbers, 3D axis labels, and coordinate/tool labels (2D and 3D, SVG and canvas) previously rendered in the monospace font while the title, annotations, and legend used the regular text font. Everything in the plot itself now uses `var(--font-text)`. The Code tab's generated-TikZ textarea and the Reference tab's code snippets are unaffected - those display literal source code and stay monospace on purpose.
+- **Annotation cards disappeared from the editor on reopen, even though the labels kept rendering on the graph.** `buildAnnotationsTab()` had no hydration step - unlike the Functions tab, which seeds a card per saved function, the Annotations tab's `addCard()` never accepted a seed and was only ever called blank from the "+ Add label" button. So every fresh modal open (e.g. reopening after Save changes, or clicking a rendered chart to edit it) started with zero cards regardless of saved data; the graph still showed the labels because the renderer reads `settings.annotations` directly, independent of the UI. Existing annotations are now hydrated into cards on open, and the Text field (which never called `.setValue()`) now shows its saved value too.
+
+### Added
+
+- **Custom legend labels for functions.** Each function card's Legend toggle now reveals a "Legend label" field; when set, it's used verbatim for the `\addlegendentry{...}` in both the exported TikZ and the live SVG preview (which also runs it through `stripLatex()`). Leaving it blank keeps the previous auto-generated label derived from the expression.
+- **Real LaTeX rendering (via Obsidian's built-in MathJax) for title, annotation, and legend-label text in the 2D live preview.** When one of these fields is a single `$...$` or `\(...\)` wrapped expression, it's now typeset with `renderMath()`/`finishRenderMath()` (the same engine Obsidian uses for `$...$` in notes) and embedded via `<foreignObject>`, instead of the `stripLatex()` Unicode approximation - so `\frac{}{}`, `\sqrt[n]{}`, matrices, accents (`\vec`, `\hat`), `\binom{}{}`, and anything else valid LaTeX now render correctly instead of degrading to flattened or garbled text. Plain prose, mixed text, and unwrapped macros still use the lightweight `stripLatex()` path (new file: `src/mathlabel.ts`). 3D preview and the default (non-custom) legend label derived from a function's expression are unaffected, since raw expression syntax isn't valid LaTeX.
+- **Lock pan/zoom toggle for the 2D preview.** New padlock icon in the floating action strip (right edge of the preview). Dragging or scrolling on the canvas silently rewrites xmin/xmax/ymin/ymax, which could undo carefully-tuned axis ranges from an incidental click near the plot (e.g. while dragging an annotation). Locking disables the pan/zoom axis writes without affecting annotation dragging or 3D rotation. Per-session only; resets to unlocked next time the editor opens.
+
 ## [3.19.3] - 2026-05-22
 
 ### Fixed

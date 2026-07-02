@@ -2,6 +2,7 @@ import { RendererConfig, Tool, FunctionParameters, ArrowStyle } from './types';
 import { MathHelper } from './math';
 import { COLOR_MAP, THICKNESS_MAP } from './colors';
 import { niceInterval, formatTick, stripLatex } from './util';
+import { extractMathSource, renderMathLabel, flushMathRenders } from './mathlabel';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -30,6 +31,8 @@ export class SVGRenderer {
     private defs: SVGElement | null = null;
     private patternIds: Map<string, string> = new Map();
     private patternCounter = 0;
+    /** Set when a `$...$`-wrapped label was rendered via MathJax during this render() pass. */
+    private usedMath = false;
 
     constructor(config: RendererConfig) {
         this.config = config;
@@ -104,14 +107,69 @@ export class SVGRenderer {
         defs.appendChild(marker);
         svg.appendChild(defs);
 
+        this.usedMath = false;
         this.drawGrid(svg);
         this.drawAxes(svg);
         this.drawFunctions(svg);
         this.drawTools(svg);
         this.drawAnnotations(svg);
         this.drawTitle(svg);
+        if (this.usedMath) flushMathRenders();
 
         return svg;
+    }
+
+    /**
+     * Render `text` as either real LaTeX (when it's a single `$...$` or
+     * `\(...\)` wrapped expression, via Obsidian's MathJax) or as the
+     * `stripLatex()` Unicode approximation (everything else - plain prose,
+     * mixed text, or unwrapped macros). MathJax output is embedded through a
+     * `<foreignObject>` since it produces its own inline HTML/SVG, not
+     * something that fits into a `<text>` node.
+     */
+    private drawMathOrText(
+        parent: SVGElement,
+        text: string,
+        x: number,
+        y: number,
+        opts: { color: string; fontSize: number; anchor: 'start' | 'middle' | 'end'; extraAttrs?: Record<string, string> }
+    ): SVGElement {
+        const mathSource = extractMathSource(text);
+        if (mathSource !== null) {
+            try {
+                const { el, width, height } = renderMathLabel(mathSource, opts.color, opts.fontSize);
+                this.usedMath = true;
+                let fx = x;
+                if (opts.anchor === 'middle') fx = x - width / 2;
+                else if (opts.anchor === 'end') fx = x - width;
+                const fo = this.el('foreignObject', {
+                    x: String(fx),
+                    y: String(y - height / 2),
+                    width: String(Math.max(width, 1)),
+                    height: String(Math.max(height, 1)),
+                    style: 'overflow: visible; pointer-events: all;',
+                    ...(opts.extraAttrs || {}),
+                });
+                fo.appendChild(el);
+                parent.appendChild(fo);
+                return fo;
+            } catch {
+                // MathJax rejected the source (unbalanced braces, unknown
+                // environment, ...); fall through to the plain-text path.
+            }
+        }
+        const t = this.el('text', {
+            x: String(x),
+            y: String(y),
+            'text-anchor': opts.anchor,
+            fill: opts.color,
+            'font-size': String(opts.fontSize),
+            'font-family': 'var(--font-text)',
+            ...(opts.extraAttrs || {}),
+        });
+        t.textContent = stripLatex(text);
+        parent.appendChild(t);
+        return t;
     }
 
     /**
@@ -296,7 +354,7 @@ export class SVGRenderer {
                     'text-anchor': 'middle',
                     fill: 'var(--text-muted)',
                     'font-size': '11',
-                    'font-family': 'var(--font-monospace)',
+                    'font-family': 'var(--font-text)',
                 });
                 label.textContent = formatTick(x);
                 axisGroup.appendChild(label);
@@ -322,7 +380,7 @@ export class SVGRenderer {
                     'text-anchor': 'end',
                     fill: 'var(--text-muted)',
                     'font-size': '11',
-                    'font-family': 'var(--font-monospace)',
+                    'font-family': 'var(--font-text)',
                 });
                 label.textContent = formatTick(y);
                 axisGroup.appendChild(label);
@@ -372,7 +430,7 @@ export class SVGRenderer {
                     'text-anchor': 'middle',
                     fill: 'var(--text-muted)',
                     'font-size': '11',
-                    'font-family': 'var(--font-monospace)',
+                    'font-family': 'var(--font-text)',
                 });
                 label.textContent = formatTick(x);
                 axisGroup.appendChild(label);
@@ -397,7 +455,7 @@ export class SVGRenderer {
                     'text-anchor': 'end',
                     fill: 'var(--text-muted)',
                     'font-size': '11',
-                    'font-family': 'var(--font-monospace)',
+                    'font-family': 'var(--font-text)',
                 });
                 label.textContent = formatTick(y);
                 axisGroup.appendChild(label);
@@ -453,7 +511,7 @@ export class SVGRenderer {
                     'text-anchor': 'middle',
                     fill: 'var(--text-muted)',
                     'font-size': '11',
-                    'font-family': 'var(--font-monospace)',
+                    'font-family': 'var(--font-text)',
                 });
                 label.textContent = formatTick(x);
                 axisGroup.appendChild(label);
@@ -490,7 +548,7 @@ export class SVGRenderer {
                     'text-anchor': 'end',
                     fill: 'var(--text-muted)',
                     'font-size': '11',
-                    'font-family': 'var(--font-monospace)',
+                    'font-family': 'var(--font-text)',
                 });
                 label.textContent = formatTick(y);
                 axisGroup.appendChild(label);
@@ -773,7 +831,8 @@ export class SVGRenderer {
             }
 
             if (func.showLegend) {
-                legendEntries.push({ color: cssColor, label: func.expression });
+                const customLabel = func.legendLabel && func.legendLabel.trim();
+                legendEntries.push({ color: cssColor, label: customLabel || func.expression });
             }
         }
 
@@ -819,15 +878,11 @@ export class SVGRenderer {
                     'stroke-width': '2.5',
                 })
             );
-            const label = this.el('text', {
-                x: String(startX + 34),
-                y: String(y + 4),
-                fill: 'var(--text-normal)',
-                'font-size': '11',
-                'font-family': 'var(--font-monospace)',
+            this.drawMathOrText(legendGroup, entry.label, startX + 34, y + 4, {
+                color: 'var(--text-normal)',
+                fontSize: 11,
+                anchor: 'start',
             });
-            label.textContent = entry.label;
-            legendGroup.appendChild(label);
         });
 
         svg.appendChild(legendGroup);
@@ -1052,7 +1107,7 @@ export class SVGRenderer {
                     y: String((sy - 6).toFixed(2)),
                     fill: cssColor,
                     'font-size': '11',
-                    'font-family': 'var(--font-monospace)',
+                    'font-family': 'var(--font-text)',
                 });
                 label.textContent = `(${r.x.toFixed(2)}, ${r.y.toFixed(2)})`;
                 group.appendChild(label);
@@ -1298,35 +1353,28 @@ export class SVGRenderer {
                 case 'right': textAnchor = 'start'; dx = 6; dy = 4; break;
                 case 'center': default: textAnchor = 'middle'; dy = 4; break;
             }
-            const t = this.el('text', {
-                x: String(sx + dx),
-                y: String(sy + dy),
-                'text-anchor': textAnchor,
-                fill: color,
-                'font-size': fontSize,
-                'font-weight': '500',
-                'font-family': 'var(--font-text)',
-                'data-annotation-idx': String(idx),
-                'pointer-events': 'bounding-box',
+            const el = this.drawMathOrText(group, a.text, sx + dx, sy + dy, {
+                color,
+                fontSize: parseInt(fontSize, 10),
+                anchor: textAnchor as 'start' | 'middle' | 'end',
+                extraAttrs: {
+                    'font-weight': '500',
+                    'data-annotation-idx': String(idx),
+                    'pointer-events': 'bounding-box',
+                },
             });
-            t.style.cursor = 'grab';
-            t.textContent = a.text;
-            group.appendChild(t);
+            el.style.cursor = 'grab';
         }
         svg.appendChild(group);
     }
 
     private drawTitle(svg: SVGElement) {
         if (!this.config.title) return;
-        const titleEl = this.el('text', {
-            x: String(this.config.width / 2),
-            y: String(PADDING_TOP - 12),
-            'text-anchor': 'middle',
-            fill: 'var(--text-normal)',
-            'font-size': '15',
-            'font-weight': '600',
+        this.drawMathOrText(svg, this.config.title, this.config.width / 2, PADDING_TOP - 12, {
+            color: 'var(--text-normal)',
+            fontSize: 15,
+            anchor: 'middle',
+            extraAttrs: { 'font-weight': '600' },
         });
-        titleEl.textContent = stripLatex(this.config.title);
-        svg.appendChild(titleEl);
     }
 }

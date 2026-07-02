@@ -14,6 +14,17 @@ function tikzPatternFor(p?: FillPattern): string {
     }
 }
 
+/**
+ * Build a `\addlegendentry{...}` line for a function. Uses the user's
+ * custom legend text verbatim (so they can write plain prose or their own
+ * math markup) when set; otherwise falls back to the caller-supplied
+ * default, which is math-mode TikZ derived from the expression.
+ */
+function legendEntryCode(func: FunctionParameters, defaultLabelLatex: string): string {
+    const custom = func.legendLabel && func.legendLabel.trim();
+    return `\n\\addlegendentry{${custom || defaultLabelLatex}}`;
+}
+
 /** Convert an arrow style into the TikZ arrow specifier. */
 function arrowSpec(arrow: ArrowStyle): string {
     switch (arrow) {
@@ -254,7 +265,7 @@ export const TIKZ_SETTINGS: TikzSetting[] = [
 
                     let code = `\n\\addplot[domain=${func.domain}, ${style.join(',')}, samples=300] {${func.expression}};`;
                     if (func.showLegend) {
-                        code += `\n\\addlegendentry{\\(${func.expression}\\)}`;
+                        code += legendEntryCode(func, `\\(${func.expression}\\)`);
                     }
 
                     if (func.tangent && func.tangentPoint) {
@@ -475,7 +486,7 @@ export class SettingsManager {
                 if (pathId) styleParts.push(`name path=${pathId}`);
                 out += `\n\\addplot[parametric, domain=${func.domain}, ${styleParts.join(',')}, samples=300] ({${func.expression}}, {${func.expressionY}});`;
                 if (func.showLegend) {
-                    out += `\n\\addlegendentry{\\((${func.expression},\\ ${func.expressionY})\\)}`;
+                    out += legendEntryCode(func, `\\((${func.expression},\\ ${func.expressionY})\\)`);
                 }
             } else if (isPolar) {
                 const expr = func.expression.replace(/\b(?:theta|x)\b/g, '\\t');
@@ -486,7 +497,7 @@ export class SettingsManager {
                 if (pathId) styleParts.push(`name path=${pathId}`);
                 out += `\n\\addplot[domain=${func.domain}, variable=\\t, ${styleParts.join(',')}, samples=300] ({(${expr})*cos(deg(\\t))}, {(${expr})*sin(deg(\\t))});`;
                 if (func.showLegend) {
-                    out += `\n\\addlegendentry{\\(r = ${func.expression}\\)}`;
+                    out += legendEntryCode(func, `\\(r = ${func.expression}\\)`);
                 }
             } else {
                 // Cartesian non-parametric: emit inline (the legacy
@@ -505,7 +516,7 @@ export class SettingsManager {
                     styleParts.push(`name path=${pathId}`);
                     out += `\n\\addplot[domain=${func.domain}, ${styleParts.join(',')}, samples=300] {${func.expression}};`;
                     if (func.showLegend) {
-                        out += `\n\\addlegendentry{\\(${func.expression}\\)}`;
+                        out += legendEntryCode(func, `\\(${func.expression}\\)`);
                     }
                 } else {
                     // Reuse the original code path (which also adds tangent and extrema annotations).

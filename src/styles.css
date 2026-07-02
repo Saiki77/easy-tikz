@@ -373,6 +373,12 @@
     transform: translateY(1px);
 }
 
+.tikz-floating-btn.is-active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+}
+
 .tikz-floating-btn svg {
     width: 18px;
     height: 18px;
