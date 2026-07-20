@@ -115,6 +115,16 @@ export class TikzModal extends Modal {
     private isDragging = false;
     private dragStartX = 0;
     private dragStartY = 0;
+    /**
+     * When true, 2D canvas drag-to-pan and scroll-to-zoom are disabled so
+     * the axis range (xmin/xmax/ymin/ymax) can't be nudged by accident -
+     * e.g. while trying to click/drag an annotation, or just moving the
+     * mouse across the preview. Annotation dragging still works either
+     * way, since that's a deliberate content edit, not an accidental pan.
+     * Per-session only (not persisted): resets to unlocked on next open.
+     */
+    private panLocked = false;
+    private panLockBtn: HTMLElement | null = null;
     private dragStartAzimuth = 0;
     private dragStartElevation = 0;
     private dragStartXmin = 0;
@@ -607,15 +617,26 @@ export class TikzModal extends Modal {
                 t.setPlaceholder(field.placeholder)
                     .setValue(this.settings.getValue(field.key))
                     .onChange((v) => {
+                        // Only commit fully-valid numbers as the user types.
+                        // Intermediate states like "-" or "1." while typing a
+                        // negative or decimal number are left alone here and
+                        // caught on blur below - validating (and reverting)
+                        // on every keystroke made it impossible to type a
+                        // leading "-" at all, since it got wiped before the
+                        // next digit landed.
                         const trimmed = v.trim();
                         if (trimmed === '' || isFinite(Number(trimmed))) {
                             this.settings.setValue(field.key, v);
                             this.requestPreviewUpdate();
-                        } else {
-                            new Notice(`${field.label} must be a number.`);
-                            t.setValue(this.settings.getValue(field.key));
                         }
                     });
+                t.inputEl.addEventListener('blur', () => {
+                    const trimmed = t.getValue().trim();
+                    if (trimmed !== '' && !isFinite(Number(trimmed))) {
+                        new Notice(`${field.label} must be a number.`);
+                        t.setValue(this.settings.getValue(field.key));
+                    }
+                });
             });
             if (i < fields.length - 1) {
                 range.createSpan({ cls: 'tikz-range-separator', text: 'to' });
@@ -843,6 +864,19 @@ export class TikzModal extends Modal {
 
             const row3 = card.createDiv({ cls: 'tikz-func-row tikz-toggle-row' });
 
+            // Custom legend text. Hidden by default, revealed by the Legend
+            // toggle below. Falls back to the expression when left blank.
+            const legendInput = card.createDiv({ cls: 'tikz-tangent-input' });
+            new Setting(legendInput)
+                .setName('Legend label')
+                .setDesc('Custom text for the legend entry. Leave blank to use the expression.')
+                .addText((t) => {
+                    t.setPlaceholder(state.expression || 'e.g. Revenue').setValue(state.legendLabel || '').onChange((v) => {
+                        state.legendLabel = v;
+                        updateFunctionValues();
+                    });
+                });
+
             // y(t) field for parametric mode. Hidden by default, revealed by
             // the Parametric toggle below.
             const parametricInput = card.createDiv({ cls: 'tikz-tangent-input' });
@@ -931,6 +965,7 @@ export class TikzModal extends Modal {
                         if (key === 'tangent') tangentInput.toggleClass('visible', v);
                         if (key === 'fill') fillOptions.toggleClass('visible', v);
                         if (key === 'parametric') parametricInput.toggleClass('visible', v);
+                        if (key === 'showLegend') legendInput.toggleClass('visible', v);
                         updateFunctionValues();
                     })
                 );
@@ -940,6 +975,7 @@ export class TikzModal extends Modal {
             if (state.tangent) tangentInput.addClass('visible');
             if (state.fill) fillOptions.addClass('visible');
             if (state.parametric) parametricInput.addClass('visible');
+            if (state.showLegend) legendInput.addClass('visible');
         };
 
         // Hydrate from existing functions if any were persisted (click-to-edit).
@@ -1559,7 +1595,7 @@ export class TikzModal extends Modal {
         };
         this.annotationUpdateFn = update;
 
-        const addCard = () => {
+        const addCard = (seed?: import('./types').Annotation) => {
             const rowId = `ann-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
             const state: import('./types').Annotation = {
                 x: '0',
@@ -1569,6 +1605,7 @@ export class TikzModal extends Modal {
                 color: 'black',
                 size: 'normal',
                 anchor: 'above',
+                ...(seed || {}),
             };
             rowStates.set(rowId, state);
             const cardEntry: typeof this.annotationCards[number] = { rowId, state, xInput: null, yInput: null, zInput: null };
@@ -1596,7 +1633,7 @@ export class TikzModal extends Modal {
             const row1 = card.createDiv({ cls: 'tikz-func-row' });
             const textDiv = row1.createDiv({ cls: 'tikz-func-field wide' });
             new Setting(textDiv).setName('Text').addText((t) =>
-                t.setPlaceholder('Local max').onChange((v) => {
+                t.setPlaceholder('Local max').setValue(state.text).onChange((v) => {
                     state.text = v;
                     update();
                 })
@@ -1662,6 +1699,14 @@ export class TikzModal extends Modal {
                     })
             );
         };
+
+        // Hydrate from existing annotations if any were persisted
+        // (click-to-edit, or reopening after Save changes). Without this
+        // the cards start empty even though the graph still shows the
+        // saved labels, since the renderer reads settings.annotations
+        // directly - only the editor UI needs rebuilding here.
+        const existingAnnotations = (this.settings.getValue('annotations') as import('./types').Annotation[]) || [];
+        for (const ann of existingAnnotations) addCard(ann);
 
         const addBtnDiv = tab.createDiv({ cls: 'tikz-add-func' });
         new Setting(addBtnDiv).addButton((btn) =>
@@ -1810,7 +1855,7 @@ export class TikzModal extends Modal {
             { name: 'Thickness', desc: 'Very thin, Thin, Thick, Very thick. Affects the rendered TikZ output and the live preview equally.' },
             { name: 'Dashed', desc: 'Draws the curve as a dashed line rather than a solid stroke.' },
             { name: 'Fill', desc: 'Shades the region between the curve and the x-axis. When enabled, a Fill pattern dropdown (solid, horizontal/vertical lines, crosshatch, dots, diagonals) and a Fill opacity slider appear.' },
-            { name: 'Legend', desc: 'Adds the expression to the legend box in the upper-right of the plot.' },
+            { name: 'Legend', desc: 'Adds an entry to the legend box in the upper-right of the plot. By default it shows the expression; set Legend label to override it with custom text (e.g. "Revenue").' },
         ]);
 
         section('Tools');
@@ -1903,6 +1948,7 @@ export class TikzModal extends Modal {
         list([
             { name: 'Scroll', desc: 'Mouse wheel zooms in or out around the cursor. Zoom updates xmin/xmax/ymin/ymax, so the generated TikZ code reflects what you see.' },
             { name: 'Drag', desc: 'Click and drag inside the preview to pan. Like zoom, this updates the axis ranges and round-trips into the code.' },
+            { name: 'Lock pan/zoom', desc: 'Padlock icon in the floating action strip on the right edge of the preview. When locked, drag and scroll no longer touch the axis range - use this if you\'ve dialed in xmin/xmax/ymin/ymax and want to stop accidentally nudging them (e.g. while dragging an annotation nearby). Annotation dragging keeps working either way. Resets to unlocked next time you open the editor.' },
             { name: 'Preview size slider', desc: 'On the Graph tab. Sets the live preview width in pixels. The exported TikZ size is controlled by Width and Height (cm) and stays independent.' },
         ]);
 
@@ -2095,8 +2141,25 @@ export class TikzModal extends Modal {
         addAction('maximize-2', 'Fit to functions', () => this.autoFitRanges());
         addAction('rotate-ccw', 'Reset axis ranges', () => this.resetAxisRanges());
         addAction('grid-3x3', 'Toggle major grid', () => this.toggleMajorGrid());
+        this.panLockBtn = addAction('lock-open', 'Lock pan/zoom (2D)', () => this.togglePanLock());
 
         this.floatingActionsOverlay = overlay;
+    }
+
+    /**
+     * Toggle whether canvas drag-to-pan and scroll-to-zoom are allowed to
+     * change the axis range. Doesn't affect 3D rotation drag or annotation
+     * dragging - only the 2D pan/zoom path that writes to xmin/xmax/ymin/ymax.
+     */
+    private togglePanLock() {
+        this.panLocked = !this.panLocked;
+        if (this.panLockBtn) {
+            setIcon(this.panLockBtn, this.panLocked ? 'lock' : 'lock-open');
+            this.panLockBtn.toggleClass('is-active', this.panLocked);
+            this.panLockBtn.setAttr('aria-label', this.panLocked ? 'Unlock pan/zoom (2D)' : 'Lock pan/zoom (2D)');
+            this.panLockBtn.setAttr('title', this.panLocked ? 'Unlock pan/zoom (2D)' : 'Lock pan/zoom (2D)');
+        }
+        new Notice(this.panLocked ? 'Pan/zoom locked - axis range won\'t change from drag or scroll.' : 'Pan/zoom unlocked.');
     }
 
     private resetAxisRanges() {
@@ -2141,6 +2204,10 @@ export class TikzModal extends Modal {
                     }
                 }
             }
+
+            // Pan lock only blocks the 2D pan-writes-axis-range path; 3D
+            // rotation drag is unaffected (it doesn't touch xmin/xmax/ymin/ymax).
+            if (this.panLocked && !this.is3D()) return;
 
             this.isDragging = true;
             this.dragStartX = e.clientX;
@@ -2228,6 +2295,7 @@ export class TikzModal extends Modal {
             'wheel',
             (e: WheelEvent) => {
                 if (this.is3D()) return;
+                if (this.panLocked) return;
                 if (e.deltaY === 0) return;
                 e.preventDefault();
 

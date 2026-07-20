@@ -14,6 +14,12 @@ export interface FunctionParameters {
     expression: string;
     domain: string;
     showLegend: boolean;
+    /**
+     * Optional custom legend text. When blank, the legend entry falls
+     * back to the function's expression (or, for parametric/polar
+     * functions, the auto-generated default label).
+     */
+    legendLabel?: string;
     fill: boolean;
     fillOpacity: number;
     fillPattern: FillPattern;

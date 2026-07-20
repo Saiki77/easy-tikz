@@ -731,7 +731,7 @@ export class SVG3DRenderer {
             t.setAttribute('font-size', fontSize);
             t.setAttribute('font-weight', '500');
             t.setAttribute('font-family', 'var(--font-text)');
-            t.textContent = a.text;
+            t.textContent = stripLatex(a.text);
             group.appendChild(t);
         }
     }
@@ -791,7 +791,7 @@ export class SVG3DRenderer {
             label.setAttribute('dominant-baseline', 'central');
             label.setAttribute('fill', tickColor);
             label.setAttribute('font-size', '10');
-            label.setAttribute('font-family', 'var(--font-monospace)');
+            label.setAttribute('font-family', 'var(--font-text)');
             label.textContent = formatTick(v);
             group.appendChild(label);
         }
@@ -950,7 +950,7 @@ export class SVG3DRenderer {
         ctx.strokeStyle = this.themeColors.textMuted;
         ctx.fillStyle = this.themeColors.textMuted;
         ctx.lineWidth = 1;
-        ctx.font = '10px var(--font-monospace, monospace)';
+        ctx.font = '10px var(--font-text, sans-serif)';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
@@ -1021,7 +1021,7 @@ export class SVG3DRenderer {
             ctx.font = `500 ${fontSize}px var(--font-text, sans-serif)`;
             ctx.textAlign = align;
             ctx.textBaseline = 'alphabetic';
-            ctx.fillText(a.text, p.sx + dx, p.sy + dy);
+            ctx.fillText(stripLatex(a.text), p.sx + dx, p.sy + dy);
         }
     }
 
@@ -1176,7 +1176,7 @@ export class SVG3DRenderer {
             text.setAttribute('y', (p.sy - 6).toFixed(2));
             text.setAttribute('fill', cssColor);
             text.setAttribute('font-size', '11');
-            text.setAttribute('font-family', 'var(--font-monospace)');
+            text.setAttribute('font-family', 'var(--font-text)');
             text.textContent = tool.label;
             this.annotationsGroup.appendChild(text);
         }
@@ -1198,7 +1198,7 @@ export class SVG3DRenderer {
         ctx.stroke();
         if (tool.label) {
             ctx.fillStyle = cssColor;
-            ctx.font = '11px var(--font-monospace, monospace)';
+            ctx.font = '11px var(--font-text, sans-serif)';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'alphabetic';
             ctx.fillText(tool.label, p.sx + 6, p.sy - 6);
