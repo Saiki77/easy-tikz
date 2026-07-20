@@ -346,9 +346,13 @@ export class SettingsManager {
         this.values.set('axis_label_y_polar', '');
     }
 
-    /** Look up the value for a setting id. Returns `undefined` if absent. */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getValue<T = any>(id: string): T {
+    /**
+     * Look up the value for a setting id. Returns `undefined` if absent.
+     * The stored values are plain JSON types; the generic is a caller-side
+     * convenience (`getValue<number | undefined>('previewSize')`) - the
+     * single cast here is the one place the map's `unknown` is narrowed.
+     */
+    getValue<T = unknown>(id: string): T {
         return this.values.get(id) as T;
     }
 
@@ -386,7 +390,7 @@ export class SettingsManager {
 
     generateTikzCode(): string {
         const isPolar = this.getValue('coordinateSystem') === 'polar';
-        const tools = (this.getValue('tools') as import('./types').Tool[]) || [];
+        const tools = this.getValue<import('./types').Tool[] | undefined>('tools') || [];
         // Function names referenced by area-between tools get `name path=`
         // injected on their `\addplot`, so pgfplots' fillbetween library
         // can address them later.
@@ -713,7 +717,7 @@ export class SettingsManager {
     }
 
     toRendererConfig(): import('./types').RendererConfig {
-        const previewSize = (this.getValue('previewSize') as number) || 760;
+        const previewSize = this.getValue<number | undefined>('previewSize') || 760;
         const width = Math.max(320, Math.min(1600, Math.round(previewSize)));
         // Match the live preview aspect ratio to the configured cm dimensions
         // so the SVG roughly matches what pgfplots will render.
@@ -723,11 +727,11 @@ export class SettingsManager {
         const height = Math.round(width * ratio);
         const isPolar = this.getValue('coordinateSystem') === 'polar';
         const xLabel = isPolar
-            ? (this.getValue('axis_label_x_polar') ?? '')
-            : (this.getValue('axis_label_x') || 'x');
+            ? (this.getValue<string | undefined>('axis_label_x_polar') ?? '')
+            : (this.getValue<string | undefined>('axis_label_x') || 'x');
         const yLabel = isPolar
-            ? (this.getValue('axis_label_y_polar') ?? '')
-            : (this.getValue('axis_label_y') || 'y');
+            ? (this.getValue<string | undefined>('axis_label_y_polar') ?? '')
+            : (this.getValue<string | undefined>('axis_label_y') || 'y');
         return {
             width,
             height,
@@ -739,7 +743,7 @@ export class SettingsManager {
             xLabel,
             yLabel,
             showAxisLabels: this.getValue('show_axis_label') ?? true,
-            axisStyle: (this.getValue('axis_style') as import('./types').AxisStyle) || 'box',
+            axisStyle: this.getValue<import('./types').AxisStyle | undefined>('axis_style') || 'box',
             gridMajor: this.getValue('showLargeGrid') ?? false,
             gridMinor: this.getValue('showSmallGrid') ?? false,
             minorTickNum: this.getValue('gridSize') ?? 5,
@@ -752,17 +756,17 @@ export class SettingsManager {
             rotationX: this.getValue('rotationX') ?? 30,
             rotationZ: this.getValue('rotationZ') ?? 45,
             zoom3D: this.getValue('zoom3D') ?? 1,
-            boxAspect: (this.getValue('boxAspect') as import('./types').BoxAspect) || 'true',
+            boxAspect: this.getValue<import('./types').BoxAspect | undefined>('boxAspect') || 'true',
             functions3D: this.getValue('functions3D') || [],
             annotations: this.getValue('annotations') || [],
-            tools: (this.getValue('tools') as import('./types').Tool[]) || [],
-            coordinateSystem: (this.getValue('coordinateSystem') as 'cartesian' | 'polar') || 'cartesian',
+            tools: this.getValue<import('./types').Tool[] | undefined>('tools') || [],
+            coordinateSystem: this.getValue<'cartesian' | 'polar' | undefined>('coordinateSystem') || 'cartesian',
         };
     }
 
     generate3DTikzCode(): string {
         const funcs: Function3DParameters[] = this.getValue('functions3D') || [];
-        const tools = (this.getValue('tools') as import('./types').Tool[]) || [];
+        const tools = this.getValue<import('./types').Tool[] | undefined>('tools') || [];
         let code = '';
 
         code += '\n\\usepackage{pgfplots}';
@@ -811,7 +815,7 @@ export class SettingsManager {
      * code generators. `is3D` controls whether the z coordinate is emitted.
      */
     generateAnnotationsCode(is3D: boolean): string {
-        const annotations = (this.getValue('annotations') as import('./types').Annotation[]) || [];
+        const annotations = this.getValue<import('./types').Annotation[] | undefined>('annotations') || [];
         if (!annotations.length) return '';
         const anchorFor = (a: string): string => {
             switch (a) {

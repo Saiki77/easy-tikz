@@ -32,10 +32,7 @@ export function extractMathSource(text: string): string | null {
 let measureHost: HTMLDivElement | null = null;
 function getMeasureHost(): HTMLDivElement {
     if (!measureHost || !measureHost.isConnected) {
-        measureHost = document.createElement('div');
-        measureHost.style.cssText =
-            'position:fixed; left:-99999px; top:-99999px; visibility:hidden; pointer-events:none;';
-        document.body.appendChild(measureHost);
+        measureHost = document.body.createEl('div', { cls: 'easy-tikz-measure-host' });
     }
     return measureHost;
 }
@@ -58,10 +55,15 @@ const MATH_SIZE_MULTIPLIER = 1.8;
 /** Render `mathSource` with MathJax and measure the result. Throws if MathJax rejects the source. */
 export function renderMathLabel(mathSource: string, color: string, fontSizePx: number): MathLabel {
     const el = renderMath(mathSource, false);
-    el.style.color = color;
-    el.style.fontSize = `${fontSizePx * MATH_SIZE_MULTIPLIER}px`;
-    el.style.display = 'inline-block';
-    el.style.pointerEvents = 'none';
+    // Inline styles (via the sanctioned helper) rather than a CSS class:
+    // the element ends up inside the chart SVG's <foreignObject>, and
+    // inline styles are the only ones that survive SVG serialization.
+    el.setCssStyles({
+        color,
+        fontSize: `${fontSizePx * MATH_SIZE_MULTIPLIER}px`,
+        display: 'inline-block',
+        pointerEvents: 'none',
+    });
     const host = getMeasureHost();
     host.appendChild(el);
     const rect = el.getBoundingClientRect();

@@ -4,6 +4,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.19.6] - 2026-07-20
+
+Community-directory review pass: resolves every error and warning from the
+Obsidian plugin review bot. No new features; one real bug fix fell out of it.
+
+### Changed
+
+- **Math expressions are now compiled by a built-in parser instead of `new Function`.** The old compiler passed user expressions to `new Function` (JavaScript's cousin of `eval`), which flagged the plugin for "dynamic code execution" and made static review impossible. The new recursive-descent parser compiles the same language - numbers, `x`/`y`, `+ - * / % ^ **`, comparisons/ternaries for piecewise functions, all the bare Math names (`sin`, `atan2`, `min`, …), constants (`PI`, `E`, …), and `Math.foo(...)` member access - into plain closures, so no dynamically generated code runs at all. Two side effects are strict improvements: `-x^2` now parses as `-(x^2)` (the old compiler rejected it outright), and syntax errors carry positions ("Expected ')' … at position 5"). Verified against a 62-case regression suite covering every built-in template, operator precedence, piecewise logic, and error timing.
+- **Requires Obsidian 1.13.0 or newer** (was 1.4.0). The settings tab now uses the declarative settings API - entries appear in Obsidian's settings search - and sliders rely on 1.13's always-visible inline value instead of the deprecated `setDynamicTooltip()`. Users on older Obsidian versions keep 3.19.5 via `versions.json`.
+- **The editor modal no longer injects a `<style>` element.** It used to carry a bundled copy of the stylesheet and add it to `document.head` on open; the `styles.css` that ships with the plugin (and that Obsidian loads automatically) is now the single source. Also drops the `esbuild-plugin-inline-import` build dependency and shrinks `main.js` by ~10 KB.
+
+### Fixed
+
+- **"Save as" template naming now works.** Both Save-as buttons called `window.prompt()`, which Electron does not implement - the call returned nothing and no template was ever saved on desktop. Replaced with a small in-app naming modal (pre-filled with the expression, Enter to confirm).
+
+### Housekeeping
+
+Review-bot compliance details, no behavior changes intended:
+
+- DOM nodes are created with Obsidian's `createEl` / `createDiv` / `createSvg` helpers instead of `document.createElement(NS)`.
+- Static inline-style writes replaced with CSS classes (new `.tikz-hidden` utility) or the sanctioned `setCssStyles()` helper; the 3D surface pool toggles visibility via the SVG `display` attribute. Labels that end up inside the exported SVG intentionally keep inline styles so exports survive serialization.
+- `setTimeout` / `requestAnimationFrame` calls go through `window.` for popout-window safety.
+- NaN checks spelled as `Number.isNaN(x)` / `Number.isFinite(x)` instead of `x !== x` self-comparisons.
+- `SettingsManager.getValue` is typed `<T = unknown>` (was `any`), the last `eslint-disable` is gone, `TikzSetting.defaultValue`/`insertText` take `unknown`, and a dozen now-redundant type assertions were dropped.
+- Toolchain: `tsconfig` lib bumped to ES2020 (fixes `Object.entries`/`fromEntries` resolving as error-typed), TypeScript 4.4 → 5.9, `obsidian` typings 0.15 → 1.13.
+
 ## [3.19.5] - 2026-07-20
 
 ### Fixed

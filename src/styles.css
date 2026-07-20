@@ -182,10 +182,9 @@
     flex-shrink: 0;
     overflow-x: auto;
     overflow-y: hidden;
-    /* Standard CSS scrollbar styling. Older browsers fall back to the
-       platform default - Obsidian 1.4.5's Chromium supports this, and
-       skipping the `::-webkit-scrollbar` vendor selector avoids an
-       Obsidian validator "partially supported feature" warning. */
+    /* Standard CSS scrollbar styling; fully supported by the Chromium in
+       Obsidian 1.13+ (this plugin's minAppVersion). Browsers without it
+       fall back to the platform default scrollbar. */
     scrollbar-width: thin;
 }
 
@@ -777,4 +776,28 @@
     user-select: text;
     -webkit-user-select: text;
     cursor: text;
+}
+
+/* --- Utility + support classes (replacing former inline-style writes) --- */
+
+/* Generic hide toggle for tab panels and the settings column. `!important`
+   wins over the base `display: flex` on `.tikz-tab-content`. */
+.tikz-hidden {
+    display: none !important;
+}
+
+/* Offscreen host used to measure MathJax label size before insertion
+   into the (possibly detached) plot SVG. See src/mathlabel.ts. */
+.easy-tikz-measure-host {
+    position: fixed;
+    left: -99999px;
+    top: -99999px;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* Text field inside the template-name prompt modal. */
+.tikz-prompt-input {
+    width: 100%;
+    margin-bottom: 12px;
 }

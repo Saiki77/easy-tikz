@@ -3,7 +3,6 @@ import { MathHelper } from './math';
 import { COLOR_MAP, THICKNESS_MAP, resolveCssColor } from './colors';
 import { niceInterval, formatTick, stripLatex, hexToRgb, rgbStringToRgb } from './util';
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const PADDING_TOP = 40;
 const PADDING_RIGHT = 40;
@@ -152,18 +151,16 @@ export class SVG3DRenderer {
     private lastFit: { parentW: number; parentH: number; configW: number; configH: number; w: number; h: number } | null = null;
 
     constructor() {
-        this.root = document.createElement('div');
         // Single static class. The renderer used to toggle between
         // `tikz-3d-mode-svg` and `tikz-3d-mode-canvas` to swap which
         // sibling was visible; canvas is now the only display path, and
         // the SVG (kept for export) is hidden via a CSS `display: none`
         // rule on `.tikz-3d-svg`.
-        this.root.className = 'tikz-3d-root';
+        this.root = createDiv({ cls: 'tikz-3d-root' });
 
-        this.svg = document.createElementNS(SVG_NS, 'svg') as SVGSVGElement;
-        this.svg.setAttribute('class', 'tikz-3d-svg');
+        this.svg = createSvg('svg', { cls: 'tikz-3d-svg' });
 
-        this.backgroundRect = document.createElementNS(SVG_NS, 'rect') as SVGRectElement;
+        this.backgroundRect = createSvg('rect');
         this.backgroundRect.setAttribute('fill', 'var(--background-primary)');
         this.backgroundRect.setAttribute('rx', '4');
         this.svg.appendChild(this.backgroundRect);
@@ -173,15 +170,14 @@ export class SVG3DRenderer {
         this.frontAxesGroup = this.makeGroup('tikz-3d-axes-front');
         this.annotationsGroup = this.makeGroup('tikz-3d-annotations');
 
-        this.titleEl = document.createElementNS(SVG_NS, 'text') as SVGTextElement;
+        this.titleEl = createSvg('text');
         this.titleEl.setAttribute('text-anchor', 'middle');
         this.titleEl.setAttribute('fill', 'var(--text-normal)');
         this.titleEl.setAttribute('font-size', '15');
         this.titleEl.setAttribute('font-weight', '600');
         this.svg.appendChild(this.titleEl);
 
-        this.canvas = document.createElement('canvas');
-        this.canvas.className = 'tikz-3d-canvas';
+        this.canvas = createEl('canvas', { cls: 'tikz-3d-canvas' });
         const ctx = this.canvas.getContext('2d');
         if (!ctx) throw new Error('Canvas 2D context unavailable');
         this.ctx = ctx;
@@ -191,8 +187,7 @@ export class SVG3DRenderer {
     }
 
     private makeGroup(cls: string): SVGGElement {
-        const g = document.createElementNS(SVG_NS, 'g') as SVGGElement;
-        g.setAttribute('class', cls);
+        const g = createSvg('g', { cls });
         this.svg.appendChild(g);
         return g;
     }
@@ -299,10 +294,9 @@ export class SVG3DRenderer {
             return;
         }
         this.lastFit = { parentW, parentH, configW: aspectW, configH: aspectH, w, h };
-        this.root.style.width = w + 'px';
-        this.root.style.height = h + 'px';
-        // Clear any aspect-ratio inline style left over from previous versions.
-        this.root.style.aspectRatio = '';
+        // The aspect-ratio reset clears any inline style left over from
+        // previous plugin versions.
+        this.root.setCssStyles({ width: w + 'px', height: h + 'px', aspectRatio: '' });
     }
 
     /**
@@ -535,12 +529,12 @@ export class SVG3DRenderer {
                     xs[off] = x;
                     ys[off] = y;
                     const z = evalFn(x, y);
-                    zs[off] = z === z && z !== Infinity && z !== -Infinity ? z : NaN;
+                    zs[off] = Number.isFinite(z) ? z : NaN;
                 }
             }
         } catch {
             for (let k = 0; k < total; k++) {
-                if (!(zs[k] === zs[k])) zs[k] = NaN;
+                if (Number.isNaN(zs[k])) zs[k] = NaN;
             }
         }
 
@@ -588,7 +582,7 @@ export class SVG3DRenderer {
 
         for (let k = 0; k < total; k++) {
             const z = data.zs[k];
-            if (z !== z) {
+            if (Number.isNaN(z)) {
                 depthBuf[k] = -Infinity;
                 continue;
             }
@@ -663,7 +657,7 @@ export class SVG3DRenderer {
         const pool = this.surfacePool;
         const surfaceGroup = this.surfaceGroup;
         while (pool.length < quads.length) {
-            const poly = document.createElementNS(SVG_NS, 'polygon') as SVGPolygonElement;
+            const poly = createSvg('polygon');
             surfaceGroup.appendChild(poly);
             pool.push(poly);
         }
@@ -691,11 +685,14 @@ export class SVG3DRenderer {
                 poly.setAttribute('stroke-width', '0.3');
                 poly.setAttribute('stroke-opacity', '0.4');
             }
-            if (poly.style.display) poly.style.display = '';
+            // Visibility via the SVG `display` presentation attribute rather
+            // than inline style - same effect, and it serializes with the
+            // element on export.
+            if (poly.hasAttribute('display')) poly.removeAttribute('display');
         }
         for (let i = quads.length; i < pool.length; i++) {
             const poly = pool[i];
-            if (poly.style.display !== 'none') poly.style.display = 'none';
+            if (poly.getAttribute('display') !== 'none') poly.setAttribute('display', 'none');
         }
     }
 
@@ -723,7 +720,7 @@ export class SVG3DRenderer {
                 case 'right': textAnchor = 'start'; dx = 6; dy = 4; break;
                 case 'center': default: textAnchor = 'middle'; dy = 4; break;
             }
-            const t = document.createElementNS(SVG_NS, 'text');
+            const t = createSvg('text');
             t.setAttribute('x', String(p.sx + dx));
             t.setAttribute('y', String(p.sy + dy));
             t.setAttribute('text-anchor', textAnchor);
@@ -784,7 +781,7 @@ export class SVG3DRenderer {
             const markY2 = p.sy + edge.outwardY * TICK_LENGTH;
             this.svgLine(group, p.sx, p.sy, markX2, markY2, tickColor, '1');
 
-            const label = document.createElementNS(SVG_NS, 'text');
+            const label = createSvg('text');
             label.setAttribute('x', String(p.sx + edge.outwardX * LABEL_OFFSET));
             label.setAttribute('y', String(p.sy + edge.outwardY * LABEL_OFFSET));
             label.setAttribute('text-anchor', 'middle');
@@ -809,7 +806,7 @@ export class SVG3DRenderer {
             if (!edge) continue;
             const mx = (edge.p1.sx + edge.p2.sx) / 2;
             const my = (edge.p1.sy + edge.p2.sy) / 2;
-            const label = document.createElementNS(SVG_NS, 'text');
+            const label = createSvg('text');
             label.setAttribute('x', String(mx + edge.outwardX * AXIS_LABEL_OFFSET));
             label.setAttribute('y', String(my + edge.outwardY * AXIS_LABEL_OFFSET));
             label.setAttribute('text-anchor', 'middle');
@@ -823,7 +820,7 @@ export class SVG3DRenderer {
     }
 
     private svgLine(parent: SVGElement, x1: number, y1: number, x2: number, y2: number, stroke: string, width: string, opacity?: number) {
-        const line = document.createElementNS(SVG_NS, 'line');
+        const line = createSvg('line');
         line.setAttribute('x1', String(x1));
         line.setAttribute('y1', String(y1));
         line.setAttribute('x2', String(x2));
@@ -1125,7 +1122,7 @@ export class SVG3DRenderer {
         const opacity = typeof tool.fillOpacity === 'number' ? tool.fillOpacity : 0.2;
         const cssColor = resolveCssColor(COLOR_MAP[tool.color] || tool.color);
         const points = pts.map((p) => `${p.sx.toFixed(2)},${p.sy.toFixed(2)}`).join(' ');
-        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        const poly = createSvg('polygon');
         poly.setAttribute('points', points);
         poly.setAttribute('fill', cssColor);
         poly.setAttribute('fill-opacity', String(opacity));
@@ -1162,7 +1159,7 @@ export class SVG3DRenderer {
         const z = this.parseCoord3D(tool.z, 0);
         const p = this.project(x, y, z);
         const cssColor = resolveCssColor(COLOR_MAP[tool.color] || tool.color);
-        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        const circle = createSvg('circle');
         circle.setAttribute('cx', p.sx.toFixed(2));
         circle.setAttribute('cy', p.sy.toFixed(2));
         circle.setAttribute('r', '4');
@@ -1171,7 +1168,7 @@ export class SVG3DRenderer {
         circle.setAttribute('stroke-width', '1.5');
         this.annotationsGroup.appendChild(circle);
         if (tool.label) {
-            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            const text = createSvg('text');
             text.setAttribute('x', (p.sx + 6).toFixed(2));
             text.setAttribute('y', (p.sy - 6).toFixed(2));
             text.setAttribute('fill', cssColor);
@@ -1218,7 +1215,7 @@ export class SVG3DRenderer {
         );
         const cssColor = resolveCssColor(COLOR_MAP[tool.color] || tool.color);
         const sw = THICKNESS_MAP[tool.thickness] || 1.5;
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        const line = createSvg('line');
         line.setAttribute('x1', p1.sx.toFixed(2));
         line.setAttribute('y1', p1.sy.toFixed(2));
         line.setAttribute('x2', p2.sx.toFixed(2));
@@ -1227,7 +1224,7 @@ export class SVG3DRenderer {
         line.setAttribute('stroke-width', String(sw));
         line.setAttribute('stroke-linecap', 'round');
         if (tool.dashed) line.setAttribute('stroke-dasharray', '6 4');
-        const arrows = tool.arrow as ArrowStyle;
+        const arrows = tool.arrow;
         if (arrows === 'forward' || arrows === 'both') line.setAttribute('marker-end', 'url(#arrowhead)');
         if (arrows === 'backward' || arrows === 'both') line.setAttribute('marker-start', 'url(#arrowhead)');
         this.annotationsGroup.appendChild(line);
@@ -1258,7 +1255,7 @@ export class SVG3DRenderer {
         ctx.stroke();
         ctx.setLineDash([]);
         // Simple arrowhead at p2 if needed.
-        const arrows = tool.arrow as ArrowStyle;
+        const arrows = tool.arrow;
         const drawHead = (from: { sx: number; sy: number }, to: { sx: number; sy: number }) => {
             const dx = to.sx - from.sx;
             const dy = to.sy - from.sy;

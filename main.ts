@@ -1,4 +1,4 @@
-import { App, MarkdownPostProcessorContext, Plugin, PluginSettingTab, Setting, TFile, setIcon } from 'obsidian';
+import { App, MarkdownPostProcessorContext, Plugin, PluginSettingTab, SettingDefinitionItem, TFile, setIcon } from 'obsidian';
 import { TikzModal } from './src/modal';
 import { SettingsManager } from './src/settings';
 import { SVGRenderer } from './src/renderer';
@@ -10,10 +10,11 @@ export default class EasyTikzPlugin extends Plugin {
 
     async onload() {
         const stored = (await this.loadData()) as Partial<PluginData> | null;
+        const storedTemplates = stored?.userTemplates;
         this.data = {
             ...DEFAULT_PLUGIN_DATA,
             ...(stored ?? {}),
-            userTemplates: Array.isArray(stored?.userTemplates) ? stored!.userTemplates : [],
+            userTemplates: Array.isArray(storedTemplates) ? storedTemplates : [],
         };
 
         this.addRibbonIcon('square-function', 'Easy TikZ', () => {
@@ -96,7 +97,7 @@ export default class EasyTikzPlugin extends Plugin {
 
         // Persisted display options (live next to the chart settings inside the JSON).
         const persistedAlign = (data.displayAlign as 'left' | 'center' | 'right') || 'center';
-        const persistedWidth = typeof data.displayWidth === 'number' ? (data.displayWidth as number) : null;
+        const persistedWidth = typeof data.displayWidth === 'number' ? data.displayWidth : null;
         this.applyAlign(wrapper, persistedAlign);
 
         let aspect = 1;
@@ -201,10 +202,10 @@ export default class EasyTikzPlugin extends Plugin {
             btn.setAttr('aria-label', label);
             btn.setAttr('title', label);
             setIcon(btn, icon);
-            btn.addEventListener('click', async (e) => {
+            btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.applyAlign(wrapper, key);
-                await this.persistDisplayPatch(data, ctx, fenceTag, source, { displayAlign: key });
+                void this.persistDisplayPatch(data, ctx, fenceTag, source, { displayAlign: key });
             });
         };
         makeAlignBtn('left', 'align-left', 'Align left');
@@ -214,7 +215,7 @@ export default class EasyTikzPlugin extends Plugin {
         const sliderBar = wrapper.createDiv({ cls: 'tikz-rendered-controls tikz-rendered-size' });
         const slider = sliderBar.createEl('input', {
             cls: 'tikz-rendered-slider',
-        }) as HTMLInputElement;
+        });
         slider.type = 'range';
         slider.min = '200';
         slider.max = String(Math.max(400, Math.min(2000, Math.round(containerWidth))));
@@ -235,9 +236,9 @@ export default class EasyTikzPlugin extends Plugin {
             wrapper.style.width = w + 'px';
             wrapper.style.height = w / aspect + 'px';
         });
-        slider.addEventListener('change', async () => {
+        slider.addEventListener('change', () => {
             const w = parseInt(slider.value, 10);
-            await this.persistDisplayPatch(data, ctx, fenceTag, source, { displayWidth: w });
+            void this.persistDisplayPatch(data, ctx, fenceTag, source, { displayWidth: w });
         });
     }
 
@@ -278,70 +279,67 @@ class EasyTikzSettingTab extends PluginSettingTab {
         this.plugin = plugin;
     }
 
-    display(): void {
-        const { containerEl } = this;
-        containerEl.empty();
-
-        new Setting(containerEl)
-            .setName('Invert vertical drag in 3D')
-            .setDesc(
-                'Off (default): drag down tilts the scene up (camera elevation rises), drag up tilts the scene down - the trackball convention. ' +
-                    'On: drag down lowers the camera, drag up raises it - direct manipulation.'
-            )
-            .addToggle((t) =>
-                t.setValue(this.plugin.data.invertDrag3D).onChange(async (v) => {
-                    this.plugin.data.invertDrag3D = v;
-                    await this.plugin.saveSettings();
-                })
-            );
-
-        new Setting(containerEl)
-            .setName('Max 3D samples per axis')
-            .setDesc(
-                'Upper bound of the Samples slider on each 3D surface card. Default 80. ' +
-                    'Higher values draw smoother surfaces but each axis step squares the work, so the preview will slow noticeably above ~200. Re-open the Easy TikZ modal after changing this.'
-            )
-            .addSlider((s) =>
-                s
-                    .setLimits(40, 400, 10)
-                    .setValue(this.plugin.data.maxSamples3D ?? 80)
-                    .setDynamicTooltip()
-                    .onChange(async (v) => {
-                        this.plugin.data.maxSamples3D = v;
-                        await this.plugin.saveSettings();
-                    })
-            );
-
-        new Setting(containerEl)
-            .setName('2D pan sensitivity')
-            .setDesc(
-                'Default 1.0 - direct manipulation: moving the mouse by N pixels pans the chart by exactly N chart pixels. ' +
+    /**
+     * Declarative settings (Obsidian 1.13+). The framework renders these
+     * and indexes them for the settings search; values flow through
+     * `getControlValue` / `setControlValue` below.
+     */
+    getSettingDefinitions(): SettingDefinitionItem[] {
+        return [
+            {
+                name: 'Invert vertical drag in 3D',
+                desc:
+                    'Off (default): drag down tilts the scene up (camera elevation rises), drag up tilts the scene down - the trackball convention. ' +
+                    'On: drag down lowers the camera, drag up raises it - direct manipulation.',
+                control: { type: 'toggle', key: 'invertDrag3D', defaultValue: false },
+            },
+            {
+                name: 'Max 3D samples per axis',
+                desc:
+                    'Upper bound of the Samples slider on each 3D surface card. Default 80. ' +
+                    'Higher values draw smoother surfaces but each axis step squares the work, so the preview will slow noticeably above ~200. Re-open the Easy TikZ modal after changing this.',
+                control: { type: 'slider', key: 'maxSamples3D', min: 40, max: 400, step: 10, defaultValue: 80 },
+            },
+            {
+                name: '2D pan sensitivity',
+                desc:
+                    'Default 1.0 - direct manipulation: moving the mouse by N pixels pans the chart by exactly N chart pixels. ' +
                     'Lower values dampen the drag for finer control on dense plots (e.g. 0.5 = half-step pan); higher values overshoot. ' +
-                    'The pan rate also scales with the current axis range, so this multiplier stays consistent as you zoom in or out.'
-            )
-            .addSlider((s) =>
-                s
-                    .setLimits(0.1, 2.0, 0.05)
-                    .setValue(this.plugin.data.dragSensitivity2D ?? 1.0)
-                    .setDynamicTooltip()
-                    .onChange(async (v) => {
-                        this.plugin.data.dragSensitivity2D = v;
-                        await this.plugin.saveSettings();
-                    })
-            );
-
-        new Setting(containerEl)
-            .setName('Also render plain `tikz` blocks')
-            .setDesc(
-                'Off by default. When on, the plugin renders blocks tagged plain ```tikz the same way it renders ```easy-tikz blocks. ' +
+                    'The pan rate also scales with the current axis range, so this multiplier stays consistent as you zoom in or out.',
+                control: { type: 'slider', key: 'dragSensitivity2D', min: 0.1, max: 2.0, step: 0.05, defaultValue: 1.0 },
+            },
+            {
+                name: 'Also render plain `tikz` blocks',
+                desc:
+                    'Off by default. When on, the plugin renders blocks tagged plain ```tikz the same way it renders ```easy-tikz blocks. ' +
                     'Useful if you want one tag for everything, but conflicts with `obsidian-tikzjax` and other plugins that claim ```tikz. ' +
-                    'Reload Obsidian after changing this for the registration to take effect.'
-            )
-            .addToggle((t) =>
-                t.setValue(this.plugin.data.renderTikzBlocks).onChange(async (v) => {
-                    this.plugin.data.renderTikzBlocks = v;
-                    await this.plugin.saveSettings();
-                })
-            );
+                    'Reload Obsidian after changing this for the registration to take effect.',
+                control: { type: 'toggle', key: 'renderTikzBlocks', defaultValue: false },
+            },
+        ];
+    }
+
+    getControlValue(key: string): unknown {
+        return this.plugin.data[key as keyof PluginData];
+    }
+
+    async setControlValue(key: string, value: unknown): Promise<void> {
+        switch (key) {
+            case 'invertDrag3D':
+                this.plugin.data.invertDrag3D = Boolean(value);
+                break;
+            case 'renderTikzBlocks':
+                this.plugin.data.renderTikzBlocks = Boolean(value);
+                break;
+            case 'maxSamples3D':
+                this.plugin.data.maxSamples3D = Number(value);
+                break;
+            case 'dragSensitivity2D':
+                this.plugin.data.dragSensitivity2D = Number(value);
+                break;
+            default:
+                return;
+        }
+        await this.plugin.saveSettings();
     }
 }

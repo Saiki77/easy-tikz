@@ -34,6 +34,67 @@ export interface TikzModalInitialState {
 }
 
 /**
+ * Minimal single-field text prompt. Electron does not implement
+ * `window.prompt`, so naming a template needs its own tiny modal.
+ * Resolves with the entered string on submit, or null on cancel/dismiss.
+ */
+class TextPromptModal extends Modal {
+    private value: string;
+    private submitted = false;
+    private onResolve: ((value: string | null) => void) | null = null;
+    private promptTitle: string;
+
+    constructor(app: App, title: string, initial: string) {
+        super(app);
+        this.promptTitle = title;
+        this.value = initial;
+    }
+
+    static prompt(app: App, title: string, initial: string): Promise<string | null> {
+        return new Promise((resolve) => {
+            const modal = new TextPromptModal(app, title, initial);
+            modal.onResolve = resolve;
+            modal.open();
+        });
+    }
+
+    onOpen() {
+        this.titleEl.setText(this.promptTitle);
+        const input = new TextComponent(this.contentEl);
+        input.setValue(this.value).onChange((v) => {
+            this.value = v;
+        });
+        input.inputEl.addClass('tikz-prompt-input');
+        input.inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.submit();
+            }
+        });
+        input.inputEl.focus();
+        input.inputEl.select();
+        new Setting(this.contentEl)
+            .addButton((b) => b.setButtonText('Cancel').onClick(() => this.close()))
+            .addButton((b) => b.setCta().setButtonText('Save').onClick(() => this.submit()));
+    }
+
+    private submit() {
+        this.submitted = true;
+        const resolve = this.onResolve;
+        this.onResolve = null;
+        if (resolve) resolve(this.value);
+        this.close();
+    }
+
+    onClose() {
+        this.contentEl.empty();
+        const resolve = this.onResolve;
+        this.onResolve = null;
+        if (!this.submitted && resolve) resolve(null);
+    }
+}
+
+/**
  * Trim the top and bottom percentile of the values then return min/max.
  * Keeps vertical asymptotes from blowing out auto-fit ranges.
  */
@@ -45,11 +106,6 @@ function trimmedRange(values: number[], percentile = 0.01): [number, number] {
     const hi = sorted[sorted.length - 1 - drop];
     return [lo, hi];
 }
-// @ts-ignore: inline import via esbuild plugin
-import styles from 'inline:./styles.css';
-
-const STYLE_ELEMENT_ID = 'easy-tikz-styles';
-
 const PREVIEW_DEBOUNCE_MS = 150;
 
 /**
@@ -145,7 +201,6 @@ export class TikzModal extends Modal {
     }> = [];
     private annotationUpdateFn: (() => void) | null = null;
 
-    private styleEl: HTMLStyleElement | null = null;
     private onMouseMove: ((e: MouseEvent) => void) | null = null;
     private onMouseUp: (() => void) | null = null;
 
@@ -181,14 +236,6 @@ export class TikzModal extends Modal {
     }
 
     onOpen() {
-        if (!document.getElementById(STYLE_ELEMENT_ID)) {
-            const styleEl = document.createElement('style');
-            styleEl.id = STYLE_ELEMENT_ID;
-            styleEl.textContent = styles;
-            document.head.appendChild(styleEl);
-            this.styleEl = styleEl;
-        }
-
         // Obsidian loads MathJax lazily, and renderMath() throws until it's
         // ready - without this kick, `$...$` labels would silently fall back
         // to the stripLatex() approximation until something else in the vault
@@ -243,10 +290,6 @@ export class TikzModal extends Modal {
         this.rangeInputs.clear();
         this.svg3dRenderer = null;
         this.currentRenderMode = null;
-        if (this.styleEl && this.styleEl.parentNode) {
-            this.styleEl.parentNode.removeChild(this.styleEl);
-        }
-        this.styleEl = null;
         if (this.settingsColumn && this.onSettingsScroll) {
             this.settingsColumn.removeEventListener('scroll', this.onSettingsScroll);
         }
@@ -288,9 +331,9 @@ export class TikzModal extends Modal {
         const isSettingsTab = SETTINGS_TABS.has(name);
 
         if (isSettingsTab) {
-            if (this.settingsColumn) this.settingsColumn.style.display = '';
+            if (this.settingsColumn) this.settingsColumn.removeClass('tikz-hidden');
             this.tabContents.forEach((content) => {
-                content.style.display = 'none';
+                content.addClass('tikz-hidden');
             });
             const target = this.settingsColumn?.querySelector<HTMLElement>(`[data-section="${name}"]`);
             if (target && this.settingsColumn) {
@@ -300,9 +343,9 @@ export class TikzModal extends Modal {
                 target.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         } else {
-            if (this.settingsColumn) this.settingsColumn.style.display = 'none';
+            if (this.settingsColumn) this.settingsColumn.addClass('tikz-hidden');
             this.tabContents.forEach((content, key) => {
-                content.style.display = key === name ? 'flex' : 'none';
+                content.toggleClass('tikz-hidden', key !== name);
             });
             if (name === 'Code') this.updateCodeArea();
         }
@@ -352,7 +395,7 @@ export class TikzModal extends Modal {
 
         this.onSettingsScroll = () => {
             if (this.scrollRafId === null) {
-                this.scrollRafId = requestAnimationFrame(updateActive);
+                this.scrollRafId = window.requestAnimationFrame(updateActive);
             }
         };
 
@@ -393,7 +436,7 @@ export class TikzModal extends Modal {
         content.setAttr('role', 'tabpanel');
         content.setAttr('id', `tikz-tabpanel-${name.toLowerCase()}`);
         content.setAttr('aria-labelledby', `tikz-tab-${name.toLowerCase()}`);
-        content.style.display = 'none';
+        content.addClass('tikz-hidden');
         if (name === 'Code') content.addClass('tikz-code-panel');
         if (name === 'Reference') content.addClass('tikz-reference');
         this.tabContents.set(name, content);
@@ -433,7 +476,7 @@ export class TikzModal extends Modal {
             .setName('Width (cm)')
             .setDesc('Width of the exported TikZ image.')
             .addSlider((s) =>
-                s.setLimits(1, 20, 1).setValue(this.settings.getValue('size_x_cm')).setDynamicTooltip().onChange((v) => {
+                s.setLimits(1, 20, 1).setValue(this.settings.getValue('size_x_cm')).onChange((v) => {
                     this.settings.setValue('size_x_cm', v);
                     this.requestPreviewUpdate();
                 })
@@ -443,7 +486,7 @@ export class TikzModal extends Modal {
             .setName('Height (cm)')
             .setDesc('Height of the exported TikZ image.')
             .addSlider((s) =>
-                s.setLimits(1, 20, 1).setValue(this.settings.getValue('size_y_cm')).setDynamicTooltip().onChange((v) => {
+                s.setLimits(1, 20, 1).setValue(this.settings.getValue('size_y_cm')).onChange((v) => {
                     this.settings.setValue('size_y_cm', v);
                     this.requestPreviewUpdate();
                 })
@@ -480,7 +523,6 @@ export class TikzModal extends Modal {
             .addSlider((s) =>
                 s.setLimits(400, 1400, 20)
                     .setValue(this.settings.getValue('previewSize') ?? 760)
-                    .setDynamicTooltip()
                     .onChange((v) => {
                         this.settings.setValue('previewSize', v);
                         this.requestPreviewUpdate();
@@ -494,7 +536,7 @@ export class TikzModal extends Modal {
             .setDesc('Tilt: 0 looks at the surface edge-on, 90 looks straight down. Drag preview or press up/down arrows.')
             .addSlider((s) => {
                 this.elevationSlider = s;
-                s.setLimits(0, 90, 1).setValue(this.settings.getValue('rotationX')).setDynamicTooltip().onChange((v) => {
+                s.setLimits(0, 90, 1).setValue(this.settings.getValue('rotationX')).onChange((v) => {
                     this.settings.setValue('rotationX', v);
                     this.requestPreviewUpdateFast();
                 });
@@ -505,7 +547,7 @@ export class TikzModal extends Modal {
             .setDesc('Camera rotation around the vertical axis. Drag preview or press left/right arrows.')
             .addSlider((s) => {
                 this.azimuthSlider = s;
-                s.setLimits(0, 360, 1).setValue(this.settings.getValue('rotationZ')).setDynamicTooltip().onChange((v) => {
+                s.setLimits(0, 360, 1).setValue(this.settings.getValue('rotationZ')).onChange((v) => {
                     this.settings.setValue('rotationZ', v);
                     this.requestPreviewUpdateFast();
                 });
@@ -800,7 +842,7 @@ export class TikzModal extends Modal {
                             new Notice('Enter an expression before saving as a template.');
                             return;
                         }
-                        const name = window.prompt('Template name:', state.expression);
+                        const name = await TextPromptModal.prompt(this.app, 'Template name', state.expression);
                         if (!name) return;
                         const trimmed = name.trim();
                         if (!trimmed) return;
@@ -947,7 +989,6 @@ export class TikzModal extends Modal {
                 .addSlider((s) =>
                     s.setLimits(0.05, 1.0, 0.05)
                         .setValue(state.fillOpacity)
-                        .setDynamicTooltip()
                         .onChange((v) => {
                             state.fillOpacity = v;
                             updateFunctionValues();
@@ -987,7 +1028,7 @@ export class TikzModal extends Modal {
 
         // Hydrate from existing functions if any were persisted (click-to-edit).
         // Falls through to a single blank card on fresh modals.
-        const existing = (this.settings.getValue('functions') as FunctionParameters[]) || [];
+        const existing = this.settings.getValue<FunctionParameters[] | undefined>('functions') || [];
         if (existing.length > 0) {
             for (const fn of existing) addFunctionCard(fn);
         } else {
@@ -1124,7 +1165,7 @@ export class TikzModal extends Modal {
                             new Notice('Enter an expression before saving as a template.');
                             return;
                         }
-                        const name = window.prompt('Template name:', state.expression);
+                        const name = await TextPromptModal.prompt(this.app, 'Template name', state.expression);
                         if (!name) return;
                         const trimmed = name.trim();
                         if (!trimmed) return;
@@ -1195,7 +1236,7 @@ export class TikzModal extends Modal {
 
             const opacityDiv = row4.createDiv({ cls: 'tikz-func-field' });
             new Setting(opacityDiv).setName('Opacity').addSlider((s) =>
-                s.setLimits(0.1, 1.0, 0.1).setValue(state.opacity).setDynamicTooltip().onChange((v) => {
+                s.setLimits(0.1, 1.0, 0.1).setValue(state.opacity).onChange((v) => {
                     state.opacity = v;
                     updateFunctionValues();
                 })
@@ -1213,7 +1254,6 @@ export class TikzModal extends Modal {
                 .addSlider((s) =>
                     s.setLimits(8, maxSamples, 2)
                         .setValue(Math.min(state.samples, maxSamples))
-                        .setDynamicTooltip()
                         .onChange((v) => {
                             state.samples = v;
                             updateFunctionValues();
@@ -1222,7 +1262,7 @@ export class TikzModal extends Modal {
         };
 
         // Hydrate from existing 3D surfaces when the modal opens with state.
-        const existing3D = (this.settings.getValue('functions3D') as Function3DParameters[]) || [];
+        const existing3D = this.settings.getValue<Function3DParameters[] | undefined>('functions3D') || [];
         if (existing3D.length > 0) {
             for (const fn of existing3D) addFunctionCard(fn);
         } else {
@@ -1254,7 +1294,7 @@ export class TikzModal extends Modal {
                 'Function-referencing tools use the Name field on each function card (defaults to f1, f2, …).'
         );
 
-        const toolList: Tool[] = ((this.settings.getValue('tools') as Tool[]) || []).map((t) => ({ ...t }));
+        const toolList: Tool[] = (this.settings.getValue<Tool[] | undefined>('tools') || []).map((t) => ({ ...t }));
         const cardsContainer = tab.createDiv({ cls: 'tikz-tool-cards' });
 
         const save = () => {
@@ -1369,8 +1409,8 @@ export class TikzModal extends Modal {
         const fnNames = (): { value: string; label: string }[] => {
             type Named = { expression?: string; name?: string };
             const raw = is3D
-                ? (this.settings.getValue('functions3D') as Named[] | undefined)
-                : (this.settings.getValue('functions') as Named[] | undefined);
+                ? this.settings.getValue<Named[] | undefined>('functions3D')
+                : this.settings.getValue<Named[] | undefined>('functions');
             const list: Named[] = Array.isArray(raw) ? raw : [];
             const out: { value: string; label: string }[] = [];
             list.forEach((f, i) => {
@@ -1406,7 +1446,7 @@ export class TikzModal extends Modal {
         const sliderField = (parent: HTMLElement, label: string, value: number, onChange: (v: number) => void) => {
             const div = parent.createDiv({ cls: 'tikz-func-field' });
             new Setting(div).setName(label).addSlider((s) =>
-                s.setLimits(0.05, 1, 0.05).setValue(value).setDynamicTooltip().onChange(onChange)
+                s.setLimits(0.05, 1, 0.05).setValue(value).onChange(onChange)
             );
         };
         const dropdownField = (parent: HTMLElement, label: string, value: string, options: Record<string, string>, onChange: (v: string) => void) => {
@@ -1712,7 +1752,7 @@ export class TikzModal extends Modal {
         // the cards start empty even though the graph still shows the
         // saved labels, since the renderer reads settings.annotations
         // directly - only the editor UI needs rebuilding here.
-        const existingAnnotations = (this.settings.getValue('annotations') as import('./types').Annotation[]) || [];
+        const existingAnnotations = this.settings.getValue<import('./types').Annotation[] | undefined>('annotations') || [];
         for (const ann of existingAnnotations) addCard(ann);
 
         const addBtnDiv = tab.createDiv({ cls: 'tikz-add-func' });
@@ -1738,7 +1778,7 @@ export class TikzModal extends Modal {
             .setName('Major divisions')
             .setDesc('Approximate number of major grid cells across the X axis. The Y axis follows proportionally.')
             .addSlider((s) =>
-                s.setLimits(2, 20, 1).setValue(this.settings.getValue('majorTickNum') ?? 8).setDynamicTooltip().onChange((v) => {
+                s.setLimits(2, 20, 1).setValue(this.settings.getValue('majorTickNum') ?? 8).onChange((v) => {
                     this.settings.setValue('majorTickNum', v);
                     this.requestPreviewUpdate();
                 })
@@ -1758,7 +1798,7 @@ export class TikzModal extends Modal {
             .setName('Minor subdivisions')
             .setDesc('Number of minor subdivisions between two major grid lines.')
             .addSlider((s) =>
-                s.setLimits(1, 10, 1).setValue(this.settings.getValue('gridSize')).setDynamicTooltip().onChange((v) => {
+                s.setLimits(1, 10, 1).setValue(this.settings.getValue('gridSize')).onChange((v) => {
                     this.settings.setValue('gridSize', v);
                     this.requestPreviewUpdate();
                 })
@@ -2020,11 +2060,11 @@ export class TikzModal extends Modal {
 
     private update3DVisibility() {
         const show3D = this.is3D();
-        if (this.rotationContainer) this.rotationContainer.style.display = show3D ? 'block' : 'none';
-        if (this.zAxisContainer) this.zAxisContainer.style.display = show3D ? 'block' : 'none';
-        if (this.axisStyleContainer) this.axisStyleContainer.style.display = show3D ? 'none' : 'block';
+        if (this.rotationContainer) this.rotationContainer.toggleClass('tikz-hidden', !show3D);
+        if (this.zAxisContainer) this.zAxisContainer.toggleClass('tikz-hidden', !show3D);
+        if (this.axisStyleContainer) this.axisStyleContainer.toggleClass('tikz-hidden', show3D);
         if (this.previewContainer) this.previewContainer.toggleClass('is-3d', show3D);
-        if (this.zoom3DOverlay) this.zoom3DOverlay.style.display = show3D ? 'flex' : 'none';
+        if (this.zoom3DOverlay) this.zoom3DOverlay.toggleClass('tikz-hidden', !show3D);
     }
 
     /**
@@ -2058,7 +2098,7 @@ export class TikzModal extends Modal {
         // also flips this, but buildGraphTab calls update3DVisibility BEFORE
         // this overlay is built (panel-left is constructed before panel-right),
         // so opening the modal in 3D mode would otherwise leave it hidden.
-        overlay.style.display = this.is3D() ? 'flex' : 'none';
+        overlay.toggleClass('tikz-hidden', !this.is3D());
 
         const plus = overlay.createEl('button', { cls: 'tikz-3d-zoom-btn', text: '+' });
         plus.setAttr('type', 'button');
@@ -2116,7 +2156,7 @@ export class TikzModal extends Modal {
     }
 
     private adjust3DZoom(factor: number) {
-        const current = (this.settings.getValue('zoom3D') as number) || 1;
+        const current = this.settings.getValue<number | undefined>('zoom3D') || 1;
         const next = Math.max(0.3, Math.min(4, current * factor));
         this.settings.setValue('zoom3D', next);
         this.requestPreviewUpdateFast();
@@ -2575,8 +2615,8 @@ export class TikzModal extends Modal {
     private setupKeyboardRotation() {
         this.previewContainer.addEventListener('keydown', (e: KeyboardEvent) => {
             if (!this.is3D()) return;
-            const az = this.settings.getValue('rotationZ') ?? 45;
-            const el = this.settings.getValue('rotationX') ?? 30;
+            const az = this.settings.getValue<number | undefined>('rotationZ') ?? 45;
+            const el = this.settings.getValue<number | undefined>('rotationX') ?? 30;
             let newAz = az;
             let newEl = el;
             switch (e.key) {
@@ -2639,7 +2679,7 @@ export class TikzModal extends Modal {
                             await navigator.clipboard.writeText(code);
                             const orig = btn.buttonEl.textContent;
                             btn.setButtonText('Copied');
-                            setTimeout(() => btn.setButtonText(orig || 'Copy TikZ code'), 2000);
+                            window.setTimeout(() => btn.setButtonText(orig || 'Copy TikZ code'), 2000);
                         } catch {
                             new Notice('Could not access clipboard.');
                         }
@@ -2728,7 +2768,7 @@ export class TikzModal extends Modal {
         // breaks PNG rasterization. Swap each for the plain-text
         // stripLatex() approximation carried in its data attributes.
         clone.querySelectorAll('foreignObject[data-export-text]').forEach((fo) => {
-            const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            const t = createSvg('text');
             t.setAttribute('x', fo.getAttribute('data-export-x') || '0');
             t.setAttribute('y', fo.getAttribute('data-export-y') || '0');
             t.setAttribute('text-anchor', fo.getAttribute('data-export-anchor') || 'start');
@@ -2744,10 +2784,13 @@ export class TikzModal extends Modal {
         const computed = getComputedStyle(document.body);
 
         const resolveVars = (value: string): string =>
-            value.replace(/var\((--[^,)]+)(?:,\s*([^)]+))?\)/g, (_match, name, fallback) => {
-                const v = computed.getPropertyValue(name).trim();
-                return v || (fallback ? String(fallback).trim() : '');
-            });
+            value.replace(
+                /var\((--[^,)]+)(?:,\s*([^)]+))?\)/g,
+                (_match: string, name: string, fallback: string | undefined) => {
+                    const v = computed.getPropertyValue(name).trim();
+                    return v || (fallback ? fallback.trim() : '');
+                }
+            );
 
         const nodes: Element[] = [clone, ...Array.from(clone.querySelectorAll('*'))];
         for (const el of nodes) {
@@ -2808,7 +2851,7 @@ export class TikzModal extends Modal {
 
             // 2x for a sharper result on Hi-DPI displays.
             const scale = 2;
-            const canvas = document.createElement('canvas');
+            const canvas = createEl('canvas');
             canvas.width = Math.round(width * scale);
             canvas.height = Math.round(height * scale);
             const ctx = canvas.getContext('2d');
@@ -2863,7 +2906,7 @@ export class TikzModal extends Modal {
         this.previewTimer = window.setTimeout(() => {
             this.previewTimer = null;
             this.updatePreview('svg');
-        }, PREVIEW_DEBOUNCE_MS) as unknown as number;
+        }, PREVIEW_DEBOUNCE_MS);
     }
 
     /**
@@ -2893,7 +2936,7 @@ export class TikzModal extends Modal {
             this.trailingSvgTimer = window.setTimeout(() => {
                 this.trailingSvgTimer = null;
                 this.updatePreview('svg');
-            }, 180) as unknown as number;
+            }, 180);
         }
     }
 

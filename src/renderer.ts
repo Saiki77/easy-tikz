@@ -4,7 +4,6 @@ import { COLOR_MAP, THICKNESS_MAP } from './colors';
 import { niceInterval, formatTick, stripLatex } from './util';
 import { extractMathSource, renderMathLabel, flushMathRenders } from './mathlabel';
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const PADDING_TOP = 45;
 const PADDING_RIGHT = 30;
@@ -53,8 +52,11 @@ export class SVGRenderer {
     }
 
     /** Create an SVG element with the given tag and attributes. */
-    private el(tag: string, attrs: Record<string, string> = {}): SVGElement {
-        const e = document.createElementNS(SVG_NS, tag);
+    private el<K extends keyof SVGElementTagNameMap>(
+        tag: K,
+        attrs: Record<string, string> = {}
+    ): SVGElementTagNameMap[K] {
+        const e = createSvg(tag);
         for (const [k, v] of Object.entries(attrs)) {
             e.setAttribute(k, v);
         }
@@ -66,7 +68,7 @@ export class SVGRenderer {
             width: String(this.config.width),
             height: String(this.config.height),
             viewBox: `0 0 ${this.config.width} ${this.config.height}`,
-        }) as SVGSVGElement;
+        });
 
         svg.appendChild(
             this.el('rect', {
@@ -655,8 +657,8 @@ export class SVGRenderer {
                         const t = domMin + i * step;
                         const x = evalFn(t);
                         const y = evalFnY(t);
-                        xs[i] = x === x && x !== Infinity && x !== -Infinity ? x : NaN;
-                        ys[i] = y === y && y !== Infinity && y !== -Infinity ? y : NaN;
+                        xs[i] = Number.isFinite(x) ? x : NaN;
+                        ys[i] = Number.isFinite(y) ? y : NaN;
                     }
                 } else if (isPolar) {
                     // The user's domain is in theta. Evaluate r = f(theta), then
@@ -665,7 +667,7 @@ export class SVGRenderer {
                     for (let i = 0; i < sampleCount; i++) {
                         const theta = domMin + i * step;
                         const r = evalFn(theta);
-                        if (r === r && r !== Infinity && r !== -Infinity) {
+                        if (Number.isFinite(r)) {
                             xs[i] = r * Math.cos(theta);
                             ys[i] = r * Math.sin(theta);
                         } else {
@@ -678,14 +680,14 @@ export class SVGRenderer {
                         const mx = domMin + i * step;
                         xs[i] = mx;
                         const my = evalFn(mx);
-                        ys[i] = my === my && my !== Infinity && my !== -Infinity ? my : NaN;
+                        ys[i] = Number.isFinite(my) ? my : NaN;
                     }
                 }
             } catch {
                 // Expression threw at runtime. Mark remaining as NaN.
                 for (let i = 0; i < sampleCount; i++) {
-                    if (!(ys[i] === ys[i])) ys[i] = NaN;
-                    if (!(xs[i] === xs[i])) xs[i] = NaN;
+                    if (Number.isNaN(ys[i])) ys[i] = NaN;
+                    if (Number.isNaN(xs[i])) xs[i] = NaN;
                 }
             }
 
@@ -693,7 +695,7 @@ export class SVGRenderer {
             let inSegment = false;
             for (let i = 0; i < sampleCount; i++) {
                 const y = ys[i];
-                if (y !== y || y > yClamp || y < -yClamp) {
+                if (Number.isNaN(y) || y > yClamp || y < -yClamp) {
                     inSegment = false;
                     continue;
                 }
@@ -712,7 +714,7 @@ export class SVGRenderer {
                     let segInProgress = false;
                     for (let i = 0; i < sampleCount; i++) {
                         const y = ys[i];
-                        if (y !== y || y > yClamp || y < -yClamp) {
+                        if (Number.isNaN(y) || y > yClamp || y < -yClamp) {
                             if (segInProgress) {
                                 const closeSx = padLeft + ((lastX - xmin) / xRange) * plotW;
                                 fillParts.push(`L${closeSx.toFixed(2)},${yAxisScreen.toFixed(2)} Z`);
@@ -1274,7 +1276,7 @@ export class SVGRenderer {
             'stroke-linecap': 'round',
         };
         if (tool.dashed) attrs['stroke-dasharray'] = '6 4';
-        const arrows = tool.arrow as ArrowStyle;
+        const arrows = tool.arrow;
         if (arrows === 'forward' || arrows === 'both') attrs['marker-end'] = 'url(#arrowhead)';
         if (arrows === 'backward' || arrows === 'both') attrs['marker-start'] = 'url(#arrowhead)';
         group.appendChild(this.el('line', attrs));
@@ -1373,7 +1375,7 @@ export class SVGRenderer {
                     'pointer-events': 'bounding-box',
                 },
             });
-            el.style.cursor = 'grab';
+            el.setCssStyles({ cursor: 'grab' });
         }
         svg.appendChild(group);
     }

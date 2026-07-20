@@ -46,12 +46,12 @@ export interface TikzSetting {
     description: string;
     category: 'basic' | 'axis' | 'function' | 'shapes' | 'grid' | 'style' | 'other';
     type: 'toggle' | 'text' | 'slider' | 'dropdown' | 'color';
-    defaultValue: any;
+    defaultValue: unknown;
     options?: string[];
     min?: number;
     max?: number;
     step?: number;
-    insertText: (value: any) => string;
+    insertText: (value: unknown) => string;
 }
 
 export interface DynamicFunctionSetting extends TikzSetting {
