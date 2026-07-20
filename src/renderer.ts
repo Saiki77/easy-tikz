@@ -148,6 +148,16 @@ export class SVGRenderer {
                     width: String(Math.max(width, 1)),
                     height: String(Math.max(height, 1)),
                     style: 'overflow: visible; pointer-events: all;',
+                    // MathJax output only renders inside the app document (it
+                    // depends on MathJax's document-level stylesheet), so the
+                    // SVG/PNG export path swaps this node for a plain <text>
+                    // rebuilt from these attributes.
+                    'data-export-text': text,
+                    'data-export-x': String(x),
+                    'data-export-y': String(y),
+                    'data-export-anchor': opts.anchor,
+                    'data-export-fill': opts.color,
+                    'data-export-font-size': String(opts.fontSize),
                     ...(opts.extraAttrs || {}),
                 });
                 fo.appendChild(el);

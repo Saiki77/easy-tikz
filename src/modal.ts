@@ -1,4 +1,5 @@
-import { Modal, Setting, SliderComponent, TextComponent, MarkdownView, Notice, App, TFile, setIcon } from 'obsidian';
+import { Modal, Setting, SliderComponent, TextComponent, MarkdownView, Notice, App, TFile, setIcon, loadMathJax } from 'obsidian';
+import { stripLatex } from './util';
 import { FunctionParameters, Function3DParameters, Tool, ArrowStyle, FillPattern } from './types';
 import { SettingsManager } from './settings';
 import { SVGRenderer } from './renderer';
@@ -187,6 +188,12 @@ export class TikzModal extends Modal {
             document.head.appendChild(styleEl);
             this.styleEl = styleEl;
         }
+
+        // Obsidian loads MathJax lazily, and renderMath() throws until it's
+        // ready - without this kick, `$...$` labels would silently fall back
+        // to the stripLatex() approximation until something else in the vault
+        // rendered math. Re-render once loaded so open charts pick it up.
+        void loadMathJax().then(() => this.requestPreviewUpdate()).catch(() => {});
 
         const { modalEl } = this;
         modalEl.addClass('tikz-modal');
@@ -2714,6 +2721,26 @@ export class TikzModal extends Modal {
         const svg = this.getChartSvg();
         if (!svg) return null;
         const clone = svg.cloneNode(true) as SVGElement;
+
+        // MathJax labels live in <foreignObject> nodes whose rendering
+        // depends on MathJax's document-level stylesheet - serialized
+        // standalone they'd show unstyled markup, and foreignObject content
+        // breaks PNG rasterization. Swap each for the plain-text
+        // stripLatex() approximation carried in its data attributes.
+        clone.querySelectorAll('foreignObject[data-export-text]').forEach((fo) => {
+            const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            t.setAttribute('x', fo.getAttribute('data-export-x') || '0');
+            t.setAttribute('y', fo.getAttribute('data-export-y') || '0');
+            t.setAttribute('text-anchor', fo.getAttribute('data-export-anchor') || 'start');
+            t.setAttribute('fill', fo.getAttribute('data-export-fill') || 'var(--text-normal)');
+            t.setAttribute('font-size', fo.getAttribute('data-export-font-size') || '11');
+            t.setAttribute('font-family', 'var(--font-text)');
+            const weight = fo.getAttribute('font-weight');
+            if (weight) t.setAttribute('font-weight', weight);
+            t.textContent = stripLatex(fo.getAttribute('data-export-text') || '');
+            fo.replaceWith(t);
+        });
+
         const computed = getComputedStyle(document.body);
 
         const resolveVars = (value: string): string =>

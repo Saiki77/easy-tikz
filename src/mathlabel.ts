@@ -23,7 +23,7 @@ export function extractMathSource(text: string): string | null {
         if (inner.length > 0 && !inner.includes('$')) return inner;
         return null;
     }
-    const m = /^\\\((.*)\\\)$/s.exec(t);
+    const m = /^\\\(([\s\S]*)\\\)$/.exec(t);
     return m ? m[1] : null;
 }
 
