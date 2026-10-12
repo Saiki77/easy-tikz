@@ -1,7 +1,8 @@
 /**
  * Function templates: pre-baked expressions, domains, and color hints that
  * the user can drop into a function card with one click. Plus a small
- * persistence layer for user-defined templates.
+ * persistence layer for user-defined templates. Whole-chart starter
+ * examples live in migrate.ts (EXAMPLES).
  */
 
 export interface Template2D {
@@ -21,9 +22,9 @@ export interface Template3D {
 
 export const BUILT_IN_2D: Template2D[] = [
     { name: 'Parabola', expression: 'x^2', domain: '-3:3', color: 'black' },
-    { name: 'Cubic', expression: 'x^3 - 3*x', domain: '-2:2', color: 'blue' },
-    { name: 'Sine wave', expression: 'sin(x)', domain: '0:2*PI', color: 'blue' },
-    { name: 'Cosine', expression: 'cos(x)', domain: '0:2*PI', color: 'teal' },
+    { name: 'Cubic', expression: 'x^3 - 3x', domain: '-2:2', color: 'blue' },
+    { name: 'Sine wave', expression: 'sin(x)', domain: '0:2*pi', color: 'blue' },
+    { name: 'Cosine', expression: 'cos(x)', domain: '0:2*pi', color: 'teal' },
     { name: 'Damped oscillation', expression: 'sin(x) * exp(-x/5)', domain: '0:20', color: 'purple' },
     { name: 'Gaussian', expression: 'exp(-x^2)', domain: '-3:3', color: 'green' },
     { name: 'Logistic', expression: '1 / (1 + exp(-x))', domain: '-6:6', color: 'teal' },
@@ -51,8 +52,26 @@ export interface UserTemplate {
     color?: string;
 }
 
+/**
+ * Autosaved, not-yet-inserted chart. Written (debounced) by the editor
+ * modal while it is open and cleared on Insert / Save, so closing the
+ * editor by accident (Esc, backdrop click) never loses work.
+ */
+export interface ChartDraft {
+    /** Epoch milliseconds. */
+    savedAt: number;
+    /** Source note when the editor was opened from a rendered block, else null. */
+    sourcePath: string | null;
+    /** The original block text (click-to-edit), else null. */
+    originalBlockText: string | null;
+    /** SettingsManager.serialize() output. */
+    data: Record<string, unknown>;
+}
+
 export interface PluginData {
     userTemplates: UserTemplate[];
+    /** Autosaved unsaved chart, see ChartDraft. */
+    draft?: ChartDraft | null;
     /**
      * When true, vertical drag in the 3D preview is inverted: dragging
      * down tilts the camera DOWN (lowers elevation), dragging up tilts

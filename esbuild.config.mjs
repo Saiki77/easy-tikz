@@ -1,6 +1,8 @@
 import esbuild from "esbuild";
 import process from "process";
 import { builtinModules as builtins } from "node:module";
+import fs from "node:fs";
+import { buildCss } from "./scripts/build-css.mjs";
 
 
 const banner =
@@ -11,6 +13,25 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === 'production');
+
+// Dev mode: styles.css is rebuilt whenever a stylesheet under src/ or src/ui/ changes.
+if (!prod) {
+	buildCss();
+	let cssTimer = null;
+	const onCss = (_event, file) => {
+		if (file && !String(file).endsWith('.css')) return;
+		if (cssTimer) clearTimeout(cssTimer);
+		cssTimer = setTimeout(() => {
+			cssTimer = null;
+			try {
+				buildCss();
+			} catch (e) {
+				console.error('styles.css:', e instanceof Error ? e.message : e);
+			}
+		}, 50);
+	};
+	for (const dir of ['src', 'src/ui']) fs.watch(dir, onCss);
+}
 
 esbuild.build({
 	banner: {

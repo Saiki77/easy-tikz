@@ -1,0 +1,255 @@
+/* Help tab (src/ui/helpPanel.ts): a readable reference. Text stays
+   selectable so formulas can be copied into fields. */
+
+.etz-help {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    max-width: 720px;
+    padding: var(--etz-panel-pad);
+    color: var(--text-normal);
+    font-size: var(--etz-font);
+    line-height: 1.55;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: auto;
+    /* The term lists stack when the help pane is narrow. */
+    container: etz-help / inline-size;
+}
+
+.etz-help-intro,
+.etz-help-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.etz-help-section {
+    scroll-margin-top: 8px;
+}
+
+h3.etz-help-h {
+    margin: 0;
+    color: var(--text-normal);
+    font-size: 16px;
+    font-weight: 650;
+    line-height: 1.3;
+}
+
+h3.etz-help-h:focus {
+    outline: none;
+}
+
+h3.etz-help-h:focus-visible {
+    border-radius: var(--etz-radius-s);
+    box-shadow: var(--etz-focus-ring);
+}
+
+h4.etz-help-sub {
+    margin: 8px 0 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-variant-caps: all-small-caps;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    line-height: 1.3;
+}
+
+.etz-help-p,
+.etz-help-note {
+    margin: 0;
+}
+
+.etz-help-note {
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+}
+
+.etz-help strong {
+    font-weight: 600;
+}
+
+/* --------------------------------------------------------------- contents */
+
+.etz-help-toc {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.etz-help-toc-label {
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.etz-help-toc-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 4px;
+    margin-left: -8px;
+}
+
+button.etz-btn.mod-ghost.etz-help-toc-btn {
+    color: var(--text-accent);
+    font-weight: 500;
+}
+
+/* ------------------------------------------------------------------ code */
+
+code.etz-help-code-inline {
+    padding: 1px 4px;
+    border-radius: var(--etz-radius-s);
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+    font-family: var(--font-monospace);
+    font-size: 0.92em;
+    overflow-wrap: anywhere;
+}
+
+pre.etz-help-code {
+    margin: 2px 0;
+    padding: 8px 12px;
+    overflow-x: auto;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-m);
+    background-color: var(--background-primary-alt);
+    font-size: var(--etz-font-mono);
+    line-height: 1.6;
+}
+
+pre.etz-help-code code {
+    padding: 0;
+    background: none;
+    color: var(--text-normal);
+    font-family: var(--font-monospace);
+    white-space: pre;
+}
+
+.etz-help-comment {
+    color: var(--text-faint);
+}
+
+/* ----------------------------------------------------------------- lists */
+
+ul.etz-help-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding-left: 20px;
+}
+
+ul.etz-help-list li {
+    padding-left: 2px;
+}
+
+ul.etz-help-list li::marker {
+    color: var(--text-faint);
+}
+
+/* Term / description pairs: two columns when there is room, stacked otherwise. */
+dl.etz-help-terms {
+    display: grid;
+    grid-template-columns: minmax(96px, max-content) minmax(0, 1fr);
+    gap: 6px 16px;
+    margin: 2px 0;
+}
+
+dl.etz-help-terms dt {
+    min-width: 0;
+    max-width: 240px;
+    margin: 0;
+    font-weight: 400;
+}
+
+dl.etz-help-terms dd {
+    min-width: 0;
+    margin: 0;
+}
+
+@container etz-help (max-width: 460px) {
+    dl.etz-help-terms {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2px;
+    }
+
+    dl.etz-help-terms dd {
+        margin-bottom: 6px;
+        padding-left: 12px;
+    }
+}
+
+kbd.etz-help-kbd {
+    display: inline-block;
+    min-width: 20px;
+    padding: 0 6px;
+    border: 1px solid var(--background-modifier-border);
+    border-bottom-width: 2px;
+    border-radius: var(--etz-radius-s);
+    background-color: var(--background-primary-alt);
+    color: var(--text-normal);
+    font-family: var(--font-interface);
+    font-size: var(--etz-font-meta);
+    line-height: 18px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+dl.etz-help-terms.mod-keys dt {
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+    white-space: nowrap;
+}
+
+/* -------------------------------------------------------------- examples */
+
+.etz-help-example {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--background-primary-alt);
+}
+
+.etz-help-example-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.etz-help-example-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.etz-help-example-desc {
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    line-height: 1.4;
+}
+
+.etz-help-badge {
+    padding: 0 5px;
+    border-radius: var(--etz-radius-s);
+    background-color: var(--etz-accent-tint);
+    color: var(--text-accent);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+button.etz-btn.etz-help-example-btn {
+    flex: 0 0 auto;
+}

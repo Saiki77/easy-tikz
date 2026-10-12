@@ -1,0 +1,168 @@
+/* Charts rendered in notes (main.ts InlineChart). The outer wrapper only
+   carries the width and the alignment; the chart box inside it keeps the
+   3.x .tikz-rendered-chart look (hover outline, overlay align / width
+   controls, 3D SVG instead of canvas at rest, see src/styles.css) and
+   takes its height from the chart's aspect ratio. Problems and sliders sit
+   under the box, so they never cover the plot or get clipped by it. */
+
+.etz-inline {
+    display: block;
+    width: var(--etz-inline-width, 100%);
+    max-width: 100%;
+    margin: 8px 0;
+}
+
+.etz-inline.align-left {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+.etz-inline.align-center {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.etz-inline.align-right {
+    margin-left: auto;
+    margin-right: 0;
+}
+
+/* The stage holds the box and, as its siblings, the hover controls (a
+   role=button must not contain other controls). */
+.etz-inline-stage {
+    position: relative;
+}
+
+.etz-inline .tikz-rendered-chart.etz-inline-box {
+    width: 100%;
+    margin: 0;
+    aspect-ratio: var(--etz-inline-aspect, 1.5);
+}
+
+.etz-inline-stage:hover > .tikz-rendered-chart.etz-inline-box {
+    outline-color: var(--interactive-accent);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--interactive-accent) 30%, transparent);
+}
+
+.etz-inline-stage:hover > .tikz-rendered-controls,
+.etz-inline-stage:focus-within > .tikz-rendered-controls {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* The SVG fills the box; its viewBox keeps the proportions. */
+.etz-inline-box > svg.etz-inline-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+}
+
+/* The 3D renderer writes a measured pixel size on its root. In a note the
+   box already has the chart's aspect ratio, so the root simply fills it
+   and follows the width slider without a re-render. */
+.etz-inline-box > .tikz-3d-root {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: none;
+    box-shadow: none;
+}
+
+/* While a slider drags, 3D frames paint the canvas (one bitmap instead of a
+   <path> per surface quad); the full render on release brings the SVG back. */
+.etz-inline-box > .tikz-3d-root.etz-inline-drafting .tikz-3d-svg {
+    display: none;
+}
+
+.etz-inline-box > .tikz-3d-root.etz-inline-drafting .tikz-3d-canvas {
+    display: block;
+}
+
+/* ------------------------------------------------------- problem line */
+
+.etz-inline-issues {
+    margin-top: 4px;
+    padding: 0 2px;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* A small error dot, so a real problem reads differently from an info note. */
+.etz-inline-issues.is-error::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background-color: var(--text-error);
+    vertical-align: 1px;
+}
+
+/* ------------------------------------------------------ slider strip */
+
+.etz-inline-strip {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 2px 2px 2px 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--background-primary-alt);
+    cursor: default;
+}
+
+.etz-inline-rows {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.etz-inline-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+}
+
+.etz-inline-name {
+    flex: 0 0 40px;
+    width: 40px;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-family: var(--font-monospace);
+    font-size: 11px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.etz-inline-row .etz-slider {
+    gap: 8px;
+    height: 24px;
+}
+
+.etz-inline-row input.etz-input.etz-slider-number {
+    flex: 0 0 48px;
+    width: 48px;
+    height: 20px;
+    padding: 0 4px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.etz-inline-rows > button.etz-btn.etz-inline-more {
+    align-self: flex-start;
+    height: 22px;
+    font-size: 11px;
+}
+
+button.etz-icon-btn.etz-inline-reset {
+    margin-top: 1px;
+}

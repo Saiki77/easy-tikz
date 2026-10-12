@@ -1,0 +1,613 @@
+/* Editor modal shell (src/modal.ts): frame and two-pane layout, header,
+   tabs, preview stage with its overlays (status chip, coordinate readout,
+   action pill), action bar, undo bar, plus the Chart and Code tabs
+   (src/ui/chartPanel.ts, src/ui/codePanel.ts). The modal adds .is-narrow
+   (preview stacked above the editor) below 700 px of modal width, and below
+   900 px only when the modal is portrait-like; landscape windows keep the
+   editor at full height (see onResize in src/modal.ts). */
+
+/* --------------------------------------------------------------- frame */
+
+/* Chained classes (0,2,0) outrank Obsidian's `.modal` sizing rules. */
+.modal.tikz-modal {
+    display: flex;
+    flex-direction: column;
+    width: 92vw;
+    max-width: 1440px;
+    height: 86vh;
+    max-height: 86vh;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* The title is screen-reader only; a header row (Obsidian 1.14) must not take space. */
+.modal.tikz-modal > .modal-header {
+    height: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.modal.tikz-modal .modal-content {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.etz-shell {
+    display: grid;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    grid-template-columns: minmax(400px, 40%) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+        'editor stage'
+        'editor dock'
+        'editor actions';
+}
+
+.etz-shell.is-narrow {
+    grid-template-columns: minmax(0, 1fr);
+    /* No hard minimum on the editor row: in short windows the minimums would
+       add up past the modal height and clip the action bar. */
+    grid-template-rows: minmax(140px, 36%) auto minmax(0, 1fr) auto;
+    grid-template-areas:
+        'stage'
+        'dock'
+        'editor'
+        'actions';
+}
+
+/* -------------------------------------------------------------- editor */
+
+.etz-editor {
+    grid-area: editor;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    border-right: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+}
+
+.etz-shell.is-narrow .etz-editor {
+    border-right: none;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.etz-header {
+    display: flex;
+    flex: 0 0 44px;
+    align-items: center;
+    gap: var(--etz-gap);
+    box-sizing: border-box;
+    height: 44px;
+    padding: 0 8px 0 var(--etz-panel-pad);
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.etz-header-spacer {
+    flex: 1 1 auto;
+}
+
+.etz-banner-slot {
+    flex: 0 0 auto;
+}
+
+.etz-banner-slot:empty {
+    display: none;
+}
+
+/* Tabs: 36 px, 13 px labels, accent underline, 6 px error dot. */
+.etz-tabs {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 2px;
+    padding: 0 calc(var(--etz-panel-pad) - 8px);
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+button.etz-tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    margin: 0;
+    padding: 0 10px;
+    border: none;
+    border-radius: 0;
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: var(--cursor);
+}
+
+button.etz-tab:hover {
+    background-color: transparent;
+    color: var(--text-normal);
+}
+
+button.etz-tab.is-active {
+    color: var(--text-normal);
+}
+
+button.etz-tab.is-active::after {
+    content: '';
+    position: absolute;
+    right: 8px;
+    bottom: -1px;
+    left: 8px;
+    height: 2px;
+    border-radius: 2px;
+    background-color: var(--interactive-accent);
+}
+
+button.etz-tab:focus-visible {
+    border-radius: var(--etz-radius-s);
+    box-shadow: var(--etz-focus-ring);
+}
+
+.etz-tab-dot {
+    display: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--text-error);
+}
+
+button.etz-tab.has-error .etz-tab-dot {
+    display: inline-block;
+}
+
+.etz-tabpanels {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.etz-tabpanel {
+    flex: 1 1 auto;
+    min-height: 0;
+    box-sizing: border-box;
+    padding: var(--etz-panel-pad);
+    overflow-y: auto;
+}
+
+.etz-tabpanel.mod-code {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Undo bar at the bottom of the editor ("Deleted R1 [Undo]"). */
+.etz-undo {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--etz-gap);
+    min-height: 40px;
+    box-sizing: border-box;
+    padding: 6px 12px 6px var(--etz-panel-pad);
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+    font-size: var(--etz-font-small);
+}
+
+.etz-undo-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* --------------------------------------------------------------- stage */
+
+.etz-stage {
+    grid-area: stage;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background-color: var(--background-secondary);
+}
+
+/* The drawing area keeps clear of the overlays: 44 px at the top (status
+   chip, Obsidian's close button) and 52 px at the bottom (readout, pill). */
+.etz-chart {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 44px 16px 52px;
+    outline: none;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.etz-shell.is-narrow .etz-chart {
+    padding: 8px 56px;
+}
+
+.etz-chart:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--background-modifier-border-focus);
+}
+
+.etz-chart.is-dragging {
+    cursor: grabbing;
+}
+
+.etz-chart.is-pan-off:not(.is-3d) {
+    cursor: default;
+}
+
+/* Fills the drawing area; the viewBox letterboxes (preserveAspectRatio meet). */
+svg.etz-chart-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.etz-preview-empty {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    padding: 10px 16px;
+    border-radius: var(--etz-radius-l);
+    background-color: color-mix(in srgb, var(--background-primary) 85%, transparent);
+    color: var(--text-muted);
+    text-align: center;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.etz-preview-empty-title {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.etz-preview-empty-hint {
+    margin-top: 2px;
+    color: var(--text-faint);
+    font-size: var(--etz-font-small);
+}
+
+/* Status chip, top-left. The right 56 px stay free for the close button. */
+.etz-status {
+    position: absolute;
+    top: 8px;
+    right: 56px;
+    left: 12px;
+    display: flex;
+    pointer-events: none;
+}
+
+button.etz-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid color-mix(in srgb, var(--text-error) 45%, transparent);
+    border-radius: 999px;
+    background-color: color-mix(in srgb, var(--text-error) 12%, var(--background-primary));
+    box-shadow: var(--shadow-s);
+    color: var(--text-error);
+    font-size: var(--etz-font-small);
+    font-weight: 500;
+    pointer-events: auto;
+    cursor: var(--cursor);
+}
+
+button.etz-status-chip:hover {
+    background-color: color-mix(in srgb, var(--text-error) 18%, var(--background-primary));
+}
+
+button.etz-status-chip.is-info {
+    border-color: var(--background-modifier-border);
+    background-color: var(--background-primary);
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+button.etz-status-chip:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+.etz-status-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.etz-status-more {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.etz-status-more:empty {
+    display: none;
+}
+
+/* Coordinate readout, bottom-left. */
+.etz-readout {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    padding: 3px 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-m);
+    background-color: color-mix(in srgb, var(--background-primary) 92%, transparent);
+    color: var(--text-muted);
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-meta);
+    font-variant-numeric: tabular-nums;
+    white-space: pre;
+    pointer-events: none;
+}
+
+/* Action pill, bottom-right: Fit, Reset, then Grid + Lock (2D) or zoom (3D). */
+.etz-pill {
+    position: absolute;
+    right: 12px;
+    bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 999px;
+    background-color: var(--background-primary);
+    box-shadow: var(--shadow-s);
+}
+
+.etz-pill-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 1px;
+    padding-left: 3px;
+    border-left: 1px solid var(--background-modifier-border);
+}
+
+.etz-pill button.etz-icon-btn {
+    border-radius: 999px;
+}
+
+/* Stacked layout: the stage is short and wide, so the pill stands at the
+   right edge, beside the (height-limited) chart. */
+.etz-shell.is-narrow .etz-pill {
+    top: 50%;
+    right: 8px;
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+}
+
+.etz-shell.is-narrow .etz-pill-group {
+    flex-direction: column;
+    margin: 1px 0 0;
+    padding: 3px 0 0;
+    border-top: 1px solid var(--background-modifier-border);
+    border-left: none;
+}
+
+/* ------------------------------------------------------- dock + actions */
+
+.etz-shell > .etz-shell-dock {
+    grid-area: dock;
+    min-width: 0;
+    max-height: 30vh;
+    overflow-y: auto;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+}
+
+.etz-shell.is-narrow > .etz-shell-dock {
+    max-height: 22vh;
+}
+
+.etz-shell > .etz-shell-dock:empty {
+    display: none;
+}
+
+.etz-actionbar {
+    grid-area: actions;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--etz-gap);
+    padding: 10px var(--etz-panel-pad);
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+    container: etz-actions / inline-size;
+}
+
+/* Side by side in a 700 to 900 px modal the bar is only 300 to 430 px wide:
+   tighter buttons keep Insert on the first row as long as possible. */
+@container etz-actions (max-width: 460px) {
+    .etz-actionbar > button.etz-btn {
+        padding: 0 8px;
+    }
+}
+
+/* When the bar still wraps, Insert stays at the right edge of its row (the
+   spacer takes all free space while everything fits on one row). */
+.etz-actionbar > button.etz-btn.mod-cta {
+    margin-left: auto;
+}
+
+.etz-shell:not(.is-narrow) > .etz-actionbar {
+    padding-right: 20px;
+}
+
+.etz-actionbar-spacer {
+    flex: 1 1 auto;
+}
+
+/* ------------------------------------------------------------ Chart tab */
+
+.etz-chart-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    --etz-field-label-w: 116px;
+}
+
+.etz-range-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--etz-gap);
+}
+
+.etz-range-row > .etz-expr {
+    flex: 1 1 0;
+}
+
+.etz-range-axis {
+    flex: 0 0 auto;
+    min-width: 22px;
+    color: var(--text-muted);
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-mono);
+    line-height: var(--etz-control-h);
+}
+
+.etz-range-sep {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    line-height: var(--etz-control-h);
+}
+
+.etz-chart-hint {
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+    line-height: 1.35;
+}
+
+.etz-chart-buttons,
+.etz-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px var(--etz-gap);
+}
+
+.etz-chart-panel .etz-field.is-error .etz-field-hint {
+    color: var(--text-error);
+}
+
+.etz-chart-panel input.etz-input.is-error {
+    border-color: var(--text-error);
+}
+
+/* ------------------------------------------------------------- Code tab */
+
+.etz-code-panel {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--etz-gap);
+    min-height: 0;
+}
+
+.etz-code-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--etz-gap);
+}
+
+.etz-code-hint {
+    flex: 1 1 160px;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+}
+
+.etz-code-banner:empty {
+    display: none;
+}
+
+.etz-code-banner .etz-banner {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+}
+
+.etz-code-error {
+    padding: 6px 10px;
+    border-radius: var(--etz-radius-m);
+    background-color: var(--etz-error-bg);
+    color: var(--text-error);
+    font-size: var(--etz-font-small);
+}
+
+textarea.etz-code-textarea {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 200px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border-radius: var(--etz-radius-l);
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-mono);
+    line-height: 1.5;
+    white-space: pre;
+    tab-size: 4;
+    resize: none;
+}
+
+/* ------------------------------------------------- saved templates dialog */
+
+.etz-template-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.etz-template-row {
+    display: flex;
+    align-items: center;
+    gap: var(--etz-gap);
+    padding: 6px 4px 6px 8px;
+    border-radius: var(--etz-radius-m);
+}
+
+.etz-template-row:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.etz-template-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.etz-template-name {
+    font-weight: 500;
+}
+
+.etz-template-meta {
+    overflow: hidden;
+    color: var(--text-muted);
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-meta);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

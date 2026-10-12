@@ -1,0 +1,294 @@
+/* Build tab (src/ui/buildPanel.ts) and function / surface cards
+   (src/ui/functionCards.ts). The card shell and every control are kit
+   components (kit.css, concatenated after this file): selectors that
+   adjust a kit control carry an extra class so they still win. The tab
+   panel around .etz-build provides the 16 px panel padding. */
+
+.etz-build {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.etz-build-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--etz-gap);
+}
+
+.etz-build-list {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+}
+
+.etz-build-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--etz-gap);
+    min-width: 0;
+}
+
+.etz-build-cards:empty {
+    display: none;
+}
+
+/* "No functions yet. Add a function" */
+.etz-build-section-empty {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 4px;
+    min-height: 36px;
+    box-sizing: border-box;
+    padding: 6px 12px;
+    border: 1px dashed var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+}
+
+.etz-build-hint {
+    color: var(--text-faint);
+    font-size: var(--etz-font-meta);
+    line-height: 1.35;
+}
+
+/* --------------------------------------------------------- empty state */
+
+.etz-build-empty {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.etz-build-empty-title {
+    color: var(--text-normal);
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.etz-build-start input.etz-input.etz-expr-input {
+    height: 36px;
+    padding: 0 10px;
+    font-size: 14px;
+}
+
+.etz-build-empty-sub {
+    margin-top: 10px;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    font-weight: 600;
+}
+
+.etz-build-examples {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--etz-gap);
+}
+
+button.etz-build-example {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 4px;
+    height: auto;
+    min-height: 92px;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--background-primary-alt);
+    box-shadow: none;
+    color: var(--text-normal);
+    font-weight: 400;
+    text-align: left;
+    white-space: normal;
+    cursor: pointer;
+    transition: border-color var(--etz-transition);
+}
+
+button.etz-build-example:hover {
+    border-color: var(--etz-accent-border);
+    background-color: var(--background-primary-alt);
+    box-shadow: none;
+}
+
+button.etz-build-example:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+.etz-build-thumb {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    height: 56px;
+    overflow: hidden;
+    border-radius: var(--etz-radius-m);
+    background-color: var(--background-primary);
+    pointer-events: none;
+}
+
+.etz-build-thumb > svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* At thumbnail scale tick labels and texts are unreadable specks. */
+.etz-build-thumb text,
+.etz-build-thumb foreignObject {
+    display: none;
+}
+
+/* Renderer not available for this example: a quiet placeholder. */
+.etz-build-thumb.is-fallback {
+    background-image: repeating-linear-gradient(
+        135deg,
+        transparent 0 8px,
+        color-mix(in srgb, var(--background-modifier-border) 60%, transparent) 8px 9px
+    );
+}
+
+.etz-build-example-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.etz-build-example-tag {
+    flex: 0 0 auto;
+    padding: 0 5px;
+    border-radius: var(--etz-radius-s);
+    background-color: var(--background-modifier-hover);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.etz-build-example-desc {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.etz-build-empty-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 6px;
+    margin-top: 6px;
+    font-size: var(--etz-font-small);
+}
+
+.etz-build-dot {
+    color: var(--text-faint);
+}
+
+/* ------------------------------------------------------ function cards */
+
+.etz-fn-card .etz-card-body {
+    --etz-field-label-w: 64px;
+}
+
+/* Formula labels ('y =', 'x(t) =', 'z =') read as math. */
+.etz-fn-row.mod-expr .etz-field-label {
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-small);
+}
+
+/* Options header: the disclosure button with the active-option pills beside it. */
+.etz-disclosure.etz-fn-options {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+}
+
+.etz-disclosure.etz-fn-options > .etz-disclosure-body {
+    flex: 1 0 100%;
+}
+
+.etz-fn-pills {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+}
+
+button.etz-fn-pill {
+    flex: 0 0 auto;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background-color: var(--etz-accent-tint);
+    box-shadow: none;
+    color: var(--text-accent);
+    font-size: var(--etz-font-meta);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+button.etz-fn-pill:hover {
+    background-color: color-mix(in srgb, var(--interactive-accent) 22%, transparent);
+    box-shadow: none;
+}
+
+button.etz-fn-pill:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+.etz-fn-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* Rows that belong to a chip (legend text, fill, tangent point). */
+.etz-field.etz-fn-dep {
+    padding-left: 8px;
+    border-left: 2px solid var(--background-modifier-border);
+}
+
+.etz-fn-fill {
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    min-width: 0;
+}
+
+.etz-fn-fill > select.etz-select {
+    flex: 0 1 150px;
+}
+
+.etz-fn-card .etz-field-control > .etz-slider,
+.etz-fn-fill > .etz-slider {
+    flex: 1 1 120px;
+}
+
+.etz-fn-card input.etz-slider-input {
+    width: 0;
+}
+
+.etz-fn-link-row {
+    flex: 1 1 100%;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+}

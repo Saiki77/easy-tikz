@@ -1,0 +1,949 @@
+/* Easy TikZ UI kit (src/ui/kit.ts). Obsidian colour variables only, so
+   light and dark themes (and community themes) follow automatically.
+   Sizes come from the --etz-* tokens on .tikz-modal / .etz-tokens
+   (src/styles.css). Selectors on buttons and inputs carry the element
+   name so they outrank Obsidian's `button:not(.clickable-icon)` and
+   `input[type='text']` rules (both specificity 0,1,1). */
+
+/* ---------------------------------------------------------------- a11y */
+
+.etz-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* --------------------------------------------------------- icon button */
+
+button.etz-icon-btn {
+    --icon-size: 16px;
+    --icon-stroke: 1.75px;
+    flex: 0 0 auto;
+    width: var(--etz-control-h);
+    height: var(--etz-control-h);
+    padding: 0;
+    border-radius: var(--etz-radius-m);
+    color: var(--text-muted);
+}
+
+button.etz-icon-btn.mod-sm {
+    --icon-size: 14px;
+    width: var(--etz-control-h-sm);
+    height: var(--etz-control-h-sm);
+    border-radius: var(--etz-radius-s);
+}
+
+button.etz-icon-btn svg {
+    width: var(--icon-size);
+    height: var(--icon-size);
+    stroke-width: var(--icon-stroke);
+}
+
+button.etz-icon-btn:hover {
+    color: var(--text-normal);
+    background-color: var(--background-modifier-hover);
+}
+
+/* Toggle icon buttons (Grid, Lock): accent when on. */
+button.etz-icon-btn[aria-pressed='true'] {
+    color: var(--text-accent);
+    background-color: var(--etz-accent-tint);
+}
+
+button.etz-icon-btn:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+button.etz-icon-btn:disabled {
+    opacity: 0.4;
+    background-color: transparent;
+}
+
+/* --------------------------------------------------------- text button */
+
+button.etz-btn {
+    gap: 6px;
+    height: var(--etz-control-h);
+    padding: 0 12px;
+    font-size: var(--etz-font);
+    font-weight: 500;
+}
+
+button.etz-btn.mod-sm {
+    height: var(--etz-control-h-sm);
+    padding: 0 8px;
+    font-size: var(--etz-font-small);
+}
+
+.etz-btn-icon {
+    display: inline-flex;
+    margin-left: -2px;
+}
+
+.etz-btn-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2px;
+}
+
+button.etz-btn.mod-ghost {
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+}
+
+button.etz-btn.mod-ghost:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+button.etz-btn.mod-link {
+    height: auto;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--text-accent);
+    font-weight: 400;
+}
+
+button.etz-btn.mod-link:hover {
+    background: none;
+    text-decoration: underline;
+}
+
+/* Quick fix next to an inline error: 22 px ghost pill. */
+button.etz-btn.mod-quickfix {
+    flex: 0 0 auto;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 11px;
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px var(--etz-accent-border);
+    color: var(--text-accent);
+    font-size: var(--etz-font-meta);
+    font-weight: 600;
+}
+
+button.etz-btn.mod-quickfix:hover {
+    background-color: var(--etz-accent-tint);
+    box-shadow: inset 0 0 0 1px var(--etz-accent-border);
+}
+
+button.etz-btn:focus-visible,
+button.etz-btn.mod-quickfix:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+/* Text buttons placed directly in a kit column keep their own width. */
+.etz-card-body > button.etz-btn,
+.etz-disclosure-body > button.etz-btn,
+.etz-group-body > button.etz-btn,
+.etz-field-main > button.etz-btn {
+    align-self: flex-start;
+}
+
+/* ----------------------------------------------------------- segmented */
+
+.etz-segmented {
+    display: inline-flex;
+    align-items: stretch;
+    gap: 2px;
+    max-width: 100%;
+    height: var(--etz-control-h);
+    padding: 2px;
+    box-sizing: border-box;
+    border-radius: var(--etz-radius-m);
+    background-color: var(--background-modifier-hover);
+    box-shadow: inset 0 0 0 1px var(--background-modifier-border);
+}
+
+.etz-segmented.mod-fill {
+    display: flex;
+    width: 100%;
+}
+
+button.etz-seg {
+    flex: 0 1 auto;
+    gap: 4px;
+    min-width: 0;
+    height: 100%;
+    padding: 0 10px;
+    border-radius: var(--etz-radius-s);
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    font-weight: 500;
+}
+
+.etz-segmented.mod-fill button.etz-seg {
+    flex: 1 1 0;
+}
+
+button.etz-seg:hover {
+    background-color: var(--background-modifier-hover);
+    box-shadow: none;
+    color: var(--text-normal);
+}
+
+button.etz-seg.is-active,
+button.etz-seg.is-active:hover {
+    background-color: var(--interactive-normal);
+    box-shadow: var(--input-shadow);
+    color: var(--text-normal);
+}
+
+button.etz-seg:focus-visible,
+button.etz-seg.is-active:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+button.etz-seg:disabled {
+    background-color: transparent;
+    opacity: 0.45;
+}
+
+.etz-seg-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.etz-seg-icon,
+.etz-seg-custom {
+    display: inline-flex;
+    align-items: center;
+}
+
+.etz-seg-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2px;
+}
+
+button.etz-seg.mod-graphic {
+    padding: 0 6px;
+}
+
+/* Thickness samples stay readable when not selected. */
+.etz-thickness button.etz-seg {
+    color: var(--text-muted);
+}
+
+.etz-thickness button.etz-seg.is-active {
+    color: var(--text-normal);
+}
+
+/* ---------------------------------------------------------------- chip */
+
+button.etz-chip {
+    flex: 0 0 auto;
+    gap: 4px;
+    height: var(--etz-control-h-chip);
+    padding: 0 10px;
+    border-radius: 999px;
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px var(--background-modifier-border);
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    font-weight: 500;
+}
+
+button.etz-chip:hover {
+    background-color: var(--background-modifier-hover);
+    box-shadow: inset 0 0 0 1px var(--background-modifier-border-hover);
+    color: var(--text-normal);
+}
+
+button.etz-chip[aria-pressed='true'],
+button.etz-chip[aria-pressed='true']:hover {
+    padding-left: 7px;
+    background-color: var(--etz-accent-tint);
+    box-shadow: inset 0 0 0 1px var(--etz-accent-border);
+    color: var(--text-accent);
+}
+
+button.etz-chip:focus-visible,
+button.etz-chip[aria-pressed='true']:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+.etz-chip-check {
+    display: none;
+}
+
+button.etz-chip[aria-pressed='true'] .etz-chip-check {
+    display: inline-flex;
+}
+
+.etz-chip-check svg {
+    width: 12px;
+    height: 12px;
+    stroke-width: 3px;
+}
+
+/* -------------------------------------------------------------- inputs */
+
+input.etz-input {
+    width: 100%;
+    min-width: 0;
+    height: var(--etz-control-h);
+    box-sizing: border-box;
+    padding: 0 8px;
+    font-size: var(--etz-font);
+}
+
+input.etz-input.mod-mono {
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-mono);
+}
+
+input.etz-input:focus,
+input.etz-input:focus-visible {
+    border-color: var(--background-modifier-border-focus);
+    box-shadow: var(--etz-focus-ring);
+}
+
+input.etz-input.etz-number {
+    flex: 0 0 auto;
+    width: 72px;
+    font-variant-numeric: tabular-nums;
+}
+
+input.etz-input.is-error,
+.etz-expr.is-error input.etz-input {
+    border-color: var(--text-error);
+}
+
+input.etz-input.is-error:focus,
+.etz-expr.is-error input.etz-input:focus {
+    border-color: var(--text-error);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-error) 30%, transparent);
+}
+
+select.etz-select {
+    min-width: 0;
+    max-width: 100%;
+    height: var(--etz-control-h);
+    font-size: var(--etz-font);
+}
+
+select.etz-select:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+select.etz-select.is-missing {
+    color: var(--text-error);
+}
+
+/* --------------------------------------------------- expression input */
+
+.etz-expr {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    width: 100%;
+}
+
+.etz-expr-msg {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    min-height: 22px;
+    color: var(--text-error);
+    font-size: var(--etz-font-meta);
+    line-height: 1.35;
+}
+
+.etz-expr-msg-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------------- slider */
+
+.etz-slider {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: var(--etz-control-h);
+}
+
+input.etz-slider-input {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 48px;
+    margin: 0;
+}
+
+.etz-slider-value {
+    flex: 0 0 auto;
+    min-width: 36px;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+}
+
+input.etz-input.etz-slider-number {
+    width: 64px;
+    text-align: right;
+}
+
+.etz-slider.is-disabled .etz-slider-value {
+    opacity: 0.5;
+}
+
+/* ------------------------------------------------------------- popover */
+
+.etz-popover {
+    position: fixed;
+    top: var(--etz-popover-top, 0);
+    left: var(--etz-popover-left, 0);
+    z-index: var(--layer-menu);
+    box-sizing: border-box;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    overflow: auto;
+    padding: 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--background-primary);
+    box-shadow: var(--shadow-s);
+    color: var(--text-normal);
+    font-size: var(--etz-font);
+    animation: etz-pop-in 100ms ease-out;
+}
+
+.etz-popover.is-above {
+    animation-name: etz-pop-in-above;
+}
+
+@keyframes etz-pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(-3px);
+    }
+}
+
+@keyframes etz-pop-in-above {
+    from {
+        opacity: 0;
+        transform: translateY(3px);
+    }
+}
+
+/* -------------------------------------------------------------- swatch */
+
+button.etz-swatch-btn {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: transparent;
+    box-shadow: none;
+}
+
+button.etz-swatch-btn:hover,
+button.etz-swatch-btn[aria-expanded='true'] {
+    background-color: var(--background-modifier-hover);
+    box-shadow: none;
+}
+
+button.etz-swatch-btn:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+.etz-swatch {
+    display: block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--etz-swatch-color, var(--text-normal));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-normal) 16%, transparent);
+}
+
+/* 'black' follows the theme text colour in the preview and exports as
+   black: show both halves so dark-theme users see what they will get. */
+.etz-swatch.is-auto {
+    background: linear-gradient(135deg, var(--text-normal) 50%, #000 50%);
+    box-shadow: inset 0 0 0 1px var(--background-modifier-border-hover);
+}
+
+.etz-swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--etz-swatch-columns, 5), 22px);
+    gap: 8px;
+}
+
+button.etz-swatch-cell {
+    position: relative;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: transparent;
+    box-shadow: none;
+}
+
+button.etz-swatch-cell:hover {
+    background-color: transparent;
+    box-shadow: 0 0 0 2px var(--background-primary), 0 0 0 4px var(--background-modifier-border-hover);
+}
+
+button.etz-swatch-cell .etz-swatch {
+    width: 22px;
+    height: 22px;
+}
+
+/* Selected: ring in the text colour plus a check. Focus: the ring turns accent. */
+button.etz-swatch-cell[aria-pressed='true'] {
+    box-shadow: 0 0 0 2px var(--background-primary), 0 0 0 4px var(--text-normal);
+}
+
+button.etz-swatch-cell:focus-visible,
+button.etz-swatch-cell[aria-pressed='true']:focus-visible {
+    box-shadow: 0 0 0 2px var(--background-primary), 0 0 0 4px var(--interactive-accent);
+}
+
+.etz-swatch-check {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.7));
+}
+
+button.etz-swatch-cell[aria-pressed='true'] .etz-swatch-check {
+    display: flex;
+}
+
+.etz-swatch-check svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 3px;
+}
+
+/* ---------------------------------------------------------- disclosure */
+
+.etz-disclosure {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+button.etz-disclosure-btn {
+    align-self: flex-start;
+    justify-content: flex-start;
+    gap: 4px;
+    max-width: 100%;
+    height: 24px;
+    padding: 0 6px 0 2px;
+    border-radius: var(--etz-radius-s);
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    font-weight: 600;
+}
+
+button.etz-disclosure-btn:hover {
+    background-color: var(--background-modifier-hover);
+    box-shadow: none;
+    color: var(--text-normal);
+}
+
+button.etz-disclosure-btn:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+.etz-disclosure-chevron {
+    display: inline-flex;
+    transition: transform var(--etz-transition);
+}
+
+.etz-disclosure-chevron svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2px;
+}
+
+.etz-disclosure.is-open .etz-disclosure-chevron {
+    transform: rotate(90deg);
+}
+
+.etz-disclosure-meta {
+    overflow: hidden;
+    color: var(--text-faint);
+    font-weight: 400;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.etz-disclosure-meta:empty {
+    display: none;
+}
+
+.etz-disclosure-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--etz-gap);
+    padding-top: 6px;
+}
+
+/* --------------------------------------------------------------- field */
+
+.etz-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.etz-field.mod-inline {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.etz-field-label {
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.etz-field.mod-inline .etz-field-label {
+    flex: 0 0 var(--etz-field-label-w, 84px);
+    overflow: hidden;
+    line-height: var(--etz-control-h);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.etz-field-main {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.etz-field-control {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    min-width: 0;
+}
+
+.etz-field-hint {
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+    line-height: 1.35;
+}
+
+/* --------------------------------------------------------------- group */
+
+.etz-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--etz-gap);
+    min-width: 0;
+}
+
+.etz-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 24px;
+}
+
+.etz-group-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-variant-caps: all-small-caps;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+.etz-group-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--etz-gap);
+    min-width: 0;
+}
+
+/* -------------------------------------------------------------- banner */
+
+.etz-banner {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-height: 32px;
+    box-sizing: border-box;
+    padding: 4px 8px 4px 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background-color: color-mix(in srgb, var(--interactive-accent) 8%, var(--background-primary));
+    font-size: var(--etz-font-small);
+}
+
+.etz-banner.mod-warning {
+    background-color: color-mix(in srgb, var(--text-warning) 10%, var(--background-primary));
+}
+
+.etz-banner-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.etz-banner-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--text-normal);
+}
+
+.etz-banner-actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 6px;
+}
+
+.etz-banner-note {
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+}
+
+/* ---------------------------------------------------------------- card */
+
+.etz-card {
+    position: relative;
+    min-width: 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--background-primary-alt);
+    transition: border-color var(--etz-transition);
+}
+
+.etz-card:focus-within {
+    border-color: color-mix(in srgb, var(--interactive-accent) 50%, transparent);
+}
+
+.etz-card-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 40px;
+    box-sizing: border-box;
+    padding: 6px 6px 6px 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.etz-card-name-wrap {
+    position: relative;
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.etz-card-name {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: var(--etz-radius-s);
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-small);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+button.etz-card-name.mod-editable {
+    box-shadow: none;
+    cursor: text;
+}
+
+button.etz-card-name.mod-editable:hover {
+    background-color: var(--background-modifier-hover);
+    box-shadow: inset 0 0 0 1px var(--background-modifier-border-hover);
+}
+
+button.etz-card-name.mod-editable:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+input.etz-input.etz-card-name-input {
+    width: auto;
+    height: 24px;
+    padding: 0 6px;
+    font-size: var(--etz-font-small);
+    font-weight: 600;
+}
+
+.etz-card-name-error {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 2;
+    padding: 2px 6px;
+    border: 1px solid color-mix(in srgb, var(--text-error) 40%, transparent);
+    border-radius: var(--etz-radius-s);
+    background-color: var(--background-primary);
+    box-shadow: var(--shadow-s);
+    color: var(--text-error);
+    font-size: var(--etz-font-meta);
+    white-space: nowrap;
+}
+
+button.etz-card-summary {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    gap: 4px;
+    min-width: 0;
+    height: var(--etz-control-h);
+    padding: 0 4px 0 6px;
+    border-radius: var(--etz-radius-s);
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    font-weight: 400;
+}
+
+button.etz-card-summary:hover {
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-normal);
+}
+
+button.etz-card-summary:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+.etz-card-summary-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.etz-card-chevron {
+    display: inline-flex;
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: var(--text-faint);
+    transition: transform var(--etz-transition);
+}
+
+.etz-card-chevron svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2px;
+}
+
+.etz-card.is-collapsed .etz-card-chevron {
+    transform: rotate(-90deg);
+}
+
+.etz-card-error-dot {
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    margin: 0 4px;
+    border-radius: 50%;
+    background-color: var(--text-error);
+}
+
+.etz-card.has-error:not(:focus-within) {
+    border-color: color-mix(in srgb, var(--text-error) 35%, var(--background-modifier-border));
+}
+
+/* The eye is a toggle, but "visible" is the normal state: no accent fill. */
+button.etz-icon-btn.etz-card-eye[aria-pressed='true'] {
+    background-color: transparent;
+    color: var(--text-muted);
+}
+
+button.etz-icon-btn.etz-card-eye[aria-pressed='true']:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.etz-card.is-hidden-item .etz-card-header .etz-swatch,
+.etz-card.is-hidden-item .etz-card-name,
+.etz-card.is-hidden-item .etz-card-summary-text {
+    opacity: 0.5;
+}
+
+.etz-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--etz-gap);
+    padding: 2px var(--etz-card-pad-x) var(--etz-card-pad-y);
+}
+
+/* ------------------------------------------------------------- dialogs */
+
+.modal.etz-dialog {
+    width: 420px;
+    max-width: calc(100vw - 32px);
+}
+
+.etz-dialog-desc {
+    margin-bottom: 12px;
+    color: var(--text-muted);
+    font-size: var(--etz-font);
+    line-height: 1.45;
+}
+
+input.etz-input.etz-dialog-input {
+    height: 32px;
+}
+
+.etz-dialog-error {
+    margin-top: 6px;
+    color: var(--text-error);
+    font-size: var(--etz-font-meta);
+}
+
+.etz-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+/* -------------------------------------------------------------- motion */
+
+@media (prefers-reduced-motion: reduce) {
+    .etz-popover {
+        animation: none;
+    }
+
+    .etz-card,
+    .etz-card-chevron,
+    .etz-disclosure-chevron {
+        transition: none;
+    }
+}

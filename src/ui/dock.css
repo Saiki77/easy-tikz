@@ -1,0 +1,273 @@
+/* Sliders dock under the preview (src/ui/slidersDock.ts). Lives in the
+   preview pane's flex column between the chart and the action bar; it
+   takes at most 30 % of the pane and scrolls on its own. */
+
+.etz-dock {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 30%;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+}
+
+.etz-dock-header {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 4px var(--etz-space-3) 0;
+}
+
+.etz-dock-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-variant-caps: all-small-caps;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+button.etz-btn.etz-dock-add {
+    margin-right: -6px;
+}
+
+.etz-dock-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 2px var(--etz-space-3) var(--etz-space-2);
+}
+
+/* 1 to 4 parameters: rows, two columns once the dock is wide enough. */
+.etz-dock-rows {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2px var(--etz-space-4);
+}
+
+.etz-dock-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 2px 0;
+}
+
+.etz-dock-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+/* Grows with the name (56 px up to 128 px) where field-sizing is supported. */
+input.etz-input.etz-dock-name {
+    flex: 0 0 auto;
+    width: 56px;
+    min-width: 56px;
+    max-width: 128px;
+    field-sizing: content;
+    font-weight: 600;
+}
+
+.etz-dock-eq {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-mono);
+}
+
+.etz-dock-value-holder {
+    display: inline-flex;
+    flex: 0 0 auto;
+}
+
+input.etz-input.etz-number.etz-dock-value {
+    width: 72px;
+}
+
+.etz-dock-spacer {
+    flex: 1 1 auto;
+}
+
+.etz-dock-msg {
+    color: var(--text-error);
+    font-size: var(--etz-font-meta);
+    line-height: 1.35;
+}
+
+/* Line 2: min label, slider, max label. */
+.etz-dock-range {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    height: 24px;
+}
+
+.etz-dock-range .etz-slider.etz-dock-slider {
+    height: 24px;
+}
+
+.etz-dock-end {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+button.etz-dock-end-btn {
+    min-width: 24px;
+    height: 20px;
+    padding: 0 4px;
+    border-radius: var(--etz-radius-s);
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+}
+
+button.etz-dock-end-btn:hover {
+    background-color: var(--background-modifier-hover);
+    box-shadow: none;
+    color: var(--text-normal);
+}
+
+button.etz-dock-end-btn:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+.etz-dock-end-holder {
+    display: inline-flex;
+}
+
+.etz-dock-end-holder:empty {
+    display: none;
+}
+
+input.etz-input.etz-number.etz-dock-end-input {
+    width: 64px;
+    height: 22px;
+    padding: 0 6px;
+    font-size: var(--etz-font-meta);
+}
+
+.etz-dock-end.mod-max input.etz-input.etz-number.etz-dock-end-input {
+    text-align: right;
+}
+
+/* 5+ parameters: wrapping pills, one expands into a row below them. */
+.etz-dock-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+button.etz-dock-pill {
+    flex: 0 0 auto;
+    gap: 4px;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px var(--background-modifier-border);
+    color: var(--text-normal);
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-small);
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+}
+
+button.etz-dock-pill:hover {
+    background-color: var(--background-modifier-hover);
+    box-shadow: inset 0 0 0 1px var(--background-modifier-border-hover);
+}
+
+button.etz-dock-pill[aria-expanded='true'],
+button.etz-dock-pill[aria-expanded='true']:hover {
+    background-color: var(--etz-accent-tint);
+    box-shadow: inset 0 0 0 1px var(--etz-accent-border);
+}
+
+button.etz-dock-pill:focus-visible,
+button.etz-dock-pill[aria-expanded='true']:focus-visible {
+    box-shadow: var(--etz-focus-ring);
+}
+
+/* A preview drag is moving this slider (rows: .etz-dock-row.is-live in drag.css). */
+button.etz-dock-pill.is-live {
+    background-color: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
+    box-shadow: inset 0 0 0 1px var(--etz-accent-border);
+}
+
+.etz-dock-pill-name {
+    font-weight: 600;
+}
+
+.etz-dock-pill-eq {
+    color: var(--text-muted);
+}
+
+/* A small accent dot marks pills whose parameter is playing. */
+.etz-dock-pill-dot {
+    display: none;
+    width: 6px;
+    height: 6px;
+    margin-left: -2px;
+    border-radius: 50%;
+    background-color: var(--interactive-accent);
+}
+
+button.etz-dock-pill.is-playing .etz-dock-pill-dot {
+    display: inline-block;
+    animation: etz-dock-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes etz-dock-pulse {
+    50% {
+        opacity: 0.35;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    button.etz-dock-pill.is-playing .etz-dock-pill-dot {
+        animation: none;
+    }
+}
+
+.etz-dock-editor {
+    padding: 4px 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--background-primary-alt);
+}
+
+/* Options popover: min / max / step side by side, Delete below. */
+.etz-dock-pop {
+    display: flex;
+    flex-direction: column;
+    gap: var(--etz-gap);
+    width: 236px;
+}
+
+.etz-dock-pop-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+input.etz-input.etz-number.etz-dock-pop-input {
+    width: 100%;
+}
+
+button.etz-btn.etz-dock-delete {
+    align-self: flex-start;
+    color: var(--text-error);
+}

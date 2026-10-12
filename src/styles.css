@@ -1,4 +1,7 @@
-/* TikZ Graph Helper: dashboard styles */
+/* Easy TikZ: base styles. Inline note charts, renderer support and the
+   design tokens shared by the editor UI. Component styles live in
+   src/ui/*.css; scripts/build-css.mjs concatenates everything into the
+   styles.css Obsidian loads. */
 
 /* Inline-rendered easy-tikz code blocks (markdown post-processor). */
 .tikz-rendered-chart {
@@ -19,45 +22,16 @@
     box-shadow: 0 1px 4px color-mix(in srgb, var(--interactive-accent) 30%, transparent);
 }
 
-.tikz-rendered-chart svg,
-.tikz-rendered-chart .tikz-3d-root {
-    max-width: 100%;
-    height: auto;
-}
-
-/* Block-level alignment of the rendered chart inside its markdown
-   container. The chart itself is display: block with an explicit
-   width, so margin: auto handles centering / right-align. */
-.tikz-rendered-chart.align-left {
-    margin-left: 0;
-    margin-right: auto;
-}
-
-.tikz-rendered-chart.align-center {
-    margin-left: auto;
-    margin-right: auto;
-}
-
-.tikz-rendered-chart.align-right {
-    margin-left: auto;
-    margin-right: 0;
-}
-
 /* Hover overlays: align buttons (left) + size slider (bottom). Hidden
    until the user hovers (or focuses) the chart so the static reading
-   experience stays clean. */
+   experience stays clean; the show-on-hover rule and the alignment of the
+   whole chart live in src/ui/inline.css (.etz-inline-stage, .etz-inline). */
 .tikz-rendered-controls {
     position: absolute;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.12s ease;
     z-index: 5;
-}
-
-.tikz-rendered-chart:hover .tikz-rendered-controls,
-.tikz-rendered-chart:focus-within .tikz-rendered-controls {
-    opacity: 1;
-    pointer-events: auto;
 }
 
 .tikz-rendered-align {
@@ -126,272 +100,34 @@
     line-height: 1.4;
 }
 
-
-/* Chained class for higher specificity (0,2,0) so width / max-width
-   override Obsidian's default `.modal` (0,1,0) rules without `!important`.
-   The selector still only matches our modal - chaining a class with
-   itself doesn't change what it targets, only its specificity. */
-.tikz-modal.tikz-modal {
-    display: flex;
-    flex-direction: column;
-    height: 80vh;
-    max-height: 80vh;
-    width: 92vw;
-    max-width: 1400px;
-}
-
-.tikz-modal.tikz-modal .modal-content {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-    padding: 0;
-}
-
-/* Split pane layout */
-.tikz-layout {
-    display: flex;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-}
-
-.tikz-panel-left {
-    width: 42%;
-    min-width: 380px;
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid color-mix(in srgb, var(--background-modifier-border) 70%, transparent);
-    overflow: hidden;
-}
-
-.tikz-panel-right {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-}
-
-/* Tab bar */
-.tikz-tab-bar {
-    display: flex;
-    gap: 4px;
-    padding: 12px 20px 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 70%, transparent);
-    background: var(--background-primary);
-    flex-shrink: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    /* Standard CSS scrollbar styling; fully supported by the Chromium in
-       Obsidian 1.13+ (this plugin's minAppVersion). Browsers without it
-       fall back to the platform default scrollbar. */
-    scrollbar-width: thin;
-}
-
-.tikz-tab-btn {
-    padding: 10px 14px;
-    border: none;
-    background: transparent;
-    box-shadow: none;
-    color: var(--text-muted);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    border-radius: 6px 6px 0 0;
-    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-    white-space: nowrap;
-    margin: 0;
-    line-height: 1.2;
-    flex-shrink: 0;
-}
-
-/* Narrower screens (MacBook Air-ish): tighten tab padding so all tabs fit. */
-@media (max-width: 1280px) {
-    .tikz-tab-btn {
-        padding: 10px 10px;
-        font-size: 12.5px;
-    }
-    .tikz-tab-bar {
-        padding-left: 12px;
-        padding-right: 12px;
-    }
-}
-
-.tikz-tab-btn:hover {
-    color: var(--text-normal);
-    background: var(--background-modifier-hover);
-    box-shadow: none;
-}
-
-.tikz-tab-btn.active {
-    color: var(--interactive-accent);
-    border-bottom-color: var(--interactive-accent);
-    background: transparent;
-    box-shadow: none;
-}
-
-.tikz-tab-btn:focus-visible {
-    outline: none;
-    box-shadow: inset 0 0 0 2px var(--interactive-accent);
-}
-
-/* Tab content (for Code and Reference) */
-.tikz-tab-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px 24px;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Settings column: continuous scroll across Graph, Axis, Functions, Grid */
-.tikz-settings-column {
-    flex: 1;
-    overflow-y: auto;
-    scroll-behavior: smooth;
-}
-
-.tikz-section {
-    padding: 24px 24px 32px;
-    border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 50%, transparent);
-}
-
-.tikz-section:last-child {
-    border-bottom: none;
-}
-
-.tikz-section-heading {
-    margin: 0 0 18px;
-    padding: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-normal);
-    letter-spacing: -0.01em;
-    line-height: 1.2;
-}
-
-.tikz-section-blurb {
-    margin: 0 0 16px;
-    color: var(--text-muted);
-    font-size: 13px;
-    line-height: 1.5;
-}
-
-/* Preview area */
-.tikz-preview-area {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: auto;
-    padding: 20px;
-    background: var(--background-primary);
-    outline: none;
-    position: relative;
-}
-
-/* 3D zoom controls overlay (only shown in 3D mode). */
-.tikz-3d-zoom-overlay {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    z-index: 5;
-    pointer-events: auto;
-}
-
-.tikz-3d-zoom-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    border: 1px solid color-mix(in srgb, var(--background-modifier-border) 80%, transparent);
-    background: color-mix(in srgb, var(--background-primary) 90%, transparent);
-    color: var(--text-normal);
-    font-size: 18px;
-    line-height: 1;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 1px 3px color-mix(in srgb, var(--background-modifier-border) 50%, transparent);
-    padding: 0;
-}
-
-.tikz-3d-zoom-btn:hover {
-    background: var(--background-modifier-hover);
-}
-
-.tikz-3d-zoom-btn:active {
-    transform: translateY(1px);
-}
-
-.tikz-3d-zoom-reset {
-    font-size: 14px;
-}
-
-/* Floating action icons (right edge of preview, vertically centered). */
-.tikz-floating-actions {
-    position: absolute;
-    top: 50%;
-    right: 16px;
-    transform: translateY(-50%);
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 5;
-    pointer-events: auto;
-}
-
-.tikz-floating-btn {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    border: 1px solid color-mix(in srgb, var(--background-modifier-border) 80%, transparent);
-    background: color-mix(in srgb, var(--background-primary) 90%, transparent);
-    color: var(--text-normal);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    box-shadow: 0 1px 3px color-mix(in srgb, var(--background-modifier-border) 50%, transparent);
-    transition: background 0.12s ease, color 0.12s ease, transform 0.05s ease;
-}
-
-.tikz-floating-btn:hover {
-    background: var(--background-modifier-hover);
-    color: var(--interactive-accent);
-}
-
-.tikz-floating-btn:active {
-    transform: translateY(1px);
-}
-
-.tikz-floating-btn.is-active {
-    background: var(--interactive-accent);
-    color: var(--text-on-accent);
-    border-color: var(--interactive-accent);
-}
-
-.tikz-floating-btn svg {
-    width: 18px;
-    height: 18px;
-}
-
-.tikz-preview-area:focus-visible {
-    box-shadow: inset 0 0 0 2px var(--interactive-accent);
-}
-
-.tikz-preview-area svg {
-    border-radius: 6px;
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--background-modifier-border) 60%, transparent);
-    max-width: 100%;
-    max-height: 100%;
+/* Design tokens for the editor UI (src/ui/*.css). Kit popovers and
+   dialogs mount outside the editor modal, so they carry .etz-tokens. */
+.tikz-modal,
+.etz-tokens {
+    --etz-space-1: 4px;
+    --etz-space-2: 8px;
+    --etz-space-3: 12px;
+    --etz-space-4: 16px;
+    --etz-gap: 8px;
+    --etz-panel-pad: 16px;
+    --etz-card-pad-y: 10px;
+    --etz-card-pad-x: 12px;
+    --etz-radius-s: 4px;
+    --etz-radius-m: 6px;
+    --etz-radius-l: 8px;
+    --etz-control-h: 28px;
+    --etz-control-h-sm: 22px;
+    --etz-control-h-chip: 26px;
+    --etz-font: 13px;
+    --etz-font-small: 12px;
+    --etz-font-meta: 11px;
+    --etz-font-mono: 12.5px;
+    --etz-focus-ring: 0 0 0 2px var(--background-modifier-border-focus);
+    --etz-accent-tint: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+    --etz-accent-border: color-mix(in srgb, var(--interactive-accent) 50%, transparent);
+    --etz-error-bg: color-mix(in srgb, var(--text-error) 12%, transparent);
+    --etz-transition: 120ms ease;
+    font-size: var(--etz-font);
 }
 
 /* 3D renderer root: holds the visible canvas plus an off-screen SVG that
@@ -442,346 +178,10 @@
     display: none;
 }
 
-.tikz-preview-area {
-    cursor: grab;
-}
+/* --- Utility + support classes (replacing inline-style writes) --- */
 
-.tikz-preview-area.tikz-preview-dragging {
-    cursor: grabbing;
-}
-
-.tikz-error {
-    color: var(--text-error);
-    font-size: 13px;
-    padding: 12px 16px;
-    background: var(--background-modifier-error);
-    border-radius: 6px;
-    max-width: 80%;
-    text-align: center;
-}
-
-/* Action bar */
-.tikz-action-bar {
-    display: flex;
-    gap: 8px;
-    padding: 14px 24px;
-    border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 70%, transparent);
-    background: var(--background-primary);
-    flex-shrink: 0;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-}
-
-.tikz-action-bar .setting-item {
-    border: none;
-    padding: 0;
-}
-
-.tikz-action-bar button {
-    padding: 6px 16px;
-    font-size: 13px;
-}
-
-/* Function cards */
-
-.tikz-func-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.tikz-func-card {
-    border: 1px solid var(--background-modifier-border);
-    border-left: 4px solid var(--text-muted);
-    border-radius: 0 8px 8px 0;
-    padding: 16px;
-    background: var(--background-secondary);
-    transition: border-left-color 0.2s ease;
-}
-
-.tikz-func-row {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 12px;
-    align-items: flex-end;
-}
-
-.tikz-func-row:last-child {
-    margin-bottom: 0;
-}
-
-.tikz-func-field {
-    flex: 1;
-    min-width: 0;
-}
-
-.tikz-func-field.wide {
-    flex: 2;
-}
-
-.tikz-func-card .setting-item {
-    padding: 2px 0;
-    border: none;
-}
-
-.tikz-func-card .setting-item-info {
-    flex: 0 0 auto;
-    margin-right: 8px;
-}
-
-.tikz-func-card .setting-item-name {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-weight: 500;
-}
-
-.tikz-func-card .setting-item-description {
-    display: none;
-}
-
-.tikz-func-card .setting-item-control input[type="text"] {
-    width: 100%;
-}
-
-.tikz-func-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--background-modifier-border);
-}
-
-.tikz-func-header .tikz-func-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-normal);
-}
-
-.tikz-func-header .setting-item {
-    padding: 0;
-    border: none;
-    flex: 0;
-}
-
-/* Toggle chips row */
-.tikz-toggle-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 16px;
-    align-items: center;
-    padding: 4px 0;
-}
-
-.tikz-toggle-chip {
-    display: flex;
-    align-items: center;
-}
-
-.tikz-toggle-chip .setting-item {
-    padding: 0;
-    min-height: auto;
-    gap: 6px;
-}
-
-.tikz-toggle-chip .setting-item-name {
-    font-size: 12px;
-    color: var(--text-normal);
-}
-
-.tikz-toggle-chip .setting-item-control {
-    margin-left: 0;
-}
-
-/* Tangent input transition */
-.tikz-tangent-input {
-    overflow: hidden;
-    max-height: 0;
-    opacity: 0;
-    transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
-    margin-top: 0;
-}
-
-.tikz-tangent-input.visible {
-    max-height: 60px;
-    opacity: 1;
-    margin-top: 10px;
-}
-
-/* Add function button */
-.tikz-add-func {
-    margin-top: 12px;
-}
-
-.tikz-add-func .setting-item {
-    justify-content: center;
-    border: none;
-    padding: 0;
-}
-
-/* Code tab: textarea fills the whole panel, no padding around it */
-
-.tikz-tab-content.tikz-code-panel {
-    padding: 0;
-}
-
-.tikz-code-textarea {
-    flex: 1;
-    width: 100%;
-    min-height: 0;
-    font-family: var(--font-monospace);
-    font-size: 12.5px;
-    padding: 18px 22px;
-    border: none;
-    border-radius: 0;
-    background: var(--background-primary);
-    color: var(--text-normal);
-    resize: none;
-    line-height: 1.55;
-    box-shadow: none;
-}
-
-.tikz-code-textarea:focus {
-    outline: none;
-    box-shadow: inset 2px 0 0 var(--interactive-accent);
-}
-
-/* Axis tab */
-
-.tikz-range-group {
-    display: flex;
-    gap: 20px;
-    align-items: center;
-    margin-bottom: 12px;
-}
-
-.tikz-range-group > div {
-    flex: 1;
-    min-width: 0;
-}
-
-.tikz-range-group .setting-item {
-    border: none;
-    padding: 6px 0;
-}
-
-.tikz-range-group .setting-item-name {
-    white-space: nowrap;
-}
-
-.tikz-range-group .setting-item-control input[type="text"] {
-    width: 100%;
-    min-width: 80px;
-}
-
-.tikz-range-separator {
-    color: var(--text-muted);
-    font-size: 13px;
-    flex-shrink: 0;
-    padding-top: 4px;
-}
-
-/* 3D controls */
-
-.tikz-3d-controls {
-    border-top: 1px solid var(--background-modifier-border);
-    margin-top: 8px;
-    padding-top: 8px;
-}
-
-/* General settings sections */
-
-.tikz-settings-section .setting-item {
-    padding: 10px 0;
-}
-
-/* Reference tab */
-
-.tikz-tab-content.tikz-reference {
-    /* Normal block flow: children get their natural height and the panel
-       scrolls. Flex layout was shrinking the <pre> blocks to one line. */
-    display: block;
-}
-
-.tikz-reference {
-    color: var(--text-normal);
-    font-size: 13px;
-    line-height: 1.55;
-    user-select: text;
-    -webkit-user-select: text;
-    cursor: text;
-}
-
-.tikz-reference * {
-    user-select: text;
-    -webkit-user-select: text;
-}
-
-.tikz-ref-heading {
-    margin: 22px 0 8px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-normal);
-    letter-spacing: 0.01em;
-}
-
-.tikz-reference > .tikz-ref-heading:first-of-type {
-    margin-top: 0;
-}
-
-.tikz-ref-para {
-    margin: 0 0 12px;
-    color: var(--text-muted);
-}
-
-.tikz-ref-list {
-    margin: 0 0 14px;
-    padding: 0;
-}
-
-.tikz-ref-list dt {
-    font-family: var(--font-monospace);
-    font-size: 12px;
-    color: var(--text-normal);
-    background: var(--background-modifier-form-field);
-    border-radius: 4px;
-    padding: 2px 6px;
-    display: inline-block;
-    margin-top: 8px;
-}
-
-.tikz-ref-list dt:first-child {
-    margin-top: 0;
-}
-
-.tikz-ref-list dd {
-    margin: 4px 0 0 4px;
-    color: var(--text-muted);
-}
-
-.tikz-ref-code {
-    display: block;
-    margin: 0 0 14px;
-    padding: 14px 16px;
-    background: var(--background-primary-alt);
-    border: 1px solid color-mix(in srgb, var(--background-modifier-border) 60%, transparent);
-    border-radius: 6px;
-    font-family: var(--font-monospace);
-    font-size: 12.5px;
-    color: var(--text-normal);
-    white-space: pre;
-    overflow-x: auto;
-    line-height: 1.6;
-    flex-shrink: 0;
-    user-select: text;
-    -webkit-user-select: text;
-    cursor: text;
-}
-
-/* --- Utility + support classes (replacing former inline-style writes) --- */
-
-/* Generic hide toggle for tab panels and the settings column. `!important`
-   wins over the base `display: flex` on `.tikz-tab-content`. */
+/* Generic hide toggle (tab panels, collapsed card bodies, inline messages).
+   `!important` wins over component rules such as `display: flex`. */
 .tikz-hidden {
     display: none !important;
 }
@@ -794,10 +194,4 @@
     top: -99999px;
     visibility: hidden;
     pointer-events: none;
-}
-
-/* Text field inside the template-name prompt modal. */
-.tikz-prompt-input {
-    width: 100%;
-    margin-bottom: 12px;
 }

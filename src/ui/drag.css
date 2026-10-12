@@ -1,0 +1,199 @@
+/* ============================================================
+   Drag to edit (SPEC3 1.8, 4.6): the preview overlay, the hint
+   chip, cursor classes on the chart and the live marks on cards
+   and dock rows. Stroke widths, radii and dashes of the overlay
+   are SVG attributes in viewBox units (set by dragLayer.ts from
+   CSS px); colours and opacities live here.
+   ============================================================ */
+
+/* ------------------------------------------------------- overlay */
+
+/* Laid over the chart SVG by setCssStyles (left / top / width / height);
+   later in the stage than the chart and before the pill and the hint, so
+   it paints above the chart and below them. Never takes the pointer. */
+svg.etz-drag-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.etz-drag-layer path,
+.etz-drag-layer line,
+.etz-drag-layer circle {
+    fill: none;
+    stroke: var(--interactive-accent);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.etz-drag-halo path,
+.etz-drag-halo circle {
+    stroke-opacity: 0.35;
+}
+
+.etz-drag-select path,
+.etz-drag-select circle {
+    stroke-opacity: 0.25;
+}
+
+.etz-drag-ghost path,
+.etz-drag-ghost circle {
+    stroke-opacity: 0.4;
+    stroke-linecap: butt;
+}
+
+.etz-drag-layer .etz-drag-grab circle {
+    fill: var(--interactive-accent);
+    stroke: var(--background-primary);
+}
+
+.etz-drag-spoke line {
+    stroke-opacity: 0.8;
+    stroke-linecap: butt;
+}
+
+.etz-drag-layer .etz-drag-pivot .etz-drag-pivot-disc {
+    fill: var(--background-primary);
+}
+
+.etz-drag-snap circle {
+    stroke-linecap: butt;
+}
+
+/* ---------------------------------------------------------- hint */
+
+.etz-drag-hint {
+    position: absolute;
+    max-width: 320px;
+    box-sizing: border-box;
+    padding: 5px 9px 6px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-m);
+    background-color: color-mix(in srgb, var(--background-primary) 96%, transparent);
+    box-shadow: var(--shadow-s);
+    color: var(--text-normal);
+    line-height: 1.35;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Hover: the readout's corner (the modal hides the readout meanwhile). */
+.etz-drag-hint.is-docked {
+    left: 12px;
+    bottom: 12px;
+}
+
+.etz-drag-hint-title {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.etz-drag-hint-title .is-num {
+    color: var(--text-accent);
+    font-weight: 500;
+}
+
+.etz-drag-hint-title .is-ghost {
+    color: color-mix(in srgb, var(--text-accent) 60%, transparent);
+    font-style: italic;
+}
+
+.etz-drag-hint-title .is-changed {
+    color: var(--text-accent);
+    font-weight: 700;
+}
+
+.etz-drag-hint-detail,
+.etz-drag-hint-note {
+    margin-top: 1px;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.etz-drag-hint.is-locked .etz-drag-hint-title {
+    color: var(--text-muted);
+}
+
+.etz-drag-hint.is-tip {
+    border-color: color-mix(in srgb, var(--interactive-accent) 50%, var(--background-modifier-border));
+}
+
+.etz-drag-hint.is-tip .etz-drag-hint-title {
+    font-weight: 600;
+}
+
+/* --------------------------------------------------------- cursors */
+
+/* shell.css (later in styles.css) sets the chart's own cursors with up to
+   three classes; these need more weight to win. */
+.etz-stage .etz-chart.is-over-object:not(.is-3d) {
+    cursor: grab;
+}
+
+.etz-stage .etz-chart.is-dragging-object:not(.is-3d) {
+    cursor: grabbing;
+}
+
+/* A restricted move shows its axis, also while dragging. */
+.etz-stage .etz-chart.is-over-object-ns:not(.is-3d) {
+    cursor: ns-resize;
+}
+
+.etz-stage .etz-chart.is-over-object-ew:not(.is-3d) {
+    cursor: ew-resize;
+}
+
+/* Space held: the chart pans, even over objects. */
+.etz-stage .etz-chart.is-space-pan:not(.is-dragging):not(.is-3d) {
+    cursor: grab;
+}
+
+/* Any pan in progress (empty space, Space, middle button) shows the closed hand. */
+.etz-stage .etz-chart.is-dragging:not(.is-dragging-object):not(.is-3d) {
+    cursor: grabbing;
+}
+
+/* ---------------------------------------------------- cards, dock */
+
+.etz-card.is-drag-source {
+    border-color: color-mix(in srgb, var(--interactive-accent) 50%, transparent);
+}
+
+.is-live input.etz-input,
+input.etz-input.is-live {
+    background-color: color-mix(in srgb, var(--interactive-accent) 8%, var(--background-modifier-form-field));
+}
+
+.etz-dock-row.is-live {
+    border-radius: var(--etz-radius-m);
+    background-color: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
+}
+
+/* Clicking an object in the preview finds its card. */
+.etz-card.is-canvas-flash {
+    animation: etz-canvas-flash 600ms ease-out;
+}
+
+@keyframes etz-canvas-flash {
+    from {
+        outline: 2px solid var(--interactive-accent);
+        outline-offset: 1px;
+    }
+
+    to {
+        outline: 2px solid transparent;
+        outline-offset: 1px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .etz-card.is-canvas-flash {
+        animation: none;
+        outline: 2px solid var(--interactive-accent);
+        outline-offset: 1px;
+    }
+}

@@ -1,23 +1,77 @@
-import { Modal, Setting, SliderComponent, TextComponent, MarkdownView, Notice, App, TFile, setIcon, loadMathJax } from 'obsidian';
-import { stripLatex } from './util';
-import { FunctionParameters, Function3DParameters, Tool, ArrowStyle, FillPattern } from './types';
-import { SettingsManager } from './settings';
-import { SVGRenderer } from './renderer';
+import { App, MarkdownView, Menu, Modal, Notice, Platform, TFile, loadMathJax } from 'obsidian';
+import { cloneData, errorText, fitPixelScale, niceInterval, stripLatex } from './util';
+import { issueText, mergeViewErrors } from './issues';
+import { Annotation, Function3DParameters, FunctionParameters, Parameter, RendererConfig, Tool } from './types';
+import { RANGE_DEFAULTS, RangeKey, SettingsManager } from './settings';
+import { RenderLayout, SVGRenderer } from './renderer';
 import { SVG3DRenderer } from './renderer3d';
-import { COLOR_OPTIONS, THICKNESS_OPTIONS, COLOR_MAP } from './colors';
-import { BUILT_IN_2D, BUILT_IN_3D, UserTemplate } from './templates';
-import { MathHelper } from './math';
-
-// Loose type so we can keep importing the plugin without a circular dep.
-interface PluginHost {
-    data: {
-        userTemplates: UserTemplate[];
-        invertDrag3D?: boolean;
-        maxSamples3D?: number;
-        dragSensitivity2D?: number;
-    };
-    saveUserTemplates(templates: UserTemplate[]): Promise<void>;
-}
+import { MathContext, renameIdentifier, renameToolReferences } from './mathcontext';
+import { SceneCache, SceneIssue } from './scene';
+import { View } from './geometry';
+import { EXAMPLES, defaultParameter } from './migrate';
+import type { ChartDraft } from './templates';
+import { FieldHandle, PanelHost, PluginHost } from './ui/host';
+import type {
+    Chip,
+    DragCommit,
+    DragContext,
+    DragFrame,
+    DragTarget,
+    FieldEdit,
+    FieldRef,
+    Gesture,
+    Hit,
+    HitIndex,
+    HitShape,
+    HitTolerance,
+    Lock,
+    MakeSliderOffer,
+    Mods,
+    ParamEdit,
+    Pt,
+    ScreenMap,
+} from './drag/types';
+import { buildHitIndex } from './drag/hits';
+import { axisSliders, fieldText, refKey, resolveTarget, setFieldText } from './drag/targets';
+import { DragSession, PreparedDrag, nudge, prepareDrag, preparedServes } from './drag/session';
+import {
+    CHART_LABEL,
+    MAKE_SLIDER_BUTTON,
+    TOGGLE_LABEL,
+    UNDO_BUTTON,
+    joinNames,
+    lockChip,
+    lockFor,
+    madeSliderText,
+    selectAnnouncement,
+    staleText,
+    tipChip,
+} from './drag/describe';
+import { EditHistory, HistoryEntry, PatchIO, patchEntry } from './drag/history';
+import { makeSliderEdit } from './drag/numbers';
+import { DragHintHandle, DragLayerHandle, createDragHint, createDragLayer } from './ui/dragLayer';
+import { BuildPanelHandle, createBuildPanel } from './ui/buildPanel';
+import { createHelpPanel } from './ui/helpPanel';
+import { SlidersDockHandle, createSlidersDock } from './ui/slidersDock';
+import { ChartPanelHandle, createChartPanel } from './ui/chartPanel';
+import { CodePanelHandle, createCodePanel } from './ui/codePanel';
+import {
+    BannerHandle,
+    IconButtonHandle,
+    SegmentedHandle,
+    TextButtonHandle,
+    banner,
+    closeAllPopovers,
+    confirmDialog,
+    formatDecimals,
+    iconButton,
+    menuFromButton,
+    segmented,
+    textButton,
+    trapEscape,
+    uniqueId,
+    visuallyHidden,
+} from './ui/kit';
 
 /**
  * Optional state passed when the modal is opened by clicking an
@@ -33,65 +87,221 @@ export interface TikzModalInitialState {
     fenceTag?: 'easy-tikz' | 'tikz';
 }
 
+type TabId = 'build' | 'chart' | 'code' | 'help';
+
+const TABS: Array<{ id: TabId; label: string }> = [
+    { id: 'build', label: 'Build' },
+    { id: 'chart', label: 'Chart' },
+    { id: 'code', label: 'Code' },
+    { id: 'help', label: 'Help' },
+];
+
+/** Typing: full render this long after the last keystroke. */
+const UPDATE_DEBOUNCE_MS = 50;
+/** Sliders and drags: full-quality render this long after the last draft frame request. */
+const FULL_RENDER_DELAY_MS = 150;
+/** The Code tab regenerates this long after the last full render (the exporter is heavier than the preview). */
+const CODE_REFRESH_DELAY_MS = 300;
+/** The status chip shows new problems only after this much quiet (half-typed input never flashes). */
+const STATUS_IDLE_MS = 600;
+/** Transient status messages ("Nothing to fit yet") stay this long. */
+const FLASH_MS = 4000;
+const AUTOSAVE_DELAY_MS = 1000;
+const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const UNDO_VISIBLE_MS = 6000;
+const COPIED_LABEL_MS = 2000;
 /**
- * Minimal single-field text prompt. Electron does not implement
- * `window.prompt`, so naming a template needs its own tiny modal.
- * Resolves with the entered string on submit, or null on cancel/dismiss.
+ * Stacked layout (preview above the editor): always below STACK_WIDTH of
+ * modal width, where the preview column beside the 400 px editor (and the
+ * sliders dock under it) would be under 300 px wide and the dock's rows no
+ * longer fit; below NARROW_WIDTH only when the modal is portrait-like
+ * (taller than STACK_ASPECT x its width). Landscape windows keep the editor
+ * at full height, as 3.x did: stacking them leaves only a few input rows.
  */
-class TextPromptModal extends Modal {
-    private value: string;
-    private submitted = false;
-    private onResolve: ((value: string | null) => void) | null = null;
-    private promptTitle: string;
+const STACK_WIDTH = 700;
+const NARROW_WIDTH = 900;
+const STACK_ASPECT = 0.8;
 
-    constructor(app: App, title: string, initial: string) {
-        super(app);
-        this.promptTitle = title;
-        this.value = initial;
-    }
+/**
+ * Mouse drag rate: 1 pixel of horizontal drag rotates azimuth by 0.5 degrees,
+ * 1 pixel of vertical drag tilts elevation by 0.3 degrees. Slightly lower
+ * vertical sensitivity keeps elevation changes feeling proportional to the
+ * shallower 0..90 range.
+ */
+const AZIMUTH_DRAG_RATE = 0.5;
+const ELEVATION_DRAG_RATE = 0.3;
+/** Step size for keyboard rotation when the preview has focus. */
+const KEYBOARD_ROTATION_STEP = 5;
+/** Arrow keys pan the 2D view by this fraction of the visible range. */
+const KEYBOARD_PAN_FRACTION = 0.05;
+/** Wheel zoom factor per WHEEL_PIXELS_PER_STEP of wheel delta. > 1 zooms out, < 1 zooms in. */
+const WHEEL_ZOOM_FACTOR = 1.15;
+/** Wheel pixels that make one WHEEL_ZOOM_FACTOR step: one classic mouse notch. */
+const WHEEL_PIXELS_PER_STEP = 100;
+/** Pixels per wheel delta unit in line mode (Firefox, some mice) and page mode. */
+const WHEEL_LINE_PIXELS = 16;
+const WHEEL_PAGE_PIXELS = 400;
+/** Trackpad pinch arrives as ctrlKey wheel events with deltas of a few pixels; this makes it feel like a pinch. */
+const PINCH_WHEEL_BOOST = 10;
+/** One wheel event zooms by at most WHEEL_ZOOM_FACTOR ^ WHEEL_MAX_STEPS (about 1.5x). */
+const WHEEL_MAX_STEPS = 3;
+const ZOOM_3D_STEP = 1.25;
+const ZOOM_3D_MIN = 0.3;
+const ZOOM_3D_MAX = 4;
+/** Fit samples per function / per surface axis. */
+const FIT_SAMPLES = 400;
+const FIT_SAMPLES_3D = 30;
 
-    static prompt(app: App, title: string, initial: string): Promise<string | null> {
-        return new Promise((resolve) => {
-            const modal = new TextPromptModal(app, title, initial);
-            modal.onResolve = resolve;
-            modal.open();
-        });
-    }
+// ---- drag to edit (SPEC3 1.2 to 1.12)
+/** A press becomes an object drag after this much movement (CSS px): mouse and pen, touch. */
+const PRESS_THRESHOLD_PX = 3;
+const PRESS_THRESHOLD_TOUCH_PX = 8;
+/** Hit tolerances in CSS px (SPEC3 1.12). */
+const TOLERANCE_MOUSE: HitTolerance = { line: 6, point: 9 };
+const TOLERANCE_TOUCH: HitTolerance = { line: 14, point: 16 };
+/** The hover chip appears after this much dwell on the same target (no flicker while passing over lines). */
+const HOVER_DWELL_MS = 120;
+/** A hover plan is reused while the pointer stays this close (CSS px) to the point it was planned at. */
+const HOVER_REPLAN_PX = 24;
+/** A press reuses the hover plan only when it grabs (almost) the same point. */
+const PRESS_REUSE_PX = 1;
+/** Lock chip after a click on a computed point. */
+const LOCK_CHIP_MS = 2000;
+/** First-hover tip (SPEC3 1.12). */
+const TIP_MS = 5000;
+/** Arrow-key presses this close together form one undo step; the step commits this long after the last press. */
+const KEY_SESSION_MS = 1000;
+/** Screen-reader announcements are debounced by this much. */
+const ANNOUNCE_DELAY_MS = 500;
+const HISTORY_SIZE = 50;
+/** Cursor classes on .etz-chart owned by the drag code (exactly one at a time). */
+const CURSOR_CLASSES = ['is-over-object', 'is-over-object-ns', 'is-over-object-ew', 'is-dragging-object', 'is-space-pan'] as const;
+type CursorClass = (typeof CURSOR_CLASSES)[number];
 
-    onOpen() {
-        this.titleEl.setText(this.promptTitle);
-        const input = new TextComponent(this.contentEl);
-        input.setValue(this.value).onChange((v) => {
-            this.value = v;
-        });
-        input.inputEl.addClass('tikz-prompt-input');
-        input.inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                this.submit();
-            }
-        });
-        input.inputEl.focus();
-        input.inputEl.select();
-        new Setting(this.contentEl)
-            .addButton((b) => b.setButtonText('Cancel').onClick(() => this.close()))
-            .addButton((b) => b.setCta().setButtonText('Save').onClick(() => this.submit()));
-    }
+type DragState =
+    | { kind: 'pan'; pointerId: number; startX: number; startY: number; view: View; plot: RenderLayout['plot']; scale: number; panX: boolean; panY: boolean }
+    | { kind: 'rotate'; pointerId: number; startX: number; startY: number; azimuth: number; elevation: number }
+    /** Pointer down on a draggable target: nothing changes until the pointer moves past the threshold. */
+    | { kind: 'press'; pointerId: number; startX: number; startY: number; touch: boolean; target: DragTarget; grab: Pt; prepared: PreparedDrag | null }
+    /**
+     * A DragSession is running (SPEC3 1.2). `mods` are the ones of the last update (Shift / Alt key changes
+     * re-run it); `offset` (math) is the grab point minus the press point, added to every pointer position
+     * so the grabbed point moves by the pointer's motion (a press 5 px off a line never jumps onto it).
+     */
+    | { kind: 'object'; pointerId: number; touch: boolean; session: DragSession; lastX: number; lastY: number; releaseEscape: () => void; mods: Mods; cursor: Pt; offset: Pt };
 
-    private submit() {
-        this.submitted = true;
-        const resolve = this.onResolve;
-        this.onResolve = null;
-        if (resolve) resolve(this.value);
-        this.close();
-    }
+/**
+ * A press that did not start an object drag (pan path): released without
+ * moving it is a click. On a locked target the click shows the lock chip;
+ * a touch tap on a draggable target selects it; on empty space it clears
+ * the selection.
+ */
+interface PendingClick {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    touch: boolean;
+    moved: boolean;
+    lock: Lock | null;
+    tap: { target: DragTarget; grab: Pt } | null;
+}
 
-    onClose() {
-        this.contentEl.empty();
-        const resolve = this.onResolve;
-        this.onResolve = null;
-        if (!this.submitted && resolve) resolve(null);
-    }
+/** What is under the pointer, resolved for dragging. */
+interface Found {
+    target: DragTarget;
+    grab: Pt;
+    /** Hit shape key (plus the passed marker), or 'label:<i>': re-resolve only when it changes. */
+    hitKey: string;
+}
+
+/** Number of CSS px between two math points under `map`. */
+function distPx(a: Pt, b: Pt, map: ScreenMap): number {
+    return Math.hypot((a.x - b.x) * map.kx, (a.y - b.y) * map.ky);
+}
+
+/** Nearest point (CSS px metric) of a hit shape to `p`, and the index of its run (-1 for a point). */
+function nearestOnShape(shape: HitShape, p: Pt, map: ScreenMap): { at: Pt; run: number } {
+    let best = { at: shape.point ?? p, run: -1, d: Infinity };
+    const px = p.x * map.kx;
+    const py = p.y * map.ky;
+    shape.lines.forEach((line, run) => {
+        for (let i = 0; i < line.length; i++) {
+            const a = line[i];
+            const b = line[i + 1] ?? a;
+            const ax = a.x * map.kx;
+            const ay = a.y * map.ky;
+            const dx = b.x * map.kx - ax;
+            const dy = b.y * map.ky - ay;
+            const len2 = dx * dx + dy * dy;
+            const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+            const qx = ax + t * dx;
+            const qy = ay + t * dy;
+            const d = Math.hypot(px - qx, py - qy);
+            if (Number.isFinite(d) && d < best.d) best = { at: { x: qx / map.kx, y: qy / map.ky }, run, d };
+        }
+    });
+    return { at: best.at, run: best.run };
+}
+
+/** Smallest 1, 2 or 5 times a power of ten that is at least `x` (> 0). */
+function niceCeil(x: number): number {
+    const mag = Math.pow(10, Math.floor(Math.log10(x)));
+    for (const m of [1, 2, 5, 10]) if (m * mag >= x * (1 - 1e-12)) return m * mag;
+    return 10 * mag;
+}
+
+/** The 1, 2 or 5 times a power of ten nearest to `x` (> 0). */
+function nearest125(x: number): number {
+    const mag = Math.pow(10, Math.floor(Math.log10(x)));
+    let best = mag;
+    for (const m of [1, 2, 5, 10]) if (Math.abs(m * mag - x) < Math.abs(best - x)) best = m * mag;
+    return best;
+}
+
+/** One step smaller on the 1-2-5 ladder (0.2 -> 0.1 -> 0.05). */
+function smaller125(step: number): number {
+    const mag = Math.pow(10, Math.floor(Math.log10(step) + 1e-9));
+    const m = Math.round(step / mag);
+    return m >= 5 ? 2 * mag : m >= 2 ? mag : 0.5 * mag;
+}
+
+/**
+ * Range and step of a slider made from the dragged number `v` (SPEC3 1.11):
+ * [0, nice(2v)] for v > 0, [nice(2v), 0] for v < 0, [-1, 1] for 0, the step
+ * the 1-2-5 value nearest span / 100, made finer until `v` lies on the grid
+ * (the slider must start exactly at the written number).
+ */
+function sliderRangeFor(v: number): { min: number; max: number; step: number } {
+    const min = v > 0 ? 0 : v < 0 ? -niceCeil(-2 * v) : -1;
+    const max = v > 0 ? niceCeil(2 * v) : v < 0 ? 0 : 1;
+    let step = nearest125((max - min) / 100);
+    const onGrid = (s: number) => Math.abs((v - min) / s - Math.round((v - min) / s)) < 1e-6;
+    for (let i = 0; i < 12 && !onGrid(step); i++) step = smaller125(step);
+    return { min, max, step };
+}
+
+/** The number written in a token span: '6.6', '-2', '(-2)', a unicode minus. Null when it is not a plain number. */
+function tokenValue(text: string): number | null {
+    let t = text.trim().replace(/\u2212/g, '-');
+    while (t.startsWith('(') && t.endsWith(')')) t = t.slice(1, -1).trim();
+    if (!/^[-+]?\s*(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?$/.test(t)) return null;
+    const v = Number(t.replace(/\s+/g, ''));
+    return Number.isFinite(v) ? v : null;
+}
+
+/** 'Moved R1 (2)' -> 'R1 (2)', 'Deleted R1' -> 'R1': the subject of an undo label, for the stale messages. */
+function labelSubject(label: string): string {
+    const at = label.indexOf(' ');
+    return at > 0 ? label.slice(at + 1) : label;
+}
+
+/** Focus is in a text field, where Mod+Z belongs to the browser's own text undo. */
+function isTextEditing(el: Element | null): boolean {
+    if (!el) return false;
+    if (el.tagName === 'TEXTAREA') return true;
+    // A focused range slider (the dock) or button leaves Mod+Z to the chart history.
+    if (el.tagName === 'INPUT') return ['text', 'search', 'number', 'email', 'url', 'tel', 'password', ''].includes((el as HTMLInputElement).type);
+    return (el as HTMLElement).isContentEditable === true;
 }
 
 /**
@@ -102,2668 +312,3049 @@ function trimmedRange(values: number[], percentile = 0.01): [number, number] {
     if (!values.length) return [0, 1];
     const sorted = values.slice().sort((a, b) => a - b);
     const drop = Math.floor(sorted.length * percentile);
-    const lo = sorted[drop];
-    const hi = sorted[sorted.length - 1 - drop];
-    return [lo, hi];
-}
-const PREVIEW_DEBOUNCE_MS = 150;
-
-/**
- * Mouse drag rate: 1 pixel of horizontal drag rotates azimuth by 0.5 degrees,
- * 1 pixel of vertical drag tilts elevation by 0.3 degrees. Slightly lower
- * vertical sensitivity keeps elevation changes feeling proportional to the
- * shallower 0..90 range.
- */
-const AZIMUTH_DRAG_RATE = 0.5;
-const ELEVATION_DRAG_RATE = 0.3;
-
-/** Step size for keyboard rotation when the preview has focus. */
-const KEYBOARD_ROTATION_STEP = 5;
-
-/**
- * Padding the SVG renderers reserve around the plot area. Mirrored here so
- * the modal can map cursor positions back to math coordinates for zoom/pan.
- */
-const RENDERER_PADDING = { top: 45, right: 30, bottom: 45, left: 55 };
-
-/** Scroll-wheel zoom factor per notch. > 1 zooms out, < 1 zooms in. */
-const WHEEL_ZOOM_FACTOR = 1.15;
-
-const TABS = ['Graph', 'Axis', 'Functions', 'Tools', 'Annotations', 'Grid', 'Code', 'Reference'] as const;
-type TabName = (typeof TABS)[number];
-
-/** Tabs that share the same scrollable settings column. Clicking jumps the scroll. */
-const SETTINGS_TABS = new Set<TabName>(['Graph', 'Axis', 'Functions', 'Tools', 'Annotations', 'Grid']);
-
-interface AxisRange {
-    key: string;
-    label: string;
-    placeholder: string;
+    return [sorted[drop], sorted[sorted.length - 1 - drop]];
 }
 
-export class TikzModal extends Modal {
-    private settings: SettingsManager;
-    private previewContainer: HTMLElement;
-    private codeTextArea: HTMLTextAreaElement;
-    private previewTimer: number | null = null;
-    private previewRafId: number | null = null;
-    private trailingSvgTimer: number | null = null;
-    private svg3dRenderer: SVG3DRenderer | null = null;
-    private currentRenderMode: '2d' | '3d' | null = null;
-    private tabContents: Map<TabName, HTMLElement> = new Map();
-    private tabButtons: Map<TabName, HTMLButtonElement> = new Map();
+/** Decimals that resolve `step` (0.02 -> 2, 5 -> 0), clamped to 0..10. */
+function decimalsFor(step: number): number {
+    if (!Number.isFinite(step) || step <= 0) return 3;
+    return Math.max(0, Math.min(10, Math.ceil(-Math.log10(step))));
+}
 
-    private rotationContainer: HTMLElement;
-    private zAxisContainer: HTMLElement;
-    private axisStyleContainer: HTMLElement;
-    private functionsTabContent: HTMLElement;
-    private toolsTabContent: HTMLElement;
-    private leftPanel: HTMLElement;
-    private zoom3DOverlay: HTMLElement | null = null;
-    private floatingActionsOverlay: HTMLElement | null = null;
-    private xLabelInput: TextComponent | null = null;
-    private yLabelInput: TextComponent | null = null;
-    private previewResizeObserver: ResizeObserver | null = null;
-    private lastObservedPreviewSize: { w: number; h: number } | null = null;
+/** Range text written by pan / zoom / fit: precise enough for the span, trailing zeros trimmed. */
+function formatBound(value: number, span: number): string {
+    return formatDecimals(value, decimalsFor(span) + 3);
+}
 
-    private elevationSlider: SliderComponent | null = null;
-    private azimuthSlider: SliderComponent | null = null;
+/**
+ * Zoom steps for one wheel event, proportional to its delta: a 100 px mouse
+ * notch is one step, a trackpad's stream of 1 to 10 px events adds up to the
+ * same amount of scrolling. Negative zooms in.
+ */
+function wheelZoomSteps(e: WheelEvent): number {
+    const unit = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? WHEEL_LINE_PIXELS : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? WHEEL_PAGE_PIXELS : 1;
+    const px = e.deltaY * unit * (e.ctrlKey ? PINCH_WHEEL_BOOST : 1);
+    return Math.max(-WHEEL_MAX_STEPS, Math.min(WHEEL_MAX_STEPS, px / WHEEL_PIXELS_PER_STEP));
+}
 
-    private isDragging = false;
-    private dragStartX = 0;
-    private dragStartY = 0;
-    /**
-     * When true, 2D canvas drag-to-pan and scroll-to-zoom are disabled so
-     * the axis range (xmin/xmax/ymin/ymax) can't be nudged by accident -
-     * e.g. while trying to click/drag an annotation, or just moving the
-     * mouse across the preview. Annotation dragging still works either
-     * way, since that's a deliberate content edit, not an accidental pan.
-     * Per-session only (not persisted): resets to unlocked on next open.
-     */
-    private panLocked = false;
-    private panLockBtn: HTMLElement | null = null;
-    private dragStartAzimuth = 0;
-    private dragStartElevation = 0;
-    private dragStartXmin = 0;
-    private dragStartXmax = 0;
-    private dragStartYmin = 0;
-    private dragStartYmax = 0;
+/** Real failures inside the editor that have no better place to go (a panel that failed to rebuild). */
+function logError(e: unknown): void {
+    console.error('Easy TikZ:', e);
+}
 
-    private rangeInputs: Map<string, TextComponent> = new Map();
+function num(v: unknown, fallback: number): number {
+    const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v) : NaN;
+    return Number.isFinite(n) ? n : fallback;
+}
 
-    private draggingAnnotationIdx: number | null = null;
-    private annotationCards: Array<{
-        rowId: string;
-        state: import('./types').Annotation;
-        xInput: TextComponent | null;
-        yInput: TextComponent | null;
-        zInput: TextComponent | null;
-    }> = [];
-    private annotationUpdateFn: (() => void) | null = null;
+function str(v: unknown): string {
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+    return '';
+}
 
-    private onMouseMove: ((e: MouseEvent) => void) | null = null;
-    private onMouseUp: (() => void) | null = null;
+/** 'Unsaved chart from 14:32' (today) or '... from Oct 3, 14:32'. */
+function draftTime(savedAt: number): string {
+    const date = new Date(savedAt);
+    const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    const today = new Date();
+    if (date.toDateString() === today.toDateString()) return time;
+    return `${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`;
+}
 
-    private settingsColumn: HTMLElement | null = null;
-    private onSettingsScroll: (() => void) | null = null;
-    private scrollRafId: number | null = null;
-    private suspendObserverUntil = 0;
+export class TikzModal extends Modal implements PanelHost {
+    settings: SettingsManager;
+    plugin: PluginHost | null;
 
-    private plugin: PluginHost | null = null;
     private sourceFile: TFile | null = null;
     private originalBlockText: string | null = null;
     private fenceTag: 'easy-tikz' | 'tikz' = 'easy-tikz';
+    private readonly openedFromBlock: boolean;
+
+    /** Shared by validation, renderers and export; null = rebuild on next use (memoized by structure). */
+    private mathCtx: MathContext | null = null;
+    private sceneCache = new SceneCache();
+    private renderer3d: SVG3DRenderer | null = null;
+    private chartMode: '2d' | '3d' | null = null;
+    private chartSvg: SVGElement | null = null;
+    private layout: RenderLayout | null = null;
+
+    // DOM
+    private shellEl: HTMLElement | null = null;
+    private bannerSlot: HTMLElement | null = null;
+    private dimSeg: SegmentedHandle<'2d' | '3d'> | null = null;
+    private coordSeg: SegmentedHandle<'cartesian' | 'polar'> | null = null;
+    private tabButtons = new Map<TabId, HTMLButtonElement>();
+    private tabPanels = new Map<TabId, HTMLElement>();
+    private tabErrorLabels = new Map<TabId, HTMLElement>();
+    private tabScroll = new Map<TabId, number>();
+    private activeTab: TabId = 'build';
+    private undoEl: HTMLElement | null = null;
+    private stageEl: HTMLElement | null = null;
+    private chartEl: HTMLElement | null = null;
+    /** Content box of `.etz-chart` in CSS px (the 100% x 100% SVG fills it), from the ResizeObserver. */
+    private chartBox = { w: 0, h: 0 };
+    /** pixelScale of the last 2D render (marching grid in on-screen px). */
+    private gridScale = 1;
+    private chartLabelEl: HTMLElement | null = null;
+    private emptyEl: HTMLElement | null = null;
+    private statusChip: HTMLButtonElement | null = null;
+    private statusText: HTMLElement | null = null;
+    private statusMore: HTMLElement | null = null;
+    private readoutEl: HTMLElement | null = null;
+    private pill2D: HTMLElement | null = null;
+    private pill3D: HTMLElement | null = null;
+    private gridBtn: IconButtonHandle | null = null;
+    private lockBtn: IconButtonHandle | null = null;
+    private ctaBtn: TextButtonHandle | null = null;
+
+    // Panels
+    private build: BuildPanelHandle | null = null;
+    private chartPanel: ChartPanelHandle | null = null;
+    private codePanel: CodePanelHandle | null = null;
+    private dock: SlidersDockHandle | null = null;
+
+    private fields = new Set<FieldHandle>();
+    /** Set while commit() refreshes the Build panel. */
+    private refreshingBuild = false;
+    /** Problems of the last full render, errors first. */
+    /** Issues the status chip, tab dots and first-issue focus use (hidden unread tools left out). */
+    private issues: SceneIssue[] = [];
+    /** Transient message in the status chip ("Nothing to fit yet"). */
+    private flash: string | null = null;
+
+    // Timers
+    private frameRaf: number | null = null;
+    private fullTimer: number | null = null;
+    private updateTimer: number | null = null;
+    private statusTimer: number | null = null;
+    private flashTimer: number | null = null;
+    /** Trailing Code tab regeneration, kept off the render path. */
+    private codeTimer: number | null = null;
+    private autosaveTimer: number | null = null;
+    private undoTimer: number | null = null;
+    private labelTimers = new Map<TextButtonHandle, { timer: number; original: string }>();
+
+    // Interaction and lifecycle
+    private drag: DragState | null = null;
+    /** Wheel zoom steps not yet applied, and the plot fractions of the latest pointer (zoom anchor). Applied once per frame. */
+    private wheelSteps = 0;
+    private wheelAnchor: { fx: number; fy: number } | null = null;
+    /** Unrounded view written by the last wheel frame, with the range text it was written as. */
+    private wheelView: { view: View; text: string } | null = null;
+    private panLocked = false;
+    private isOpen = false;
+    /** onOpen finished: from now on every change request counts as an edit. */
+    private ready = false;
+    /** The chart changed in this session (autosave, restore confirmation). */
+    private dirty = false;
+    /** Inserted / saved: no more autosaves. */
+    private finished = false;
+    /** savedAt of the last draft this session wrote. */
+    private ownDraftAt: number | null = null;
+    private draftBanner: BannerHandle | null = null;
+    private draftSaveFailed = false;
+    private resizeObserver: ResizeObserver | null = null;
+    private lastStageSize = { w: 0, h: 0 };
+
+    // Drag to edit (SPEC3 4.8)
+    /** Hit index of the last 2D render (null in 3D and before the first render). */
+    private hits: HitIndex | null = null;
+    /** Built lazily from the last render; null after every render and resize. */
+    private dragCtx: DragContext | null = null;
+    private dragLayer: DragLayerHandle | null = null;
+    private dragHint: DragHintHandle | null = null;
+    private dragToggle: IconButtonHandle | null = null;
+    /** The target under the (button-less) pointer; `timer` is the chip dwell. */
+    private hover: {
+        key: string;
+        hitKey: string;
+        target: DragTarget;
+        grab: Pt;
+        timer: number | null;
+        clientX: number;
+        clientY: number;
+        /** The dwell ran (the chip shows): later moves on the same target update it at once. */
+        chipShown: boolean;
+        /** Shift state the chip was planned with. */
+        chipShift: boolean;
+    } | null = null;
+    /** Last pointer position over the chart (hover is re-resolved there after renders). */
+    private lastPointer: { clientX: number; clientY: number; pointerType: string } | null = null;
+    private selected: { key: string; target: DragTarget; grab: Pt; releaseEscape: () => void; label: number | null; stale: boolean } | null = null;
+    /** Plans per target, gesture and render (`${key}|${gesture}|${renderVersion}`), shared by hover and press. */
+    private prepCache = new Map<string, PreparedDrag | { lock: Lock }>();
+    /**
+     * Texts (by field key) and slider values the running drag or keyboard session wrote last. A commit only
+     * writes and records a patch whose field still holds them: anything typed or set since wins (AC7).
+     */
+    private liveFrame: { texts: Map<string, string>; params: Map<string, number> } | null = null;
+    /** Lines whose plain drag is locked, per render (`${renderVersion}|${shape key}`), see preferUnlockedLine. */
+    private lineLocks = new Map<string, boolean>();
+    private renderVersion = 0;
+    /** math() builds unmemoized contexts while an object drag or keyboard session edits texts (no LRU churn). */
+    private objectDragActive = false;
+    private history = new EditHistory(HISTORY_SIZE);
+    private spaceHeld = false;
+    private stageHovered = false;
+    private keySession: { session: DragSession; prepared: PreparedDrag; timer: number } | null = null;
+    /** Visually hidden aria-live span in the stage. */
+    private announcer: HTMLElement | null = null;
+    private announceTimer: number | null = null;
+    /** Transient chip (lock after a click, the first-hover tip): hides or gives way to the hover chip. */
+    private chipTimer: number | null = null;
+    private tipUntil = 0;
+    /** The hover chip sits in the readout corner: the readout stays hidden meanwhile. */
+    private hintDocked = false;
+    private pendingClick: PendingClick | null = null;
+    /** An object drag just ended: re-run the hover after the next render. */
+    private rehoverPending = false;
+    /** Shift / Alt of the last pointer or key event (hover chip gesture, key-driven re-runs). */
+    private mods: Mods = { shift: false, alt: false };
+    /** Overlay state of the running drag, re-drawn after every render. */
+    private dragOverlay: { ghost: Pt[][]; points: Pt[] | null; pivot: Pt | null; snapped: Pt | null } | null = null;
+    private onModalKeyDown: ((e: KeyboardEvent) => void) | null = null;
+    private onModalKeyUp: ((e: KeyboardEvent) => void) | null = null;
+    private onWindowBlur: (() => void) | null = null;
+    /** Drag toggle state when no plugin stores it (harness, tests). */
+    private dragEditLocal = true;
 
     constructor(app: App, plugin?: PluginHost, initialState?: TikzModalInitialState) {
         super(app);
         this.plugin = plugin ?? null;
+        this.openedFromBlock = !!(initialState && initialState.data);
         if (initialState && initialState.data) {
             this.settings = SettingsManager.fromJSON(initialState.data);
             this.sourceFile = initialState.sourceFile ?? null;
             this.originalBlockText = initialState.originalBlockText ?? null;
             this.fenceTag = initialState.fenceTag ?? 'easy-tikz';
         } else {
-            this.settings = new SettingsManager();
+            // fromJSON runs the v4 migration, so new charts get the v4 defaults too.
+            this.settings = SettingsManager.fromJSON({});
         }
     }
 
-    private getUserTemplates(): UserTemplate[] {
-        return this.plugin?.data?.userTemplates ?? [];
+    // ================================================================ PanelHost
+
+    is3D(): boolean {
+        return this.settings.getValue('dimension') === true;
     }
 
-    private async setUserTemplates(templates: UserTemplate[]): Promise<void> {
-        if (this.plugin) await this.plugin.saveUserTemplates(templates);
+    isPolar(): boolean {
+        return !this.is3D() && this.settings.getValue('coordinateSystem') === 'polar';
     }
+
+    math(): MathContext {
+        // While a drag rewrites function texts every frame, each frame builds a fresh context
+        // outside the shared memo (SPEC3 D20): no LRU churn for the inline charts.
+        if (!this.mathCtx) this.mathCtx = this.settings.createMathContext({ memo: !this.objectDragActive });
+        return this.mathCtx;
+    }
+
+    requestFrame(): void {
+        this.markChanged();
+        this.scheduleFrame();
+    }
+
+    requestUpdate(): void {
+        // Any other edit ends a keyboard nudge session at once, so its commit never overwrites this edit.
+        this.flushKeySession();
+        this.forgetPlans();
+        this.markChanged();
+        // Typing may have changed a function body or a name: the next math() call rebuilds (memoized).
+        this.mathCtx = null;
+        this.scheduleUpdate();
+    }
+
+    commit(): void {
+        this.flushKeySession();
+        this.forgetPlans();
+        this.mathCtx = null;
+        // Cards for added / removed items, and dropdowns of function / region names. The
+        // panel keeps every card whose item is still listed, so this is cheap; the guard
+        // stops a card that commits while it is being built from re-entering the rebuild.
+        if (this.build && !this.refreshingBuild) {
+            this.refreshingBuild = true;
+            try {
+                this.build.refresh();
+            } catch (e) {
+                // A card failing to rebuild must not block validation and rendering.
+                logError(e);
+            } finally {
+                this.refreshingBuild = false;
+            }
+        }
+        for (const handle of Array.from(this.fields)) {
+            try {
+                handle.validate();
+            } catch (e) {
+                // One panel's validator failing must not keep the others stale.
+                logError(e);
+            }
+        }
+        this.dock?.refresh();
+        this.updateTabDots();
+        this.requestUpdate();
+    }
+
+    addParameter(name?: string, value?: number): Parameter {
+        const params = this.list<Parameter>('parameters');
+        const taken = [
+            ...params.map((p) => p.name),
+            ...this.list<FunctionParameters>('functions').map((f) => f.name || ''),
+            ...this.list<Function3DParameters>('functions3D').map((f) => f.name || ''),
+            ...this.list<Tool>('tools').map((t) => t.name),
+        ];
+        const param = defaultParameter(taken, name, value);
+        this.settings.setValue('parameters', params.concat([param]));
+        this.commit();
+        return param;
+    }
+
+    rename(kind: 'function' | 'parameter' | 'tool', from: string, to: string): void {
+        if (!from || !to || from === to) {
+            this.commit();
+            return;
+        }
+        // Tools are referenced by bare name (paths) and derived names (P1_x, P1_val, P1_x2, ...).
+        const expr = (src: string | undefined) =>
+            kind === 'tool' ? renameToolReferences(src ?? '', from, to) : renameIdentifier(src ?? '', from, to);
+        const tpl = (src: string | undefined) =>
+            kind === 'tool' ? renameToolReferences(src ?? '', from, to, true) : renameIdentifier(src ?? '', from, to, true);
+        const ref = (name: string) => (name === from ? to : name);
+
+        const functions = this.list<FunctionParameters>('functions');
+        for (const f of functions) {
+            if (kind === 'function' && f.name === from) f.name = to;
+            f.expression = expr(f.expression);
+            if (typeof f.expressionY === 'string') f.expressionY = expr(f.expressionY);
+            f.domain = expr(f.domain);
+            if (typeof f.tangentPoint === 'string') f.tangentPoint = expr(f.tangentPoint);
+        }
+        for (const s of this.list<Function3DParameters>('functions3D')) {
+            if (kind === 'function' && s.name === from) s.name = to;
+            s.expression = expr(s.expression);
+            s.xDomain = expr(s.xDomain);
+            s.yDomain = expr(s.yDomain);
+        }
+        for (const t of this.list<Tool>('tools')) {
+            if (kind === 'tool' && t.name === from) t.name = to;
+            switch (t.type) {
+                case 'region':
+                    t.conditions = t.conditions.map((c) => expr(c));
+                    t.conditionLabels = t.conditionLabels.map((l) => tpl(l));
+                    t.label = tpl(t.label);
+                    break;
+                case 'curve':
+                    t.equation = expr(t.equation);
+                    t.levels = expr(t.levels);
+                    t.label = tpl(t.label);
+                    break;
+                case 'points':
+                    t.points = expr(t.points);
+                    if (kind !== 'parameter') {
+                        t.ref1 = ref(t.ref1);
+                        t.ref2 = ref(t.ref2);
+                    }
+                    if (kind === 'tool') t.regionName = ref(t.regionName);
+                    t.objective = expr(t.objective);
+                    t.label = tpl(t.label);
+                    break;
+                case 'segment':
+                    t.path = expr(t.path);
+                    t.label = tpl(t.label);
+                    break;
+                case 'plane3D':
+                    t.value = expr(t.value);
+                    break;
+            }
+        }
+        for (const a of this.list<Annotation>('annotations')) {
+            a.x = expr(a.x);
+            a.y = expr(a.y);
+            if (typeof a.z === 'string') a.z = expr(a.z);
+            a.text = tpl(a.text);
+        }
+        for (const key of Object.keys(RANGE_DEFAULTS) as RangeKey[]) {
+            const v = this.settings.getValue(key);
+            if (typeof v === 'string') this.settings.setValue(key, expr(v));
+        }
+        const title = this.settings.getValue('title');
+        if (typeof title === 'string') this.settings.setValue('title', tpl(title));
+        if (kind === 'parameter') {
+            for (const p of this.list<Parameter>('parameters')) if (p.name === from) p.name = to;
+        }
+        this.chartPanel?.refresh();
+        this.commit();
+    }
+
+    registerField(field: FieldHandle): () => void {
+        this.fields.add(field);
+        return () => {
+            this.fields.delete(field);
+        };
+    }
+
+    showUndo(message: string, undo: () => void, extra?: { text: string; run: () => void }): void {
+        // A running keyboard session goes into the history first (entries stay in the order of the edits).
+        this.flushKeySession();
+        // Deletes and other panel actions join the chart history, so Mod+Z undoes them too.
+        const entry: HistoryEntry = {
+            label: message,
+            undo: () => {
+                undo();
+                return true;
+            },
+        };
+        this.history.push(entry);
+        this.showUndoBar(entry, extra);
+    }
+
+    pushHistory(entry: HistoryEntry): void {
+        this.flushKeySession();
+        this.history.push(entry);
+    }
+
+    /**
+     * Drop the hover plans, line locks and the drag context: they were made from the texts before an edit
+     * (undo, Make slider, typing), and a press must never start from a stale plan (AC7). A running session
+     * keeps its own context.
+     */
+    private forgetPlans(): void {
+        this.prepCache.clear();
+        this.lineLocks.clear();
+        this.dragCtx = null;
+    }
+
+    /** The bottom bar for a history entry: its Undo button runs the entry and drops it from the history. */
+    private showUndoBar(entry: HistoryEntry, extra?: { text: string; run: () => void }): void {
+        const el = this.undoEl;
+        if (!el) return;
+        this.hideUndo();
+        el.createSpan({ cls: 'etz-undo-text', text: entry.label });
+        textButton(el, {
+            text: UNDO_BUTTON,
+            size: 'sm',
+            onClick: () => {
+                this.hideUndo();
+                this.flushKeySession();
+                let applied = false;
+                try {
+                    applied = entry.undo();
+                } catch (e) {
+                    logError(e);
+                }
+                this.history.forget(entry);
+                const stale = this.staleMessage(entry, applied, false);
+                if (stale) this.showMessage(stale);
+            },
+        });
+        if (extra) {
+            textButton(el, {
+                text: extra.text,
+                size: 'sm',
+                onClick: () => {
+                    this.hideUndo();
+                    extra.run();
+                },
+            });
+        }
+        el.removeClass('tikz-hidden');
+        this.undoTimer = window.setTimeout(() => this.hideUndo(), UNDO_VISIBLE_MS);
+    }
+
+    /** The bottom bar with a message and an optional action (undo / redo results). */
+    private showMessage(message: string, action?: { text: string; run: () => void }): void {
+        const el = this.undoEl;
+        if (!el) return;
+        this.hideUndo();
+        el.createSpan({ cls: 'etz-undo-text', text: message });
+        if (action) {
+            textButton(el, {
+                text: action.text,
+                size: 'sm',
+                onClick: () => {
+                    this.hideUndo();
+                    action.run();
+                },
+            });
+        }
+        el.removeClass('tikz-hidden');
+        this.undoTimer = window.setTimeout(() => this.hideUndo(), UNDO_VISIBLE_MS);
+    }
+
+    loadChart(data: Record<string, unknown>): void {
+        if (!this.hasContent()) {
+            this.applyChart(data);
+            return;
+        }
+        void confirmDialog(this.app, {
+            title: 'Replace the current chart?',
+            message: 'The chart in the editor is replaced. Charts already in your notes are not affected.',
+            confirmText: 'Replace',
+            destructive: true,
+        }).then((ok) => {
+            if (ok && this.isOpen) this.applyChart(data);
+        });
+    }
+
+    showTab(tab: TabId): void {
+        const previous = this.activeTab;
+        const prevPanel = this.tabPanels.get(previous);
+        if (prevPanel && previous !== tab) this.tabScroll.set(previous, prevPanel.scrollTop);
+        this.activeTab = tab;
+        this.tabButtons.forEach((btn, id) => {
+            const active = id === tab;
+            btn.setAttr('aria-selected', String(active));
+            btn.tabIndex = active ? 0 : -1;
+            btn.toggleClass('is-active', active);
+        });
+        this.tabPanels.forEach((panel, id) => panel.toggleClass('tikz-hidden', id !== tab));
+        const panel = this.tabPanels.get(tab);
+        if (panel && previous !== tab) panel.scrollTop = this.tabScroll.get(tab) ?? 0;
+        if (tab === 'code') this.codePanel?.onShow();
+    }
+
+    // ================================================================ lifecycle
 
     onOpen() {
+        this.isOpen = true;
         // Obsidian loads MathJax lazily, and renderMath() throws until it's
-        // ready - without this kick, `$...$` labels would silently fall back
+        // ready: without this kick, `$...$` labels would silently fall back
         // to the stripLatex() approximation until something else in the vault
         // rendered math. Re-render once loaded so open charts pick it up.
-        void loadMathJax().then(() => this.requestPreviewUpdate()).catch(() => {});
+        void loadMathJax()
+            .then(() => {
+                if (this.isOpen) this.scheduleUpdate();
+            })
+            .catch(() => undefined);
 
-        const { modalEl } = this;
+        const { modalEl, contentEl } = this;
         modalEl.addClass('tikz-modal');
+        this.titleEl.setText('Easy TikZ editor');
+        this.titleEl.addClass('etz-sr-only');
+        contentEl.empty();
 
-        const layout = modalEl.createDiv({ cls: 'tikz-layout' });
+        const shell = contentEl.createDiv({ cls: 'etz-shell' });
+        this.shellEl = shell;
+        this.buildEditor(shell);
+        this.buildStage(shell);
+        this.dock = createSlidersDock(shell, this);
+        this.dock.el.addClass('etz-shell-dock');
+        this.buildActionBar(shell);
 
-        this.leftPanel = layout.createDiv({ cls: 'tikz-panel-left' });
-        this.buildTabBar(this.leftPanel);
-        this.buildTabs(this.leftPanel);
+        this.scope.register(['Mod'], 'Enter', () => {
+            void this.emitBlock();
+            return false;
+        });
+        this.bindDragKeys();
 
-        const rightPanel = layout.createDiv({ cls: 'tikz-panel-right' });
-        this.previewContainer = rightPanel.createDiv({ cls: 'tikz-preview-area' });
-        this.previewContainer.setAttr('tabindex', '0');
-        this.previewContainer.setAttr('role', 'img');
-        this.previewContainer.setAttr('aria-label', 'Graph preview. Use arrow keys in 3D mode to rotate.');
-        this.buildZoom3DOverlay();
-        this.buildFloatingActions();
-        this.setupMouseDragRotation();
-        this.setupKeyboardRotation();
-        this.buildActionBar(rightPanel);
+        if (typeof ResizeObserver !== 'undefined') {
+            this.resizeObserver = new ResizeObserver((entries) => {
+                for (const e of entries) if (e.target === this.chartEl) this.chartBox = { w: e.contentRect.width, h: e.contentRect.height };
+                this.onResize();
+                // The SVG's on-screen scale may have changed: the px map and the overlay follow it.
+                this.dragCtx = null;
+                this.syncOverlay();
+                // Outside onResize: that returns early when the stage keeps its size, while is-narrow changes only the chart padding.
+                this.checkGridScale();
+            });
+            this.resizeObserver.observe(shell);
+            if (this.stageEl) this.resizeObserver.observe(this.stageEl);
+            if (this.chartEl) this.resizeObserver.observe(this.chartEl);
+        }
+        if (this.chartEl) this.chartBox = { w: this.chartEl.clientWidth, h: this.chartEl.clientHeight };
+        this.onResize();
 
-        this.setupSectionObserver();
-        this.setupPreviewResizeObserver();
-        // Re-run visibility now that every panel and overlay exists. Earlier
-        // calls fired during tab construction before right-panel overlays
-        // were attached; this second pass picks them up.
-        this.update3DVisibility();
-        this.updatePreview();
+        this.showTab('build');
+        this.syncHeader();
+        this.offerDraft();
+        this.renderNow('full');
+        this.ready = true;
     }
 
     onClose() {
-        if (this.previewTimer) window.clearTimeout(this.previewTimer);
-        this.previewTimer = null;
-        if (this.previewRafId !== null) cancelAnimationFrame(this.previewRafId);
-        this.previewRafId = null;
-        if (this.trailingSvgTimer) window.clearTimeout(this.trailingSvgTimer);
-        this.trailingSvgTimer = null;
-        if (this.onMouseMove) window.removeEventListener('mousemove', this.onMouseMove);
-        if (this.onMouseUp) window.removeEventListener('mouseup', this.onMouseUp);
-        this.onMouseMove = null;
-        this.onMouseUp = null;
-        if (this.previewResizeObserver) {
-            this.previewResizeObserver.disconnect();
-            this.previewResizeObserver = null;
+        this.isOpen = false;
+        this.ready = false;
+        // A running drag restores its start texts before the draft flush; a keyboard nudge keeps its texts.
+        this.abortObjectDrag(false);
+        this.dropKeySession();
+        this.clearSelection();
+        this.clearHover();
+        // Playing sliders snap back onto their step first, so the flushed draft never stores a sub-step value.
+        this.dock?.stopAnimations();
+        // Changes from the last second must not be lost: flush the pending autosave now.
+        if (this.autosaveTimer !== null) {
+            window.clearTimeout(this.autosaveTimer);
+            this.autosaveTimer = null;
+            void this.saveDraft();
         }
-        this.lastObservedPreviewSize = null;
-        this.rangeInputs.clear();
-        this.svg3dRenderer = null;
-        this.currentRenderMode = null;
-        if (this.settingsColumn && this.onSettingsScroll) {
-            this.settingsColumn.removeEventListener('scroll', this.onSettingsScroll);
+        for (const id of [this.fullTimer, this.updateTimer, this.statusTimer, this.flashTimer, this.undoTimer, this.codeTimer, this.announceTimer, this.chipTimer]) {
+            if (id !== null) window.clearTimeout(id);
         }
-        if (this.scrollRafId !== null) {
-            cancelAnimationFrame(this.scrollRafId);
-            this.scrollRafId = null;
-        }
-        this.onSettingsScroll = null;
-        this.settingsColumn = null;
-        this.tabContents.clear();
+        this.announceTimer = this.chipTimer = null;
+        this.unbindDragKeys();
+        this.dragLayer?.destroy();
+        this.dragHint?.destroy();
+        this.dragLayer = null;
+        this.dragHint = null;
+        this.dragToggle = null;
+        this.announcer = null;
+        this.history.clear();
+        this.prepCache.clear();
+        this.lineLocks.clear();
+        this.hits = null;
+        this.dragCtx = null;
+        this.pendingClick = null;
+        this.spaceHeld = false;
+        this.dragOverlay = null;
+        this.labelTimers.forEach((pending) => window.clearTimeout(pending.timer));
+        this.labelTimers.clear();
+        if (this.frameRaf !== null) window.cancelAnimationFrame(this.frameRaf);
+        this.frameRaf = this.fullTimer = this.updateTimer = this.statusTimer = this.flashTimer = this.undoTimer = this.codeTimer = null;
+        this.dropPendingWheel();
+        closeAllPopovers();
+        if (this.resizeObserver) this.resizeObserver.disconnect();
+        this.resizeObserver = null;
+        this.drag = null;
+        this.fields.clear();
         this.tabButtons.clear();
+        this.tabPanels.clear();
+        this.tabErrorLabels.clear();
+        this.build = this.chartPanel = this.codePanel = this.dock = null;
+        this.renderer3d = null;
+        this.chartMode = null;
+        this.chartSvg = null;
+        this.layout = null;
+        this.contentEl.empty();
     }
 
-    private is3D(): boolean {
-        return this.settings.getValue('dimension') ?? false;
+    // ================================================================ editor pane
+
+    private buildEditor(shell: HTMLElement) {
+        const editor = shell.createDiv({ cls: 'etz-editor' });
+        this.buildHeader(editor);
+        this.bannerSlot = editor.createDiv({ cls: 'etz-banner-slot' });
+        this.buildTabs(editor);
+        this.undoEl = editor.createDiv({ cls: ['etz-undo', 'tikz-hidden'], attr: { role: 'status' } });
     }
 
-    // --- Tab bar ---
-
-    private buildTabBar(container: HTMLElement) {
-        const bar = container.createDiv({ cls: 'tikz-tab-bar' });
-        bar.setAttr('role', 'tablist');
-
-        TABS.forEach((name, i) => {
-            const btn = bar.createEl('button', { cls: 'tikz-tab-btn', text: name });
-            btn.setAttr('role', 'tab');
-            btn.setAttr('id', `tikz-tab-${name.toLowerCase()}`);
-            btn.setAttr('aria-controls', `tikz-tabpanel-${name.toLowerCase()}`);
-            btn.setAttr('aria-selected', String(i === 0));
-            if (i === 0) btn.addClass('active');
-            btn.onclick = () => this.switchTab(name);
-            this.tabButtons.set(name, btn);
+    private buildHeader(editor: HTMLElement) {
+        const header = editor.createDiv({ cls: 'etz-header' });
+        this.dimSeg = segmented<'2d' | '3d'>(header, {
+            label: 'Chart type',
+            value: this.is3D() ? '3d' : '2d',
+            options: [
+                { value: '2d', text: '2D' },
+                { value: '3d', text: '3D' },
+            ],
+            onChange: (value) => this.setDimension(value === '3d'),
         });
-    }
-
-    private switchTab(name: TabName) {
-        this.setActiveTabButton(name);
-
-        const isSettingsTab = SETTINGS_TABS.has(name);
-
-        if (isSettingsTab) {
-            if (this.settingsColumn) this.settingsColumn.removeClass('tikz-hidden');
-            this.tabContents.forEach((content) => {
-                content.addClass('tikz-hidden');
-            });
-            const target = this.settingsColumn?.querySelector<HTMLElement>(`[data-section="${name}"]`);
-            if (target && this.settingsColumn) {
-                // Suspend the observer briefly so the smooth scroll does not
-                // race against scroll-position-based active-tab updates.
-                this.suspendObserverUntil = Date.now() + 600;
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        } else {
-            if (this.settingsColumn) this.settingsColumn.addClass('tikz-hidden');
-            this.tabContents.forEach((content, key) => {
-                content.toggleClass('tikz-hidden', key !== name);
-            });
-            if (name === 'Code') this.updateCodeArea();
-        }
-    }
-
-    private setActiveTabButton(name: TabName) {
-        this.tabButtons.forEach((btn, key) => {
-            const isActive = key === name;
-            btn.toggleClass('active', isActive);
-            btn.setAttr('aria-selected', String(isActive));
+        this.coordSeg = segmented<'cartesian' | 'polar'>(header, {
+            label: 'Coordinates',
+            value: this.isPolar() ? 'polar' : 'cartesian',
+            options: [
+                { value: 'cartesian', text: 'Cartesian' },
+                { value: 'polar', text: 'Polar' },
+            ],
+            onChange: (value) => this.setCoordinates(value),
         });
+        header.createDiv({ cls: 'etz-header-spacer' });
+        const more = iconButton(header, { icon: 'more-horizontal', label: 'Examples and templates', tooltipPosition: 'bottom' });
+        menuFromButton(more.el, (menu) => this.fillMoreMenu(menu), 'end');
     }
 
-    /**
-     * Updates the active tab to match whichever section is currently at the
-     * "active line" (a fixed offset below the top of the scroll column).
-     * Driven by the scroll event and rAF-throttled.
-     */
-    private setupSectionObserver() {
-        if (!this.settingsColumn) return;
-        const column = this.settingsColumn;
-
-        // The active section is the last one whose top is at or above this
-        // many pixels from the top of the visible column.
-        const ACTIVE_LINE_OFFSET_PX = 80;
-
-        const updateActive = () => {
-            this.scrollRafId = null;
-            if (Date.now() < this.suspendObserverUntil) return;
-            const sections = Array.from(column.querySelectorAll<HTMLElement>('[data-section]'));
-            if (!sections.length) return;
-            const columnTop = column.getBoundingClientRect().top;
-
-            let active: HTMLElement = sections[0];
-            for (const section of sections) {
-                const top = section.getBoundingClientRect().top - columnTop;
-                if (top <= ACTIVE_LINE_OFFSET_PX) {
-                    active = section;
-                } else {
-                    break;
-                }
-            }
-
-            const name = active.getAttribute('data-section') as TabName | null;
-            if (name) this.setActiveTabButton(name);
-        };
-
-        this.onSettingsScroll = () => {
-            if (this.scrollRafId === null) {
-                this.scrollRafId = window.requestAnimationFrame(updateActive);
-            }
-        };
-
-        column.addEventListener('scroll', this.onSettingsScroll, { passive: true });
-        updateActive();
+    private fillMoreMenu(menu: Menu) {
+        menu.addItem((item) => item.setTitle('Examples').setIsLabel(true));
+        for (const example of EXAMPLES) {
+            menu.addItem((item) =>
+                item
+                    .setTitle(example.is3D ? `${example.title} (3D)` : example.title)
+                    .setIcon(example.is3D ? 'box' : 'line-chart')
+                    .onClick(() => this.loadChart(example.data))
+            );
+        }
+        menu.addSeparator();
+        menu.addItem((item) =>
+            item
+                .setTitle('Manage saved templates...')
+                .setIcon('bookmark')
+                .setDisabled(!this.plugin)
+                .onClick(() => {
+                    if (this.plugin) new TemplatesModal(this.app, this.plugin).open();
+                })
+        );
     }
 
-    // --- Tab contents ---
+    private buildTabs(editor: HTMLElement) {
+        const list = editor.createDiv({ cls: 'etz-tabs', attr: { role: 'tablist' } });
+        const listLabel = visuallyHidden(list, 'Editor sections');
+        listLabel.id = uniqueId('tabs');
+        list.setAttr('aria-labelledby', listLabel.id);
+        const panels = editor.createDiv({ cls: 'etz-tabpanels' });
 
-    private buildTabs(container: HTMLElement) {
-        // Single scrollable column shared by Graph, Axis, Functions, Annotations, Grid.
-        this.settingsColumn = container.createDiv({ cls: 'tikz-settings-column' });
+        for (const tab of TABS) {
+            const btn = list.createEl('button', { cls: 'etz-tab', attr: { type: 'button', role: 'tab' } });
+            btn.id = uniqueId(`tab-${tab.id}`);
+            btn.createSpan({ cls: 'etz-tab-text', text: tab.label });
+            btn.createSpan({ cls: 'etz-tab-dot', attr: { 'aria-hidden': 'true' } });
+            this.tabErrorLabels.set(tab.id, btn.createSpan({ cls: 'etz-sr-only' }));
+            btn.addEventListener('click', () => this.showTab(tab.id));
+            this.tabButtons.set(tab.id, btn);
 
-        this.buildGraphTab(this.settingsColumn);
-        this.buildAxisTab(this.settingsColumn);
-        this.buildFunctionsTab(this.settingsColumn);
-        this.buildToolsTab(this.settingsColumn);
-        this.buildAnnotationsTab(this.settingsColumn);
-        this.buildGridTab(this.settingsColumn);
-
-        // Standalone panels for the non-settings tabs.
-        this.buildCodeTab(container);
-        this.buildReferenceTab(container);
-    }
-
-    private createTabContent(container: HTMLElement, name: TabName, _visible = false): HTMLElement {
-        if (SETTINGS_TABS.has(name)) {
-            // Section inside the shared scroll column.
-            const section = container.createDiv({ cls: 'tikz-section tikz-settings-section' });
-            section.setAttr('data-section', name);
-            section.setAttr('id', `tikz-section-${name.toLowerCase()}`);
-            section.createEl('h3', { cls: 'tikz-section-heading', text: name });
-            return section;
+            const panel = panels.createDiv({ cls: ['etz-tabpanel', `mod-${tab.id}`], attr: { role: 'tabpanel' } });
+            panel.id = uniqueId(`panel-${tab.id}`);
+            panel.setAttr('aria-labelledby', btn.id);
+            btn.setAttr('aria-controls', panel.id);
+            this.tabPanels.set(tab.id, panel);
         }
 
-        // Standalone tab panel (Code, Reference) sitting next to the settings column.
-        const content = container.createDiv({ cls: 'tikz-tab-content' });
-        content.setAttr('role', 'tabpanel');
-        content.setAttr('id', `tikz-tabpanel-${name.toLowerCase()}`);
-        content.setAttr('aria-labelledby', `tikz-tab-${name.toLowerCase()}`);
-        content.addClass('tikz-hidden');
-        if (name === 'Code') content.addClass('tikz-code-panel');
-        if (name === 'Reference') content.addClass('tikz-reference');
-        this.tabContents.set(name, content);
-        return content;
-    }
-
-    private buildGraphTab(container: HTMLElement) {
-        const tab = this.createTabContent(container, 'Graph', true);
-
-        new Setting(tab)
-            .setName('3D mode')
-            .setDesc('Switch between 2D function plots and 3D surface plots.')
-            .addToggle((t) =>
-                t.setValue(this.settings.getValue('dimension')).onChange((v) => {
-                    this.settings.setValue('dimension', v);
-                    this.update3DVisibility();
-                    this.rebuildFunctionsTab();
-                    this.rebuildToolsTab();
-                    this.requestPreviewUpdate();
-                })
-            );
-
-        new Setting(tab)
-            .setName('Title')
-            .setDesc('Name displayed above the graph.')
-            .addText((text) =>
-                text
-                    .setPlaceholder('My graph')
-                    .setValue(this.settings.getValue('title'))
-                    .onChange((v) => {
-                        this.settings.setValue('title', v);
-                        this.requestPreviewUpdate();
-                    })
-            );
-
-        new Setting(tab)
-            .setName('Width (cm)')
-            .setDesc('Width of the exported TikZ image.')
-            .addSlider((s) =>
-                s.setLimits(1, 20, 1).setValue(this.settings.getValue('size_x_cm')).onChange((v) => {
-                    this.settings.setValue('size_x_cm', v);
-                    this.requestPreviewUpdate();
-                })
-            );
-
-        new Setting(tab)
-            .setName('Height (cm)')
-            .setDesc('Height of the exported TikZ image.')
-            .addSlider((s) =>
-                s.setLimits(1, 20, 1).setValue(this.settings.getValue('size_y_cm')).onChange((v) => {
-                    this.settings.setValue('size_y_cm', v);
-                    this.requestPreviewUpdate();
-                })
-            );
-
-        new Setting(tab)
-            .setName('Use pgfplots')
-            .setDesc('Include the pgfplots package in the TikZ code.')
-            .addToggle((t) =>
-                t.setValue(this.settings.getValue('documentSetup')).onChange((v) => {
-                    this.settings.setValue('documentSetup', v);
-                    this.requestPreviewUpdate();
-                })
-            );
-
-        new Setting(tab)
-            .setName('Coordinate system')
-            .setDesc('Cartesian uses f(x). Polar uses r(theta) and plots r in radians. Polar mode is 2D only.')
-            .addDropdown((d) =>
-                d.addOptions({ cartesian: 'Cartesian', polar: 'Polar' })
-                    .setValue(this.settings.getValue('coordinateSystem') ?? 'cartesian')
-                    .onChange((v) => {
-                        this.settings.setValue('coordinateSystem', v);
-                        // Axis labels are stored per-coordinate-system; refresh
-                        // the inputs so the user sees the right pair after toggling.
-                        this.refreshAxisLabelInputs();
-                        this.requestPreviewUpdate();
-                    })
-            );
-
-        new Setting(tab)
-            .setName('Preview size')
-            .setDesc('Width of the live preview, in pixels. Does not affect the exported TikZ dimensions. Scroll on the preview to zoom and drag to pan.')
-            .addSlider((s) =>
-                s.setLimits(400, 1400, 20)
-                    .setValue(this.settings.getValue('previewSize') ?? 760)
-                    .onChange((v) => {
-                        this.settings.setValue('previewSize', v);
-                        this.requestPreviewUpdate();
-                    })
-            );
-
-        this.rotationContainer = tab.createDiv({ cls: 'tikz-3d-controls' });
-
-        new Setting(this.rotationContainer)
-            .setName('Elevation')
-            .setDesc('Tilt: 0 looks at the surface edge-on, 90 looks straight down. Drag preview or press up/down arrows.')
-            .addSlider((s) => {
-                this.elevationSlider = s;
-                s.setLimits(0, 90, 1).setValue(this.settings.getValue('rotationX')).onChange((v) => {
-                    this.settings.setValue('rotationX', v);
-                    this.requestPreviewUpdateFast();
-                });
-            });
-
-        new Setting(this.rotationContainer)
-            .setName('Azimuth')
-            .setDesc('Camera rotation around the vertical axis. Drag preview or press left/right arrows.')
-            .addSlider((s) => {
-                this.azimuthSlider = s;
-                s.setLimits(0, 360, 1).setValue(this.settings.getValue('rotationZ')).onChange((v) => {
-                    this.settings.setValue('rotationZ', v);
-                    this.requestPreviewUpdateFast();
-                });
-            });
-
-        new Setting(this.rotationContainer)
-            .setName('Box aspect')
-            .setDesc(
-                'Equal: each axis spans the same length on screen - the bounding box is a perfect cube. ' +
-                    'True: edge lengths scale with the data ranges (xmax-xmin, ymax-ymin, zmax-zmin), so an axis with a much larger range dominates the box. The exported pgfplots adds `axis equal image` when Equal is selected.'
-            )
-            .addDropdown((d) =>
-                d
-                    .addOptions({ equal: 'Equal (cube)', true: 'True (proportional)' })
-                    .setValue(this.settings.getValue('boxAspect') ?? 'true')
-                    .onChange((v) => {
-                        this.settings.setValue('boxAspect', v);
-                        this.requestPreviewUpdate();
-                    })
-            );
-
-        this.update3DVisibility();
-    }
-
-    private buildAxisTab(container: HTMLElement) {
-        const tab = this.createTabContent(container, 'Axis');
-
-        new Setting(tab)
-            .setName('Show axis labels')
-            .addToggle((t) =>
-                t.setValue(this.settings.getValue('show_axis_label')).onChange((v) => {
-                    this.settings.setValue('show_axis_label', v);
-                    this.requestPreviewUpdate();
-                })
-            );
-
-        new Setting(tab)
-            .setName('X-axis label')
-            .setDesc('In polar mode this edits a separate polar X label so your cartesian label stays intact.')
-            .addText((text) => {
-                this.xLabelInput = text;
-                text.setValue(this.currentXLabelValue()).onChange((v) => {
-                    this.settings.setValue(this.currentXLabelKey(), v);
-                    this.requestPreviewUpdate();
-                });
-            });
-
-        new Setting(tab)
-            .setName('Y-axis label')
-            .setDesc('In polar mode this edits a separate polar Y label so your cartesian label stays intact.')
-            .addText((text) => {
-                this.yLabelInput = text;
-                text.setValue(this.currentYLabelValue()).onChange((v) => {
-                    this.settings.setValue(this.currentYLabelKey(), v);
-                    this.requestPreviewUpdate();
-                });
-            });
-
-        this.zAxisContainer = tab.createDiv({ cls: 'tikz-3d-controls' });
-
-        new Setting(this.zAxisContainer)
-            .setName('Z-axis label')
-            .addText((text) =>
-                text.setValue(this.settings.getValue('axis_label_z')).onChange((v) => {
-                    this.settings.setValue('axis_label_z', v);
-                    this.requestPreviewUpdate();
-                })
-            );
-
-        this.buildAxisRange(tab, [
-            { key: 'xmin', label: 'X min', placeholder: '-0.5' },
-            { key: 'xmax', label: 'X max', placeholder: '10' },
-        ]);
-        this.buildAxisRange(tab, [
-            { key: 'ymin', label: 'Y min', placeholder: '-0.5' },
-            { key: 'ymax', label: 'Y max', placeholder: '5' },
-        ]);
-        this.buildAxisRange(this.zAxisContainer, [
-            { key: 'zmin', label: 'Z min', placeholder: '-5' },
-            { key: 'zmax', label: 'Z max', placeholder: '5' },
-        ]);
-
-        new Setting(tab)
-            .setName('Fit to functions')
-            .setDesc('Sample every enabled function and set the axis ranges so the curves fit comfortably inside the plot. Clips outliers so vertical asymptotes do not blow out the range.')
-            .addButton((btn) =>
-                btn
-                    .setButtonText('Auto-fit')
-                    .setTooltip('Compute axis ranges from the current functions')
-                    .onClick(() => this.autoFitRanges())
-            );
-
-        this.axisStyleContainer = tab.createDiv();
-        new Setting(this.axisStyleContainer)
-            .setName('Axis style')
-            .setDesc('Box: full rectangle around the plot. Middle: axes cross at origin. Axes: L-shape (x at bottom, y at left) with no enclosing box.')
-            .addDropdown((d) =>
-                d
-                    .addOptions({ box: 'Box (all around)', middle: 'Middle (crossing)', axes: 'Axes (no box)' })
-                    .setValue(this.settings.getValue('axis_style') ?? 'box')
-                    .onChange((v) => {
-                        this.settings.setValue('axis_style', v);
-                        this.requestPreviewUpdate();
-                    })
-            );
-
-        this.update3DVisibility();
-    }
-
-    private buildAxisRange(parent: HTMLElement, fields: AxisRange[]) {
-        const range = parent.createDiv({ cls: 'tikz-range-group' });
-        fields.forEach((field, i) => {
-            const wrapper = range.createDiv();
-            new Setting(wrapper).setName(field.label).addText((t) => {
-                this.rangeInputs.set(field.key, t);
-                t.setPlaceholder(field.placeholder)
-                    .setValue(this.settings.getValue(field.key))
-                    .onChange((v) => {
-                        // Only commit fully-valid numbers as the user types.
-                        // Intermediate states like "-" or "1." while typing a
-                        // negative or decimal number are left alone here and
-                        // caught on blur below - validating (and reverting)
-                        // on every keystroke made it impossible to type a
-                        // leading "-" at all, since it got wiped before the
-                        // next digit landed.
-                        const trimmed = v.trim();
-                        if (trimmed === '' || isFinite(Number(trimmed))) {
-                            this.settings.setValue(field.key, v);
-                            this.requestPreviewUpdate();
-                        }
-                    });
-                t.inputEl.addEventListener('blur', () => {
-                    const trimmed = t.getValue().trim();
-                    if (trimmed !== '' && !isFinite(Number(trimmed))) {
-                        new Notice(`${field.label} must be a number.`);
-                        t.setValue(this.settings.getValue(field.key));
-                    }
-                });
-            });
-            if (i < fields.length - 1) {
-                range.createSpan({ cls: 'tikz-range-separator', text: 'to' });
-            }
-        });
-    }
-
-    private buildFunctionsTab(container: HTMLElement) {
-        this.functionsTabContent = this.createTabContent(container, 'Functions');
-        this.populateFunctionsTab();
-    }
-
-    private rebuildFunctionsTab() {
-        this.functionsTabContent.empty();
-        this.populateFunctionsTab();
-    }
-
-    private populateFunctionsTab() {
-        const tab = this.functionsTabContent;
-        if (this.is3D()) {
-            this.build3DFunctionCards(tab);
-        } else {
-            this.build2DFunctionCards(tab);
-        }
-    }
-
-    private build2DFunctionCards(tab: HTMLElement) {
-        const cardsContainer = tab.createDiv({ cls: 'tikz-func-cards' });
-        const rowStates = new Map<string, FunctionParameters>();
-
-        const updateFunctionValues = () => {
-            const functions: FunctionParameters[] = [];
-            rowStates.forEach((state) => {
-                if (state.expression && state.domain) {
-                    functions.push({ ...state });
-                }
-            });
-            this.settings.setValue('functions', functions);
-            this.requestPreviewUpdate();
-        };
-
-        const addFunctionCard = (seed?: FunctionParameters) => {
-            const rowId = `func-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-            const ordinal = rowStates.size + 1;
-            // Default state used for a brand-new card. If a seed is supplied
-            // (modal opened from click-to-edit on an existing chart) we
-            // merge the saved values on top so every input below shows what
-            // was persisted, not the placeholder defaults.
-            const state: FunctionParameters = {
-                expression: '',
-                domain: '-10:10',
-                showLegend: false,
-                fill: false,
-                fillOpacity: 0.2,
-                fillPattern: 'solid',
-                tangent: false,
-                dashed: false,
-                tangentPoint: '',
-                extrema: false,
-                color: 'black',
-                thickness: 'thin',
-                parametric: false,
-                expressionY: '',
-                name: `f${ordinal}`,
-                ...(seed || {}),
-            };
-            rowStates.set(rowId, state);
-
-            const card = cardsContainer.createDiv({ cls: 'tikz-func-card' });
-            card.style.borderLeftColor = COLOR_MAP[state.color];
-
-            const header = card.createDiv({ cls: 'tikz-func-header' });
-            const headerLabel = header.createSpan({ cls: 'tikz-func-label', text: state.name || `Function ${ordinal}` });
-            new Setting(header).addButton((btn) =>
-                btn
-                    .setIcon('trash')
-                    .setTooltip('Remove function')
-                    .then((b) => b.buttonEl.setAttr('aria-label', 'Remove function'))
-                    .onClick(() => {
-                        rowStates.delete(rowId);
-                        card.remove();
-                        updateFunctionValues();
-                    })
-            );
-
-            // Captures so the Template dropdown can refresh the UI when applied.
-            let expressionInput: TextComponent | null = null;
-            let domainInput: TextComponent | null = null;
-            let colorDropdown: { setValue: (v: string) => unknown } | null = null;
-
-            const templateRow = card.createDiv({ cls: 'tikz-func-row' });
-            const templateDiv = templateRow.createDiv({ cls: 'tikz-func-field wide' });
-            new Setting(templateDiv)
-                .setName('Template')
-                .setDesc('Quick start from a built-in curve, or save the current card as your own template.')
-                .addDropdown((d) => {
-                    const buildOptions = () => {
-                        d.selectEl.empty();
-                        d.addOption('', 'Choose a template...');
-                        const builtIn = d.selectEl.createEl('optgroup');
-                        builtIn.setAttribute('label', 'Built-in');
-                        for (let i = 0; i < BUILT_IN_2D.length; i++) {
-                            const opt = builtIn.createEl('option', { text: BUILT_IN_2D[i].name });
-                            opt.value = `builtin:${i}`;
-                        }
-                        const userTemplates2D = this.getUserTemplates().filter((t) => !t.is3D);
-                        if (userTemplates2D.length > 0) {
-                            const saved = d.selectEl.createEl('optgroup');
-                            saved.setAttribute('label', 'Saved');
-                            for (const t of userTemplates2D) {
-                                const opt = saved.createEl('option', { text: t.name });
-                                opt.value = `user:${t.name}`;
-                            }
-                        }
-                        d.selectEl.value = '';
-                    };
-                    buildOptions();
-                    d.onChange((v) => {
-                        if (!v) return;
-                        let chosenExpr = '', chosenDomain = '', chosenColor = state.color;
-                        if (v.startsWith('builtin:')) {
-                            const idx = parseInt(v.slice(8), 10);
-                            const tpl = BUILT_IN_2D[idx];
-                            if (!tpl) return;
-                            chosenExpr = tpl.expression;
-                            chosenDomain = tpl.domain;
-                            if (tpl.color) chosenColor = tpl.color;
-                        } else if (v.startsWith('user:')) {
-                            const name = v.slice(5);
-                            const tpl = this.getUserTemplates().find((t) => !t.is3D && t.name === name);
-                            if (!tpl) return;
-                            chosenExpr = tpl.expression;
-                            chosenDomain = tpl.domain ?? state.domain;
-                            if (tpl.color) chosenColor = tpl.color;
-                        }
-                        state.expression = chosenExpr;
-                        state.domain = chosenDomain;
-                        state.color = chosenColor;
-                        if (expressionInput) expressionInput.setValue(chosenExpr);
-                        if (domainInput) domainInput.setValue(chosenDomain);
-                        if (colorDropdown) colorDropdown.setValue(chosenColor);
-                        card.style.borderLeftColor = COLOR_MAP[chosenColor] || 'var(--text-muted)';
-                        updateFunctionValues();
-                        d.selectEl.value = '';
-                    });
-                });
-            const saveDiv = templateRow.createDiv({ cls: 'tikz-func-field' });
-            new Setting(saveDiv).addButton((btn) =>
-                btn
-                    .setButtonText('Save as')
-                    .setTooltip('Save the current expression, domain, and color as a personal template')
-                    .onClick(async () => {
-                        if (!state.expression) {
-                            new Notice('Enter an expression before saving as a template.');
-                            return;
-                        }
-                        const name = await TextPromptModal.prompt(this.app, 'Template name', state.expression);
-                        if (!name) return;
-                        const trimmed = name.trim();
-                        if (!trimmed) return;
-                        const existing = this.getUserTemplates().filter((t) => !(t.is3D === false && t.name === trimmed));
-                        const next: UserTemplate[] = [...existing, {
-                            name: trimmed,
-                            is3D: false,
-                            expression: state.expression,
-                            domain: state.domain,
-                            color: state.color,
-                        }];
-                        await this.setUserTemplates(next);
-                        new Notice(`Saved template "${trimmed}".`);
-                    })
-            );
-
-            const row1 = card.createDiv({ cls: 'tikz-func-row' });
-            const exprDiv = row1.createDiv({ cls: 'tikz-func-field wide' });
-            new Setting(exprDiv)
-                .setName('Expression')
-                .setDesc('Use x. Supports +, -, *, /, ^, parentheses, and Math.* functions.')
-                .addText((t) => {
-                    expressionInput = t;
-                    t.setPlaceholder('x^2').setValue(state.expression || '').onChange((v) => {
-                        state.expression = v;
-                        updateFunctionValues();
-                    });
-                });
-            const domDiv = row1.createDiv({ cls: 'tikz-func-field' });
-            new Setting(domDiv).setName('Domain').addText((t) => {
-                domainInput = t;
-                t.setPlaceholder('-10:10').setValue(state.domain).onChange((v) => {
-                    state.domain = v;
-                    updateFunctionValues();
-                });
-            });
-
-            const nameRow = card.createDiv({ cls: 'tikz-func-row' });
-            const nameDiv = nameRow.createDiv({ cls: 'tikz-func-field wide' });
-            new Setting(nameDiv)
-                .setName('Name')
-                .setDesc('Used to reference this function from Tools (e.g. area between curves). Defaults to f1, f2, …')
-                .addText((t) => {
-                    t.setPlaceholder(state.name || `f${ordinal}`).setValue(state.name || '').onChange((v) => {
-                        state.name = v;
-                        if (headerLabel) headerLabel.textContent = (v && v.trim()) || `Function ${ordinal}`;
-                        updateFunctionValues();
-                    });
-                });
-
-            const row2 = card.createDiv({ cls: 'tikz-func-row' });
-            const colorDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(colorDiv).setName('Color').addDropdown((d) => {
-                colorDropdown = d;
-                d.addOptions(COLOR_OPTIONS).setValue(state.color).onChange((v) => {
-                    state.color = v;
-                    card.style.borderLeftColor = COLOR_MAP[v] || 'var(--text-muted)';
-                    updateFunctionValues();
-                });
-            });
-            const thickDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(thickDiv).setName('Thickness').addDropdown((d) =>
-                d.addOptions(THICKNESS_OPTIONS).setValue(state.thickness).onChange((v) => {
-                    state.thickness = v;
-                    updateFunctionValues();
-                })
-            );
-
-            const row3 = card.createDiv({ cls: 'tikz-func-row tikz-toggle-row' });
-
-            // Custom legend text. Hidden by default, revealed by the Legend
-            // toggle below. Falls back to the expression when left blank.
-            const legendInput = card.createDiv({ cls: 'tikz-tangent-input' });
-            new Setting(legendInput)
-                .setName('Legend label')
-                .setDesc('Custom text for the legend entry. Leave blank to use the expression.')
-                .addText((t) => {
-                    t.setPlaceholder(state.expression || 'e.g. Revenue').setValue(state.legendLabel || '').onChange((v) => {
-                        state.legendLabel = v;
-                        updateFunctionValues();
-                    });
-                });
-
-            // y(t) field for parametric mode. Hidden by default, revealed by
-            // the Parametric toggle below.
-            const parametricInput = card.createDiv({ cls: 'tikz-tangent-input' });
-            new Setting(parametricInput)
-                .setName('y(t)')
-                .setDesc('Second component when parametric. The Expression field above becomes x(t). Domain is the t range.')
-                .addText((t) =>
-                    t.setPlaceholder('sin(t)').setValue(state.expressionY || '').onChange((v) => {
-                        state.expressionY = v;
-                        updateFunctionValues();
-                    })
-                );
-
-            const tangentInput = card.createDiv({ cls: 'tikz-tangent-input' });
-            new Setting(tangentInput)
-                .setName('Tangent point (x)')
-                .setDesc('A number, or "min" / "max" to snap to the nearest extremum. Append a digit (min2, max1) to pick the n-th.')
-                .addText((t) => {
-                    t.setPlaceholder('x value, min, or max').setValue(state.tangentPoint || '').onChange((v) => {
-                        state.tangentPoint = v;
-                        updateFunctionValues();
-                    });
-                    const tryResolve = () => {
-                        const v = t.getValue();
-                        const resolved = this.resolveTangentKeyword(v, state.expression, state.domain);
-                        if (resolved !== null) {
-                            const text = String(parseFloat(resolved.toFixed(3)));
-                            state.tangentPoint = text;
-                            t.setValue(text);
-                            updateFunctionValues();
-                        }
-                    };
-                    t.inputEl.addEventListener('blur', tryResolve);
-                    t.inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
-                        if (e.key === 'Enter') {
-                            tryResolve();
-                            e.preventDefault();
-                        }
-                    });
-                });
-
-            const fillOptions = card.createDiv({ cls: 'tikz-tangent-input' });
-            new Setting(fillOptions)
-                .setName('Fill pattern')
-                .addDropdown((d) =>
-                    d.addOptions({
-                        solid: 'Solid',
-                        horizontal: 'Horizontal lines',
-                        vertical: 'Vertical lines',
-                        crosshatch: 'Crosshatch',
-                        dots: 'Dots',
-                        'north-east': 'NE diagonal',
-                        'north-west': 'NW diagonal',
-                    }).setValue(state.fillPattern).onChange((v) => {
-                        state.fillPattern = v as FunctionParameters['fillPattern'];
-                        updateFunctionValues();
-                    })
-                );
-            new Setting(fillOptions)
-                .setName('Fill opacity')
-                .addSlider((s) =>
-                    s.setLimits(0.05, 1.0, 0.05)
-                        .setValue(state.fillOpacity)
-                        .onChange((v) => {
-                            state.fillOpacity = v;
-                            updateFunctionValues();
-                        })
-                );
-
-            type BooleanKey = 'showLegend' | 'fill' | 'tangent' | 'dashed' | 'extrema' | 'parametric';
-            const toggles: { name: string; key: BooleanKey }[] = [
-                { name: 'Legend', key: 'showLegend' },
-                { name: 'Fill', key: 'fill' },
-                { name: 'Tangent', key: 'tangent' },
-                { name: 'Dashed', key: 'dashed' },
-                { name: 'Extrema', key: 'extrema' },
-                { name: 'Parametric', key: 'parametric' },
-            ];
-
-            toggles.forEach(({ name, key }) => {
-                const chip = row3.createDiv({ cls: 'tikz-toggle-chip' });
-                new Setting(chip).setName(name).addToggle((t) =>
-                    t.setValue(state[key]).onChange((v) => {
-                        state[key] = v;
-                        if (key === 'tangent') tangentInput.toggleClass('visible', v);
-                        if (key === 'fill') fillOptions.toggleClass('visible', v);
-                        if (key === 'parametric') parametricInput.toggleClass('visible', v);
-                        if (key === 'showLegend') legendInput.toggleClass('visible', v);
-                        updateFunctionValues();
-                    })
-                );
-            });
-            // If the seed had these toggles on, reveal the dependent sub-rows
-            // now - the onChange handler above only fires on user input.
-            if (state.tangent) tangentInput.addClass('visible');
-            if (state.fill) fillOptions.addClass('visible');
-            if (state.parametric) parametricInput.addClass('visible');
-            if (state.showLegend) legendInput.addClass('visible');
-        };
-
-        // Hydrate from existing functions if any were persisted (click-to-edit).
-        // Falls through to a single blank card on fresh modals.
-        const existing = this.settings.getValue<FunctionParameters[] | undefined>('functions') || [];
-        if (existing.length > 0) {
-            for (const fn of existing) addFunctionCard(fn);
-        } else {
-            addFunctionCard();
-        }
-
-        const addBtnDiv = tab.createDiv({ cls: 'tikz-add-func' });
-        new Setting(addBtnDiv).addButton((btn) =>
-            btn.setButtonText('+ Add function').onClick(() => addFunctionCard())
-        );
-    }
-
-    private build3DFunctionCards(tab: HTMLElement) {
-        const cardsContainer = tab.createDiv({ cls: 'tikz-func-cards' });
-        const rowStates = new Map<string, Function3DParameters>();
-
-        const updateFunctionValues = () => {
-            const functions: Function3DParameters[] = [];
-            rowStates.forEach((state) => {
-                if (state.expression) {
-                    functions.push({ ...state });
-                }
-            });
-            this.settings.setValue('functions3D', functions);
-            this.requestPreviewUpdate();
-        };
-
-        const addFunctionCard = (seed?: Function3DParameters) => {
-            const rowId = `func3d-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-            // Like the 2D card, accept a seed so click-to-edit reopens the
-            // modal with the persisted surface, not a blank one.
-            const state: Function3DParameters = {
-                expression: '',
-                xDomain: '-5:5',
-                yDomain: '-5:5',
-                color: 'blue',
-                wireframe: false,
-                opacity: 0.7,
-                samples: 40,
-                ...(seed || {}),
-            };
-            rowStates.set(rowId, state);
-
-            const card = cardsContainer.createDiv({ cls: 'tikz-func-card' });
-            card.style.borderLeftColor = COLOR_MAP[state.color] || 'var(--text-muted)';
-
-            const header = card.createDiv({ cls: 'tikz-func-header' });
-            header.createSpan({ cls: 'tikz-func-label', text: `Surface ${rowStates.size}` });
-            new Setting(header).addButton((btn) =>
-                btn
-                    .setIcon('trash')
-                    .setTooltip('Remove surface')
-                    .then((b) => b.buttonEl.setAttr('aria-label', 'Remove surface'))
-                    .onClick(() => {
-                        rowStates.delete(rowId);
-                        card.remove();
-                        updateFunctionValues();
-                    })
-            );
-
-            // Captures used by the template dropdown to refresh inputs.
-            let expressionInput: TextComponent | null = null;
-            let xDomainInput: TextComponent | null = null;
-            let yDomainInput: TextComponent | null = null;
-            let colorDropdown: { setValue: (v: string) => unknown } | null = null;
-
-            const templateRow = card.createDiv({ cls: 'tikz-func-row' });
-            const templateDiv = templateRow.createDiv({ cls: 'tikz-func-field wide' });
-            new Setting(templateDiv)
-                .setName('Template')
-                .setDesc('Quick start from a built-in surface, or save the current card as your own template.')
-                .addDropdown((d) => {
-                    const buildOptions = () => {
-                        d.selectEl.empty();
-                        d.addOption('', 'Choose a template...');
-                        const builtIn = d.selectEl.createEl('optgroup');
-                        builtIn.setAttribute('label', 'Built-in');
-                        for (let i = 0; i < BUILT_IN_3D.length; i++) {
-                            const opt = builtIn.createEl('option', { text: BUILT_IN_3D[i].name });
-                            opt.value = `builtin:${i}`;
-                        }
-                        const userTemplates3D = this.getUserTemplates().filter((t) => t.is3D);
-                        if (userTemplates3D.length > 0) {
-                            const saved = d.selectEl.createEl('optgroup');
-                            saved.setAttribute('label', 'Saved');
-                            for (const t of userTemplates3D) {
-                                const opt = saved.createEl('option', { text: t.name });
-                                opt.value = `user:${t.name}`;
-                            }
-                        }
-                        d.selectEl.value = '';
-                    };
-                    buildOptions();
-                    d.onChange((v) => {
-                        if (!v) return;
-                        let chosenExpr = '', chosenXDomain = state.xDomain, chosenYDomain = state.yDomain, chosenColor = state.color;
-                        if (v.startsWith('builtin:')) {
-                            const idx = parseInt(v.slice(8), 10);
-                            const tpl = BUILT_IN_3D[idx];
-                            if (!tpl) return;
-                            chosenExpr = tpl.expression;
-                            chosenXDomain = tpl.xDomain;
-                            chosenYDomain = tpl.yDomain;
-                            if (tpl.color) chosenColor = tpl.color;
-                        } else if (v.startsWith('user:')) {
-                            const name = v.slice(5);
-                            const tpl = this.getUserTemplates().find((t) => t.is3D && t.name === name);
-                            if (!tpl) return;
-                            chosenExpr = tpl.expression;
-                            chosenXDomain = tpl.xDomain ?? state.xDomain;
-                            chosenYDomain = tpl.yDomain ?? state.yDomain;
-                            if (tpl.color) chosenColor = tpl.color;
-                        }
-                        state.expression = chosenExpr;
-                        state.xDomain = chosenXDomain;
-                        state.yDomain = chosenYDomain;
-                        state.color = chosenColor;
-                        if (expressionInput) expressionInput.setValue(chosenExpr);
-                        if (xDomainInput) xDomainInput.setValue(chosenXDomain);
-                        if (yDomainInput) yDomainInput.setValue(chosenYDomain);
-                        if (colorDropdown) colorDropdown.setValue(chosenColor);
-                        card.style.borderLeftColor = COLOR_MAP[chosenColor] || 'var(--text-muted)';
-                        updateFunctionValues();
-                        d.selectEl.value = '';
-                    });
-                });
-            const saveDiv = templateRow.createDiv({ cls: 'tikz-func-field' });
-            new Setting(saveDiv).addButton((btn) =>
-                btn
-                    .setButtonText('Save as')
-                    .setTooltip('Save the current expression and domains as a personal template')
-                    .onClick(async () => {
-                        if (!state.expression) {
-                            new Notice('Enter an expression before saving as a template.');
-                            return;
-                        }
-                        const name = await TextPromptModal.prompt(this.app, 'Template name', state.expression);
-                        if (!name) return;
-                        const trimmed = name.trim();
-                        if (!trimmed) return;
-                        const existing = this.getUserTemplates().filter((t) => !(t.is3D === true && t.name === trimmed));
-                        const next: UserTemplate[] = [...existing, {
-                            name: trimmed,
-                            is3D: true,
-                            expression: state.expression,
-                            xDomain: state.xDomain,
-                            yDomain: state.yDomain,
-                            color: state.color,
-                        }];
-                        await this.setUserTemplates(next);
-                        new Notice(`Saved template "${trimmed}".`);
-                    })
-            );
-
-            const row1 = card.createDiv({ cls: 'tikz-func-row' });
-            const exprDiv = row1.createDiv({ cls: 'tikz-func-field wide' });
-            new Setting(exprDiv)
-                .setName('f(x, y)')
-                .setDesc('Use x and y. Supports +, -, *, /, ^, parentheses, and Math.* functions.')
-                .addText((t) => {
-                    expressionInput = t;
-                    t.setPlaceholder('sin(x)*cos(y)').setValue(state.expression || '').onChange((v) => {
-                        state.expression = v;
-                        updateFunctionValues();
-                    });
-                });
-
-            const row2 = card.createDiv({ cls: 'tikz-func-row' });
-            const xDomDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(xDomDiv).setName('X domain').addText((t) => {
-                xDomainInput = t;
-                t.setPlaceholder('-5:5').setValue(state.xDomain).onChange((v) => {
-                    state.xDomain = v;
-                    updateFunctionValues();
-                });
-            });
-            const yDomDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(yDomDiv).setName('Y domain').addText((t) => {
-                yDomainInput = t;
-                t.setPlaceholder('-5:5').setValue(state.yDomain).onChange((v) => {
-                    state.yDomain = v;
-                    updateFunctionValues();
-                });
-            });
-
-            const row3 = card.createDiv({ cls: 'tikz-func-row' });
-            const colorDiv = row3.createDiv({ cls: 'tikz-func-field' });
-            new Setting(colorDiv).setName('Color').addDropdown((d) => {
-                colorDropdown = d;
-                d.addOptions(COLOR_OPTIONS).setValue(state.color).onChange((v) => {
-                    state.color = v;
-                    card.style.borderLeftColor = COLOR_MAP[v] || 'var(--text-muted)';
-                    updateFunctionValues();
-                });
-            });
-
-            const row4 = card.createDiv({ cls: 'tikz-func-row tikz-toggle-row' });
-            const wireChip = row4.createDiv({ cls: 'tikz-toggle-chip' });
-            new Setting(wireChip).setName('Wireframe').addToggle((t) =>
-                t.setValue(state.wireframe).onChange((v) => {
-                    state.wireframe = v;
-                    updateFunctionValues();
-                })
-            );
-
-            const opacityDiv = row4.createDiv({ cls: 'tikz-func-field' });
-            new Setting(opacityDiv).setName('Opacity').addSlider((s) =>
-                s.setLimits(0.1, 1.0, 0.1).setValue(state.opacity).onChange((v) => {
-                    state.opacity = v;
-                    updateFunctionValues();
-                })
-            );
-
-            const row5 = card.createDiv({ cls: 'tikz-func-row' });
-            const samplesDiv = row5.createDiv({ cls: 'tikz-func-field wide' });
-            // Slider upper bound is configurable via the plugin's settings tab.
-            // Defaults to 80; advanced users can raise it to draw smoother
-            // surfaces at the cost of preview FPS.
-            const maxSamples = Math.max(40, Math.min(400, this.plugin?.data?.maxSamples3D ?? 80));
-            new Setting(samplesDiv)
-                .setName('Samples')
-                .setDesc(`Grid density per axis (8 to ${maxSamples}). Higher = smoother surface but slower preview. Also drives pgfplots \`samples=\` in the exported code.`)
-                .addSlider((s) =>
-                    s.setLimits(8, maxSamples, 2)
-                        .setValue(Math.min(state.samples, maxSamples))
-                        .onChange((v) => {
-                            state.samples = v;
-                            updateFunctionValues();
-                        })
-                );
-        };
-
-        // Hydrate from existing 3D surfaces when the modal opens with state.
-        const existing3D = this.settings.getValue<Function3DParameters[] | undefined>('functions3D') || [];
-        if (existing3D.length > 0) {
-            for (const fn of existing3D) addFunctionCard(fn);
-        } else {
-            addFunctionCard();
-        }
-
-        const addBtnDiv = tab.createDiv({ cls: 'tikz-add-func' });
-        new Setting(addBtnDiv).addButton((btn) =>
-            btn.setButtonText('+ Add surface').onClick(() => addFunctionCard())
-        );
-    }
-
-    private buildToolsTab(container: HTMLElement) {
-        this.toolsTabContent = this.createTabContent(container, 'Tools');
-        this.populateToolsTab();
-    }
-
-    private rebuildToolsTab() {
-        if (!this.toolsTabContent) return;
-        this.toolsTabContent.empty();
-        this.populateToolsTab();
-    }
-
-    private populateToolsTab() {
-        const tab = this.toolsTabContent;
-        const is3D = this.is3D();
-        tab.createEl('p', { cls: 'tikz-section-blurb' }).setText(
-            'Composable overlays. Combine functions (area between, intersections), draw reference lines, and add free shapes - each independent of the others, so you can stack them freely. ' +
-                'Function-referencing tools use the Name field on each function card (defaults to f1, f2, …).'
-        );
-
-        const toolList: Tool[] = (this.settings.getValue<Tool[] | undefined>('tools') || []).map((t) => ({ ...t }));
-        const cardsContainer = tab.createDiv({ cls: 'tikz-tool-cards' });
-
-        const save = () => {
-            this.settings.setValue('tools', toolList);
-            this.requestPreviewUpdate();
-        };
-        const renderAll = () => {
-            cardsContainer.empty();
-            toolList.forEach((t, i) => this.renderToolCard(cardsContainer, t, i, toolList, save, renderAll, is3D));
-        };
-        renderAll();
-
-        const addRow = tab.createDiv({ cls: 'tikz-add-func' });
-        new Setting(addRow)
-            .setName('Add tool')
-            .setDesc(is3D ? 'Pick a 3D tool type.' : 'Pick a tool type.')
-            .addDropdown((d) => {
-                d.addOption('', '- select type -');
-                if (!is3D) {
-                    d.addOption('areaBetween', 'Area between two curves');
-                    d.addOption('intersection', 'Intersection points');
-                    d.addOption('verticalLine', 'Vertical line (x = c)');
-                    d.addOption('horizontalLine', 'Horizontal line (y = c)');
-                    d.addOption('rectangle', 'Rectangle');
-                    d.addOption('circle', 'Circle');
-                    d.addOption('segment', 'Line segment');
-                    d.addOption('brace', 'Brace with label');
-                } else {
-                    d.addOption('plane3D', 'Plane (constant x / y / z)');
-                    d.addOption('point3D', '3D point marker');
-                    d.addOption('segment3D', '3D line segment');
-                }
-                d.setValue('').onChange((v) => {
-                    if (!v) return;
-                    const next = this.createDefaultTool(v as Tool['type']);
-                    if (!next) return;
-                    toolList.push(next);
-                    save();
-                    renderAll();
-                    d.setValue('');
-                });
-            });
-    }
-
-    private createDefaultTool(type: Tool['type']): Tool | null {
-        const c = 'blue';
-        switch (type) {
-            case 'areaBetween':
-                return { type, func1Name: 'f1', func2Name: 'f2', domain: '', color: c, fillOpacity: 0.3, fillPattern: 'solid' };
-            case 'intersection':
-                return { type, func1Name: 'f1', func2Name: 'f2', color: 'red', showLabels: true };
-            case 'verticalLine':
-                return { type, x: '0', color: c, thickness: 'thin', dashed: true, label: '' };
-            case 'horizontalLine':
-                return { type, y: '0', color: c, thickness: 'thin', dashed: true, label: '' };
-            case 'rectangle':
-                return { type, x1: '0', y1: '0', x2: '1', y2: '1', color: c, thickness: 'thin', fill: true, fillOpacity: 0.2, fillPattern: 'solid' };
-            case 'circle':
-                return { type, cx: '0', cy: '0', r: '1', color: c, thickness: 'thin', fill: false, fillOpacity: 0.2, fillPattern: 'solid' };
-            case 'segment':
-                return { type, x1: '0', y1: '0', x2: '1', y2: '1', color: c, thickness: 'thin', dashed: false, arrow: 'forward' };
-            case 'brace':
-                return { type, x1: '0', y1: '0', x2: '1', y2: '0', color: c, label: '' };
-            case 'plane3D':
-                return { type, axis: 'z', value: '0', color: c, fillOpacity: 0.25 };
-            case 'point3D':
-                return { type, x: '0', y: '0', z: '0', color: 'red', label: '' };
-            case 'segment3D':
-                return { type, x1: '0', y1: '0', z1: '0', x2: '1', y2: '1', z2: '1', color: c, thickness: 'thin', dashed: false, arrow: 'forward' };
-            default:
-                return null;
-        }
-    }
-
-    private toolLabel(type: Tool['type']): string {
-        switch (type) {
-            case 'areaBetween': return 'Area between curves';
-            case 'intersection': return 'Intersection points';
-            case 'verticalLine': return 'Vertical line';
-            case 'horizontalLine': return 'Horizontal line';
-            case 'rectangle': return 'Rectangle';
-            case 'circle': return 'Circle';
-            case 'segment': return 'Line segment';
-            case 'brace': return 'Brace';
-            case 'plane3D': return '3D plane';
-            case 'point3D': return '3D point';
-            case 'segment3D': return '3D segment';
-        }
-    }
-
-    private renderToolCard(
-        container: HTMLElement,
-        tool: Tool,
-        idx: number,
-        toolList: Tool[],
-        save: () => void,
-        renderAll: () => void,
-        is3D: boolean
-    ) {
-        const card = container.createDiv({ cls: 'tikz-func-card' });
-        const header = card.createDiv({ cls: 'tikz-func-header' });
-        header.createSpan({ cls: 'tikz-func-label', text: `${idx + 1}. ${this.toolLabel(tool.type)}` });
-        new Setting(header).addButton((btn) =>
-            btn.setIcon('trash').setTooltip('Remove tool').onClick(() => {
-                toolList.splice(idx, 1);
-                save();
-                renderAll();
-            })
-        );
-
-        // Function-name dropdown options pulled fresh from settings each render.
-        const fnNames = (): { value: string; label: string }[] => {
-            type Named = { expression?: string; name?: string };
-            const raw = is3D
-                ? this.settings.getValue<Named[] | undefined>('functions3D')
-                : this.settings.getValue<Named[] | undefined>('functions');
-            const list: Named[] = Array.isArray(raw) ? raw : [];
-            const out: { value: string; label: string }[] = [];
-            list.forEach((f, i) => {
-                if (!f || !f.expression) return;
-                const name = (f.name && f.name.trim()) || `f${i + 1}`;
-                out.push({ value: name, label: name });
-            });
-            return out;
-        };
-
-        const textField = (parent: HTMLElement, label: string, value: string, onChange: (v: string) => void) => {
-            const div = parent.createDiv({ cls: 'tikz-func-field' });
-            new Setting(div).setName(label).addText((t) => t.setValue(String(value ?? '')).onChange(onChange));
-        };
-        const colorField = (parent: HTMLElement, value: string, onChange: (v: string) => void) => {
-            const div = parent.createDiv({ cls: 'tikz-func-field' });
-            new Setting(div).setName('Color').addDropdown((d) => {
-                for (const [k, v] of Object.entries(COLOR_OPTIONS)) d.addOption(k, v);
-                d.setValue(value).onChange(onChange);
-            });
-        };
-        const thicknessField = (parent: HTMLElement, value: string, onChange: (v: string) => void) => {
-            const div = parent.createDiv({ cls: 'tikz-func-field' });
-            new Setting(div).setName('Thickness').addDropdown((d) => {
-                for (const [k, v] of Object.entries(THICKNESS_OPTIONS)) d.addOption(k, v);
-                d.setValue(value).onChange(onChange);
-            });
-        };
-        const toggleField = (parent: HTMLElement, label: string, value: boolean, onChange: (v: boolean) => void) => {
-            const div = parent.createDiv({ cls: 'tikz-func-field' });
-            new Setting(div).setName(label).addToggle((t) => t.setValue(!!value).onChange(onChange));
-        };
-        const sliderField = (parent: HTMLElement, label: string, value: number, onChange: (v: number) => void) => {
-            const div = parent.createDiv({ cls: 'tikz-func-field' });
-            new Setting(div).setName(label).addSlider((s) =>
-                s.setLimits(0.05, 1, 0.05).setValue(value).onChange(onChange)
-            );
-        };
-        const dropdownField = (parent: HTMLElement, label: string, value: string, options: Record<string, string>, onChange: (v: string) => void) => {
-            const div = parent.createDiv({ cls: 'tikz-func-field' });
-            new Setting(div).setName(label).addDropdown((d) => {
-                for (const [k, v] of Object.entries(options)) d.addOption(k, v);
-                d.setValue(value).onChange(onChange);
-            });
-        };
-        const fnNameField = (parent: HTMLElement, label: string, value: string, onChange: (v: string) => void) => {
-            const div = parent.createDiv({ cls: 'tikz-func-field' });
-            const names = fnNames();
-            new Setting(div).setName(label).addDropdown((d) => {
-                d.addOption('', '- select function -');
-                for (const n of names) d.addOption(n.value, n.label);
-                d.setValue(value).onChange(onChange);
-            });
-        };
-        const patternField = (parent: HTMLElement, value: FillPattern, onChange: (v: FillPattern) => void) => {
-            const div = parent.createDiv({ cls: 'tikz-func-field' });
-            new Setting(div).setName('Pattern').addDropdown((d) => {
-                d.addOption('solid', 'Solid');
-                d.addOption('horizontal', 'Horizontal lines');
-                d.addOption('vertical', 'Vertical lines');
-                d.addOption('crosshatch', 'Crosshatch');
-                d.addOption('dots', 'Dots');
-                d.addOption('north-east', 'NE diagonal');
-                d.addOption('north-west', 'NW diagonal');
-                d.setValue(value).onChange((v) => onChange(v as FillPattern));
-            });
-        };
-        const arrowField = (parent: HTMLElement, value: ArrowStyle, onChange: (v: ArrowStyle) => void) => {
-            dropdownField(parent, 'Arrow', value, {
-                none: 'None',
-                forward: 'Forward (→)',
-                backward: 'Backward (←)',
-                both: 'Both (↔)',
-            }, (v) => onChange(v as ArrowStyle));
-        };
-
-        // Type-specific form.
-        switch (tool.type) {
-            case 'areaBetween': {
-                const row1 = card.createDiv({ cls: 'tikz-func-row' });
-                fnNameField(row1, 'Function A', tool.func1Name, (v) => { tool.func1Name = v; save(); });
-                fnNameField(row1, 'Function B', tool.func2Name, (v) => { tool.func2Name = v; save(); });
-                textField(row1, 'Domain (optional)', tool.domain, (v) => { tool.domain = v; save(); });
-                const row2 = card.createDiv({ cls: 'tikz-func-row' });
-                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
-                sliderField(row2, 'Opacity', tool.fillOpacity, (v) => { tool.fillOpacity = v; save(); });
-                patternField(row2, tool.fillPattern, (v) => { tool.fillPattern = v; save(); });
-                break;
-            }
-            case 'intersection': {
-                const row1 = card.createDiv({ cls: 'tikz-func-row' });
-                fnNameField(row1, 'Function A', tool.func1Name, (v) => { tool.func1Name = v; save(); });
-                fnNameField(row1, 'Function B', tool.func2Name, (v) => { tool.func2Name = v; save(); });
-                const row2 = card.createDiv({ cls: 'tikz-func-row' });
-                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
-                toggleField(row2, 'Show (x, y) labels', tool.showLabels, (v) => { tool.showLabels = v; save(); });
-                break;
-            }
-            case 'verticalLine': {
-                const row1 = card.createDiv({ cls: 'tikz-func-row' });
-                textField(row1, 'x =', tool.x, (v) => { tool.x = v; save(); });
-                textField(row1, 'Label (optional)', tool.label, (v) => { tool.label = v; save(); });
-                const row2 = card.createDiv({ cls: 'tikz-func-row' });
-                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
-                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
-                toggleField(row2, 'Dashed', tool.dashed, (v) => { tool.dashed = v; save(); });
-                break;
-            }
-            case 'horizontalLine': {
-                const row1 = card.createDiv({ cls: 'tikz-func-row' });
-                textField(row1, 'y =', tool.y, (v) => { tool.y = v; save(); });
-                textField(row1, 'Label (optional)', tool.label, (v) => { tool.label = v; save(); });
-                const row2 = card.createDiv({ cls: 'tikz-func-row' });
-                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
-                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
-                toggleField(row2, 'Dashed', tool.dashed, (v) => { tool.dashed = v; save(); });
-                break;
-            }
-            case 'rectangle': {
-                const row1 = card.createDiv({ cls: 'tikz-func-row' });
-                textField(row1, 'x₁', tool.x1, (v) => { tool.x1 = v; save(); });
-                textField(row1, 'y₁', tool.y1, (v) => { tool.y1 = v; save(); });
-                textField(row1, 'x₂', tool.x2, (v) => { tool.x2 = v; save(); });
-                textField(row1, 'y₂', tool.y2, (v) => { tool.y2 = v; save(); });
-                const row2 = card.createDiv({ cls: 'tikz-func-row' });
-                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
-                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
-                toggleField(row2, 'Fill', tool.fill, (v) => { tool.fill = v; save(); });
-                sliderField(row2, 'Fill opacity', tool.fillOpacity, (v) => { tool.fillOpacity = v; save(); });
-                patternField(row2, tool.fillPattern, (v) => { tool.fillPattern = v; save(); });
-                break;
-            }
-            case 'circle': {
-                const row1 = card.createDiv({ cls: 'tikz-func-row' });
-                textField(row1, 'Center x', tool.cx, (v) => { tool.cx = v; save(); });
-                textField(row1, 'Center y', tool.cy, (v) => { tool.cy = v; save(); });
-                textField(row1, 'Radius', tool.r, (v) => { tool.r = v; save(); });
-                const row2 = card.createDiv({ cls: 'tikz-func-row' });
-                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
-                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
-                toggleField(row2, 'Fill', tool.fill, (v) => { tool.fill = v; save(); });
-                sliderField(row2, 'Fill opacity', tool.fillOpacity, (v) => { tool.fillOpacity = v; save(); });
-                patternField(row2, tool.fillPattern, (v) => { tool.fillPattern = v; save(); });
-                break;
-            }
-            case 'segment': {
-                const row1 = card.createDiv({ cls: 'tikz-func-row' });
-                textField(row1, 'x₁', tool.x1, (v) => { tool.x1 = v; save(); });
-                textField(row1, 'y₁', tool.y1, (v) => { tool.y1 = v; save(); });
-                textField(row1, 'x₂', tool.x2, (v) => { tool.x2 = v; save(); });
-                textField(row1, 'y₂', tool.y2, (v) => { tool.y2 = v; save(); });
-                const row2 = card.createDiv({ cls: 'tikz-func-row' });
-                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
-                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
-                toggleField(row2, 'Dashed', tool.dashed, (v) => { tool.dashed = v; save(); });
-                arrowField(row2, tool.arrow, (v) => { tool.arrow = v; save(); });
-                break;
-            }
-            case 'brace': {
-                const row1 = card.createDiv({ cls: 'tikz-func-row' });
-                textField(row1, 'x₁', tool.x1, (v) => { tool.x1 = v; save(); });
-                textField(row1, 'y₁', tool.y1, (v) => { tool.y1 = v; save(); });
-                textField(row1, 'x₂', tool.x2, (v) => { tool.x2 = v; save(); });
-                textField(row1, 'y₂', tool.y2, (v) => { tool.y2 = v; save(); });
-                const row2 = card.createDiv({ cls: 'tikz-func-row' });
-                textField(row2, 'Label', tool.label, (v) => { tool.label = v; save(); });
-                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
-                break;
-            }
-            case 'plane3D': {
-                const row1 = card.createDiv({ cls: 'tikz-func-row' });
-                dropdownField(row1, 'Constant axis', tool.axis, { x: 'x', y: 'y', z: 'z' }, (v) => {
-                    tool.axis = v as 'x' | 'y' | 'z';
-                    save();
-                });
-                textField(row1, 'Value', tool.value, (v) => { tool.value = v; save(); });
-                const row2 = card.createDiv({ cls: 'tikz-func-row' });
-                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
-                sliderField(row2, 'Opacity', tool.fillOpacity, (v) => { tool.fillOpacity = v; save(); });
-                break;
-            }
-            case 'point3D': {
-                const row1 = card.createDiv({ cls: 'tikz-func-row' });
-                textField(row1, 'x', tool.x, (v) => { tool.x = v; save(); });
-                textField(row1, 'y', tool.y, (v) => { tool.y = v; save(); });
-                textField(row1, 'z', tool.z, (v) => { tool.z = v; save(); });
-                const row2 = card.createDiv({ cls: 'tikz-func-row' });
-                textField(row2, 'Label', tool.label, (v) => { tool.label = v; save(); });
-                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
-                break;
-            }
-            case 'segment3D': {
-                const row1 = card.createDiv({ cls: 'tikz-func-row' });
-                textField(row1, 'x₁', tool.x1, (v) => { tool.x1 = v; save(); });
-                textField(row1, 'y₁', tool.y1, (v) => { tool.y1 = v; save(); });
-                textField(row1, 'z₁', tool.z1, (v) => { tool.z1 = v; save(); });
-                textField(row1, 'x₂', tool.x2, (v) => { tool.x2 = v; save(); });
-                textField(row1, 'y₂', tool.y2, (v) => { tool.y2 = v; save(); });
-                textField(row1, 'z₂', tool.z2, (v) => { tool.z2 = v; save(); });
-                const row2 = card.createDiv({ cls: 'tikz-func-row' });
-                colorField(row2, tool.color, (v) => { tool.color = v; save(); });
-                thicknessField(row2, tool.thickness, (v) => { tool.thickness = v; save(); });
-                toggleField(row2, 'Dashed', tool.dashed, (v) => { tool.dashed = v; save(); });
-                arrowField(row2, tool.arrow, (v) => { tool.arrow = v; save(); });
-                break;
-            }
-        }
-    }
-
-    private buildAnnotationsTab(container: HTMLElement) {
-        const tab = this.createTabContent(container, 'Annotations');
-
-        tab.createEl('p', {
-            cls: 'tikz-section-blurb',
-            text: 'Add text labels at any point in the coordinate system. In 2D, drag a label in the preview to move it. Annotations are rendered in the live preview and emitted as \\node commands in the exported TikZ.',
-        });
-
-        const cardsContainer = tab.createDiv({ cls: 'tikz-func-cards' });
-        const rowStates = new Map<string, import('./types').Annotation>();
-        this.annotationCards.length = 0;
-
-        const update = () => {
-            const list: import('./types').Annotation[] = [];
-            rowStates.forEach((state) => {
-                if (state.text) list.push({ ...state });
-            });
-            this.settings.setValue('annotations', list);
-            this.requestPreviewUpdate();
-        };
-        this.annotationUpdateFn = update;
-
-        const addCard = (seed?: import('./types').Annotation) => {
-            const rowId = `ann-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const state: import('./types').Annotation = {
-                x: '0',
-                y: '0',
-                z: this.is3D() ? '0' : undefined,
-                text: '',
-                color: 'black',
-                size: 'normal',
-                anchor: 'above',
-                ...(seed || {}),
-            };
-            rowStates.set(rowId, state);
-            const cardEntry: typeof this.annotationCards[number] = { rowId, state, xInput: null, yInput: null, zInput: null };
-            this.annotationCards.push(cardEntry);
-
-            const card = cardsContainer.createDiv({ cls: 'tikz-func-card' });
-            card.style.borderLeftColor = COLOR_MAP[state.color];
-
-            const header = card.createDiv({ cls: 'tikz-func-header' });
-            header.createSpan({ cls: 'tikz-func-label', text: `Label ${rowStates.size}` });
-            new Setting(header).addButton((btn) =>
-                btn
-                    .setIcon('trash')
-                    .setTooltip('Remove label')
-                    .then((b) => b.buttonEl.setAttr('aria-label', 'Remove label'))
-                    .onClick(() => {
-                        rowStates.delete(rowId);
-                        const idx = this.annotationCards.indexOf(cardEntry);
-                        if (idx >= 0) this.annotationCards.splice(idx, 1);
-                        card.remove();
-                        update();
-                    })
-            );
-
-            const row1 = card.createDiv({ cls: 'tikz-func-row' });
-            const textDiv = row1.createDiv({ cls: 'tikz-func-field wide' });
-            new Setting(textDiv).setName('Text').addText((t) =>
-                t.setPlaceholder('Local max').setValue(state.text).onChange((v) => {
-                    state.text = v;
-                    update();
-                })
-            );
-
-            const row2 = card.createDiv({ cls: 'tikz-func-row' });
-            const xDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(xDiv).setName('x').addText((t) => {
-                cardEntry.xInput = t;
-                t.setPlaceholder('0').setValue(state.x).onChange((v) => {
-                    state.x = v;
-                    update();
-                });
-            });
-            const yDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(yDiv).setName('y').addText((t) => {
-                cardEntry.yInput = t;
-                t.setPlaceholder('0').setValue(state.y).onChange((v) => {
-                    state.y = v;
-                    update();
-                });
-            });
-            const zDiv = row2.createDiv({ cls: 'tikz-func-field' });
-            new Setting(zDiv).setName('z').addText((t) => {
-                cardEntry.zInput = t;
-                t.setPlaceholder('0').setValue(state.z ?? '').onChange((v) => {
-                    state.z = v;
-                    update();
-                });
-            });
-
-            const row3 = card.createDiv({ cls: 'tikz-func-row' });
-            const colorDiv = row3.createDiv({ cls: 'tikz-func-field' });
-            new Setting(colorDiv).setName('Color').addDropdown((d) =>
-                d.addOptions(COLOR_OPTIONS).setValue(state.color).onChange((v) => {
-                    state.color = v;
-                    card.style.borderLeftColor = COLOR_MAP[v] || 'var(--text-muted)';
-                    update();
-                })
-            );
-            const sizeDiv = row3.createDiv({ cls: 'tikz-func-field' });
-            new Setting(sizeDiv).setName('Size').addDropdown((d) =>
-                d.addOptions({ small: 'Small', normal: 'Normal', large: 'Large' })
-                    .setValue(state.size)
-                    .onChange((v) => {
-                        state.size = v as import('./types').AnnotationSize;
-                        update();
-                    })
-            );
-            const anchorDiv = row3.createDiv({ cls: 'tikz-func-field' });
-            new Setting(anchorDiv).setName('Anchor').addDropdown((d) =>
-                d.addOptions({
-                    above: 'Above',
-                    below: 'Below',
-                    left: 'Left',
-                    right: 'Right',
-                    center: 'Center',
-                })
-                    .setValue(state.anchor)
-                    .onChange((v) => {
-                        state.anchor = v as import('./types').AnnotationAnchor;
-                        update();
-                    })
-            );
-        };
-
-        // Hydrate from existing annotations if any were persisted
-        // (click-to-edit, or reopening after Save changes). Without this
-        // the cards start empty even though the graph still shows the
-        // saved labels, since the renderer reads settings.annotations
-        // directly - only the editor UI needs rebuilding here.
-        const existingAnnotations = this.settings.getValue<import('./types').Annotation[] | undefined>('annotations') || [];
-        for (const ann of existingAnnotations) addCard(ann);
-
-        const addBtnDiv = tab.createDiv({ cls: 'tikz-add-func' });
-        new Setting(addBtnDiv).addButton((btn) =>
-            btn.setButtonText('+ Add label').onClick(() => addCard())
-        );
-    }
-
-    private buildGridTab(container: HTMLElement) {
-        const tab = this.createTabContent(container, 'Grid');
-
-        new Setting(tab)
-            .setName('Show major grid')
-            .setDesc('Display major coordinate grid lines.')
-            .addToggle((t) =>
-                t.setValue(this.settings.getValue('showLargeGrid')).onChange((v) => {
-                    this.settings.setValue('showLargeGrid', v);
-                    this.requestPreviewUpdate();
-                })
-            );
-
-        new Setting(tab)
-            .setName('Major divisions')
-            .setDesc('Approximate number of major grid cells across the X axis. The Y axis follows proportionally.')
-            .addSlider((s) =>
-                s.setLimits(2, 20, 1).setValue(this.settings.getValue('majorTickNum') ?? 8).onChange((v) => {
-                    this.settings.setValue('majorTickNum', v);
-                    this.requestPreviewUpdate();
-                })
-            );
-
-        new Setting(tab)
-            .setName('Show minor grid')
-            .setDesc('Display minor coordinate grid lines between the major ones.')
-            .addToggle((t) =>
-                t.setValue(this.settings.getValue('showSmallGrid')).onChange((v) => {
-                    this.settings.setValue('showSmallGrid', v);
-                    this.requestPreviewUpdate();
-                })
-            );
-
-        new Setting(tab)
-            .setName('Minor subdivisions')
-            .setDesc('Number of minor subdivisions between two major grid lines.')
-            .addSlider((s) =>
-                s.setLimits(1, 10, 1).setValue(this.settings.getValue('gridSize')).onChange((v) => {
-                    this.settings.setValue('gridSize', v);
-                    this.requestPreviewUpdate();
-                })
-            );
-    }
-
-    private buildCodeTab(container: HTMLElement) {
-        const tab = this.createTabContent(container, 'Code');
-        const textarea = tab.createEl('textarea', { cls: 'tikz-code-textarea' });
-        textarea.spellcheck = false;
-        textarea.setAttr('aria-label', 'Generated TikZ code. Editable, but changes are overwritten when settings update.');
-        this.codeTextArea = textarea;
-    }
-
-    private buildReferenceTab(container: HTMLElement) {
-        const tab = this.createTabContent(container, 'Reference');
-
-        const section = (title: string) => {
-            const h = tab.createEl('h3', { cls: 'tikz-ref-heading', text: title });
-            return h;
-        };
-
-        const para = (text: string) => {
-            tab.createEl('p', { cls: 'tikz-ref-para', text });
-        };
-
-        const list = (items: { name: string; desc: string }[]) => {
-            const dl = tab.createEl('dl', { cls: 'tikz-ref-list' });
-            items.forEach((item) => {
-                dl.createEl('dt', { text: item.name });
-                dl.createEl('dd', { text: item.desc });
-            });
-        };
-
-        const code = (text: string) => {
-            tab.createEl('pre', { cls: 'tikz-ref-code', text });
-        };
-
-        section('Expressions');
-        para('Use the variable x in 2D, or x and y in 3D. Expressions are JavaScript with one convenience: ^ is treated as the power operator (rewritten to **).');
-
-        section('Operators');
-        list([
-            { name: '+  -  *  /', desc: 'Standard arithmetic.' },
-            { name: '^', desc: 'Power. Equivalent to ** in JavaScript. x^2 means x squared.' },
-            { name: '( )', desc: 'Grouping. Always wrap fractions, e.g. 1/(x+1).' },
-        ]);
-
-        section('Trigonometry');
-        para('Angles are in radians. Use PI for degrees, e.g. sin(x * PI / 180).');
-        list([
-            { name: 'sin(x)  cos(x)  tan(x)', desc: 'Sine, cosine, tangent.' },
-            { name: 'asin(x)  acos(x)  atan(x)', desc: 'Inverse trig (radians).' },
-            { name: 'atan2(y, x)', desc: 'Inverse tangent of y/x with correct quadrant.' },
-            { name: 'sinh(x)  cosh(x)  tanh(x)', desc: 'Hyperbolic trig.' },
-            { name: 'asinh(x)  acosh(x)  atanh(x)', desc: 'Inverse hyperbolic.' },
-        ]);
-
-        section('Exponentials and logs');
-        list([
-            { name: 'exp(x)', desc: 'e raised to x.' },
-            { name: 'log(x)', desc: 'Natural log (base e).' },
-            { name: 'log2(x)  log10(x)', desc: 'Logs base 2 and 10.' },
-            { name: 'pow(a, b)', desc: 'Same as a^b. Useful when one operand is itself complex.' },
-        ]);
-
-        section('Roots and rounding');
-        list([
-            { name: 'sqrt(x)  cbrt(x)', desc: 'Square root, cube root.' },
-            { name: 'abs(x)  sign(x)', desc: 'Absolute value, sign (-1, 0, or 1).' },
-            { name: 'floor(x)  ceil(x)  round(x)  trunc(x)', desc: 'Rounding helpers.' },
-            { name: 'min(a, b)  max(a, b)  hypot(a, b)', desc: 'Pairwise helpers.' },
-        ]);
-
-        section('Constants');
-        list([
-            { name: 'PI', desc: '3.14159...' },
-            { name: 'E', desc: '2.71828...' },
-            { name: 'LN2  LN10  LOG2E  LOG10E  SQRT2', desc: 'The usual companions.' },
-        ]);
-
-        section('Examples');
-        code(
-            'x^2                       parabola\n' +
-            'x^3 - 3*x                 cubic with two extrema\n' +
-            'sin(x)                    sine wave\n' +
-            'tanh(x)                   smooth step\n' +
-            'sin(x) * exp(-x/5)        damped oscillation\n' +
-            '1 / (1 + x^2)             bell curve (Cauchy)\n' +
-            'sqrt(1 - x^2)             upper half-circle (domain -1:1)\n' +
-            'sin(x*PI/180)             sine of an angle in degrees'
-        );
-
-        section('Domain');
-        para('A domain is min:max, e.g. -10:10 or 0:6.28. Min must be strictly less than max. Each function card has its own domain so different curves can span different ranges.');
-
-        section('Function options');
-        para('Each card on the Functions tab exposes the same set of styling and analysis toggles.');
-        list([
-            { name: 'Color', desc: 'Black, Red, Blue, Teal, Orange, Green, Purple. Black resolves to the theme text color so the curve is visible in both light and dark themes.' },
-            { name: 'Thickness', desc: 'Very thin, Thin, Thick, Very thick. Affects the rendered TikZ output and the live preview equally.' },
-            { name: 'Dashed', desc: 'Draws the curve as a dashed line rather than a solid stroke.' },
-            { name: 'Fill', desc: 'Shades the region between the curve and the x-axis. When enabled, a Fill pattern dropdown (solid, horizontal/vertical lines, crosshatch, dots, diagonals) and a Fill opacity slider appear.' },
-            { name: 'Legend', desc: 'Adds an entry to the legend box in the upper-right of the plot. By default it shows the expression; set Legend label to override it with custom text (e.g. "Revenue").' },
-        ]);
-
-        section('Tools');
-        para(
-            'The Tools tab adds composable overlays on top of functions. Each tool is independent - stack them freely to build the diagram you want. ' +
-                'Function-referencing tools (area between, intersection) look up your functions by the Name field on each function card (defaults to f1, f2, …).'
-        );
-        list([
-            { name: 'Area between two curves', desc: 'Picks two functions by name and shades the region between them. Optional domain override (defaults to the overlap of both function domains). Color, opacity, pattern.' },
-            { name: 'Intersection points', desc: 'Bisection root-finder on f - g across the overlap of both function domains. Each crossing gets a dot; optional (x, y) label.' },
-            { name: 'Vertical / horizontal reference line', desc: 'Line at x = c or y = c spanning the plot. Color, thickness, dashed, optional label.' },
-            { name: 'Rectangle', desc: 'Outline + optional fill between (x₁, y₁) and (x₂, y₂). Patterns supported.' },
-            { name: 'Circle', desc: 'Center (cx, cy), radius r. Drawn in axis coordinates so the radius scales with the axes.' },
-            { name: 'Line segment', desc: 'Straight line between two points with optional forward / backward / both arrows.' },
-            { name: 'Brace with label', desc: 'Curly brace between two points with optional label centered above. Useful for marking intervals.' },
-            { name: '3D plane', desc: 'Flat plane at constant x, y, or z. Color + opacity.' },
-            { name: '3D point / segment', desc: 'Single point at (x, y, z) with optional label, or a line segment between two 3D points with optional arrows.' },
-        ]);
-        para(
-            'Exported TikZ uses real pgfplots semantics - `\\addplot fill between [of=A and B]` for area-between, ' +
-                '`\\draw` for shapes, `\\node` for labels, `decorate / decoration={brace}` for braces. The `fillbetween` and `decorations.pathreplacing` libraries are added to the document setup only when a tool needs them.'
-        );
-
-        section('Annotations');
-        para('The Annotations tab lets you place text labels at arbitrary points. Each label has x, y (and z in 3D), a color, a size (small/normal/large), and an anchor that controls which side of the point the text sits on. In the exported TikZ each label becomes a \\node command.');
-
-        section('Tangent');
-        para('Enable the Tangent toggle to draw the line tangent to the curve at a chosen x value. The Tangent point field appears once the toggle is on. The point must lie inside the domain. A small dot marks the touch point.');
-
-        section('Extrema');
-        para('Enable the Extrema toggle to scan the domain for local minima and maxima. Detected points are marked with a dot and labelled "min" or "max". Resolution is 100 samples across the domain, so very sharp features inside a wide domain might be missed.');
-
-        section('Parametric curves');
-        para('Enable the Parametric toggle on a 2D function card to plot a parametric curve. The Expression field becomes x(t), a new y(t) field appears, and the Domain field is now the t range (default `0:2*PI`). Both components can use any Math.* function and the constants PI, E. The exported TikZ emits `\\addplot[parametric, ...]`.');
-        code(
-            'x(t) = sin(3*t)             Lissajous (3:4)    domain 0:2*PI\n' +
-            'y(t) = sin(4*t)\n\n' +
-            'x(t) = cos(t) * (1 + 0.3*cos(8*t))   epicycloid   domain 0:2*PI\n' +
-            'y(t) = sin(t) * (1 + 0.3*cos(8*t))\n\n' +
-            'x(t) = t                     classic curve      domain -2:2\n' +
-            'y(t) = t^3 - 3*t\n\n' +
-            'x(t) = cos(t)                circle             domain 0:2*PI\n' +
-            'y(t) = sin(t)'
-        );
-
-        section('Polar coordinates');
-        para('On the Graph tab, set Coordinate system to "Polar". The Functions tab\'s expression is then interpreted as r(theta) and the domain is the theta range in radians. The preview transforms to Cartesian internally; the exported TikZ uses a parametric `\\addplot ({r*cos(deg(\\t))}, {r*sin(deg(\\t))})` and adds `axis equal` so circles stay circular. You can write the variable as `theta` or `x`; both are accepted.');
-        code(
-            '1 + cos(theta)            cardioid           domain 0:2*PI\n' +
-            'sin(4*theta)              rose curve         domain 0:2*PI\n' +
-            'sin(2.5*theta)            5-petal rose       domain 0:4*PI\n' +
-            'theta                     Archimedean spiral domain 0:6*PI\n' +
-            '2 * sin(3*theta)          3-petal rose       domain 0:2*PI\n' +
-            'exp(theta/10)             logarithmic spiral domain 0:6*PI'
-        );
-
-        section('3D surfaces');
-        para('Switch the modal to 3D mode on the Graph tab. The Functions tab then accepts two-variable expressions.');
-        code(
-            'sin(x) * cos(y)\n' +
-            'x^2 + y^2                 paraboloid\n' +
-            'sin(sqrt(x^2 + y^2))      ripple pattern\n' +
-            'exp(-(x^2 + y^2) / 4)     gaussian bump\n' +
-            'x*y                       saddle\n' +
-            'cos(x) + sin(y)           interference pattern'
-        );
-
-        section('3D surface options');
-        list([
-            { name: 'X domain / Y domain', desc: 'Each axis gets its own range.' },
-            { name: 'Color', desc: 'Same palette as 2D. The surface is shaded from the base color toward white based on z value.' },
-            { name: 'Wireframe', desc: 'Renders only the grid lines of the surface, no fill. Useful when stacking multiple surfaces.' },
-            { name: 'Opacity', desc: 'Slider from 0.1 to 1.0. Affects the filled surface; wireframes use the opacity for stroke transparency.' },
-            { name: 'Samples', desc: 'Grid density per axis (8 to 80). Higher = smoother surface, slower preview. Also drives pgfplots `samples=` in the exported code.' },
-        ]);
-
-        section('Preview vs exported code');
-        para('The live preview is a custom SVG renderer; the exported code is pgfplots that you compile with a real TeX engine. They are necessarily two pipelines. The plugin keeps them as close as possible: the SVG aspect ratio now follows the Width/Height (cm) values on the Graph tab, and the same axis ranges, fill options, samples, and annotations are used by both.');
-
-        section('Exporting the preview');
-        list([
-            { name: 'Copy TikZ code', desc: 'The default. Copies the pgfplots source to the clipboard.' },
-            { name: 'Copy SVG', desc: 'Copies the live SVG with a transparent background. Paste into Inkscape, Figma, or directly into Obsidian as <img src="...">. CSS variables are resolved so the file renders correctly outside the plugin.' },
-            { name: 'Copy PNG', desc: 'Rasterises the SVG at 2x resolution and copies a PNG to the clipboard, also with a transparent background. Paste into any image-aware app.' },
-            { name: 'Insert into note', desc: 'Inserts an `easy-tikz` JSON code block into the active note; the plugin renders it inline via its own SVG renderer - no external TikZ plugin required. Clicking the rendered chart reopens this modal pre-filled.' },
-        ]);
-
-        section('Preview (2D)');
-        para('The right-hand preview is a live SVG that always reflects the current settings. In 2D mode you can interact with it directly:');
-        list([
-            { name: 'Scroll', desc: 'Mouse wheel zooms in or out around the cursor. Zoom updates xmin/xmax/ymin/ymax, so the generated TikZ code reflects what you see.' },
-            { name: 'Drag', desc: 'Click and drag inside the preview to pan. Like zoom, this updates the axis ranges and round-trips into the code.' },
-            { name: 'Lock pan/zoom', desc: 'Padlock icon in the floating action strip on the right edge of the preview. When locked, drag and scroll no longer touch the axis range - use this if you\'ve dialed in xmin/xmax/ymin/ymax and want to stop accidentally nudging them (e.g. while dragging an annotation nearby). Annotation dragging keeps working either way. Resets to unlocked next time you open the editor.' },
-            { name: 'Preview size slider', desc: 'On the Graph tab. Sets the live preview width in pixels. The exported TikZ size is controlled by Width and Height (cm) and stays independent.' },
-        ]);
-
-        section('Camera (3D)');
-        para('The Graph tab has Elevation and Azimuth sliders. You can also drag the preview to rotate, or click into the preview and use the arrow keys (5 degree steps).');
-        list([
-            { name: 'Elevation', desc: '0 is edge-on (looking along the y-axis), 90 is straight down.' },
-            { name: 'Azimuth', desc: 'Rotation of the camera around the vertical axis (0 to 360).' },
-        ]);
-
-        section('Grid');
-        para('Major grid lines and minor subdivisions can be toggled independently. The Major divisions slider sets how many cells span the X axis (Y follows proportionally). Minor subdivisions chooses how many minor lines sit between two major ones.');
-
-        section('Recipes');
-        para('Quick starts for common plots. Copy the expression, the suggested domain, and the suggested ranges.');
-        code(
-            'Parabola               x^2                       domain -3:3       y -1:9\n' +
-            'Cubic                  x^3 - 3*x                 domain -2:2       y -3:3\n' +
-            'Sine wave              sin(x)                    domain 0:2*PI     y -1.5:1.5\n' +
-            'Damped oscillation     sin(x) * exp(-x/5)        domain 0:20       y -1:1\n' +
-            'Gaussian               exp(-x^2)                 domain -3:3       y 0:1.2\n' +
-            'Logistic               1 / (1 + exp(-x))         domain -6:6       y 0:1\n' +
-            'Hyperbola              1 / x                     domain 0.1:5      y 0:10\n' +
-            'Tangent (clipped)      tan(x)                    domain -1.5:1.5   y -10:10\n' +
-            'Circle (upper half)    sqrt(1 - x^2)             domain -1:1       y 0:1.2\n' +
-            'Ellipse (upper half)   sqrt(1 - (x/2)^2)         domain -2:2       y 0:1.2'
-        );
-
-        section('Troubleshooting');
-        list([
-            { name: '"Render failed" toast.', desc: 'The expression could not be evaluated. Common causes: missing operator (write 2*x not 2x), unbalanced parentheses, undefined name (you typed Tan instead of tan).' },
-            { name: 'Curve disappears off the top or bottom.', desc: 'Adjust the Y range on the Axis tab. Values outside the range are clipped.' },
-            { name: 'Tangent point error.', desc: 'The x value you entered is not inside the function domain. Check the Domain field on the same card.' },
-            { name: '3D surface is empty.', desc: 'The expression returned NaN or Infinity at every sample. Most often log of a negative number, or division by zero across the whole grid.' },
-            { name: 'Plot looks jagged.', desc: 'The 2D renderer uses 500 samples; the 3D renderer uses a 40x40 grid. Both are fixed. For smoother output, narrow the domain so the same samples cover a smaller range.' },
-        ]);
-
-        section('Tips');
-        list([
-            {
-                name: 'Math.* still works.',
-                desc: 'Anything from the JavaScript Math namespace is also accessible explicitly, e.g. Math.tan(x). The bare names above are just shortcuts.',
-            },
-            {
-                name: 'Errors surface as a notice.',
-                desc: 'If an expression fails to evaluate, you will see a transient toast at the top of the screen. The Code tab still updates.',
-            },
-            {
-                name: 'Asymptotes are clipped.',
-                desc: 'Values whose absolute size exceeds 10x the Y axis range are dropped, so tan(x) near pi/2 will not blow out the chart.',
-            },
-            {
-                name: 'Code tab is editable.',
-                desc: 'You can tweak the generated TikZ before copying or inserting. Settings changes overwrite your edits unless the textarea is focused.',
-            },
-            {
-                name: 'Keyboard navigation.',
-                desc: 'Click any tab and the active state follows you as you scroll. Tab clicks smooth-scroll to that section.',
-            },
-        ]);
-    }
-
-    private update3DVisibility() {
-        const show3D = this.is3D();
-        if (this.rotationContainer) this.rotationContainer.toggleClass('tikz-hidden', !show3D);
-        if (this.zAxisContainer) this.zAxisContainer.toggleClass('tikz-hidden', !show3D);
-        if (this.axisStyleContainer) this.axisStyleContainer.toggleClass('tikz-hidden', show3D);
-        if (this.previewContainer) this.previewContainer.toggleClass('is-3d', show3D);
-        if (this.zoom3DOverlay) this.zoom3DOverlay.toggleClass('tikz-hidden', !show3D);
-    }
-
-    /**
-     * Watch the preview area for size changes (modal/window resize) and
-     * re-render so the 3D fit-contain sizing updates. Guarded against
-     * self-trigger from our own style writes by only firing when the
-     * dimensions moved by more than 0.5px since the last paint.
-     */
-    private setupPreviewResizeObserver() {
-        if (typeof ResizeObserver === 'undefined') return;
-        const observer = new ResizeObserver((entries) => {
-            const entry = entries[0];
-            if (!entry) return;
-            const w = entry.contentRect.width;
-            const h = entry.contentRect.height;
-            const last = this.lastObservedPreviewSize;
-            if (last && Math.abs(last.w - w) < 0.5 && Math.abs(last.h - h) < 0.5) {
-                return;
-            }
-            this.lastObservedPreviewSize = { w, h };
-            this.requestPreviewUpdate();
-        });
-        observer.observe(this.previewContainer);
-        this.previewResizeObserver = observer;
-    }
-
-    private buildZoom3DOverlay() {
-        const overlay = this.previewContainer.createDiv({ cls: 'tikz-3d-zoom-overlay' });
-        overlay.setAttr('aria-hidden', 'true');
-        // Initial display follows the current 2D/3D state. update3DVisibility
-        // also flips this, but buildGraphTab calls update3DVisibility BEFORE
-        // this overlay is built (panel-left is constructed before panel-right),
-        // so opening the modal in 3D mode would otherwise leave it hidden.
-        overlay.toggleClass('tikz-hidden', !this.is3D());
-
-        const plus = overlay.createEl('button', { cls: 'tikz-3d-zoom-btn', text: '+' });
-        plus.setAttr('type', 'button');
-        plus.setAttr('aria-label', 'Zoom in');
-        plus.setAttr('title', 'Zoom in');
-        plus.onclick = (e) => {
-            e.stopPropagation();
-            this.adjust3DZoom(1.25);
-        };
-
-        const minus = overlay.createEl('button', { cls: 'tikz-3d-zoom-btn', text: '−' });
-        minus.setAttr('type', 'button');
-        minus.setAttr('aria-label', 'Zoom out');
-        minus.setAttr('title', 'Zoom out');
-        minus.onclick = (e) => {
-            e.stopPropagation();
-            this.adjust3DZoom(1 / 1.25);
-        };
-
-        const reset = overlay.createEl('button', { cls: 'tikz-3d-zoom-btn tikz-3d-zoom-reset', text: '↻' });
-        reset.setAttr('type', 'button');
-        reset.setAttr('aria-label', 'Reset zoom');
-        reset.setAttr('title', 'Reset zoom');
-        reset.onclick = (e) => {
-            e.stopPropagation();
-            this.settings.setValue('zoom3D', 1);
-            this.requestPreviewUpdateFast();
-        };
-
-        // Mouse-down on the overlay shouldn't trigger the drag-rotate handler.
-        overlay.addEventListener('mousedown', (e) => e.stopPropagation());
-
-        this.zoom3DOverlay = overlay;
-    }
-
-    private currentXLabelKey(): string {
-        return this.settings.getValue('coordinateSystem') === 'polar' ? 'axis_label_x_polar' : 'axis_label_x';
-    }
-
-    private currentYLabelKey(): string {
-        return this.settings.getValue('coordinateSystem') === 'polar' ? 'axis_label_y_polar' : 'axis_label_y';
-    }
-
-    private currentXLabelValue(): string {
-        return String(this.settings.getValue(this.currentXLabelKey()) ?? '');
-    }
-
-    private currentYLabelValue(): string {
-        return String(this.settings.getValue(this.currentYLabelKey()) ?? '');
-    }
-
-    private refreshAxisLabelInputs() {
-        if (this.xLabelInput) this.xLabelInput.setValue(this.currentXLabelValue());
-        if (this.yLabelInput) this.yLabelInput.setValue(this.currentYLabelValue());
-    }
-
-    private adjust3DZoom(factor: number) {
-        const current = this.settings.getValue<number | undefined>('zoom3D') || 1;
-        const next = Math.max(0.3, Math.min(4, current * factor));
-        this.settings.setValue('zoom3D', next);
-        this.requestPreviewUpdateFast();
-    }
-
-    /**
-     * Vertical strip of floating action icons on the right edge of the
-     * preview area. Surfaces commands that would otherwise be buried in
-     * the settings tabs (auto-fit, reset axes, toggle major grid).
-     */
-    private buildFloatingActions() {
-        const overlay = this.previewContainer.createDiv({ cls: 'tikz-floating-actions' });
-        overlay.setAttr('aria-hidden', 'false');
-        overlay.addEventListener('mousedown', (e) => e.stopPropagation());
-
-        const addAction = (icon: string, label: string, onClick: () => void) => {
-            const btn = overlay.createEl('button', { cls: 'tikz-floating-btn' });
-            btn.setAttr('type', 'button');
-            btn.setAttr('aria-label', label);
-            btn.setAttr('title', label);
-            setIcon(btn, icon);
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                onClick();
-            };
-            return btn;
-        };
-
-        addAction('maximize-2', 'Fit to functions', () => this.autoFitRanges());
-        addAction('rotate-ccw', 'Reset axis ranges', () => this.resetAxisRanges());
-        addAction('grid-3x3', 'Toggle major grid', () => this.toggleMajorGrid());
-        this.panLockBtn = addAction('lock-open', 'Lock pan/zoom (2D)', () => this.togglePanLock());
-
-        this.floatingActionsOverlay = overlay;
-    }
-
-    /**
-     * Toggle whether canvas drag-to-pan and scroll-to-zoom are allowed to
-     * change the axis range. Doesn't affect 3D rotation drag or annotation
-     * dragging - only the 2D pan/zoom path that writes to xmin/xmax/ymin/ymax.
-     */
-    private togglePanLock() {
-        this.panLocked = !this.panLocked;
-        if (this.panLockBtn) {
-            setIcon(this.panLockBtn, this.panLocked ? 'lock' : 'lock-open');
-            this.panLockBtn.toggleClass('is-active', this.panLocked);
-            this.panLockBtn.setAttr('aria-label', this.panLocked ? 'Unlock pan/zoom (2D)' : 'Lock pan/zoom (2D)');
-            this.panLockBtn.setAttr('title', this.panLocked ? 'Unlock pan/zoom (2D)' : 'Lock pan/zoom (2D)');
-        }
-        new Notice(this.panLocked ? 'Pan/zoom locked - axis range won\'t change from drag or scroll.' : 'Pan/zoom unlocked.');
-    }
-
-    private resetAxisRanges() {
-        this.settings.setValue('xmin', '-0.5');
-        this.settings.setValue('xmax', '10');
-        this.settings.setValue('ymin', '-0.5');
-        this.settings.setValue('ymax', '5');
-        if (this.is3D()) {
-            this.settings.setValue('zmin', '-5');
-            this.settings.setValue('zmax', '5');
-            this.settings.setValue('zoom3D', 1);
-        }
-        this.refreshRangeInputs();
-        this.requestPreviewUpdate();
-        new Notice('Axis ranges reset.');
-    }
-
-    private toggleMajorGrid() {
-        const current = !!this.settings.getValue('showLargeGrid');
-        this.settings.setValue('showLargeGrid', !current);
-        this.requestPreviewUpdate();
-        new Notice(current ? 'Major grid off.' : 'Major grid on.');
-    }
-
-    private setupMouseDragRotation() {
-        const el = this.previewContainer;
-
-        el.addEventListener('mousedown', (e: MouseEvent) => {
-            if (e.button !== 0) return;
-
-            // Annotation drag takes priority. Only supported in 2D for now.
-            if (!this.is3D()) {
-                const target = e.target as Element | null;
-                const annoEl = target?.closest('[data-annotation-idx]') as Element | null;
-                if (annoEl) {
-                    const idx = parseInt(annoEl.getAttribute('data-annotation-idx') || '-1', 10);
-                    if (idx >= 0) {
-                        this.draggingAnnotationIdx = idx;
-                        el.addClass('tikz-preview-dragging');
-                        e.preventDefault();
-                        return;
-                    }
-                }
-            }
-
-            // Pan lock only blocks the 2D pan-writes-axis-range path; 3D
-            // rotation drag is unaffected (it doesn't touch xmin/xmax/ymin/ymax).
-            if (this.panLocked && !this.is3D()) return;
-
-            this.isDragging = true;
-            this.dragStartX = e.clientX;
-            this.dragStartY = e.clientY;
-
-            if (this.is3D()) {
-                this.dragStartAzimuth = this.settings.getValue('rotationZ') ?? 45;
-                this.dragStartElevation = this.settings.getValue('rotationX') ?? 30;
-            } else {
-                this.dragStartXmin = parseFloat(this.settings.getValue('xmin')) || -0.5;
-                this.dragStartXmax = parseFloat(this.settings.getValue('xmax')) || 10;
-                this.dragStartYmin = parseFloat(this.settings.getValue('ymin')) || -0.5;
-                this.dragStartYmax = parseFloat(this.settings.getValue('ymax')) || 5;
-            }
-
-            el.addClass('tikz-preview-dragging');
+        // Roving tabindex: arrows / Home / End move between tabs and activate them.
+        list.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+            const ids = TABS.map((t) => t.id);
+            const at = ids.indexOf(this.activeTab);
+            let next: number | null = null;
+            if (e.key === 'ArrowRight') next = (at + 1) % ids.length;
+            else if (e.key === 'ArrowLeft') next = (at - 1 + ids.length) % ids.length;
+            else if (e.key === 'Home') next = 0;
+            else if (e.key === 'End') next = ids.length - 1;
+            if (next === null) return;
             e.preventDefault();
+            this.showTab(ids[next]);
+            this.tabButtons.get(ids[next])?.focus();
         });
 
-        this.onMouseMove = (e: MouseEvent) => {
-            if (this.draggingAnnotationIdx !== null) {
-                this.applyAnnotationDrag(this.draggingAnnotationIdx, e);
+        const panel = (id: TabId) => this.tabPanels.get(id) as HTMLElement;
+        this.build = createBuildPanel(panel('build'), this, {
+            onErrorsChange: () => this.updateTabDots(),
+            // The default view cuts off most first formulas: fit it once, unless the user already set ranges.
+            onStartAdded: () => {
+                if (this.rangesAreDefault()) this.autoFit(true);
+            },
+        });
+        this.chartPanel = createChartPanel(panel('chart'), this, {
+            fit: () => this.autoFit(),
+            reset: () => this.resetRanges(),
+        });
+        this.codePanel = createCodePanel(panel('code'), this, {
+            generate: () => this.generateCode(),
+            isVisible: () => this.activeTab === 'code',
+            copy: (text, button) => void this.copyText(text, button),
+        });
+        createHelpPanel(panel('help'), this);
+    }
+
+    private syncHeader() {
+        this.dimSeg?.setValue(this.is3D() ? '3d' : '2d');
+        this.coordSeg?.setValue(this.isPolar() ? 'polar' : 'cartesian');
+        this.coordSeg?.el.toggleClass('tikz-hidden', this.is3D());
+        this.pill2D?.toggleClass('tikz-hidden', this.is3D());
+        this.pill3D?.toggleClass('tikz-hidden', !this.is3D());
+        if (this.chartLabelEl) {
+            this.chartLabelEl.setText(
+                this.is3D()
+                    ? 'Chart preview. Drag or use the arrow keys to rotate.'
+                    : this.dragEditOn()
+                      ? CHART_LABEL
+                      : 'Chart preview. Drag or use the arrow keys to pan, scroll to zoom, drag labels to move them.'
+            );
+        }
+        this.chartEl?.toggleClass('is-3d', this.is3D());
+        this.updateEmptyHint();
+    }
+
+    private setDimension(is3D: boolean) {
+        if (is3D === this.is3D()) return;
+        closeAllPopovers();
+        this.dock?.stopAnimations();
+        this.resetDrag();
+        this.settings.setValue('dimension', is3D);
+        this.drag = null;
+        this.layout = null;
+        this.hideReadout();
+        this.syncHeader();
+        this.build?.refresh();
+        this.chartPanel?.refresh();
+        this.commit();
+    }
+
+    private setCoordinates(system: 'cartesian' | 'polar') {
+        if (this.settings.getValue('coordinateSystem') === system) return;
+        closeAllPopovers();
+        this.resetDrag();
+        this.settings.setValue('coordinateSystem', system);
+        this.syncHeader();
+        // Function cards and axis labels differ per coordinate system.
+        this.build?.refresh();
+        this.chartPanel?.refresh();
+        this.commit();
+    }
+
+    private hideUndo() {
+        if (this.undoTimer !== null) window.clearTimeout(this.undoTimer);
+        this.undoTimer = null;
+        if (!this.undoEl) return;
+        this.undoEl.empty();
+        this.undoEl.addClass('tikz-hidden');
+    }
+
+    private updateTabDots() {
+        const isError = (i: SceneIssue) => i.severity === 'error';
+        const params = new Set(this.list<Parameter>('parameters').map((p) => p.name));
+        let buildErr = this.issues.some((i) => isError(i) && i.source !== 'chart' && !params.has(i.source));
+        let chartErr = this.issues.some((i) => isError(i) && i.source === 'chart');
+        try {
+            buildErr = buildErr || !!this.build?.hasErrors();
+            chartErr = chartErr || !!this.chartPanel?.hasErrors();
+        } catch (e) {
+            // A broken panel: keep the render-based dots, the next render updates them again.
+            logError(e);
+        }
+        const set = (id: TabId, on: boolean) => {
+            this.tabButtons.get(id)?.toggleClass('has-error', on);
+            this.tabErrorLabels.get(id)?.setText(on ? ' (has problems)' : '');
+        };
+        set('build', buildErr);
+        set('chart', chartErr);
+    }
+
+    // ================================================================ preview stage
+
+    private buildStage(shell: HTMLElement) {
+        const stage = shell.createDiv({ cls: 'etz-stage' });
+        this.stageEl = stage;
+
+        const chart = stage.createDiv({ cls: 'etz-chart', attr: { tabindex: '0', role: 'img' } });
+        this.chartEl = chart;
+        this.chartLabelEl = visuallyHidden(stage, '');
+        this.chartLabelEl.id = uniqueId('preview');
+        chart.setAttr('aria-labelledby', this.chartLabelEl.id);
+        this.bindPreviewPointer(chart);
+        // Drag overlay (a sibling SVG over the chart, never exported), the chip and the announcer.
+        this.dragLayer = createDragLayer(chart);
+        this.dragHint = createDragHint(stage);
+        this.announcer = stage.createSpan({ cls: 'etz-sr-only', attr: { 'aria-live': 'polite' } });
+        stage.addEventListener('pointerenter', () => {
+            this.stageHovered = true;
+        });
+        stage.addEventListener('pointerleave', () => {
+            this.stageHovered = false;
+        });
+
+        this.emptyEl = stage.createDiv({ cls: ['etz-preview-empty', 'tikz-hidden'], attr: { 'aria-hidden': 'true' } });
+        this.emptyEl.createDiv({ cls: 'etz-preview-empty-title', text: 'Your chart appears here' });
+        this.emptyEl.createDiv({ cls: 'etz-preview-empty-hint' });
+
+        // Status chip (top-left; the top-right corner stays free for the modal's close button).
+        const live = stage.createDiv({ cls: 'etz-status', attr: { 'aria-live': 'polite' } });
+        this.statusChip = live.createEl('button', { cls: ['etz-status-chip', 'tikz-hidden'], attr: { type: 'button' } });
+        this.statusText = this.statusChip.createSpan({ cls: 'etz-status-text' });
+        this.statusMore = this.statusChip.createSpan({ cls: 'etz-status-more' });
+        this.statusChip.addEventListener('click', () => {
+            if (this.flash !== null) {
+                this.clearFlash();
                 return;
             }
-            if (!this.isDragging) return;
-            const dx = e.clientX - this.dragStartX;
-            const dy = e.clientY - this.dragStartY;
+            const first = this.issues[0];
+            if (first) this.focusIssue(first);
+        });
 
-            if (this.is3D()) {
-                let newAzimuth = this.dragStartAzimuth + dx * AZIMUTH_DRAG_RATE;
-                // Vertical drag direction follows the plugin setting. Default
-                // (invertDrag3D: false): drag down RAISES elevation
-                // (trackball-style - you're "pulling the floor up").
-                // invertDrag3D: true: drag down LOWERS elevation (direct
-                // manipulation - the camera follows your finger).
-                const invert = !!this.plugin?.data?.invertDrag3D;
-                const elevationDelta = (invert ? dy : -dy) * ELEVATION_DRAG_RATE;
-                let newElevation = this.dragStartElevation + elevationDelta;
-                newAzimuth = ((newAzimuth % 360) + 360) % 360;
-                newElevation = Math.max(0, Math.min(90, newElevation));
-                this.applyRotation(Math.round(newAzimuth), Math.round(newElevation));
-            } else {
-                // 2D drag: pan the visible axis range each frame and let
-                // the renderer redraw the chart in place. The chart pans
-                // inside its fixed axes (the box doesn't move), the tick
-                // labels update with the new range - same idea as the
-                // 3D drag which re-renders with new camera rotation
-                // each move. The scale math is correct since 3.18.2
-                // fixed `getPlotMetricsFromSvg` to read the chart SVG
-                // (not an overlay icon).
-                const plot = this.getPlotMetricsFromSvg();
-                if (!plot) return;
-                const sensitivity = this.plugin?.data?.dragSensitivity2D ?? 1.0;
-                const dxVb = dx * plot.scale;
-                const dyVb = dy * plot.scale;
-                const startXrange = this.dragStartXmax - this.dragStartXmin;
-                const startYrange = this.dragStartYmax - this.dragStartYmin;
-                const dxMath = (-dxVb / plot.plotW) * startXrange * sensitivity;
-                const dyMath = (dyVb / plot.plotH) * startYrange * sensitivity;
-                this.applyAxisRange(
-                    this.dragStartXmin + dxMath,
-                    this.dragStartXmax + dxMath,
-                    this.dragStartYmin + dyMath,
-                    this.dragStartYmax + dyMath
-                );
-            }
+        this.readoutEl = stage.createDiv({ cls: ['etz-readout', 'tikz-hidden'], attr: { 'aria-hidden': 'true' } });
+
+        const pill = stage.createDiv({ cls: 'etz-pill' });
+        iconButton(pill, { icon: 'maximize-2', label: 'Fit ranges to the functions', tooltipPosition: 'top', onClick: () => this.autoFit() });
+        iconButton(pill, { icon: 'rotate-ccw', label: 'Reset ranges', tooltipPosition: 'top', onClick: () => this.resetRanges() });
+        this.pill2D = pill.createDiv({ cls: 'etz-pill-group' });
+        this.gridBtn = iconButton(this.pill2D, {
+            icon: 'grid',
+            label: 'Major grid',
+            pressed: this.settings.getValue('showLargeGrid') === true,
+            tooltipPosition: 'top',
+            onClick: () => this.toggleGrid(),
+        });
+        this.lockBtn = iconButton(this.pill2D, {
+            icon: 'lock-open',
+            label: 'Lock pan and zoom',
+            pressed: false,
+            tooltipPosition: 'top',
+            onClick: () => this.togglePanLock(),
+        });
+        this.dragToggle = iconButton(this.pill2D, {
+            icon: 'mouse-pointer-2',
+            label: TOGGLE_LABEL,
+            pressed: this.dragEditOn(),
+            tooltipPosition: 'top',
+            onClick: () => this.toggleDragEdit(),
+        });
+        this.pill3D = pill.createDiv({ cls: 'etz-pill-group' });
+        iconButton(this.pill3D, { icon: 'zoom-in', label: 'Zoom in', tooltipPosition: 'top', onClick: () => this.zoom3D(ZOOM_3D_STEP) });
+        iconButton(this.pill3D, { icon: 'zoom-out', label: 'Zoom out', tooltipPosition: 'top', onClick: () => this.zoom3D(1 / ZOOM_3D_STEP) });
+        iconButton(this.pill3D, { icon: 'scan', label: 'Reset zoom', tooltipPosition: 'top', onClick: () => this.zoom3D(0) });
+    }
+
+    private onResize() {
+        const shell = this.shellEl;
+        if (!shell) return;
+        // The shell's size comes from the modal frame, never from this class, so toggling cannot loop.
+        const { width, height } = shell.getBoundingClientRect();
+        if (width > 0) shell.toggleClass('is-narrow', width < STACK_WIDTH || (width < NARROW_WIDTH && height > width * STACK_ASPECT));
+        const stage = this.stageEl;
+        if (!stage) return;
+        const r = stage.getBoundingClientRect();
+        const last = this.lastStageSize;
+        if (Math.abs(r.width - last.w) < 0.5 && Math.abs(r.height - last.h) < 0.5) return;
+        this.lastStageSize = { w: r.width, h: r.height };
+        // The 2D SVG scales with CSS; the 3D canvas measures its parent, so it repaints.
+        if (this.is3D() && this.chartMode === '3d') this.scheduleFrame();
+    }
+
+    /** The chart is shown at a new size: redraw the 2D scene once at the matching grid. */
+    private checkGridScale() {
+        if (this.chartMode !== '2d' || !this.layout) return;
+        if (fitPixelScale(this.chartBox.w, this.chartBox.h, this.layout.width, this.layout.height) !== this.gridScale) this.scheduleUpdate();
+    }
+
+    private updateEmptyHint() {
+        if (!this.emptyEl) return;
+        const empty = !this.hasContent();
+        this.emptyEl.toggleClass('tikz-hidden', !empty);
+        const hint = this.emptyEl.querySelector('.etz-preview-empty-hint');
+        if (hint) hint.setText(this.is3D() ? 'Drag to rotate' : 'Drag to pan, scroll to zoom');
+    }
+
+    // ================================================================ rendering
+
+    private scheduleFrame() {
+        this.cancelCodeRefresh();
+        if (this.updateTimer !== null) {
+            window.clearTimeout(this.updateTimer);
+            this.updateTimer = null;
+        }
+        if (this.frameRaf === null) {
+            this.frameRaf = window.requestAnimationFrame(() => {
+                this.frameRaf = null;
+                this.renderNow('draft');
+            });
+        }
+        if (this.fullTimer !== null) window.clearTimeout(this.fullTimer);
+        this.fullTimer = window.setTimeout(() => {
+            this.fullTimer = null;
+            this.renderNow('full');
+        }, FULL_RENDER_DELAY_MS);
+    }
+
+    private scheduleUpdate() {
+        this.cancelCodeRefresh();
+        if (this.updateTimer !== null) window.clearTimeout(this.updateTimer);
+        this.updateTimer = window.setTimeout(() => {
+            this.updateTimer = null;
+            this.renderNow('full');
+        }, UPDATE_DEBOUNCE_MS);
+    }
+
+    private renderNow(quality: 'draft' | 'full') {
+        if (!this.isOpen || !this.chartEl) return;
+        if (quality === 'full') {
+            // A full render supersedes every pending frame.
+            if (this.frameRaf !== null) window.cancelAnimationFrame(this.frameRaf);
+            if (this.fullTimer !== null) window.clearTimeout(this.fullTimer);
+            if (this.updateTimer !== null) window.clearTimeout(this.updateTimer);
+            this.frameRaf = this.fullTimer = this.updateTimer = null;
+        }
+        this.flushWheel();
+        let issues: SceneIssue[] = [];
+        try {
+            const math = this.math();
+            math.setParams(this.list<Parameter>('parameters'));
+            const config = this.settings.toRendererConfig(math);
+            issues = config.is3D ? this.render3D(config, math, quality) : this.render2D(config, math, quality);
+        } catch (e) {
+            // Keep the last good drawing; the problem goes to the status chip, never a Notice.
+            issues = [{ source: 'chart', message: `Preview failed: ${errorText(e)}`, severity: 'error' }];
+        }
+        if (quality !== 'full') return;
+        this.updateEmptyHint();
+        this.setIssues(issues);
+        this.updatePill();
+        this.scheduleCodeRefresh();
+    }
+
+    /**
+     * Regenerate the Code tab a moment after a full render, not inside it:
+     * the exporter recomputes the whole scene at export resolution, which
+     * would turn every pause in a slider drag or pan into a long task. Any
+     * new frame or edit within the delay postpones it again, so it runs only
+     * once the user has stopped. Copy always generates fresh code itself.
+     */
+    private scheduleCodeRefresh() {
+        this.cancelCodeRefresh();
+        if (this.activeTab !== 'code') return;
+        this.codeTimer = window.setTimeout(() => {
+            this.codeTimer = null;
+            this.codePanel?.onFullRender();
+        }, CODE_REFRESH_DELAY_MS);
+    }
+
+    private cancelCodeRefresh() {
+        if (this.codeTimer !== null) window.clearTimeout(this.codeTimer);
+        this.codeTimer = null;
+    }
+
+    private render2D(config: RendererConfig, math: MathContext, quality: 'draft' | 'full'): SceneIssue[] {
+        const chart = this.chartEl as HTMLElement;
+        // Leaving 3D: drop its canvas first, so a failing first 2D frame never leaves the 3D picture up.
+        if (this.chartMode !== '2d') {
+            chart.empty();
+            this.chartSvg = null;
+            this.chartMode = '2d';
+        }
+        const pixelScale = fitPixelScale(this.chartBox.w, this.chartBox.h, config.width, config.height);
+        this.gridScale = pixelScale;
+        const renderer = new SVGRenderer(config, { math, cache: this.sceneCache, quality, pixelScale });
+        const svg = renderer.render();
+        svg.addClass('etz-chart-svg');
+        if (this.chartSvg && this.chartSvg.parentElement === chart) this.chartSvg.replaceWith(svg);
+        else chart.appendChild(svg);
+        this.chartSvg = svg;
+        this.layout = renderer.layout;
+        this.afterRender2D(renderer.drawn);
+        return quality === 'full' ? this.withViewErrors(renderer.issues ?? [], math) : [];
+    }
+
+    /**
+     * New picture: rebuild the hit index, drop the drag context and the
+     * plans (they belong to the previous picture), place the overlay over
+     * the new SVG and re-resolve hover and selection by key.
+     */
+    private afterRender2D(drawn: SVGRenderer['drawn']) {
+        this.renderVersion++;
+        this.prepCache.clear();
+        this.lineLocks.clear();
+        this.dragCtx = null;
+        try {
+            this.hits = drawn ? buildHitIndex(drawn) : null;
+        } catch (e) {
+            // Dragging is unavailable for this frame; the picture itself is fine.
+            this.hits = null;
+            logError(e);
+        }
+        if (this.selected) this.selected.stale = true;
+        this.syncOverlay();
+        if (this.drag) return;
+        // Hover follows the new picture under a still pointer (a slider moved the line away, or onto it).
+        const p = this.lastPointer;
+        if ((this.hover || this.rehoverPending) && p) this.updateHover(p.clientX, p.clientY, null, p.pointerType, true);
+        this.rehoverPending = false;
+    }
+
+    private render3D(config: RendererConfig, math: MathContext, quality: 'draft' | 'full'): SceneIssue[] {
+        if (this.hits || this.selected || this.hover) this.resetDrag();
+        this.hits = null;
+        if (!this.renderer3d) this.renderer3d = new SVG3DRenderer();
+        const root = this.renderer3d.getElement();
+        const chart = this.chartEl as HTMLElement;
+        // Attach the 3D root BEFORE rendering, so its fit-contain sizing can
+        // measure the parent on the very first paint.
+        if (this.chartMode !== '3d' || root.parentElement !== chart) {
+            chart.empty();
+            this.chartSvg = null;
+            chart.appendChild(root);
+            this.chartMode = '3d';
+        }
+        this.layout = null;
+        this.renderer3d.renderCanvas(config, { math });
+        // Surface fields, the 3D scene's tools and labels; view fallbacks are added here.
+        return quality === 'full' ? this.withViewErrors(this.renderer3d.issues, math) : [];
+    }
+
+    /**
+     * Add settings.resolveView fallbacks ('xmax: Unknown name b') that the
+     * renderer did not report itself, and sliders named like an axis.
+     */
+    private withViewErrors(issues: SceneIssue[], math: MathContext): SceneIssue[] {
+        const out = mergeViewErrors(issues, () => this.settings.resolveView(math).errors, this.is3D());
+        for (const issue of math.parameterIssues()) {
+            if (!out.some((i) => i.source === issue.source && i.message === issue.message)) out.push(issue);
+        }
+        return out;
+    }
+
+    // ================================================================ status chip
+
+    private setIssues(issues: SceneIssue[]) {
+        // Errors first, then info (unbounded / infeasible / truncated); stable otherwise.
+        const ordered = issues.filter((i) => i.severity === 'error').concat(issues.filter((i) => i.severity !== 'error'));
+        // Hidden tools that nothing reads keep their card's dot but stay out of the chip and the tab dots.
+        this.issues = ordered.filter((i) => !i.hiddenSource);
+        if (this.statusTimer !== null) window.clearTimeout(this.statusTimer);
+        this.statusTimer = null;
+        const show = () => {
+            // Cards show their own issues (info notes, scene errors on valid text) with the chip.
+            this.build?.setIssues?.(ordered);
+            this.renderStatus();
+            this.updateTabDots();
         };
+        if (!this.issues.length) {
+            // Fixing a problem clears the chip at once; new problems wait for a pause.
+            show();
+            return;
+        }
+        this.statusTimer = window.setTimeout(() => {
+            this.statusTimer = null;
+            show();
+        }, STATUS_IDLE_MS);
+    }
 
-        this.onMouseUp = () => {
-            if (this.draggingAnnotationIdx !== null) {
-                this.draggingAnnotationIdx = null;
-                el.removeClass('tikz-preview-dragging');
-            }
-            if (this.isDragging) {
-                this.isDragging = false;
-                el.removeClass('tikz-preview-dragging');
-            }
+    private renderStatus() {
+        const chipEl = this.statusChip;
+        if (!chipEl || !this.statusText || !this.statusMore) return;
+        if (this.flash !== null) {
+            chipEl.removeClass('tikz-hidden');
+            chipEl.addClass('is-info');
+            this.statusText.setText(this.flash);
+            this.statusMore.setText('');
+            chipEl.title = this.flash;
+            return;
+        }
+        const first = this.issues[0];
+        chipEl.toggleClass('tikz-hidden', !first);
+        if (!first) {
+            this.statusText.setText('');
+            this.statusMore.setText('');
+            return;
+        }
+        const text = issueText(first, ' · ');
+        chipEl.toggleClass('is-info', first.severity !== 'error');
+        this.statusText.setText(text);
+        this.statusMore.setText(this.issues.length > 1 ? `+${this.issues.length - 1} more` : '');
+        chipEl.title = this.issues.map((i) => issueText(i, ' · ')).join('\n');
+    }
+
+    /** Short-lived message in the status chip, for actions that could not do anything. */
+    private flashStatus(text: string) {
+        this.flash = text;
+        if (this.flashTimer !== null) window.clearTimeout(this.flashTimer);
+        this.flashTimer = window.setTimeout(() => this.clearFlash(), FLASH_MS);
+        this.renderStatus();
+    }
+
+    private clearFlash() {
+        if (this.flashTimer !== null) window.clearTimeout(this.flashTimer);
+        this.flashTimer = null;
+        this.flash = null;
+        this.renderStatus();
+    }
+
+    /** Switch tab, expand the card, focus the field and select the offending name. */
+    private focusIssue(issue: SceneIssue) {
+        const selectText = /'([^']+)'/.exec(issue.message)?.[1];
+        const handle = issue.field === undefined ? null : Array.from(this.fields).find((f) => f.source === issue.source && f.field === issue.field);
+        if (issue.source === 'chart') {
+            this.showTab('chart');
+        } else if (!this.list<Parameter>('parameters').some((p) => p.name === issue.source)) {
+            // Functions, tools and labels live in Build; parameters in the dock (always visible).
+            this.showTab('build');
+        }
+        if (handle) {
+            handle.focus(selectText);
+            return;
+        }
+        if (issue.source !== 'chart') this.build?.reveal(issue.source, issue.field, selectText);
+    }
+
+    // ================================================================ preview pointer / keys
+
+    private bindPreviewPointer(chart: HTMLElement) {
+        chart.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+        chart.addEventListener('pointermove', (e) => this.onPointerMove(e));
+        chart.addEventListener('pointerup', (e) => this.endDrag(e, false));
+        chart.addEventListener('pointercancel', (e) => this.endDrag(e, true));
+        // The capture can go without a pointerup reaching the chart (released in another app after
+        // Cmd+Tab): an object drag ends as on release, a press as on cancel. Our own releases come after
+        // the drag state is gone and change nothing.
+        chart.addEventListener('lostpointercapture', (e) => this.onLostCapture(e));
+        // Focus leaving the chart (into a card input, the dock) ends a keyboard nudge session at once.
+        chart.addEventListener('focusout', () => this.flushKeySession());
+        chart.addEventListener('pointerleave', () => {
+            this.lastPointer = null;
+            if (this.drag) return;
+            this.hideReadout();
+            this.clearHover();
+        });
+        // The middle button pans: keep the browser's autoscroll out of it.
+        chart.addEventListener('mousedown', (e) => {
+            if (e.button === 1 && !this.is3D()) e.preventDefault();
+        });
+        chart.addEventListener('dblclick', (e) => this.onDoubleClick(e));
+        chart.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+        chart.addEventListener('keydown', (e) => this.onPreviewKey(e));
+    }
+
+    /** Index into settings 'annotations' of the label under `target`, or null. */
+    private labelAt(target: EventTarget | null): number | null {
+        if (!target || (target as Node).nodeType !== Node.ELEMENT_NODE) return null;
+        const hit = (target as Element).closest('[data-annotation-idx]');
+        if (!hit) return null;
+        const index = parseInt(hit.getAttribute('data-annotation-idx') ?? '', 10);
+        return Number.isFinite(index) && index >= 0 ? index : null;
+    }
+
+    /** Pan / zoom may write an axis only when both its bounds are empty or plain numbers. */
+    private axisFree(axis: 'x' | 'y' | 'z'): boolean {
+        const free = (key: string) => {
+            const v = this.settings.getValue(key);
+            return v === undefined || v === null || str(v).trim() === '' || MathContext.isNumericLiteral(v);
         };
+        return free(`${axis}min`) && free(`${axis}max`);
+    }
 
-        window.addEventListener('mousemove', this.onMouseMove);
-        window.addEventListener('mouseup', this.onMouseUp);
+    /** The chart SVG's on-screen box mapped to viewBox units (preserveAspectRatio meet). */
+    private svgBox(): { s: number; ox: number; oy: number } | null {
+        const svg = this.chartSvg;
+        const layout = this.layout;
+        if (!svg || !layout || !svg.isConnected) return null;
+        const r = svg.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return null;
+        const s = Math.min(r.width / layout.width, r.height / layout.height);
+        return { s, ox: r.left + (r.width - layout.width * s) / 2, oy: r.top + (r.height - layout.height * s) / 2 };
+    }
 
-        // Wheel zoom (2D only). Pan/zoom converge on the same set of axis-range settings.
-        el.addEventListener(
-            'wheel',
-            (e: WheelEvent) => {
-                if (this.is3D()) return;
-                if (this.panLocked) return;
-                if (e.deltaY === 0) return;
-                e.preventDefault();
+    /** Pointer position in math coordinates plus its fractions inside the plot rectangle. */
+    private toMath(clientX: number, clientY: number): { x: number; y: number; fx: number; fy: number } | null {
+        const box = this.svgBox();
+        const layout = this.layout;
+        if (!box || !layout || layout.plot.w <= 0 || layout.plot.h <= 0) return null;
+        const vx = (clientX - box.ox) / box.s;
+        const vy = (clientY - box.oy) / box.s;
+        const fx = (vx - layout.plot.x) / layout.plot.w;
+        const fy = (vy - layout.plot.y) / layout.plot.h;
+        const v = layout.view;
+        return { x: v.xmin + fx * (v.xmax - v.xmin), y: v.ymax - fy * (v.ymax - v.ymin), fx, fy };
+    }
 
-                const plot = this.getPlotMetricsFromSvg(e.clientX, e.clientY);
-                if (!plot) return;
-                const { xFracInPlot, yFracInPlot } = plot;
-                if (
-                    xFracInPlot < -0.05 || xFracInPlot > 1.05 ||
-                    yFracInPlot < -0.05 || yFracInPlot > 1.05
-                ) {
+    /** Decimals matching one screen pixel of the current view. */
+    private pixelDecimals(): number {
+        const box = this.svgBox();
+        const layout = this.layout;
+        if (!box || !layout) return 3;
+        const px = layout.plot.w * box.s;
+        return decimalsFor((layout.view.xmax - layout.view.xmin) / Math.max(1, px));
+    }
+
+    /**
+     * SPEC3 1.2: a press on a draggable target waits for the movement
+     * threshold; anything else (empty space, a computed point, Space held,
+     * the middle button, dragging switched off) pans as before. Touch edits
+     * only the selected object: elsewhere it pans, and a tap selects.
+     */
+    private onPointerDown(e: PointerEvent) {
+        const chart = this.chartEl;
+        if (!chart) return;
+        const middle = e.button === 1 && !this.is3D();
+        if (e.button !== 0 && !middle) return;
+        // A second finger or button while an object is pressed or dragged is ignored (no multi-touch editing).
+        if (this.drag && (this.drag.kind === 'press' || this.drag.kind === 'object')) return;
+        this.flushKeySession();
+        this.readMods(e);
+        chart.focus({ preventScroll: true });
+        this.pendingClick = null;
+        if (this.is3D()) {
+            this.drag = {
+                kind: 'rotate',
+                pointerId: e.pointerId,
+                startX: e.clientX,
+                startY: e.clientY,
+                azimuth: num(this.settings.getValue('rotationZ'), 45),
+                elevation: num(this.settings.getValue('rotationX'), 30),
+            };
+        } else {
+            if (middle) e.preventDefault();
+            const touch = e.pointerType === 'touch';
+            const forcePan = middle || this.spaceHeld;
+            const found = forcePan ? null : this.findTarget(e.clientX, e.clientY, e.target, e.pointerType);
+            let lock: Lock | null = null;
+            let tap: PendingClick['tap'] = null;
+            if (found) {
+                const known = this.prepCache.get(this.planKey(found.target, 'move'));
+                if (found.target.lock) lock = found.target.lock;
+                else if (known && 'lock' in known) lock = known.lock;
+                else if (touch && (!this.selected || this.selected.key !== found.target.key)) tap = { target: found.target, grab: found.grab };
+                else {
+                    // Nothing changes visibly until the threshold: halo and chip stay as they are.
+                    this.drag = {
+                        kind: 'press',
+                        pointerId: e.pointerId,
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        touch,
+                        target: found.target,
+                        grab: found.grab,
+                        prepared: this.cachedPlan(found.target, found.grab, this.gestureFor(e.shiftKey && !touch)),
+                    };
+                    this.capture(e.pointerId);
                     return;
                 }
-
-                const xmin = parseFloat(this.settings.getValue('xmin')) || -0.5;
-                const xmax = parseFloat(this.settings.getValue('xmax')) || 10;
-                const ymin = parseFloat(this.settings.getValue('ymin')) || -0.5;
-                const ymax = parseFloat(this.settings.getValue('ymax')) || 5;
-                const xRange = xmax - xmin;
-                const yRange = ymax - ymin;
-
-                const cursorMx = xmin + xFracInPlot * xRange;
-                const cursorMy = ymax - yFracInPlot * yRange;
-
-                const factor = e.deltaY < 0 ? 1 / WHEEL_ZOOM_FACTOR : WHEEL_ZOOM_FACTOR;
-                const newXrange = xRange * factor;
-                const newYrange = yRange * factor;
-
-                const newXmin = cursorMx - xFracInPlot * newXrange;
-                const newXmax = newXmin + newXrange;
-                const newYmax = cursorMy + yFracInPlot * newYrange;
-                const newYmin = newYmax - newYrange;
-
-                this.applyAxisRange(newXmin, newXmax, newYmin, newYmax);
-            },
-            { passive: false }
-        );
-    }
-
-    /**
-     * Returns the rendered SVG's plot metrics plus optional cursor coordinates
-     * mapped into the SVG viewBox and into 0..1 fractions of the plot area.
-     */
-    private getPlotMetricsFromSvg(
-        clientX?: number,
-        clientY?: number
-    ): {
-        scale: number;
-        plotW: number;
-        plotH: number;
-        xFracInPlot: number;
-        yFracInPlot: number;
-    } | null {
-        const svg = this.getChartSvg();
-        if (!svg) return null;
-        const rect = svg.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return null;
-        const config = this.settings.toRendererConfig();
-        const scale = config.width / rect.width;
-        const plotW = config.width - RENDERER_PADDING.left - RENDERER_PADDING.right;
-        const plotH = config.height - RENDERER_PADDING.top - RENDERER_PADDING.bottom;
-
-        let xFracInPlot = 0;
-        let yFracInPlot = 0;
-        if (clientX !== undefined && clientY !== undefined) {
-            const cursorVbX = (clientX - rect.left) * scale;
-            const cursorVbY = (clientY - rect.top) * (config.height / rect.height);
-            xFracInPlot = (cursorVbX - RENDERER_PADDING.left) / plotW;
-            yFracInPlot = (cursorVbY - RENDERER_PADDING.top) / plotH;
+            }
+            if (!forcePan) this.pendingClick = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, touch, moved: false, lock, tap };
+            if (!this.startPan(e)) return;
         }
-
-        return { scale, plotW, plotH, xFracInPlot, yFracInPlot };
+        this.capture(e.pointerId);
+        chart.addClass('is-dragging');
     }
 
-    /**
-     * Update the annotation at `idx` (within the current settings.annotations
-     * array) from the cursor position. 2D only: maps the cursor through the
-     * inverse of toScreenX/toScreenY and updates both the card state and the
-     * x/y text inputs.
-     */
-    private applyAnnotationDrag(idx: number, e: MouseEvent) {
-        const plot = this.getPlotMetricsFromSvg(e.clientX, e.clientY);
-        if (!plot) return;
-        const xmin = parseFloat(this.settings.getValue('xmin')) || -0.5;
-        const xmax = parseFloat(this.settings.getValue('xmax')) || 10;
-        const ymin = parseFloat(this.settings.getValue('ymin')) || -0.5;
-        const ymax = parseFloat(this.settings.getValue('ymax')) || 5;
-        const cursorMx = xmin + plot.xFracInPlot * (xmax - xmin);
-        const cursorMy = ymax - plot.yFracInPlot * (ymax - ymin);
-        const clampedX = Math.max(xmin, Math.min(xmax, cursorMx));
-        const clampedY = Math.max(ymin, Math.min(ymax, cursorMy));
-
-        // Find the matching annotation card (idx-th card with non-empty text).
-        const nonEmpty = this.annotationCards.filter((c) => c.state.text);
-        const card = nonEmpty[idx];
-        if (!card) return;
-
-        const newX = String(parseFloat(clampedX.toFixed(3)));
-        const newY = String(parseFloat(clampedY.toFixed(3)));
-        card.state.x = newX;
-        card.state.y = newY;
-        if (card.xInput) card.xInput.setValue(newX);
-        if (card.yInput) card.yInput.setValue(newY);
-
-        // Rebuild settings.annotations from the card states (same shape as the
-        // tab's `update` callback) and use the fast render path so the drag
-        // stays smooth.
-        const list: import('./types').Annotation[] = [];
-        for (const c of this.annotationCards) {
-            if (c.state.text) list.push({ ...c.state });
-        }
-        this.settings.setValue('annotations', list);
-        this.requestPreviewUpdateFast();
+    /** Start panning from the event's position; false when pan is locked or both axes are pinned. */
+    private startPan(e: PointerEvent): boolean {
+        const layout = this.layout;
+        const box = this.svgBox();
+        const panX = this.axisFree('x');
+        const panY = this.axisFree('y');
+        if (this.panLocked || !layout || !box || (!panX && !panY)) return false;
+        this.drag = {
+            kind: 'pan',
+            pointerId: e.pointerId,
+            startX: e.clientX,
+            startY: e.clientY,
+            view: { ...layout.view },
+            plot: { ...layout.plot },
+            scale: box.s,
+            panX,
+            panY,
+        };
+        return true;
     }
 
-    /**
-     * If `input` looks like `min`, `max`, `min2`, `max3` etc., return the
-     * x value of the matching local extremum (nth by left-to-right order).
-     * Returns null for anything else, including unparseable input.
-     */
-    private resolveTangentKeyword(input: string, expression: string, domain: string): number | null {
-        if (!expression || !domain) return null;
-        const m = input.trim().toLowerCase().match(/^(min|max)(\d+)?$/);
-        if (!m) return null;
+    private capture(pointerId: number) {
         try {
-            const extrema = MathHelper.findExtrema(expression, domain);
-            const wanted = m[1] === 'min' ? 'minimum' : 'maximum';
-            const filtered = extrema.filter((e) => e.type === wanted);
-            const idx = m[2] ? Math.max(1, parseInt(m[2], 10)) - 1 : 0;
-            const chosen = filtered[idx];
-            if (!chosen) return null;
-            return chosen.x;
+            this.chartEl?.setPointerCapture(pointerId);
         } catch {
+            // Without capture the drag still works while the pointer stays over the chart.
+        }
+    }
+
+    private releaseCapture(pointerId: number) {
+        const chart = this.chartEl;
+        if (chart && chart.hasPointerCapture(pointerId)) chart.releasePointerCapture(pointerId);
+    }
+
+    /** See bindPreviewPointer: a lost capture ends an object drag (commit) or drops a press. */
+    private onLostCapture(e: PointerEvent) {
+        const drag = this.drag;
+        if (!drag || drag.pointerId !== e.pointerId) return;
+        if (drag.kind === 'object') this.finishObjectDrag(drag);
+        else if (drag.kind === 'press') this.endDrag(e, true);
+    }
+
+    private onPointerMove(e: PointerEvent) {
+        // A mouse or pen move without a button during a press or an object drag: the release never reached
+        // the chart. End it as a release would, so button-less hover never keeps editing.
+        const held = this.drag;
+        if (held && held.pointerId === e.pointerId && e.pointerType !== 'touch' && e.buttons === 0 && (held.kind === 'press' || held.kind === 'object')) {
+            if (held.kind === 'object') this.finishObjectDrag(held);
+            else this.endDrag(e, true);
+            return;
+        }
+        if (e.pointerType !== 'touch') this.lastPointer = { clientX: e.clientX, clientY: e.clientY, pointerType: e.pointerType };
+        const click = this.pendingClick;
+        if (click && click.pointerId === e.pointerId && !click.moved && Math.hypot(e.clientX - click.startX, e.clientY - click.startY) >= this.threshold(click.touch)) {
+            click.moved = true;
+        }
+        const drag = this.drag;
+        if (drag && drag.pointerId === e.pointerId) {
+            if (drag.kind === 'rotate') this.moveRotate(drag, e);
+            else if (drag.kind === 'pan') this.movePan(drag, e);
+            else if (drag.kind === 'press') this.movePress(drag, e);
+            else this.moveObject(drag, e);
+        } else if (!drag && !this.is3D()) {
+            this.readMods(e);
+            if (e.buttons === 0) this.updateHover(e.clientX, e.clientY, e.target, e.pointerType, false);
+            else this.clearHover();
+        }
+        if (!this.is3D()) this.updateReadout(e.clientX, e.clientY);
+    }
+
+    private endDrag(e: PointerEvent, cancelled: boolean) {
+        const click = this.pendingClick;
+        if (click && click.pointerId === e.pointerId) {
+            this.pendingClick = null;
+            if (!cancelled && !click.moved) this.onClick(click);
+        }
+        const drag = this.drag;
+        if (!drag || drag.pointerId !== e.pointerId) return;
+        if (drag.kind === 'object') {
+            // pointercancel (the system took the pointer) restores like Escape.
+            if (cancelled) this.cancelObjectDrag();
+            else this.finishObjectDrag(drag);
+            return;
+        }
+        this.drag = null;
+        this.releaseCapture(e.pointerId);
+        this.chartEl?.removeClass('is-dragging');
+        // Released under the threshold: a click selects the object.
+        if (drag.kind === 'press' && !cancelled) this.select(drag.target, drag.grab);
+        if (e.pointerType !== 'touch' && e.buttons === 0) this.updateHover(e.clientX, e.clientY, null, e.pointerType, true);
+    }
+
+    private moveRotate(drag: Extract<DragState, { kind: 'rotate' }>, e: PointerEvent) {
+        const dx = e.clientX - drag.startX;
+        const dy = e.clientY - drag.startY;
+        // Vertical drag direction follows the plugin setting. Default
+        // (invertDrag3D: false): drag down RAISES elevation (trackball-style,
+        // "pulling the floor up"). invertDrag3D: true: drag down LOWERS
+        // elevation (direct manipulation, the camera follows your finger).
+        const invert = !!this.plugin?.data?.invertDrag3D;
+        const azimuth = (((drag.azimuth + dx * AZIMUTH_DRAG_RATE) % 360) + 360) % 360;
+        const elevation = Math.max(0, Math.min(90, drag.elevation + (invert ? dy : -dy) * ELEVATION_DRAG_RATE));
+        this.applyRotation(Math.round(azimuth), Math.round(elevation));
+    }
+
+    private movePan(drag: Extract<DragState, { kind: 'pan' }>, e: PointerEvent) {
+        const sensitivity = this.plugin?.data?.dragSensitivity2D ?? 1;
+        const v = drag.view;
+        const xSpan = v.xmax - v.xmin;
+        const ySpan = v.ymax - v.ymin;
+        const dx = drag.panX ? (-(e.clientX - drag.startX) / drag.scale / drag.plot.w) * xSpan * sensitivity : 0;
+        const dy = drag.panY ? ((e.clientY - drag.startY) / drag.scale / drag.plot.h) * ySpan * sensitivity : 0;
+        this.writeView({ xmin: v.xmin + dx, xmax: v.xmax + dx, ymin: v.ymin + dy, ymax: v.ymax + dy }, drag.panX, drag.panY);
+    }
+
+    // ================================================================ drag to edit (SPEC3 1.2 to 1.12)
+
+    private threshold(touch: boolean): number {
+        return touch ? PRESS_THRESHOLD_TOUCH_PX : PRESS_THRESHOLD_PX;
+    }
+
+    /** Shift and Alt are read from every pointer event (never cached across events). */
+    private readMods(e: { shiftKey: boolean; altKey: boolean }): Mods {
+        this.mods = { shift: e.shiftKey, alt: e.altKey };
+        return this.mods;
+    }
+
+    private dragEditOn(): boolean {
+        const plugin = this.plugin;
+        return plugin ? plugin.data.dragEdit !== false : this.dragEditLocal;
+    }
+
+    private toggleDragEdit() {
+        const on = !this.dragEditOn();
+        const plugin = this.plugin;
+        if (plugin) {
+            plugin.data.dragEdit = on;
+            void plugin.saveSettings().catch(() => new Notice('Could not update the plugin data file.'));
+        } else {
+            this.dragEditLocal = on;
+        }
+        if (!on) {
+            this.flushKeySession();
+            this.clearSelection();
+            this.clearHover();
+            this.hideChip();
+        }
+        this.updatePill();
+        this.syncHeader();
+    }
+
+    /**
+     * Shift held = the pivot gesture for every target: the session starts in
+     * the state Shift says (a mismatch would re-base on the first frame).
+     * Point-like targets plan it as a straight Move, targets without a
+     * Shift feature as a Move (session.ts).
+     */
+    private gestureFor(shift: boolean): Gesture {
+        return shift ? 'pivot' : 'move';
+    }
+
+    /** The engine's view of the chart (lazy, rebuilt after every render and resize). */
+    private dragContext(): DragContext | null {
+        if (this.dragCtx) return this.dragCtx;
+        if (this.is3D() || this.chartMode !== '2d') return null;
+        const layout = this.layout;
+        const box = this.svgBox();
+        const hits = this.hits;
+        if (!layout || !box || !hits) return null;
+        const view = layout.view;
+        const sx = view.xmax - view.xmin;
+        const sy = view.ymax - view.ymin;
+        if (!(sx > 0) || !(sy > 0) || layout.plot.w <= 0 || layout.plot.h <= 0) return null;
+        try {
+            const math = this.math();
+            const parameters = this.list<Parameter>('parameters');
+            math.setParams(parameters);
+            const ranges = (['xmin', 'xmax', 'ymin', 'ymax'] as const).map((k) => str(this.settings.getValue(k)));
+            const mac = Platform.isMacOS;
+            this.dragCtx = {
+                functions: this.list<FunctionParameters>('functions'),
+                tools: this.list<Tool>('tools'),
+                annotations: this.list<Annotation>('annotations'),
+                parameters,
+                math,
+                mathInput: this.settings.mathContextInput(),
+                hits,
+                map: { view: { ...view }, kx: (layout.plot.w * box.s) / sx, ky: (layout.plot.h * box.s) / sy },
+                ticks: layout.ticks ?? { x: [], y: [] },
+                polar: this.isPolar(),
+                axisSliders: axisSliders(ranges, math),
+                keyNames: { mod: mac ? 'Cmd' : 'Ctrl', alt: mac ? 'Option' : 'Alt' },
+            };
+        } catch (e) {
+            logError(e);
+            return null;
+        }
+        return this.dragCtx;
+    }
+
+    /** The settings arrays the engine reads and writes (live objects). */
+    private chartData(): { functions: FunctionParameters[]; tools: Tool[]; annotations: Annotation[]; parameters: Parameter[] } {
+        return {
+            functions: this.list<FunctionParameters>('functions'),
+            tools: this.list<Tool>('tools'),
+            annotations: this.list<Annotation>('annotations'),
+            parameters: this.list<Parameter>('parameters'),
+        };
+    }
+
+    /** Card source of a field: 'f1', 'R1', 'label:2' (null when the item is gone). */
+    private sourceOf(ref: FieldRef): string | null {
+        if (ref.kind === 'function') return ref.name;
+        if (ref.kind === 'label') return `label:${ref.index}`;
+        const tool = this.list<Tool>('tools').find((t) => t.id === ref.id);
+        return tool ? tool.name : null;
+    }
+
+    /** What is under the pointer: a label (by DOM), else the hit index (only with dragging on). */
+    private probe(clientX: number, clientY: number, el: EventTarget | null, pointerType: string): { hitKey: string; grab: Pt; hit: Hit | null; label: number | null } | null {
+        const ctx = this.dragContext();
+        const p = this.toMath(clientX, clientY);
+        if (!ctx || !p) return null;
+        const at = { x: p.x, y: p.y };
+        const label = this.labelAt(el);
+        if (label !== null) return { hitKey: `label:${label}`, grab: at, hit: null, label };
+        if (!this.dragEditOn()) return null;
+        let hit: Hit | null = null;
+        const tol = pointerType === 'touch' ? TOLERANCE_TOUCH : TOLERANCE_MOUSE;
+        try {
+            hit = ctx.hits.pick(at, tol, ctx.map);
+            if (hit) hit = this.preferUnlockedLine(hit, at, tol, ctx);
+        } catch (e) {
+            logError(e);
+        }
+        if (!hit) return null;
+        return { hitKey: hit.passed ? `${hit.shape.key}+${hit.passed.key}` : hit.shape.key, grab: hit.at, hit, label: null };
+    }
+
+    /**
+     * A line whose plain drag is locked (a derived level like `P1_val`, a clause reading `P1_y`) gives way
+     * to an unlocked line drawn within 1 px of it: the levels example draws C2 (`P1_val` = 3.2) exactly
+     * over C1's level 3.2, and the 3.2 circle should push C1's level rather than pan. Where the locked
+     * line is alone it is picked as before (lock chip, a press pans).
+     */
+    private preferUnlockedLine(hit: Hit, at: Pt, tol: HitTolerance, ctx: DragContext): Hit {
+        if (hit.shape.point || !hit.shape.lines.length || !this.lineLocked(hit, ctx)) return hit;
+        let best: Hit | null = null;
+        for (const shape of ctx.hits.all()) {
+            if (shape.key === hit.shape.key || shape.point || shape.locked || !shape.lines.length) continue;
+            const near = nearestOnShape(shape, at, ctx.map);
+            const d = distPx(near.at, at, ctx.map);
+            if (d > tol.line || d > hit.distPx + 1 || (best && d >= best.distPx)) continue;
+            const alt: Hit = { shape, at: near.at, run: near.run, distPx: d, passed: hit.passed };
+            if (!this.lineLocked(alt, ctx)) best = alt;
+        }
+        return best ?? hit;
+    }
+
+    /** Whether a line hit's target cannot be dragged plainly (cached per shape and render). */
+    private lineLocked(hit: Hit, ctx: DragContext): boolean {
+        const key = `${this.renderVersion}|${hit.shape.key}`;
+        const known = this.lineLocks.get(key);
+        if (known !== undefined) return known;
+        let locked = true;
+        try {
+            const target = resolveTarget(hit, ctx);
+            locked = !!target.lock || 'lock' in this.prepare(target, hit.at, 'move', ctx, HOVER_REPLAN_PX);
+        } catch (e) {
+            logError(e);
+        }
+        if (this.lineLocks.size > 256) this.lineLocks.clear();
+        this.lineLocks.set(key, locked);
+        return locked;
+    }
+
+    private resolveProbe(probe: { grab: Pt; hit: Hit | null; label: number | null }): DragTarget | null {
+        const ctx = this.dragContext();
+        if (!ctx) return null;
+        try {
+            if (probe.label !== null) return resolveTarget({ label: probe.label, at: probe.grab }, ctx);
+            return probe.hit ? resolveTarget(probe.hit, ctx) : null;
+        } catch (e) {
+            logError(e);
             return null;
         }
     }
 
+    private findTarget(clientX: number, clientY: number, el: EventTarget | null, pointerType: string): Found | null {
+        const probe = this.probe(clientX, clientY, el, pointerType);
+        if (!probe) return null;
+        const target = this.resolveProbe(probe);
+        return target ? { target, grab: probe.grab, hitKey: probe.hitKey } : null;
+    }
+
+    private planKey(target: DragTarget, gesture: Gesture): string {
+        return `${target.key}|${gesture}|${this.renderVersion}`;
+    }
+
     /**
-     * Sample every enabled function and set xmin/xmax/ymin/ymax (and zmin/zmax
-     * in 3D) so the curves fit. Drops outliers above the 99th percentile so a
-     * vertical asymptote does not blow out the range.
+     * Plan a drag (cached per target, gesture and render). A cached plan is
+     * reused while its grab point lies within `reusePx` of `grab`: the hover
+     * chip tolerates the pointer sliding along the object, a press does not
+     * (the first frame would jump by the difference). A Shift plan is also
+     * re-made when the slide leaves its ⊕ dead for the new grab (preparedServes).
      */
-    private autoFitRanges() {
-        if (this.is3D()) {
-            const surfaces: Function3DParameters[] = this.settings.getValue('functions3D') || [];
-            const live = surfaces.filter((s) => s.expression);
-            if (!live.length) {
-                new Notice('Add a surface first.');
-                return;
+    private prepare(target: DragTarget, grab: Pt, gesture: Gesture, ctx: DragContext, reusePx: number): PreparedDrag | { lock: Lock } {
+        if (target.lock) return { lock: target.lock };
+        const key = this.planKey(target, gesture);
+        const cached = this.prepCache.get(key);
+        if (cached && ('lock' in cached || preparedServes(cached, grab, ctx.map, reusePx))) return cached;
+        let plan: PreparedDrag | { lock: Lock };
+        try {
+            plan = prepareDrag(target, grab, gesture, ctx);
+        } catch (e) {
+            logError(e);
+            plan = { lock: lockFor({ kind: 'cannotDragHere', subject: target.subject }) };
+        }
+        this.prepCache.set(key, plan);
+        return plan;
+    }
+
+    /** The hover plan for a press at `grab`, when it was made for (almost) the same point. */
+    private cachedPlan(target: DragTarget, grab: Pt, gesture: Gesture): PreparedDrag | null {
+        const ctx = this.dragContext();
+        const cached = this.prepCache.get(this.planKey(target, gesture));
+        if (!ctx || !cached || 'lock' in cached) return null;
+        return preparedServes(cached, grab, ctx.map, PRESS_REUSE_PX) ? cached : null;
+    }
+
+    // ---------------------------------------------------------------- cursor, chip, overlay
+
+    /** Exactly one drag cursor class on the chart (null: the chart's own cursor). */
+    private setCursor(cls: CursorClass | null) {
+        const chart = this.chartEl;
+        if (!chart) return;
+        for (const c of CURSOR_CLASSES) chart.toggleClass(c, c === cls);
+    }
+
+    /** Hover chip in the readout corner (the readout hides meanwhile). */
+    private dockChip(chip: Chip) {
+        if (!this.dragHint) return;
+        this.dragHint.dock(chip);
+        this.hintDocked = true;
+        this.readoutEl?.addClass('tikz-hidden');
+    }
+
+    private hideChip() {
+        if (this.chipTimer !== null) window.clearTimeout(this.chipTimer);
+        this.chipTimer = null;
+        this.dragHint?.hide();
+        this.hintDocked = false;
+    }
+
+    /** A chip for a while (lock after a click, the tip); then the hover chip again, or nothing. */
+    private showTransientChip(chip: Chip, ms: number) {
+        this.dockChip(chip);
+        if (this.chipTimer !== null) window.clearTimeout(this.chipTimer);
+        this.chipTimer = window.setTimeout(() => {
+            this.chipTimer = null;
+            if (this.hover && this.hover.chipShown && !this.drag) this.showHoverChip();
+            else if (!(this.drag && this.drag.kind === 'object')) {
+                this.dragHint?.hide();
+                this.hintDocked = false;
             }
-            let xs: number[] = [];
-            let ys: number[] = [];
-            let zs: number[] = [];
-            for (const s of live) {
+        }, ms);
+    }
+
+    /** Place the overlay over the chart again and re-draw what it shows (after renders and resizes). */
+    private syncOverlay() {
+        const layer = this.dragLayer;
+        const chart = this.chartEl;
+        const svg = this.chartSvg;
+        const layout = this.layout;
+        if (!layer || !chart) return;
+        if (!svg || !layout || this.chartMode !== '2d') {
+            layer.clear();
+            return;
+        }
+        layer.sync(layout, chart, svg);
+        const overlay = this.dragOverlay;
+        if (overlay && this.drag && this.drag.kind === 'object') {
+            layer.ghost(overlay.ghost, overlay.points);
+            layer.pivot(overlay.pivot, overlay.pivot ? this.drag.cursor : null);
+            layer.snap(overlay.snapped);
+        }
+        this.drawSelection();
+    }
+
+    // ---------------------------------------------------------------- hover
+
+    /**
+     * Hit test on every button-less pointer move: halo and cursor at once,
+     * the chip after HOVER_DWELL_MS on the same target. `force` re-resolves
+     * the target even when the same shape is under the pointer (after a
+     * render the shape may have moved).
+     */
+    private updateHover(clientX: number, clientY: number, el: EventTarget | null, pointerType: string, force: boolean) {
+        if (this.is3D() || this.spaceHeld || this.drag) {
+            this.clearHover();
+            return;
+        }
+        const element = el ?? this.chartEl?.ownerDocument.elementFromPoint(clientX, clientY) ?? null;
+        const probe = this.probe(clientX, clientY, element, pointerType);
+        if (!probe) {
+            this.clearHover();
+            return;
+        }
+        const cur = this.hover;
+        if (cur && cur.hitKey === probe.hitKey && !force) {
+            cur.grab = probe.grab;
+            cur.clientX = clientX;
+            cur.clientY = clientY;
+            this.drawHover();
+            // Shift pressed or released while the focus was elsewhere: the chip changes gesture.
+            if (cur.chipShown && cur.chipShift !== this.mods.shift) this.showHoverChip();
+            // Slid along the object far from the planned grab: the pivot preview and the chip are re-planned after the dwell.
+            else if (cur.chipShown && this.hoverPlanStale(cur.target, cur.grab)) this.scheduleDwell();
+            return;
+        }
+        const target = this.resolveProbe(probe);
+        if (!target) {
+            this.clearHover();
+            return;
+        }
+        const same = !!cur && cur.key === target.key;
+        if (cur && cur.timer !== null) window.clearTimeout(cur.timer);
+        this.hover = {
+            key: target.key,
+            hitKey: probe.hitKey,
+            target,
+            grab: probe.grab,
+            timer: null,
+            clientX,
+            clientY,
+            chipShown: same && !!cur && cur.chipShown,
+            chipShift: cur ? cur.chipShift : this.mods.shift,
+        };
+        this.drawHover();
+        if (this.hover.chipShown) this.showHoverChip();
+        else this.scheduleDwell();
+    }
+
+    private scheduleDwell() {
+        const h = this.hover;
+        if (!h) return;
+        if (h.timer !== null) window.clearTimeout(h.timer);
+        h.timer = window.setTimeout(() => {
+            h.timer = null;
+            if (this.hover === h) this.showHoverChip();
+        }, HOVER_DWELL_MS);
+    }
+
+    /**
+     * The cached hover plan for the current gesture was made more than HOVER_REPLAN_PX away from `grab`, or
+     * its ⊕ no longer serves `grab` (a stretch axis it kept live would be dead there).
+     */
+    private hoverPlanStale(target: DragTarget, grab: Pt): boolean {
+        const ctx = this.dragContext();
+        const plan = this.prepCache.get(this.planKey(target, this.gestureFor(this.mods.shift)));
+        if (!ctx || !plan || 'lock' in plan) return false;
+        return !preparedServes(plan, grab, ctx.map, HOVER_REPLAN_PX);
+    }
+
+    /** Re-run the hover at the last pointer position (after Space is released, after a drag). */
+    private rehover() {
+        const p = this.lastPointer;
+        if (p) this.updateHover(p.clientX, p.clientY, null, p.pointerType, true);
+    }
+
+    private drawHover() {
+        const h = this.hover;
+        const layer = this.dragLayer;
+        if (!h || !layer) return;
+        const t = h.target;
+        // Locked: no halo, the chart's own cursor (a press pans), the lock in the chip.
+        const plan = this.prepCache.get(this.planKey(t, 'move'));
+        if (t.lock || (plan && 'lock' in plan)) {
+            layer.hover(null, null, null);
+            this.setCursor(null);
+            return;
+        }
+        // Dragging switched off: labels still move, without halo or chip.
+        if (!this.dragEditOn()) {
+            layer.hover(null, null, null);
+            this.setCursor('is-over-object');
+            return;
+        }
+        const pointLike = !t.lines.length;
+        layer.hover(pointLike ? null : t.lines, pointLike ? (t.points[0] ?? null) : null, h.grab);
+        const restricted = plan && !('lock' in plan) ? plan.info.restricted : 'none';
+        this.setCursor(restricted === 'vertical' ? 'is-over-object-ns' : restricted === 'horizontal' ? 'is-over-object-ew' : 'is-over-object');
+    }
+
+    /** After the dwell: plan (cached), dock the chip, and with Shift held preview the pivot. */
+    private showHoverChip() {
+        const h = this.hover;
+        if (!h || this.drag || !this.dragEditOn()) return;
+        h.chipShown = true;
+        h.chipShift = this.mods.shift;
+        if (h.target.lock) {
+            this.dockChip(lockChip(h.target.lock));
+            this.dragLayer?.pivot(null, null);
+            return;
+        }
+        if (this.maybeShowTip()) return;
+        const ctx = this.dragContext();
+        if (!ctx) return;
+        const gesture = this.gestureFor(this.mods.shift);
+        const plan = this.prepare(h.target, h.grab, gesture, ctx, HOVER_REPLAN_PX);
+        if ('lock' in plan) {
+            // Nothing can change: drop the halo and say why (a press pans).
+            this.dragLayer?.hover(null, null, null);
+            this.dragLayer?.pivot(null, null);
+            this.setCursor(null);
+            if (Date.now() >= this.tipUntil) this.dockChip(lockChip(plan.lock));
+            return;
+        }
+        if (Date.now() >= this.tipUntil) this.dockChip(plan.chip);
+        this.dragLayer?.pivot(gesture === 'pivot' && plan.info.pivot ? plan.info.pivot.at : null, null);
+        this.drawHover();
+    }
+
+    /** The first hover over a draggable target ever shows the tip for TIP_MS (SPEC3 1.12). */
+    private maybeShowTip(): boolean {
+        const plugin = this.plugin;
+        if (!plugin || plugin.data.dragTipSeen) return false;
+        plugin.data.dragTipSeen = true;
+        void plugin.saveSettings().catch(() => undefined);
+        this.tipUntil = Date.now() + TIP_MS;
+        this.showTransientChip(tipChip({ mod: Platform.isMacOS ? 'Cmd' : 'Ctrl' }), TIP_MS);
+        return true;
+    }
+
+    private clearHover() {
+        const h = this.hover;
+        if (h && h.timer !== null) window.clearTimeout(h.timer);
+        this.hover = null;
+        const dragging = !!this.drag && this.drag.kind === 'object';
+        this.dragLayer?.hover(null, null, null);
+        if (!dragging) {
+            this.dragLayer?.pivot(null, null);
+            this.setCursor(this.spaceHeld ? 'is-space-pan' : null);
+            // A transient chip (lock after a click, the tip) keeps its time; the hover chip goes.
+            if (this.chipTimer === null && !this.keySession) {
+                this.dragHint?.hide();
+                this.hintDocked = false;
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- selection
+
+    private labelIndexOf(target: DragTarget): number | null {
+        const ref = target.units[0]?.ref;
+        return target.kind === 'label' && ref && ref.kind === 'label' ? ref.index : null;
+    }
+
+    /** Text of the target's first field, for announcements. */
+    private unitText(target: DragTarget): string {
+        const ref = target.units[0]?.ref;
+        return (ref && fieldText(ref, this.chartData())) ?? '';
+    }
+
+    /** Click on a draggable target (SPEC3 1.9): selection halo, card flash, announcement; focus stays on the chart. */
+    private select(target: DragTarget, grab: Pt) {
+        if (target.lock) return;
+        const prev = this.selected;
+        if (prev && prev.key === target.key) {
+            prev.target = target;
+            prev.grab = grab;
+            prev.stale = false;
+        } else {
+            this.clearSelection();
+            this.selected = {
+                key: target.key,
+                target,
+                grab,
+                label: this.labelIndexOf(target),
+                stale: false,
+                // Escape clears the selection before it can close the editor.
+                releaseEscape: trapEscape(this, () => this.clearSelection()),
+            };
+        }
+        this.drawSelection();
+        if (this.activeTab === 'build') this.build?.flash?.(target.cardSource);
+        this.announce(selectAnnouncement(target, this.unitText(target)));
+    }
+
+    private clearSelection() {
+        const sel = this.selected;
+        if (!sel) return;
+        this.flushKeySession();
+        this.selected = null;
+        sel.releaseEscape();
+        this.dragLayer?.selection(null, null);
+    }
+
+    /**
+     * The selected target, re-resolved after renders by key (labels by
+     * index). Null when its item is gone or it cannot be dragged any more:
+     * the selection is dropped then.
+     */
+    private selectionTarget(): DragTarget | null {
+        const sel = this.selected;
+        if (!sel) return null;
+        if (!sel.stale) return sel.target;
+        const ctx = this.dragContext();
+        if (!ctx) return null;
+        let target: DragTarget | null = null;
+        try {
+            if (sel.label !== null) {
+                if (this.list<Annotation>('annotations')[sel.label]) target = resolveTarget({ label: sel.label, at: sel.grab }, ctx);
+            } else {
+                const shape = ctx.hits.byKey(sel.key);
+                if (shape) {
+                    const near = nearestOnShape(shape, sel.grab, ctx.map);
+                    target = resolveTarget({ shape, at: near.at, run: near.run, distPx: 0, passed: null }, ctx);
+                    sel.grab = near.at;
+                }
+            }
+        } catch (e) {
+            logError(e);
+        }
+        if (!target || target.lock) {
+            this.clearSelection();
+            return null;
+        }
+        sel.target = target;
+        sel.stale = false;
+        return target;
+    }
+
+    /** Selection halo from the current picture (the hit shape by key; labels: their anchor). */
+    private drawSelection() {
+        const sel = this.selected;
+        const layer = this.dragLayer;
+        if (!sel || !layer) return;
+        // Mid-drag a frame may lack the shape for a moment (an erroring text): keep the selection until the drag ends.
+        const dragging = (!!this.drag && this.drag.kind === 'object') || !!this.keySession;
+        if (sel.label !== null) {
+            if (dragging) {
+                // The label moves under the drag: its ring follows the current position.
+                const a = this.list<Annotation>('annotations')[sel.label];
+                const ctx = this.dragContext();
+                if (!a || !ctx) return;
                 try {
-                    const [xmin, xmax] = MathHelper.parseDomain(s.xDomain);
-                    const [ymin, ymax] = MathHelper.parseDomain(s.yDomain);
-                    const samples = Math.max(8, Math.min(40, s.samples ?? 30));
-                    const f = MathHelper.compile2D(s.expression);
-                    for (let i = 0; i <= samples; i++) {
-                        const x = xmin + ((xmax - xmin) * i) / samples;
-                        for (let j = 0; j <= samples; j++) {
-                            const y = ymin + ((ymax - ymin) * j) / samples;
-                            const z = f(x, y);
-                            if (isFinite(z)) { xs.push(x); ys.push(y); zs.push(z); }
-                        }
-                    }
+                    const at = { x: ctx.math.value(str(a.x), NaN), y: ctx.math.value(str(a.y), NaN) };
+                    if (Number.isFinite(at.x) && Number.isFinite(at.y)) layer.selection(null, at);
                 } catch {
-                    // skip surfaces with bad domain/expression
+                    // A half-written position: keep the last ring.
                 }
-            }
-            if (!xs.length) {
-                new Notice('Could not evaluate any surface.');
                 return;
             }
-            const [zLo, zHi] = trimmedRange(zs);
-            const xPad = (Math.max(...xs) - Math.min(...xs)) * 0.05 || 0.5;
-            const yPad = (Math.max(...ys) - Math.min(...ys)) * 0.05 || 0.5;
-            const zPad = (zHi - zLo) * 0.05 || 0.5;
-            const newXmin = Math.min(...xs) - xPad;
-            const newXmax = Math.max(...xs) + xPad;
-            const newYmin = Math.min(...ys) - yPad;
-            const newYmax = Math.max(...ys) + yPad;
-            const newZmin = zLo - zPad;
-            const newZmax = zHi + zPad;
-            this.settings.setValue('xmin', this.formatRange(newXmin));
-            this.settings.setValue('xmax', this.formatRange(newXmax));
-            this.settings.setValue('ymin', this.formatRange(newYmin));
-            this.settings.setValue('ymax', this.formatRange(newYmax));
-            this.settings.setValue('zmin', this.formatRange(newZmin));
-            this.settings.setValue('zmax', this.formatRange(newZmax));
-            this.refreshRangeInputs();
-            this.requestPreviewUpdate();
-            new Notice('Axis ranges fit to surfaces.');
+            const target = this.selectionTarget();
+            if (target) layer.selection(null, target.points[0] ?? sel.grab);
             return;
         }
-
-        const funcs: FunctionParameters[] = this.settings.getValue('functions') || [];
-        const live = funcs.filter((f) => f.expression && f.domain);
-        if (!live.length) {
-            new Notice('Add a function first.');
+        const shape = this.hits ? this.hits.byKey(sel.key) : null;
+        if (!shape) {
+            // Deleted item, hidden or erroring: the selection goes with it.
+            if (this.hits && !dragging) this.clearSelection();
+            else layer.selection(null, null);
             return;
         }
-        let xs: number[] = [];
-        let ys: number[] = [];
-        for (const f of live) {
-            try {
-                const [xmin, xmax] = MathHelper.parseDomain(f.domain);
-                const fn = MathHelper.compile1D(f.expression);
-                const N = 200;
-                for (let i = 0; i <= N; i++) {
-                    const x = xmin + ((xmax - xmin) * i) / N;
-                    const y = fn(x);
-                    if (isFinite(y)) { xs.push(x); ys.push(y); }
-                }
-            } catch {
-                // skip
-            }
-        }
-        if (!xs.length) {
-            new Notice('Could not evaluate any function.');
-            return;
-        }
-        const [yLo, yHi] = trimmedRange(ys);
-        const xPad = (Math.max(...xs) - Math.min(...xs)) * 0.05 || 0.5;
-        const yPad = (yHi - yLo) * 0.05 || 0.5;
-        const newXmin = Math.min(...xs) - xPad;
-        const newXmax = Math.max(...xs) + xPad;
-        const newYmin = yLo - yPad;
-        const newYmax = yHi + yPad;
-        this.settings.setValue('xmin', this.formatRange(newXmin));
-        this.settings.setValue('xmax', this.formatRange(newXmax));
-        this.settings.setValue('ymin', this.formatRange(newYmin));
-        this.settings.setValue('ymax', this.formatRange(newYmax));
-        this.refreshRangeInputs();
-        this.requestPreviewUpdate();
-        new Notice('Axis ranges fit to functions.');
+        layer.selection(shape.lines.length ? shape.lines : null, shape.lines.length ? null : shape.point);
     }
 
-    private applyAxisRange(xmin: number, xmax: number, ymin: number, ymax: number) {
-        if (!isFinite(xmin) || !isFinite(xmax) || !isFinite(ymin) || !isFinite(ymax)) return;
-        if (xmin >= xmax || ymin >= ymax) return;
-        this.settings.setValue('xmin', this.formatRange(xmin));
-        this.settings.setValue('xmax', this.formatRange(xmax));
-        this.settings.setValue('ymin', this.formatRange(ymin));
-        this.settings.setValue('ymax', this.formatRange(ymax));
-        this.refreshRangeInputs();
-        // Drag pan and wheel zoom are continuous; render on the next frame
-        // instead of the 150 ms debounce.
-        this.requestPreviewUpdateFast();
+    private onClick(click: PendingClick) {
+        if (click.lock) {
+            this.showTransientChip(lockChip(click.lock), LOCK_CHIP_MS);
+            return;
+        }
+        if (click.tap) {
+            this.select(click.tap.target, click.tap.grab);
+            return;
+        }
+        this.clearSelection();
+    }
+
+    private onDoubleClick(e: MouseEvent) {
+        if (this.is3D()) return;
+        const found = this.findTarget(e.clientX, e.clientY, e.target, 'mouse');
+        if (!found || found.target.lock) return;
+        e.preventDefault();
+        this.revealTarget(found.target, found.grab);
+    }
+
+    /** Focus the target's field and select the first number a Move would change (SPEC3 1.9). */
+    private revealTarget(target: DragTarget, grab: Pt) {
+        this.flushKeySession();
+        let selectText: string | undefined;
+        const ctx = this.dragContext();
+        if (ctx) {
+            const plan = this.prepare(target, grab, 'move', ctx, HOVER_REPLAN_PX);
+            if (!('lock' in plan)) {
+                const span = plan.info.numSpans[0];
+                if (span) selectText = plan.info.text.slice(span[0], span[1]) || undefined;
+            }
+        }
+        this.showTab('build');
+        this.build?.reveal(target.cardSource, target.cardField, selectText);
+    }
+
+    private announce(text: string) {
+        if (!this.announcer || !text) return;
+        if (this.announceTimer !== null) window.clearTimeout(this.announceTimer);
+        this.announceTimer = window.setTimeout(() => {
+            this.announceTimer = null;
+            this.announcer?.setText(text);
+        }, ANNOUNCE_DELAY_MS);
+    }
+
+    // ---------------------------------------------------------------- object drag
+
+    /** The press passed the threshold: plan with the gesture of this event, then run the session. */
+    private movePress(drag: Extract<DragState, { kind: 'press' }>, e: PointerEvent) {
+        if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < this.threshold(drag.touch)) return;
+        const mods = this.readMods(e);
+        const ctx = this.dragContext();
+        if (!ctx) {
+            this.drag = null;
+            this.releaseCapture(drag.pointerId);
+            return;
+        }
+        // Touch edits by Move only in Phase 1 (the Shift features need the Phase 2 handle).
+        const gesture = this.gestureFor(mods.shift && !drag.touch);
+        const plan = drag.prepared && drag.prepared.gesture === gesture ? drag.prepared : this.prepare(drag.target, drag.grab, gesture, ctx, PRESS_REUSE_PX);
+        if ('lock' in plan) {
+            // Nothing to change after all: pan from here (never a dead zone) and say why.
+            this.drag = null;
+            this.showTransientChip(lockChip(plan.lock), LOCK_CHIP_MS);
+            if (this.startPan(e)) this.chartEl?.addClass('is-dragging');
+            else this.releaseCapture(drag.pointerId);
+            return;
+        }
+        let session: DragSession;
+        try {
+            session = DragSession.start(plan, mods, ctx);
+        } catch (err) {
+            logError(err);
+            this.drag = null;
+            if (this.startPan(e)) this.chartEl?.addClass('is-dragging');
+            else this.releaseCapture(drag.pointerId);
+            return;
+        }
+        this.clearHover();
+        this.hideChip();
+        // Playing sliders would fight the drag over the same numbers.
+        this.dock?.stopAnimations();
+        this.objectDragActive = true;
+        const target = session.target;
+        this.build?.markLive?.(target.cardSource, target.cardField);
+        const points = !target.lines.length && target.points.length ? target.points : null;
+        this.dragOverlay = { ghost: session.ghost, points, pivot: null, snapped: null };
+        this.dragLayer?.ghost(session.ghost, points);
+        // The grabbed point keeps its offset from the pointer: the object moves by the pointer's motion from
+        // the press, so passing the threshold never jumps it onto the pointer (AC3 reads against this cursor).
+        const start = this.toMath(drag.startX, drag.startY);
+        const offset = start ? { x: drag.grab.x - start.x, y: drag.grab.y - start.y } : { x: 0, y: 0 };
+        const p = this.toMath(e.clientX, e.clientY);
+        const cursor = p ? { x: p.x + offset.x, y: p.y + offset.y } : drag.grab;
+        this.liveFrame = null;
+        const object: Extract<DragState, { kind: 'object' }> = {
+            kind: 'object',
+            pointerId: drag.pointerId,
+            touch: drag.touch,
+            session,
+            lastX: e.clientX,
+            lastY: e.clientY,
+            // Escape cancels the drag (restores every text and slider) instead of closing the editor.
+            releaseEscape: trapEscape(this, () => this.cancelObjectDrag()),
+            mods,
+            cursor,
+            offset,
+        };
+        this.drag = object;
+        this.setCursor('is-dragging-object');
+        this.runUpdate(object, cursor, mods, e.clientX, e.clientY);
+    }
+
+    private moveObject(drag: Extract<DragState, { kind: 'object' }>, e: PointerEvent) {
+        const p = this.toMath(e.clientX, e.clientY);
+        if (!p) return;
+        this.runUpdate(drag, { x: p.x + drag.offset.x, y: p.y + drag.offset.y }, this.readMods(e), e.clientX, e.clientY);
+    }
+
+    /** One session update and its frame (pointer moves, and Shift / Alt changes without a move). */
+    private runUpdate(drag: Extract<DragState, { kind: 'object' }>, cursor: Pt, mods: Mods, clientX: number, clientY: number) {
+        const m: Mods = drag.touch ? { shift: false, alt: mods.alt } : mods;
+        let frame: DragFrame;
+        try {
+            frame = drag.session.update(cursor, m);
+        } catch (e) {
+            // update() never throws by contract; keep the last frame if it does.
+            logError(e);
+            return;
+        }
+        drag.mods = m;
+        drag.cursor = cursor;
+        drag.lastX = clientX;
+        drag.lastY = clientY;
+        this.applyFrame(frame, { clientX, clientY, cursor });
     }
 
     /**
-     * Trim trailing zeros and cap to 5 decimals so storage has sub-pixel
-     * pan granularity. parseFloat strips the trailing zeros so the
-     * Axis-tab range inputs still look short for integer-ish values
-     * (e.g. "-5" rather than "-5.00000"). Five decimals is overkill for
-     * typical math ranges but keeps the pan smooth at extreme zoom.
+     * Write one frame: field texts, slider values, card and dock sync, the
+     * chip, the overlay; then a draft render next frame and a full one
+     * 150 ms after the last (requestFrame). `at` is null for keyboard nudges
+     * (the chip stays docked).
      */
-    private formatRange(value: number): string {
-        return String(parseFloat(value.toFixed(5)));
+    private applyFrame(frame: DragFrame, at: { clientX: number; clientY: number; cursor: Pt } | null) {
+        const data = this.chartData();
+        const sources = new Set<string>();
+        if (!this.liveFrame) this.liveFrame = { texts: new Map(), params: new Map() };
+        const live = this.liveFrame;
+        for (const edit of frame.edits) {
+            if (!setFieldText(edit.ref, data, edit.text)) continue;
+            live.texts.set(refKey(edit.ref), edit.text);
+            const source = this.sourceOf(edit.ref);
+            if (source) sources.add(source);
+        }
+        if (frame.params.length) {
+            for (const edit of frame.params) {
+                const p = data.parameters.find((q) => q.name === edit.name);
+                if (!p) continue;
+                p.value = edit.value;
+                live.params.set(edit.name, edit.value);
+            }
+        }
+        // A function text changed: the next render builds a fresh (unmemoized) context.
+        if (frame.structural) this.mathCtx = null;
+        this.syncCards(sources);
+        if (frame.params.length) {
+            this.dock?.syncValues();
+            this.dock?.markLive?.(frame.params.map((p) => p.name));
+        }
+        if (at) this.dragHint?.follow(frame.chip, at.clientX, at.clientY);
+        else this.dockChip(frame.chip);
+        if (this.dragOverlay) {
+            this.dragOverlay.pivot = frame.pivot;
+            this.dragOverlay.snapped = frame.snapped;
+        }
+        this.dragLayer?.pivot(frame.pivot, frame.pivot && at ? at.cursor : null);
+        this.dragLayer?.snap(frame.snapped);
+        if (at) this.setCursor(frame.restricted === 'vertical' ? 'is-over-object-ns' : frame.restricted === 'horizontal' ? 'is-over-object-ew' : 'is-dragging-object');
+        this.requestFrame();
     }
 
-    private refreshRangeInputs() {
-        for (const key of ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax']) {
-            const input = this.rangeInputs.get(key);
-            if (input) input.setValue(String(this.settings.getValue(key)));
+    /** Re-read the edited items' card inputs (the cards of the target and its twins). */
+    private syncCards(sources: Set<string>) {
+        const build = this.build;
+        if (!build || !sources.size) return;
+        if (build.syncItem) {
+            for (const source of sources) build.syncItem(source);
+            return;
+        }
+        // Panels without syncItem: labels re-read their position, everything else refreshes once.
+        let other = false;
+        for (const source of sources) {
+            const label = /^label:(\d+)$/.exec(source);
+            if (label) build.syncAnnotation(Number(label[1]));
+            else other = true;
+        }
+        if (other) build.refresh();
+    }
+
+    private endLiveMarks() {
+        this.build?.markLive?.(null, null);
+        this.dock?.markLive?.([]);
+    }
+
+    /** Leave the object state: Escape trap, pointer capture, overlay, chip, cursor, live marks. */
+    private endObjectDrag(drag: Extract<DragState, { kind: 'object' }>) {
+        drag.releaseEscape();
+        if (this.drag === drag) this.drag = null;
+        this.objectDragActive = false;
+        this.releaseCapture(drag.pointerId);
+        this.dragOverlay = null;
+        this.dragLayer?.ghost(null, null);
+        this.dragLayer?.pivot(null, null);
+        this.dragLayer?.snap(null);
+        this.hideChip();
+        this.setCursor(this.spaceHeld ? 'is-space-pan' : null);
+        this.endLiveMarks();
+        if (this.selected) this.selected.stale = true;
+    }
+
+    /** Release: one history entry, the undo bar (plus Make slider), the announcement, then commit. */
+    private finishObjectDrag(drag: Extract<DragState, { kind: 'object' }>) {
+        let commit: DragCommit | null = null;
+        try {
+            commit = drag.session.commit();
+        } catch (e) {
+            logError(e);
+        }
+        this.endObjectDrag(drag);
+        if (commit) this.recordCommit(commit, drag.session.target);
+        this.commit();
+        // The pointer still rests on the object: hover it again once the committed picture is drawn.
+        this.rehoverPending = true;
+    }
+
+    /**
+     * Write the committed texts and slider values: tidy at release can differ from the last frame
+     * (`1x + 1` becomes `x + 1`), and the history patches compare against these after-values.
+     */
+    private applyCommit(commit: DragCommit): DragCommit | null {
+        const data = this.chartData();
+        const live = this.liveFrame;
+        this.liveFrame = null;
+        const sources = new Set<string>();
+        const fields: DragCommit['fields'] = [];
+        for (const patch of commit.fields) {
+            const now = fieldText(patch.ref, data);
+            const last = live ? live.texts.get(refKey(patch.ref)) : undefined;
+            // Edited since the session's last frame (typed into its card, another panel): that edit wins,
+            // and the patch leaves the history entry (an undo must not restore over it either).
+            if (now === null || (last !== undefined && now !== last && now !== patch.after)) continue;
+            fields.push(patch);
+            if (now === patch.after || !setFieldText(patch.ref, data, patch.after)) continue;
+            const source = this.sourceOf(patch.ref);
+            if (source) sources.add(source);
+        }
+        const params: DragCommit['params'] = [];
+        for (const patch of commit.params) {
+            const p = data.parameters.find((q) => q.name === patch.name);
+            if (!p) continue;
+            const last = live ? live.params.get(patch.name) : undefined;
+            if (last !== undefined && p.value !== last && p.value !== patch.after) continue;
+            params.push(patch);
+            p.value = patch.after;
+        }
+        this.syncCards(sources);
+        if (params.length) this.dock?.syncValues();
+        if (!fields.length && !params.length) return null;
+        if (fields.length === commit.fields.length && params.length === commit.params.length) return commit;
+        const kept = new Set(fields.map((f) => refKey(f.ref)));
+        const offer = commit.makeSlider && kept.has(refKey(commit.makeSlider.ref)) ? commit.makeSlider : null;
+        return { ...commit, fields, params, makeSlider: offer };
+    }
+
+    private recordCommit(raw: DragCommit, target: DragTarget) {
+        const commit = this.applyCommit(raw);
+        if (!commit) return;
+        const entry = patchEntry(commit, this.patchIO());
+        this.history.push(entry);
+        const offer = commit.makeSlider;
+        this.showUndoBar(entry, offer ? { text: MAKE_SLIDER_BUTTON, run: () => this.makeSlider(offer) } : undefined);
+        this.announce(commit.announce);
+        if (this.activeTab === 'build') this.build?.flash?.(target.cardSource);
+    }
+
+    /** Escape or pointercancel during an object drag: every text and slider back to its start value, no history entry. */
+    private cancelObjectDrag() {
+        const drag = this.drag;
+        if (!drag || drag.kind !== 'object') return;
+        this.restoreStart(drag.session);
+        this.endObjectDrag(drag);
+        this.commit();
+    }
+
+    /** Drop a press or object drag without a history entry (mode switches, close). */
+    private abortObjectDrag(commit: boolean) {
+        const drag = this.drag;
+        if (!drag) return;
+        if (drag.kind === 'press') {
+            this.drag = null;
+            this.releaseCapture(drag.pointerId);
+            return;
+        }
+        if (drag.kind !== 'object') return;
+        this.restoreStart(drag.session);
+        this.endObjectDrag(drag);
+        if (commit) this.commit();
+    }
+
+    private restoreStart(session: DragSession) {
+        this.liveFrame = null;
+        let start: { edits: FieldEdit[]; params: ParamEdit[] };
+        try {
+            start = session.cancel();
+        } catch (e) {
+            logError(e);
+            return;
+        }
+        const data = this.chartData();
+        const sources = new Set<string>();
+        for (const edit of start.edits) {
+            if (!setFieldText(edit.ref, data, edit.text)) continue;
+            const source = this.sourceOf(edit.ref);
+            if (source) sources.add(source);
+        }
+        for (const edit of start.params) {
+            const p = data.parameters.find((q) => q.name === edit.name);
+            if (p) p.value = edit.value;
+        }
+        this.mathCtx = null;
+        this.syncCards(sources);
+        this.dock?.syncValues();
+    }
+
+    /** Leaving the picture (2D / 3D, polar, another chart): drop drags, selection, hover, plans and the overlay. */
+    private resetDrag() {
+        this.abortObjectDrag(false);
+        this.flushKeySession();
+        this.clearSelection();
+        this.clearHover();
+        this.hideChip();
+        this.pendingClick = null;
+        this.dragOverlay = null;
+        this.dragLayer?.clear();
+        this.prepCache.clear();
+        this.lineLocks.clear();
+        this.dragCtx = null;
+    }
+
+    // ---------------------------------------------------------------- keyboard
+
+    /** Arrow keys with a selection: Move by a tenth of the tick step (Shift x10, Alt x0.1), one undo step per second of presses. */
+    private nudgeSelection(e: KeyboardEvent) {
+        const sel = this.selected;
+        const view = this.layout?.view;
+        if (!sel || !view) return;
+        const ks = this.keySession;
+        const target = ks ? ks.session.target : this.selectionTarget();
+        const ctx = this.dragContext();
+        if (!target || !ctx) return;
+        const horizontal = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+        const sign = e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 1;
+        const span = horizontal ? view.xmax - view.xmin : view.ymax - view.ymin;
+        const step = (niceInterval(span, 8) / 10) * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1);
+        if (!(step > 0) || !Number.isFinite(step)) return;
+        const delta = horizontal ? { x: sign * step, y: 0 } : { x: 0, y: sign * step };
+        let prepared = ks ? ks.prepared : null;
+        if (!prepared) {
+            const plan = this.prepare(target, sel.grab, 'move', ctx, PRESS_REUSE_PX);
+            if ('lock' in plan) {
+                this.showTransientChip(lockChip(plan.lock), LOCK_CHIP_MS);
+                return;
+            }
+            prepared = plan;
+        }
+        let result: { session: DragSession; frame: DragFrame };
+        try {
+            // Shift and Alt scale the step here; they never turn or stop snapping.
+            result = nudge(ks ? ks.session : null, prepared, delta, { shift: false, alt: false }, ctx);
+        } catch (err) {
+            logError(err);
+            return;
+        }
+        if (!ks) {
+            this.liveFrame = null;
+            this.dock?.stopAnimations();
+            this.objectDragActive = true;
+            this.build?.markLive?.(target.cardSource, target.cardField);
+        } else {
+            window.clearTimeout(ks.timer);
+        }
+        this.keySession = { session: result.session, prepared, timer: window.setTimeout(() => this.flushKeySession(), KEY_SESSION_MS) };
+        sel.grab = { x: sel.grab.x + delta.x, y: sel.grab.y + delta.y };
+        this.applyFrame(result.frame, null);
+    }
+
+    /** Commit the running keyboard session as one history entry (1 s after the last press, or at once on any other action). */
+    private flushKeySession() {
+        const ks = this.keySession;
+        if (!ks) return;
+        this.keySession = null;
+        window.clearTimeout(ks.timer);
+        this.objectDragActive = false;
+        this.endLiveMarks();
+        let commit: DragCommit | null = null;
+        try {
+            commit = ks.session.commit();
+        } catch (e) {
+            logError(e);
+        }
+        if (!this.hover && this.chipTimer === null) this.hideChip();
+        if (this.selected) this.selected.stale = true;
+        if (commit) this.recordCommit(commit, ks.session.target);
+        this.commit();
+    }
+
+    /** Close: the nudged texts stay as they are, without a history entry. */
+    private dropKeySession() {
+        const ks = this.keySession;
+        if (!ks) return;
+        this.keySession = null;
+        this.liveFrame = null;
+        window.clearTimeout(ks.timer);
+        this.objectDragActive = false;
+    }
+
+    /**
+     * Mod+Z / Mod+Shift+Z on the modal scope (SPEC3 1.11), plus capture
+     * listeners for Space (pan over objects) and Shift / Alt (re-run the
+     * drag or the hover chip without a pointer move).
+     */
+    private bindDragKeys() {
+        const undoKey = (redo: boolean) => (): boolean => {
+            // Text fields keep the browser's own text undo.
+            if (isTextEditing(this.modalEl.ownerDocument.activeElement)) return true;
+            // Ignored while an object is pressed or dragged: the press holds a plan of the current texts.
+            if (this.drag && (this.drag.kind === 'object' || this.drag.kind === 'press')) return false;
+            if (redo) this.redoLast();
+            else this.undoLast();
+            return false;
+        };
+        // Shift turns the key into 'Z' in some layouts and hosts: register both spellings.
+        this.scope.register(['Mod'], 'z', undoKey(false));
+        this.scope.register(['Mod'], 'Z', undoKey(false));
+        this.scope.register(['Mod', 'Shift'], 'z', undoKey(true));
+        this.scope.register(['Mod', 'Shift'], 'Z', undoKey(true));
+
+        const down = (e: KeyboardEvent) => this.onDragKey(e, true);
+        const up = (e: KeyboardEvent) => this.onDragKey(e, false);
+        const blur = () => {
+            // Keys released while the window was in the background never send keyup.
+            if (this.spaceHeld) {
+                this.spaceHeld = false;
+                if (!(this.drag && this.drag.kind === 'object')) this.setCursor(null);
+            }
+        };
+        this.modalEl.addEventListener('keydown', down, true);
+        this.modalEl.addEventListener('keyup', up, true);
+        window.addEventListener('blur', blur);
+        this.onModalKeyDown = down;
+        this.onModalKeyUp = up;
+        this.onWindowBlur = blur;
+    }
+
+    private unbindDragKeys() {
+        if (this.onModalKeyDown) this.modalEl.removeEventListener('keydown', this.onModalKeyDown, true);
+        if (this.onModalKeyUp) this.modalEl.removeEventListener('keyup', this.onModalKeyUp, true);
+        if (this.onWindowBlur) window.removeEventListener('blur', this.onWindowBlur);
+        this.onModalKeyDown = this.onModalKeyUp = this.onWindowBlur = null;
+    }
+
+    private onDragKey(e: KeyboardEvent, down: boolean) {
+        if (e.key === ' ' || e.code === 'Space') {
+            if (down) {
+                const doc = this.modalEl.ownerDocument;
+                const active = doc.activeElement;
+                const chartFocused = !!active && active === this.chartEl;
+                // Space belongs to buttons, inputs and links that have focus.
+                const free = chartFocused || !active || active === doc.body || !active.closest('input, textarea, select, button, a, [contenteditable="true"]');
+                if (this.is3D() || !free || !(this.stageHovered || chartFocused)) return;
+                e.preventDefault();
+                if (this.spaceHeld) return;
+                this.spaceHeld = true;
+                this.clearHover();
+                if (!(this.drag && this.drag.kind === 'object')) this.setCursor('is-space-pan');
+            } else if (this.spaceHeld) {
+                this.spaceHeld = false;
+                if (!(this.drag && this.drag.kind === 'object')) this.setCursor(null);
+                this.rehover();
+            }
+            return;
+        }
+        if (e.key !== 'Shift' && e.key !== 'Alt') return;
+        const mods: Mods = { shift: e.shiftKey, alt: e.altKey };
+        if (mods.shift === this.mods.shift && mods.alt === this.mods.alt) return;
+        this.mods = mods;
+        const drag = this.drag;
+        if (drag && drag.kind === 'object') {
+            // Shift re-bases the drag (Move, then turn, in one drag); Alt toggles snapping live.
+            this.runUpdate(drag, drag.cursor, mods, drag.lastX, drag.lastY);
+            return;
+        }
+        if (!drag && this.hover && this.hover.chipShown) this.showHoverChip();
+    }
+
+    private undoLast() {
+        this.flushKeySession();
+        const r = this.history.undo();
+        if (!r) {
+            this.showMessage('Nothing to undo');
+            return;
+        }
+        const stale = this.staleMessage(r.entry, r.applied, false);
+        if (stale) this.showMessage(stale);
+        else this.showMessage(`Undone: ${r.entry.label}`, this.history.canRedo ? { text: 'Redo', run: () => this.redoLast() } : undefined);
+    }
+
+    private redoLast() {
+        this.flushKeySession();
+        const r = this.history.redo();
+        if (!r) {
+            this.showMessage('Nothing to redo');
+            return;
+        }
+        const stale = this.staleMessage(r.entry, r.applied, true);
+        if (stale) this.showMessage(stale);
+        else this.showMessage(`Redone: ${r.entry.label}`, { text: UNDO_BUTTON, run: () => this.undoLast() });
+    }
+
+    /**
+     * Bar text when an undo / redo skipped edited fields (SPEC3 1.8):
+     * 'Nothing undone: R1 (2) was edited since', 'Undone, except R1 (2),
+     * which was edited since'. Null when nothing was skipped.
+     */
+    private staleMessage(entry: HistoryEntry, applied: boolean, redo: boolean): string | null {
+        const names = entry.stale ?? [];
+        if (!redo) {
+            const text = staleText(names, applied);
+            if (text) return text;
+            return applied ? null : `Nothing undone: ${labelSubject(entry.label)} was edited since`;
+        }
+        const verb = names.length > 1 ? 'were' : 'was';
+        if (names.length) return applied ? `Redone, except ${joinNames(names)}, which ${verb} edited since` : `Nothing redone: ${joinNames(names)} ${verb} edited since`;
+        return applied ? null : `Nothing redone: ${labelSubject(entry.label)} was edited since`;
+    }
+
+    /** History patches read and write the live settings, then commit (cards, dock, validators, render). */
+    private patchIO(): PatchIO {
+        return {
+            read: (ref) => fieldText(ref, this.chartData()),
+            write: (ref, text) => {
+                setFieldText(ref, this.chartData(), text);
+            },
+            readParam: (name) => {
+                const p = this.list<Parameter>('parameters').find((q) => q.name === name);
+                return p ? p.value : null;
+            },
+            writeParam: (name, value) => {
+                const p = this.list<Parameter>('parameters').find((q) => q.name === name);
+                if (p) p.value = value;
+            },
+            done: () => {
+                this.dock?.syncValues();
+                this.commit();
+            },
+        };
+    }
+
+    // ---------------------------------------------------------------- Make slider
+
+    /**
+     * SPEC3 1.11: replace the dragged number with a new slider (and the
+     * same number in the twin), starting at the written value. Undo puts
+     * the number back where the text still holds the slider name and
+     * removes the slider when no field reads it any more.
+     */
+    private makeSlider(offer: MakeSliderOffer) {
+        this.flushKeySession();
+        const data = this.chartData();
+        const value = offer.value;
+        const sites = [{ ref: offer.ref, span: offer.span }, ...offer.twins];
+        const taken = [
+            ...data.parameters.map((p) => p.name),
+            ...data.functions.map((f) => f.name || ''),
+            ...this.list<Function3DParameters>('functions3D').map((f) => f.name || ''),
+            ...data.tools.map((t) => t.name),
+        ];
+        const name = defaultParameter(taken).name;
+        const edits: Array<{ ref: FieldRef; before: string; after: string }> = [];
+        for (const site of sites) {
+            const before = fieldText(site.ref, data);
+            if (before === null) continue;
+            // The field was edited since the drag: its number is somewhere else now.
+            const written = tokenValue(before.slice(site.span[0], site.span[1]));
+            if (written === null || Math.abs(written - value) > 1e-9 * Math.max(1, Math.abs(value))) continue;
+            edits.push({ ref: site.ref, before, after: makeSliderEdit(before, site.span, name) });
+        }
+        if (!edits.length) {
+            this.showMessage('Nothing changed: the number was edited since');
+            return;
+        }
+        for (const edit of edits) setFieldText(edit.ref, data, edit.after);
+        const range = sliderRangeFor(value);
+        const param: Parameter = { name, value, min: range.min, max: range.max, step: range.step };
+        this.settings.setValue('parameters', data.parameters.concat([param]));
+        const entry: HistoryEntry = {
+            label: madeSliderText(name, value),
+            undo: () => {
+                const now = this.chartData();
+                let restored = false;
+                for (const edit of edits) {
+                    if (fieldText(edit.ref, now) !== edit.after) continue;
+                    setFieldText(edit.ref, now, edit.before);
+                    restored = true;
+                }
+                if (!this.readsName(name)) {
+                    this.settings.setValue(
+                        'parameters',
+                        this.list<Parameter>('parameters').filter((p) => p.name !== name)
+                    );
+                    restored = true;
+                }
+                this.commit();
+                return restored;
+            },
+        };
+        this.history.push(entry);
+        this.showUndoBar(entry);
+        this.commit();
+    }
+
+    /** True when any expression, template or range of the chart reads `name` (same fields as rename()). */
+    private readsName(name: string): boolean {
+        const probe = `${name}_etz_probe`;
+        const reads = (src: string | undefined, template = false) => typeof src === 'string' && src !== '' && renameIdentifier(src, name, probe, template) !== src;
+        for (const f of this.list<FunctionParameters>('functions')) {
+            if (reads(f.expression) || reads(f.expressionY) || reads(f.domain) || (typeof f.tangentPoint === 'string' && reads(f.tangentPoint))) return true;
+        }
+        for (const s of this.list<Function3DParameters>('functions3D')) {
+            if (reads(s.expression) || reads(s.xDomain) || reads(s.yDomain)) return true;
+        }
+        for (const t of this.list<Tool>('tools')) {
+            switch (t.type) {
+                case 'region':
+                    if (t.conditions.some((c) => reads(c)) || t.conditionLabels.some((l) => reads(l, true)) || reads(t.label, true)) return true;
+                    break;
+                case 'curve':
+                    if (reads(t.equation) || reads(t.levels) || reads(t.label, true)) return true;
+                    break;
+                case 'points':
+                    if (reads(t.points) || reads(t.objective) || reads(t.label, true)) return true;
+                    break;
+                case 'segment':
+                    if (reads(t.path) || reads(t.label, true)) return true;
+                    break;
+                case 'plane3D':
+                    if (reads(t.value)) return true;
+                    break;
+            }
+        }
+        for (const a of this.list<Annotation>('annotations')) {
+            if (reads(a.x) || reads(a.y) || reads(a.z) || reads(a.text, true)) return true;
+        }
+        for (const key of Object.keys(RANGE_DEFAULTS) as RangeKey[]) {
+            const v = this.settings.getValue(key);
+            if (typeof v === 'string' && reads(v)) return true;
+        }
+        const title = this.settings.getValue('title');
+        return typeof title === 'string' && reads(title, true);
+    }
+
+    /**
+     * Zoom around the pointer by an amount proportional to the wheel delta
+     * (see wheelZoomSteps). Trackpads send dozens of small events per
+     * gesture, so the steps are summed and applied once per frame, by the
+     * next render (flushWheel): one settings write per frame, no rounding
+     * drift from many tiny writes.
+     */
+    private onWheel(e: WheelEvent) {
+        if (this.is3D() || this.panLocked || e.deltaY === 0) return;
+        // The view stays fixed while an object is pressed or dragged (its px map belongs to the drag).
+        if (this.drag && (this.drag.kind === 'press' || this.drag.kind === 'object')) {
+            e.preventDefault();
+            return;
+        }
+        if (!this.axisFree('x') && !this.axisFree('y')) return;
+        const p = this.toMath(e.clientX, e.clientY);
+        if (!p || p.fx < -0.05 || p.fx > 1.05 || p.fy < -0.05 || p.fy > 1.05) return;
+        e.preventDefault();
+        this.wheelSteps += wheelZoomSteps(e);
+        this.wheelAnchor = { fx: p.fx, fy: p.fy };
+        this.requestFrame();
+    }
+
+    /** Apply the wheel zoom collected since the last frame (renderNow calls this first). */
+    private flushWheel() {
+        const steps = this.wheelSteps;
+        const anchor = this.wheelAnchor;
+        this.dropPendingWheel();
+        if (!anchor || steps === 0 || this.is3D() || this.panLocked) return;
+        const zoomX = this.axisFree('x');
+        const zoomY = this.axisFree('y');
+        // Continue from the exact view of the previous wheel frame while the settings still hold
+        // its rounded text: many tiny steps then add up without rounding drift.
+        const kept = this.wheelView;
+        const view = kept && kept.text === this.rangeText() ? kept.view : this.currentView();
+        if (!view || (!zoomX && !zoomY)) return;
+        const factor = Math.pow(WHEEL_ZOOM_FACTOR, steps);
+        const xSpan = (view.xmax - view.xmin) * factor;
+        const ySpan = (view.ymax - view.ymin) * factor;
+        // Keep the math point under the pointer in place (the fractions do not depend on the view).
+        const cx = view.xmin + anchor.fx * (view.xmax - view.xmin);
+        const cy = view.ymax - anchor.fy * (view.ymax - view.ymin);
+        const xmin = cx - anchor.fx * xSpan;
+        const ymax = cy + anchor.fy * ySpan;
+        const next: View = {
+            xmin: zoomX ? xmin : view.xmin,
+            xmax: zoomX ? xmin + xSpan : view.xmax,
+            ymin: zoomY ? ymax - ySpan : view.ymin,
+            ymax: zoomY ? ymax : view.ymax,
+        };
+        if (this.setView(next, zoomX, zoomY)) this.wheelView = { view: next, text: this.rangeText() };
+    }
+
+    /** The 2D range settings as one string, to tell whether anything but the wheel changed them. */
+    private rangeText(): string {
+        return (['xmin', 'xmax', 'ymin', 'ymax'] as const).map((k) => str(this.settings.getValue(k))).join(',');
+    }
+
+    /** Forget wheel zoom that has not been applied yet (Reset and Fit win over it, closing drops it). */
+    private dropPendingWheel() {
+        this.wheelSteps = 0;
+        this.wheelAnchor = null;
+    }
+
+    private onPreviewKey(e: KeyboardEvent) {
+        const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+        // The view stays fixed while an object is pressed or dragged (its px map belongs to the drag), as for the wheel.
+        if (this.drag && (this.drag.kind === 'press' || this.drag.kind === 'object') && keys.includes(e.key)) {
+            e.preventDefault();
+            return;
+        }
+        // With a selection (SPEC3 1.10): arrows move it (Shift x10, Alt x0.1), Enter reveals its field.
+        if (!this.is3D() && this.selected && !e.ctrlKey && !e.metaKey && !(this.drag && this.drag.kind === 'object')) {
+            if (keys.includes(e.key)) {
+                e.preventDefault();
+                this.nudgeSelection(e);
+                return;
+            }
+            if (e.key === 'Enter' && !e.altKey && !e.shiftKey) {
+                const target = this.selectionTarget();
+                if (target && this.selected) {
+                    e.preventDefault();
+                    this.revealTarget(target, this.selected.grab);
+                    return;
+                }
+            }
+        }
+        // Any other key ends a keyboard nudge session (modifiers alone do not).
+        if (!keys.includes(e.key) && e.key !== 'Shift' && e.key !== 'Alt' && e.key !== 'Control' && e.key !== 'Meta') this.flushKeySession();
+        if (e.altKey || e.ctrlKey || e.metaKey) return;
+        if (!keys.includes(e.key)) return;
+        if (this.is3D()) {
+            const az = num(this.settings.getValue('rotationZ'), 45);
+            const el = num(this.settings.getValue('rotationX'), 30);
+            const step = KEYBOARD_ROTATION_STEP;
+            e.preventDefault();
+            if (e.key === 'ArrowLeft') this.applyRotation((((az - step) % 360) + 360) % 360, el);
+            else if (e.key === 'ArrowRight') this.applyRotation((az + step) % 360, el);
+            else if (e.key === 'ArrowUp') this.applyRotation(az, Math.min(90, el + step));
+            else this.applyRotation(az, Math.max(0, el - step));
+            return;
+        }
+        const view = this.currentView();
+        if (this.panLocked || !view) return;
+        const horizontal = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+        if (horizontal ? !this.axisFree('x') : !this.axisFree('y')) return;
+        e.preventDefault();
+        const sign = e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 1;
+        const dx = horizontal ? sign * (view.xmax - view.xmin) * KEYBOARD_PAN_FRACTION : 0;
+        const dy = horizontal ? 0 : sign * (view.ymax - view.ymin) * KEYBOARD_PAN_FRACTION;
+        this.writeView({ xmin: view.xmin + dx, xmax: view.xmax + dx, ymin: view.ymin + dy, ymax: view.ymax + dy }, horizontal, !horizontal);
+    }
+
+    /** The numeric view the settings resolve to now (pan start values may be one frame old). */
+    private currentView(): View | null {
+        try {
+            return this.settings.resolveView(this.math()).view;
+        } catch {
+            return this.layout ? this.layout.view : null;
         }
     }
 
-    private setupKeyboardRotation() {
-        this.previewContainer.addEventListener('keydown', (e: KeyboardEvent) => {
-            if (!this.is3D()) return;
-            const az = this.settings.getValue<number | undefined>('rotationZ') ?? 45;
-            const el = this.settings.getValue<number | undefined>('rotationX') ?? 30;
-            let newAz = az;
-            let newEl = el;
-            switch (e.key) {
-                case 'ArrowLeft':
-                    newAz = ((az - KEYBOARD_ROTATION_STEP) % 360 + 360) % 360;
-                    break;
-                case 'ArrowRight':
-                    newAz = (az + KEYBOARD_ROTATION_STEP) % 360;
-                    break;
-                case 'ArrowUp':
-                    newEl = Math.min(90, el + KEYBOARD_ROTATION_STEP);
-                    break;
-                case 'ArrowDown':
-                    newEl = Math.max(0, el - KEYBOARD_ROTATION_STEP);
-                    break;
-                default:
-                    return;
-            }
-            e.preventDefault();
-            this.applyRotation(newAz, newEl);
-        });
+    private writeView(v: View, xAxis: boolean, yAxis: boolean) {
+        if (this.setView(v, xAxis, yAxis)) this.requestFrame();
+    }
+
+    /** Write the view's bounds for the given axes into the settings and the Chart tab; false when nothing was valid. */
+    private setView(v: View, xAxis: boolean, yAxis: boolean): boolean {
+        const ok = (a: number, b: number) => Number.isFinite(a) && Number.isFinite(b) && a < b;
+        let changed = false;
+        if (xAxis && ok(v.xmin, v.xmax)) {
+            const span = v.xmax - v.xmin;
+            this.settings.setValue('xmin', formatBound(v.xmin, span));
+            this.settings.setValue('xmax', formatBound(v.xmax, span));
+            changed = true;
+        }
+        if (yAxis && ok(v.ymin, v.ymax)) {
+            const span = v.ymax - v.ymin;
+            this.settings.setValue('ymin', formatBound(v.ymin, span));
+            this.settings.setValue('ymax', formatBound(v.ymax, span));
+            changed = true;
+        }
+        if (changed) this.chartPanel?.syncView();
+        return changed;
     }
 
     private applyRotation(azimuth: number, elevation: number) {
         this.settings.setValue('rotationZ', azimuth);
         this.settings.setValue('rotationX', elevation);
-        if (this.azimuthSlider) this.azimuthSlider.setValue(azimuth);
-        if (this.elevationSlider) this.elevationSlider.setValue(elevation);
-        // Camera-only change; render on the next animation frame.
-        this.requestPreviewUpdateFast();
+        this.chartPanel?.syncView();
+        this.requestFrame();
     }
 
-    private buildActionBar(container: HTMLElement) {
-        const bar = container.createDiv({ cls: 'tikz-action-bar' });
+    private updateReadout(clientX: number, clientY: number) {
+        const el = this.readoutEl;
+        if (!el) return;
+        // The hover chip docks in the readout corner.
+        if (this.hintDocked) {
+            el.addClass('tikz-hidden');
+            return;
+        }
+        const p = this.toMath(clientX, clientY);
+        if (!p || p.fx < 0 || p.fx > 1 || p.fy < 0 || p.fy > 1) {
+            this.hideReadout();
+            return;
+        }
+        const names = String(this.settings.getValue('variables') ?? '')
+            .split(/[,;\s]+/)
+            .filter((n) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(n));
+        const [vx, vy] = names.length === 2 && names[0] !== names[1] && !this.isPolar() ? names : ['x', 'y'];
+        const d = this.pixelDecimals();
+        el.setText(`${vx} = ${formatDecimals(p.x, d)}   ${vy} = ${formatDecimals(p.y, d)}`);
+        el.removeClass('tikz-hidden');
+    }
 
-        new Setting(bar)
-            .addButton((btn) =>
-                btn
-                    .setButtonText('Copy SVG')
-                    .then((b) => b.buttonEl.setAttr('aria-label', 'Copy the preview as an SVG with transparent background'))
-                    .onClick(async () => {
-                        await this.copyPreviewAsSvg();
-                    })
-            )
-            .addButton((btn) =>
-                btn
-                    .setButtonText('Copy PNG')
-                    .then((b) => b.buttonEl.setAttr('aria-label', 'Copy the preview as a PNG with transparent background'))
-                    .onClick(async () => {
-                        await this.copyPreviewAsPng();
-                    })
-            )
-            .addButton((btn) =>
-                btn
-                    .setButtonText('Copy TikZ code')
-                    .then((b) => b.buttonEl.setAttr('aria-label', 'Copy generated TikZ code to clipboard'))
-                    .onClick(async () => {
-                        const code = this.getCurrentTikzCode();
-                        try {
-                            await navigator.clipboard.writeText(code);
-                            const orig = btn.buttonEl.textContent;
-                            btn.setButtonText('Copied');
-                            window.setTimeout(() => btn.setButtonText(orig || 'Copy TikZ code'), 2000);
-                        } catch {
-                            new Notice('Could not access clipboard.');
-                        }
-                    })
-            )
-            .addButton((btn) =>
-                btn
-                    .setButtonText(this.sourceFile ? 'Save changes' : 'Insert into note')
-                    .setCta()
-                    .then((b) =>
-                        b.buttonEl.setAttr(
-                            'aria-label',
-                            this.sourceFile
-                                ? 'Save the edited chart back into the source note'
-                                : 'Insert this chart as an easy-tikz block in the current note'
-                        )
-                    )
-                    .onClick(async () => {
-                        await this.emitEasyTikzBlock();
-                    })
-            );
+    private hideReadout() {
+        this.readoutEl?.addClass('tikz-hidden');
+    }
+
+    // ================================================================ action pill
+
+    private updatePill() {
+        this.gridBtn?.setPressed(this.settings.getValue('showLargeGrid') === true);
+        this.dragToggle?.setPressed(this.dragEditOn());
+        const lock = this.lockBtn;
+        if (!lock) return;
+        lock.setPressed(this.panLocked);
+        lock.setIcon(this.panLocked ? 'lock' : 'lock-open');
+        const pinned = (['x', 'y'] as const).filter((a) => !this.axisFree(a));
+        let label = this.panLocked ? 'Unlock pan and zoom' : 'Lock pan and zoom';
+        if (pinned.length === 2) label += ' (both ranges use expressions, so they stay fixed)';
+        else if (pinned.length === 1) label += ` (the ${pinned[0]} range uses an expression, so it stays fixed)`;
+        lock.setLabel(label);
+        this.chartEl?.toggleClass('is-pan-off', this.panLocked || pinned.length === 2);
+    }
+
+    private toggleGrid() {
+        this.settings.setValue('showLargeGrid', this.settings.getValue('showLargeGrid') !== true);
+        this.gridBtn?.setPressed(this.settings.getValue('showLargeGrid') === true);
+        this.chartPanel?.syncView();
+        this.requestUpdate();
+    }
+
+    private togglePanLock() {
+        this.panLocked = !this.panLocked;
+        this.updatePill();
+    }
+
+    /** factor 0 resets the zoom. */
+    private zoom3D(factor: number) {
+        const current = num(this.settings.getValue('zoom3D'), 1);
+        const next = factor === 0 ? 1 : Math.max(ZOOM_3D_MIN, Math.min(ZOOM_3D_MAX, current * factor));
+        this.settings.setValue('zoom3D', next);
+        this.requestFrame();
+    }
+
+    /** The visible axis ranges are still the defaults (2D: x and y, 3D: all three). */
+    private rangesAreDefault(): boolean {
+        const keys: RangeKey[] = this.is3D() ? ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'] : ['xmin', 'xmax', 'ymin', 'ymax'];
+        return keys.every((key) => String(this.settings.getValue(key) ?? '').trim() === RANGE_DEFAULTS[key]);
+    }
+
+    private resetRanges() {
+        this.dropPendingWheel();
+        const keys: RangeKey[] = this.is3D() ? ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'] : ['xmin', 'xmax', 'ymin', 'ymax'];
+        for (const key of keys) this.settings.setValue(key, RANGE_DEFAULTS[key]);
+        if (this.is3D()) this.settings.setValue('zoom3D', 1);
+        this.chartPanel?.syncView();
+        this.requestUpdate();
     }
 
     /**
-     * Emit the current settings as an `easy-tikz` JSON code block. If the
-     * modal was opened by clicking an existing rendered chart, replace
-     * that block in its source file; otherwise insert a new block at the
-     * active editor's cursor.
+     * Fit the ranges to what the functions (2D) or surfaces (3D) draw.
+     * Drops outliers beyond the 1st / 99th percentile so a vertical
+     * asymptote does not blow out the range. Ranges written as expressions
+     * stay as they are, like pan and zoom. `quiet` (the automatic fit after
+     * the first formula) skips the status messages.
      */
-    private async emitEasyTikzBlock() {
-        const json = JSON.stringify(this.settings.serialize(), null, 2);
-        const newBlock = '```' + this.fenceTag + '\n' + json + '\n```';
+    private autoFit(quiet = false) {
+        this.dropPendingWheel();
+        let math: MathContext;
+        try {
+            math = this.math();
+            math.setParams(this.list<Parameter>('parameters'));
+        } catch (e) {
+            if (!quiet) this.flashStatus(`Cannot fit: ${errorText(e)}`);
+            return;
+        }
+        const view = this.currentView() ?? this.settings.resolveView(math).view;
+        const xs: number[] = [];
+        const ys: number[] = [];
+        const zs: number[] = [];
+        const push = (x: number, y: number, z?: number) => {
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+            if (z !== undefined && !Number.isFinite(z)) return;
+            xs.push(x);
+            ys.push(y);
+            if (z !== undefined) zs.push(z);
+        };
 
-        if (this.sourceFile && this.originalBlockText) {
-            try {
-                const content = await this.app.vault.read(this.sourceFile);
-                if (!content.includes(this.originalBlockText)) {
-                    new Notice(
-                        'Could not locate the original chart in the source file (it may have been edited). Inserting at the cursor instead.'
-                    );
-                    this.insertAtCursor(newBlock);
+        if (this.is3D()) {
+            for (const s of this.list<Function3DParameters>('functions3D')) {
+                if (s.hidden || !str(s.expression).trim()) continue;
+                try {
+                    const f = math.fn2(s.expression);
+                    const [x0, x1] = math.domain(s.xDomain, [view.xmin, view.xmax]);
+                    const [y0, y1] = math.domain(s.yDomain, [view.ymin, view.ymax]);
+                    for (let i = 0; i <= FIT_SAMPLES_3D; i++) {
+                        const x = x0 + ((x1 - x0) * i) / FIT_SAMPLES_3D;
+                        for (let j = 0; j <= FIT_SAMPLES_3D; j++) {
+                            const y = y0 + ((y1 - y0) * j) / FIT_SAMPLES_3D;
+                            push(x, y, f(x, y));
+                        }
+                    }
+                } catch {
+                    // A broken surface is reported in the status chip; fit the others.
+                }
+            }
+        } else {
+            for (const info of math.functions()) {
+                if (info.hidden || info.error) continue;
+                if (info.kind === 'cartesian') {
+                    const [a, b] = info.domain ?? [view.xmin, view.xmax];
+                    for (let i = 0; i <= FIT_SAMPLES; i++) {
+                        const x = a + ((b - a) * i) / FIT_SAMPLES;
+                        push(x, info.fn(x));
+                    }
+                } else {
+                    const [a, b] = info.domain ?? [0, 2 * Math.PI];
+                    for (let i = 0; i <= FIT_SAMPLES; i++) {
+                        const t = a + ((b - a) * i) / FIT_SAMPLES;
+                        if (info.kind === 'parametric') push(info.fn(t), info.fnY ? info.fnY(t) : NaN);
+                        else push(info.fn(t) * Math.cos(t), info.fn(t) * Math.sin(t));
+                    }
+                }
+            }
+        }
+
+        if (!xs.length) {
+            if (quiet) return;
+            this.flashStatus(this.is3D() ? 'Nothing to fit yet: add a surface first.' : 'Nothing to fit yet: add a function first.');
+            return;
+        }
+        const axes: Array<{ axis: 'x' | 'y' | 'z'; values: number[]; trim: boolean }> = [
+            { axis: 'x', values: xs, trim: false },
+            { axis: 'y', values: ys, trim: true },
+        ];
+        if (this.is3D()) axes.push({ axis: 'z', values: zs, trim: true });
+        let wrote = false;
+        for (const { axis, values, trim } of axes) {
+            if (!this.axisFree(axis)) continue;
+            const [lo, hi] = trim ? trimmedRange(values) : [Math.min(...values), Math.max(...values)];
+            const pad = (hi - lo) * 0.05 || 0.5;
+            const span = hi - lo + 2 * pad;
+            this.settings.setValue(`${axis}min`, formatBound(lo - pad, span));
+            this.settings.setValue(`${axis}max`, formatBound(hi + pad, span));
+            wrote = true;
+        }
+        if (!wrote) {
+            if (!quiet) this.flashStatus('The ranges use expressions: edit them in Chart > Ranges.');
+            return;
+        }
+        this.chartPanel?.syncView();
+        this.requestUpdate();
+    }
+
+    // ================================================================ action bar
+
+    private buildActionBar(shell: HTMLElement) {
+        const bar = shell.createDiv({ cls: 'etz-actionbar' });
+        const copySvg = textButton(bar, { text: 'Copy SVG', onClick: () => void this.copySvg(copySvg) });
+        const copyPng = textButton(bar, { text: 'Copy PNG', onClick: () => void this.copyPng(copyPng) });
+        const copyTikz = textButton(bar, {
+            text: 'Copy TikZ',
+            onClick: () => {
+                let text: string;
+                try {
+                    text = this.codePanel ? this.codePanel.copyText() : this.generateCode();
+                } catch (e) {
+                    this.flashStatus(`Could not generate TikZ: ${errorText(e)}`);
                     return;
                 }
-                const updated = content.replace(this.originalBlockText, newBlock);
-                await this.app.vault.modify(this.sourceFile, updated);
-                // Update originalBlockText so subsequent saves still find the block.
-                this.originalBlockText = newBlock;
-                this.close();
-            } catch (e) {
-                const msg = e instanceof Error ? e.message : 'unknown error';
-                new Notice('Could not save the chart to the file: ' + msg);
-            }
-            return;
-        }
-
-        this.insertAtCursor(newBlock);
+                void this.copyText(text, copyTikz);
+            },
+        });
+        bar.createDiv({ cls: 'etz-actionbar-spacer' });
+        this.ctaBtn = textButton(bar, { text: '', variant: 'cta', onClick: () => void this.emitBlock() });
+        this.syncCta();
     }
 
-    private insertAtCursor(blockText: string) {
-        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (!view) {
-            new Notice('No active note to insert into.');
-            return;
+    private syncCta() {
+        const btn = this.ctaBtn;
+        if (!btn) return;
+        const text = this.sourceFile ? 'Save changes' : 'Insert into note';
+        btn.setText(text);
+        btn.el.setAttr('aria-label', `${text} (${Platform.isMacOS ? 'Cmd' : 'Ctrl'}+Enter)`);
+    }
+
+    /** Swap a button's text for a moment ("Copied"); UI state instead of a Notice. */
+    private flashButton(button: TextButtonHandle, text: string) {
+        const pending = this.labelTimers.get(button);
+        if (pending !== undefined) window.clearTimeout(pending.timer);
+        const original = pending ? pending.original : (button.el.querySelector('.etz-btn-text')?.textContent ?? '');
+        button.setText(text);
+        const timer = window.setTimeout(() => {
+            this.labelTimers.delete(button);
+            button.setText(original);
+        }, COPIED_LABEL_MS);
+        this.labelTimers.set(button, { timer, original });
+    }
+
+    private async copyText(text: string, button: TextButtonHandle) {
+        try {
+            await navigator.clipboard.writeText(text);
+            this.flashButton(button, 'Copied');
+        } catch {
+            new Notice('Could not copy to the clipboard.');
         }
-        view.editor.replaceSelection(blockText + '\n');
-        this.close();
+    }
+
+    /** Fresh TikZ code generated from the current settings. */
+    private generateCode(): string {
+        const math = this.math();
+        math.setParams(this.list<Parameter>('parameters'));
+        return this.is3D() ? this.settings.generate3DTikzCode(math) : this.settings.generateTikzCode(math);
     }
 
     /**
-     * Clone the live SVG and prepare it for export: resolve every `var(--...)`
-     * to its computed value (so the image survives outside Obsidian) and drop
-     * the background rect for transparency.
+     * Clone the live SVG and prepare it for export: swap MathJax labels for
+     * text, resolve every `var(--...)` to its computed value (so the image
+     * survives outside Obsidian) and drop the background rect for
+     * transparency.
      */
     private prepareSvgForExport(): SVGElement | null {
-        // 3D's on-screen view is canvas-only; the off-screen SVG holds the
-        // exportable DOM and is refreshed here just before we read it.
-        // No-op in 2D (the live SVG is already in the DOM).
-        this.ensureSvgFresh();
-        const svg = this.getChartSvg();
+        let svg: SVGElement | null = null;
+        if (this.is3D()) {
+            // 3D's on-screen view is canvas-only; the off-screen SVG holds the
+            // exportable DOM and is refreshed here just before we read it.
+            if (!this.renderer3d) return null;
+            const math = this.math();
+            math.setParams(this.list<Parameter>('parameters'));
+            this.renderer3d.renderSvg(this.settings.toRendererConfig(math), { math });
+            svg = this.renderer3d.getElement().querySelector<SVGElement>(':scope > svg');
+        } else {
+            svg = this.chartSvg;
+        }
         if (!svg) return null;
         const clone = svg.cloneNode(true) as SVGElement;
+        clone.removeAttribute('class');
+        clone.removeAttribute('style');
 
         // MathJax labels live in <foreignObject> nodes whose rendering
-        // depends on MathJax's document-level stylesheet - serialized
+        // depends on MathJax's document-level stylesheet: serialized
         // standalone they'd show unstyled markup, and foreignObject content
         // breaks PNG rasterization. Swap each for the plain-text
         // stripLatex() approximation carried in its data attributes.
@@ -2781,20 +3372,19 @@ export class TikzModal extends Modal {
             fo.replaceWith(t);
         });
 
-        const computed = getComputedStyle(document.body);
+        // The background rect is the first child, fill="var(--background-primary)".
+        const background = clone.querySelector(':scope > rect');
+        if (background && (background.getAttribute('fill') ?? '').includes('--background-primary')) background.remove();
 
+        const computed = getComputedStyle(this.modalEl.ownerDocument.body);
         const resolveVars = (value: string): string =>
-            value.replace(
-                /var\((--[^,)]+)(?:,\s*([^)]+))?\)/g,
-                (_match: string, name: string, fallback: string | undefined) => {
-                    const v = computed.getPropertyValue(name).trim();
-                    return v || (fallback ? fallback.trim() : '');
-                }
-            );
-
+            value.replace(/var\((--[^,)]+)(?:,\s*([^)]+))?\)/g, (_match: string, name: string, fallback: string | undefined) => {
+                const v = computed.getPropertyValue(name).trim();
+                return v || (fallback ? fallback.trim() : '');
+            });
         const nodes: Element[] = [clone, ...Array.from(clone.querySelectorAll('*'))];
         for (const el of nodes) {
-            for (const attrName of ['fill', 'stroke']) {
+            for (const attrName of ['fill', 'stroke', 'font-family', 'stop-color']) {
                 const v = el.getAttribute(attrName);
                 if (v && v.includes('var(')) el.setAttribute(attrName, resolveVars(v));
             }
@@ -2802,37 +3392,43 @@ export class TikzModal extends Modal {
             if (styleAttr && styleAttr.includes('var(')) el.setAttribute('style', resolveVars(styleAttr));
         }
 
-        // Drop the background rect (it's the first child, fill="var(--background-primary)").
-        const firstRect = clone.querySelector(':scope > rect');
-        if (firstRect) firstRect.remove();
-
-        // Make sure the SVG carries proper xmlns so it renders standalone outside the page.
+        // Proper xmlns so it renders standalone outside the page.
         clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
         clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-
         return clone;
     }
 
-    private async copyPreviewAsSvg() {
-        const clone = this.prepareSvgForExport();
-        if (!clone) {
-            new Notice('No graph to copy yet.');
+    private async copySvg(button: TextButtonHandle) {
+        let clone: SVGElement | null = null;
+        try {
+            clone = this.prepareSvgForExport();
+        } catch (e) {
+            this.flashStatus(`Could not export the preview: ${errorText(e)}`);
             return;
         }
-        const svgString = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' +
-            new XMLSerializer().serializeToString(clone);
+        if (!clone) {
+            new Notice('Nothing to copy yet: the chart has not rendered.');
+            return;
+        }
+        const svgString = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' + new XMLSerializer().serializeToString(clone);
         try {
             await navigator.clipboard.writeText(svgString);
-            new Notice('SVG copied to clipboard (transparent background).');
+            this.flashButton(button, 'Copied');
         } catch {
-            new Notice('Could not copy SVG to the clipboard.');
+            new Notice('Could not copy the SVG to the clipboard.');
         }
     }
 
-    private async copyPreviewAsPng() {
-        const clone = this.prepareSvgForExport();
+    private async copyPng(button: TextButtonHandle) {
+        let clone: SVGElement | null = null;
+        try {
+            clone = this.prepareSvgForExport();
+        } catch (e) {
+            this.flashStatus(`Could not export the preview: ${errorText(e)}`);
+            return;
+        }
         if (!clone) {
-            new Notice('No graph to copy yet.');
+            new Notice('Nothing to copy yet: the chart has not rendered.');
             return;
         }
         const svgString = new XMLSerializer().serializeToString(clone);
@@ -2840,7 +3436,6 @@ export class TikzModal extends Modal {
         const url = URL.createObjectURL(blob);
         const width = parseFloat(clone.getAttribute('width') || '760');
         const height = parseFloat(clone.getAttribute('height') || '532');
-
         try {
             const img = new Image();
             await new Promise<void>((resolve, reject) => {
@@ -2848,7 +3443,6 @@ export class TikzModal extends Modal {
                 img.onerror = () => reject(new Error('Failed to rasterize SVG'));
                 img.src = url;
             });
-
             // 2x for a sharper result on Hi-DPI displays.
             const scale = 2;
             const canvas = createEl('canvas');
@@ -2858,193 +3452,279 @@ export class TikzModal extends Modal {
             if (!ctx) throw new Error('Canvas 2D context unavailable');
             ctx.scale(scale, scale);
             ctx.drawImage(img, 0, 0, width, height);
-
             const pngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
             if (!pngBlob) throw new Error('Could not encode PNG');
-
             // Older lib.dom.d.ts in this toolchain requires Promise<Blob>; the runtime accepts a Blob too.
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': Promise.resolve(pngBlob) })]);
-            new Notice('PNG copied to clipboard (transparent background, 2x resolution).');
+            this.flashButton(button, 'Copied');
         } catch (e) {
-            const message = e instanceof Error ? e.message : 'PNG copy failed';
-            new Notice(message);
+            new Notice(`Could not copy the PNG: ${errorText(e)}`);
         } finally {
             URL.revokeObjectURL(url);
         }
     }
 
-    /** Fresh TikZ code generated from the current settings. */
-    private generateTikzCodeFresh(): string {
-        return this.is3D() ? this.settings.generate3DTikzCode() : this.settings.generateTikzCode();
-    }
-
     /**
-     * Returns the code to copy or insert. Uses the textarea value so user
-     * tweaks survive, falling back to a fresh render if the textarea is empty.
+     * Emit the current settings as an `easy-tikz` JSON code block. If the
+     * modal was opened by clicking an existing rendered chart, replace
+     * that block in its source file; otherwise insert a new block at the
+     * active editor's cursor.
      */
-    private getCurrentTikzCode(): string {
-        const edited = this.codeTextArea?.value;
-        if (edited && edited.trim().length > 0) return edited;
-        return this.generateTikzCodeFresh();
-    }
-
-    /**
-     * Schedule a preview update after the standard debounce. Right for text
-     * inputs and settings that should not re-render on every keystroke.
-     * 3D path always ends up in the SVG render (queryable, exportable).
-     */
-    private requestPreviewUpdate() {
-        if (this.previewRafId !== null) {
-            window.cancelAnimationFrame(this.previewRafId);
-            this.previewRafId = null;
-        }
-        if (this.trailingSvgTimer) {
-            window.clearTimeout(this.trailingSvgTimer);
-            this.trailingSvgTimer = null;
-        }
-        if (this.previewTimer) window.clearTimeout(this.previewTimer);
-        this.previewTimer = window.setTimeout(() => {
-            this.previewTimer = null;
-            this.updatePreview('svg');
-        }, PREVIEW_DEBOUNCE_MS);
-    }
-
-    /**
-     * Schedule a fast canvas render on the next animation frame for
-     * continuous interactions (drag, wheel, slider) plus a trailing SVG
-     * render once the interaction settles. The canvas keeps the FPS high
-     * during drag; the SVG kicks in afterward so Copy SVG / Copy PNG see a
-     * fresh, queryable DOM tree.
-     */
-    private requestPreviewUpdateFast() {
-        if (this.previewTimer) {
-            window.clearTimeout(this.previewTimer);
-            this.previewTimer = null;
-        }
-        if (this.previewRafId === null) {
-            this.previewRafId = window.requestAnimationFrame(() => {
-                this.previewRafId = null;
-                this.updatePreview('canvas');
-            });
-        }
-        // For 3D the on-screen view is canvas-only, so no trailing SVG
-        // render is needed (the SVG is rebuilt on demand for export by
-        // `ensureSvgFresh`). For 2D the live SVG is always shown, so the
-        // trailing render keeps it queryable.
-        if (this.trailingSvgTimer) window.clearTimeout(this.trailingSvgTimer);
-        if (!this.is3D()) {
-            this.trailingSvgTimer = window.setTimeout(() => {
-                this.trailingSvgTimer = null;
-                this.updatePreview('svg');
-            }, 180);
-        }
-    }
-
-    /**
-     * Remove only the SVG / 3D root from the preview container, keeping
-     * the floating overlays (3D zoom buttons, action icons) in place.
-     * `previewContainer.empty()` would wipe them out on every render.
-     */
-    private clearPreviewContent() {
-        const children = Array.from(this.previewContainer.children);
-        for (const child of children) {
-            const tag = child.tagName.toLowerCase();
-            if (tag === 'svg' || child.classList.contains('tikz-3d-root')) {
-                this.previewContainer.removeChild(child);
+    private async emitBlock() {
+        const json = JSON.stringify(this.settings.serialize(), null, 2);
+        const block = '```' + this.fenceTag + '\n' + json + '\n```';
+        const file = this.sourceFile;
+        const original = this.originalBlockText;
+        if (file && original) {
+            let found = false;
+            try {
+                await this.app.vault.process(file, (content) => {
+                    const at = content.indexOf(original);
+                    if (at < 0) return content;
+                    found = true;
+                    // Splice by index: String.replace would expand `$&` / `$$` in labels.
+                    return content.slice(0, at) + block + content.slice(at + original.length);
+                });
+            } catch (e) {
+                new Notice(`Could not save the chart to the file: ${errorText(e)}`);
+                return;
             }
-        }
-    }
-
-    /**
-     * Find the chart's SVG element inside the preview container. We can't
-     * use `previewContainer.querySelector('svg')` because Obsidian's
-     * `setIcon` injects Lucide SVGs into our floating overlay buttons,
-     * and those come earlier in the DOM than the chart - every drag,
-     * wheel, and export call was accidentally grabbing the first Fit /
-     * Reset / Toggle-grid icon (~18 px), which made `plot.scale`
-     * ~40× too large and the whole drag pipeline feel runaway.
-     *
-     * In 2D the chart SVG is a direct child of `previewContainer`. In 3D
-     * the SVG lives inside `.tikz-3d-root` (off-screen, used for export).
-     */
-    private getChartSvg(): SVGElement | null {
-        if (this.is3D()) {
-            const root = this.previewContainer.querySelector('.tikz-3d-root');
-            return (root?.querySelector(':scope > svg') as SVGElement | null) ?? null;
-        }
-        for (const child of Array.from(this.previewContainer.children)) {
-            if (child.tagName.toLowerCase() === 'svg') {
-                return child as unknown as SVGElement;
+            if (!found) {
+                new Notice('Could not find the original chart in the note (it may have been edited), so it was inserted at the current position.');
+                this.insertAtCursor(block);
+                return;
             }
+            // Later saves of this session still find the block.
+            this.originalBlockText = block;
+            this.finish();
+            return;
         }
-        return null;
+        this.insertAtCursor(block);
     }
 
-    private updatePreview(mode: 'svg' | 'canvas' = 'svg') {
-        if (this.previewTimer) {
-            window.clearTimeout(this.previewTimer);
-            this.previewTimer = null;
+    private insertAtCursor(block: string) {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view) {
+            new Notice('No active note to insert into. Open a note and try again.');
+            return;
         }
-        if (this.previewRafId !== null) {
-            window.cancelAnimationFrame(this.previewRafId);
-            this.previewRafId = null;
-        }
-        // Note: we do NOT clear the trailing SVG timer here. If we just
-        // rendered to canvas, the trailing SVG render still needs to run.
+        view.editor.replaceSelection(block + '\n');
+        this.finish();
+    }
 
+    /** After Insert / Save: drop this chart's draft and close. */
+    private finish() {
+        this.finished = true;
+        if (this.autosaveTimer !== null) window.clearTimeout(this.autosaveTimer);
+        this.autosaveTimer = null;
+        const plugin = this.plugin;
+        const draft = plugin?.data?.draft;
+        if (plugin && draft && (draft.savedAt === this.ownDraftAt || this.draftMatchesBlock(draft))) {
+            plugin.data.draft = null;
+            void plugin.saveSettings().catch(() => new Notice('Could not update the plugin data file.'));
+        }
+        this.close();
+    }
+
+    // ================================================================ drafts
+
+    private markChanged() {
+        // Panels may validate or request a render while they are being built; that is not an edit.
+        if (!this.ready) return;
+        this.dirty = true;
+        this.scheduleAutosave();
+    }
+
+    private scheduleAutosave() {
+        if (!this.plugin || this.finished) return;
+        if (this.autosaveTimer !== null) window.clearTimeout(this.autosaveTimer);
+        this.autosaveTimer = window.setTimeout(() => {
+            this.autosaveTimer = null;
+            void this.saveDraft();
+        }, AUTOSAVE_DELAY_MS);
+    }
+
+    private async saveDraft() {
+        const plugin = this.plugin;
+        if (!plugin || this.finished || !this.dirty || !this.hasContent()) return;
+        const draft: ChartDraft = {
+            savedAt: Date.now(),
+            sourcePath: this.sourceFile ? this.sourceFile.path : null,
+            originalBlockText: this.originalBlockText,
+            data: cloneData(this.settings.serialize()),
+        };
+        plugin.data.draft = draft;
+        this.ownDraftAt = draft.savedAt;
         try {
-            const config = this.settings.toRendererConfig();
-            if (config.is3D) {
-                if (!this.svg3dRenderer) this.svg3dRenderer = new SVG3DRenderer();
-                // Attach the 3D root to the preview container BEFORE
-                // rendering, so `applyRootFitContain` inside prepareScene
-                // can measure the parent on the very first paint. If we
-                // rendered first, the root would still be orphaned and
-                // the fit-contain math would fall back to config dims.
-                const root = this.svg3dRenderer.getElement();
-                if (this.currentRenderMode !== '3d' || root.parentElement !== this.previewContainer) {
-                    this.clearPreviewContent();
-                    this.previewContainer.appendChild(root);
-                    this.currentRenderMode = '3d';
+            await plugin.saveSettings();
+        } catch {
+            // Tell once per session; a failing disk must not raise a Notice every second.
+            if (!this.draftSaveFailed) new Notice('Could not autosave the chart draft.');
+            this.draftSaveFailed = true;
+        }
+    }
+
+    private draftMatchesBlock(draft: ChartDraft): boolean {
+        return this.openedFromBlock && draft.sourcePath === (this.sourceFile ? this.sourceFile.path : null) && draft.originalBlockText === this.originalBlockText;
+    }
+
+    /** Banner "Unsaved chart from 14:32 [Restore] [Discard]" for a recent draft that belongs here. */
+    private offerDraft() {
+        const draft = this.plugin?.data?.draft;
+        const slot = this.bannerSlot;
+        if (!slot || !draft || typeof draft !== 'object' || !draft.data || typeof draft.data !== 'object') return;
+        if (!Number.isFinite(draft.savedAt) || Date.now() - draft.savedAt > DRAFT_MAX_AGE_MS) return;
+        if (this.openedFromBlock && !this.draftMatchesBlock(draft)) return;
+        if (JSON.stringify(draft.data) === JSON.stringify(this.settings.serialize())) return;
+        const when = draftTime(draft.savedAt);
+        let text = `Unsaved chart from ${when}`;
+        if (this.openedFromBlock) text = `Unsaved changes from ${when}`;
+        else if (draft.sourcePath) text = `Unsaved edit of a chart in ${draft.sourcePath.replace(/^.*\//, '').replace(/\.md$/, '')} from ${when}`;
+        // Keep the draft in memory: autosaves of this session may overwrite the stored one.
+        const kept: ChartDraft = { ...draft, data: cloneData(draft.data) };
+        this.draftBanner = banner(slot, {
+            text,
+            actions: [
+                { text: 'Restore', cta: true, onClick: () => this.restoreDraft(kept) },
+                { text: 'Discard', onClick: () => this.discardDraft(kept) },
+            ],
+        });
+    }
+
+    private removeDraftBanner() {
+        if (this.draftBanner) this.draftBanner.remove();
+        this.draftBanner = null;
+    }
+
+    private restoreDraft(draft: ChartDraft) {
+        const apply = () => {
+            this.removeDraftBanner();
+            // A fresh editor restoring a block's draft re-links it, so Save replaces that block.
+            if (!this.openedFromBlock && draft.sourcePath && draft.originalBlockText) {
+                const file = this.app.vault.getAbstractFileByPath(draft.sourcePath);
+                if (file instanceof TFile) {
+                    this.sourceFile = file;
+                    this.originalBlockText = draft.originalBlockText;
+                    this.fenceTag = draft.originalBlockText.startsWith('```tikz\n') ? 'tikz' : 'easy-tikz';
+                    this.syncCta();
                 }
-                // 3D is canvas-only on screen. The mode parameter is
-                // ignored here; the off-screen SVG is rendered on demand
-                // by `ensureSvgFresh` before Copy SVG / Copy PNG.
-                this.svg3dRenderer.renderCanvas(config);
-            } else {
-                this.clearPreviewContent();
-                const svg = new SVGRenderer(config).render();
-                this.previewContainer.appendChild(svg);
-                this.currentRenderMode = '2d';
             }
-        } catch (e) {
-            const message = e instanceof Error ? e.message : 'Rendering error';
-            new Notice(`Render failed: ${message}`);
+            this.applyChart(draft.data);
+        };
+        if (!this.dirty || !this.hasContent()) {
+            apply();
+            return;
         }
-
-        this.updateCodeArea();
+        void confirmDialog(this.app, {
+            title: 'Restore the unsaved chart?',
+            message: 'Your changes in this editor are replaced by the restored chart.',
+            confirmText: 'Restore',
+            destructive: true,
+        }).then((ok) => {
+            if (ok && this.isOpen) apply();
+        });
     }
 
-    /**
-     * Render the 3D scene to the off-screen SVG synchronously, so the
-     * export path can clone a fresh SVG node. Called before Copy SVG /
-     * Copy PNG; no-op when the modal is in 2D mode (the 2D path always
-     * has a live SVG already mounted).
-     */
-    private ensureSvgFresh() {
-        if (!this.is3D() || !this.svg3dRenderer) return;
-        if (this.trailingSvgTimer) {
-            window.clearTimeout(this.trailingSvgTimer);
-            this.trailingSvgTimer = null;
-        }
-        const config = this.settings.toRendererConfig();
-        this.svg3dRenderer.renderSvg(config);
+    private discardDraft(draft: ChartDraft) {
+        this.removeDraftBanner();
+        const plugin = this.plugin;
+        if (!plugin || !plugin.data.draft || plugin.data.draft.savedAt !== draft.savedAt) return;
+        plugin.data.draft = null;
+        void plugin.saveSettings().catch(() => new Notice('Could not update the plugin data file.'));
     }
 
-    private updateCodeArea() {
-        if (!this.codeTextArea) return;
-        // Don't trample user edits while they're actively typing in the textarea.
-        if (document.activeElement === this.codeTextArea) return;
-        this.codeTextArea.value = this.generateTikzCodeFresh();
+    // ================================================================ chart replacement
+
+    /** Replace every setting in place (panels keep their SettingsManager reference). */
+    private applyChart(data: Record<string, unknown>) {
+        closeAllPopovers();
+        this.dock?.stopAnimations();
+        this.resetDrag();
+        // Entries of the old chart could patch a tool of the new one that has the same id.
+        this.history.clear();
+        // The bar's Undo would run an entry of the old chart.
+        this.hideUndo();
+        const next = SettingsManager.fromJSON(cloneData(data)).serialize();
+        for (const key of Object.keys(this.settings.serialize())) {
+            if (!(key in next)) this.settings.setValue(key, undefined);
+        }
+        for (const [key, value] of Object.entries(next)) this.settings.setValue(key, value);
+        this.mathCtx = null;
+        this.sceneCache = new SceneCache();
+        this.renderer3d?.invalidateCache();
+        this.layout = null;
+        this.hideReadout();
+        this.syncHeader();
+        this.build?.refresh();
+        this.chartPanel?.refresh();
+        this.codePanel?.refresh();
+        this.commit();
+    }
+
+    // ================================================================ helpers
+
+    private list<T>(key: string): T[] {
+        const v = this.settings.getValue<unknown>(key);
+        return Array.isArray(v) ? (v as T[]) : [];
+    }
+
+    /** Anything worth keeping: autosave, the replace confirmation and the preview's empty hint use this. */
+    private hasContent(): boolean {
+        const filled = (s: unknown) => typeof s === 'string' && s.trim().length > 0;
+        return (
+            this.list<FunctionParameters>('functions').some((f) => filled(f.expression) || filled(f.expressionY)) ||
+            this.list<Function3DParameters>('functions3D').some((s) => filled(s.expression)) ||
+            this.list<Tool>('tools').length > 0 ||
+            this.list<Annotation>('annotations').some((a) => filled(a.text)) ||
+            this.list<Parameter>('parameters').length > 0
+        );
+    }
+}
+
+/** "Manage saved templates...": the user's function templates with delete. */
+class TemplatesModal extends Modal {
+    private plugin: PluginHost;
+
+    constructor(app: App, plugin: PluginHost) {
+        super(app);
+        this.plugin = plugin;
+    }
+
+    onOpen() {
+        this.modalEl.addClass('etz-dialog', 'etz-tokens', 'etz-templates-dialog');
+        this.titleEl.setText('Saved templates');
+        this.renderList();
+    }
+
+    private renderList() {
+        const { contentEl } = this;
+        contentEl.empty();
+        const templates = this.plugin.data.userTemplates ?? [];
+        if (!templates.length) {
+            contentEl.createDiv({ cls: 'etz-dialog-desc', text: 'No saved templates yet. Save a function as a template from its card menu.' });
+            return;
+        }
+        const list = contentEl.createDiv({ cls: 'etz-template-list', attr: { role: 'list' } });
+        templates.forEach((t, index) => {
+            const row = list.createDiv({ cls: 'etz-template-row', attr: { role: 'listitem' } });
+            const text = row.createDiv({ cls: 'etz-template-text' });
+            text.createDiv({ cls: 'etz-template-name', text: t.name });
+            text.createDiv({ cls: 'etz-template-meta', text: `${t.is3D ? '3D' : '2D'} · ${t.expression}` });
+            iconButton(row, {
+                icon: 'trash-2',
+                label: `Delete ${t.name}`,
+                onClick: () => {
+                    const next = templates.filter((_, i) => i !== index);
+                    void this.plugin
+                        .saveUserTemplates(next)
+                        .then(() => this.renderList())
+                        .catch(() => new Notice('Could not update the plugin data file.'));
+                },
+            });
+        });
+    }
+
+    onClose() {
+        this.contentEl.empty();
     }
 }

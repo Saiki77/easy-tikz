@@ -1,4 +1,5 @@
 import { renderMath, finishRenderMath } from 'obsidian';
+import { labelMathSource } from './mathcontext';
 
 /**
  * Real LaTeX rendering for annotation/title/legend text, layered on top of
@@ -12,19 +13,13 @@ import { renderMath, finishRenderMath } from 'obsidian';
  */
 
 /**
- * If `text`, once trimmed, is entirely one `$...$` or `\(...\)` wrapped
- * expression, return the LaTeX source inside the delimiters. Otherwise null.
+ * If `text`, once trimmed, is entirely one math segment (`$...$`, `$$...$$`
+ * or `\(...\)`), return the LaTeX source inside the delimiters, else null.
+ * Uses the label reader the exporter uses (labelMathSource), so MathJax and
+ * the PDF agree on what counts as math ('$5 and $10' is text).
  */
 export function extractMathSource(text: string): string | null {
-    const t = text.trim();
-    if (t.length < 2) return null;
-    if (t.startsWith('$') && t.endsWith('$')) {
-        const inner = t.slice(1, -1);
-        if (inner.length > 0 && !inner.includes('$')) return inner;
-        return null;
-    }
-    const m = /^\\\(([\s\S]*)\\\)$/.exec(t);
-    return m ? m[1] : null;
+    return labelMathSource(text);
 }
 
 // Offscreen host used to measure MathJax's rendered size before it's
@@ -32,7 +27,7 @@ export function extractMathSource(text: string): string | null {
 let measureHost: HTMLDivElement | null = null;
 function getMeasureHost(): HTMLDivElement {
     if (!measureHost || !measureHost.isConnected) {
-        measureHost = document.body.createEl('div', { cls: 'easy-tikz-measure-host' });
+        measureHost = activeDocument.body.createEl('div', { cls: 'easy-tikz-measure-host' });
     }
     return measureHost;
 }
@@ -52,8 +47,54 @@ export interface MathLabel {
  */
 const MATH_SIZE_MULTIPLIER = 1.8;
 
-/** Render `mathSource` with MathJax and measure the result. Throws if MathJax rejects the source. */
+/**
+ * Rendered and measured labels by (font size, colour, source). Slider drags
+ * re-render the chart every frame, and measuring forces a layout per label,
+ * so repeated labels are served as clones of an earlier render. MathJax adds
+ * the CSS for new glyphs only when the render pass is flushed, so a label
+ * measured before that can have the wrong size: an entry is served only once
+ * it was measured after a flush had completed (`verified`); until then every
+ * call measures again. Map order is the LRU order (oldest first).
+ */
+interface CachedLabel extends MathLabel {
+    verified: boolean;
+    /** completedFlushes when this entry was measured. */
+    generation: number;
+}
+const renderCache = new Map<string, CachedLabel>();
+const RENDER_CACHE_SIZE = 200;
+let completedFlushes = 0;
+
+/**
+ * Render `mathSource` with MathJax and measure the result. Throws if MathJax
+ * rejects the source. Every call returns a fresh element (callers insert it
+ * into their own SVG).
+ */
 export function renderMathLabel(mathSource: string, color: string, fontSizePx: number): MathLabel {
+    const key = `${fontSizePx}|${color}|${mathSource}`;
+    const hit = renderCache.get(key);
+    if (hit && hit.verified) {
+        renderCache.delete(key);
+        renderCache.set(key, hit);
+        return { el: hit.el.cloneNode(true) as HTMLElement, width: hit.width, height: hit.height };
+    }
+    const label = renderAndMeasure(mathSource, color, fontSizePx);
+    renderCache.delete(key);
+    renderCache.set(key, {
+        el: label.el.cloneNode(true) as HTMLElement,
+        width: label.width,
+        height: label.height,
+        verified: !!hit && completedFlushes > hit.generation,
+        generation: completedFlushes,
+    });
+    if (renderCache.size > RENDER_CACHE_SIZE) {
+        const oldest = renderCache.keys().next();
+        if (!oldest.done) renderCache.delete(oldest.value);
+    }
+    return label;
+}
+
+function renderAndMeasure(mathSource: string, color: string, fontSizePx: number): MathLabel {
     const el = renderMath(mathSource, false);
     // Inline styles (via the sanctioned helper) rather than a CSS class:
     // the element ends up inside the chart SVG's <foreignObject>, and
@@ -78,5 +119,8 @@ export function renderMathLabel(mathSource: string, color: string, fontSizePx: n
  * contract - safe to call even when nothing was rendered.
  */
 export function flushMathRenders(): void {
-    void finishRenderMath();
+    const done = () => {
+        completedFlushes++;
+    };
+    finishRenderMath().then(done, done);
 }
