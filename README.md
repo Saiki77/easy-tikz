@@ -1,35 +1,60 @@
 <p align="center">
-  <img src="docs/screenshots/marketing-1-hero.png" alt="Easy TikZ: design TikZ & pgfplots charts in Obsidian" width="100%">
+  <img src="docs/media/hero.png" alt="Easy TikZ 4, an Obsidian plugin: the visual editor for TikZ and pgfplots charts. The editor is open on a linear program: the region card with its four conditions on the left; on the right the shaded feasible region with its constraint lines, corner points, the dashed objective line and the optimum x* = (3, 1), with slider c under the preview." width="100%">
 </p>
+
+<h1 align="center">Easy TikZ</h1>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/guides/README.md">Guides</a> ·
+  <a href="#what-is-new-in-version-4">What is new in 4</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+**Easy TikZ** is an [Obsidian](https://obsidian.md) plugin for drawing TikZ and pgfplots charts without writing TikZ. You build a chart from formulas and cards, the preview redraws as you type, the chart renders in your note with no TeX install, and the Code tab holds pgfplots code that compiles with pdflatex.
+
+<p align="center">
+  <img src="docs/media/overview.gif" alt="Easy TikZ 4 in 54 seconds: the editor is open on a new chart, a click on its tile loads the Linear program example, slider c moves the objective line, the line is dragged onto the optimum and turned around it with Shift until the optimum jumps to the next corner, Undo takes that back, a new limit is typed into a condition, the Code tab shows the LaTeX, Insert into note puts the chart into the note, the slider under the chart in the note still works, and a click on the chart opens the editor again." width="960">
+</p>
+<p align="center"><sub>Version 4 in 54 seconds, recorded in Obsidian with real mouse and keyboard input: load the Linear program example into a new chart, move a slider, drag and Shift-turn the objective line, undo, edit a condition, read the LaTeX, insert into a note and re-edit from there. <a href="docs/media/overview.mp4">MP4</a></sub></p>
+
+## What is new in version 4
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/marketing-2-2d.png" alt="2D plots: any expression, live preview, tangents and extrema" width="100%"></td>
-    <td width="50%"><img src="docs/screenshots/marketing-3-3d.png" alt="3D surfaces: f(x, y) at 60 fps, drag to rotate" width="100%"></td>
+    <td width="50%"><img src="docs/media/card-drag.png" alt="Drag a line. Numbers follow. A constraint line of a linear program is being turned with Shift-drag around the pivot at (3, 1); the tip at the pointer reads R1 (2): x + 2y &lt;= 5, slope -1/2. A second tip shows what resting on the shape says beforehand: x + 3y &lt;= 6, Shift-drag turns around (3, 1)." width="100%"></td>
+    <td width="50%"><img src="docs/media/card-sliders.png" alt="Sliders move the picture. The Market equilibrium example at slider values a = 0.6 and a = 2.2: the demand line turns, and the equilibrium point and the shaded consumer and producer surplus follow. The Sliders dock under the large chart shows a = 2.2." width="100%"></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/marketing-4-inline.png" alt="Renders inline in your notes - no external TikZ plugin" width="100%"></td>
-    <td width="50%"><img src="docs/screenshots/marketing-5-tools.png" alt="Composable tools: area between, intersections, reference lines, free shapes" width="100%"></td>
+    <td width="50%"><img src="docs/media/card-regions.png" alt="Shade by inequality. The two areas A1 and A2 between sin(x) and cos(x), shaded in blue and orange with their crossing points marked, and under them the region card of a linear program, which lists one condition per row: x + y &lt;= 4, x + 3y &lt;= 6, x &gt;= 0, y &gt;= 0." width="100%"></td>
+    <td width="50%"><img src="docs/media/card-notes.png" alt="Lives in your notes. A note titled Damped oscillation with the chart rendered in it and three sliders a, k and w under the chart; slider k is being dragged. Sliders never edit the note." width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/card-export.png" alt="Exports to LaTeX. The linear program as the preview in Obsidian next to the PDF that pdflatex compiled from the exported code: the same region, lines, labels and colours. Below them the first lines of the standalone document from the Code tab." width="100%"></td>
+    <td width="50%"><img src="docs/media/card-3d.png" alt="Surfaces in 3D. The surface z = x^2 + y^2 cut by the plane z = 3, with the Sliders dock showing slider h = 3, which moves the plane." width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/card-tools.png" alt="Five tools. Not eleven. The + Add menu with its recipes in plain words, grouped as Functions, Regions, Curves and lines, Points, Segments and arrows, Labels and Sliders; the pointer is on Feasible region (inequalities)." width="100%"></td>
+    <td width="50%" valign="middle">
+      <b>Coming from 3.x?</b><br>
+      Your charts keep working. They are converted when they render or open, and a note is only rewritten when you press <b>Save changes</b>.<br><br>
+      The guide <a href="docs/guides/from-3x.md">Coming from 3.x</a> shows where the eight old tabs went and which tool replaces each old one. The <a href="CHANGELOG.md">changelog</a> lists every change, with the breaking ones at the end of the 4.0.0 section.
+    </td>
   </tr>
 </table>
 
-<p align="center">
-  <img src="docs/screenshots/demo-overview.gif" alt="One-minute overview of the 3.x editor: every tab, function and tool flowing end-to-end" width="960">
-</p>
-<p align="center"><sub>One-minute walkthrough, recorded with the 3.x editor. Version 4 regroups the same work into Build, Chart, Code and Help tabs (see <a href="#quick-start">Quick start</a>). <a href="docs/screenshots/demo-overview.mp4">(MP4)</a></sub></p>
-
-<p align="center">
-  <img src="docs/screenshots/demo.gif" alt="Tighter clip: open the modal, edit a plot, pan / drag, insert into the note, click the rendered chart to re-edit" width="960">
-</p>
-<p align="center"><sub>Tighter clip (3.x editor): open the editor, edit, pan / drag, insert, click the rendered chart to re-edit. The click-to-edit loop is unchanged in v4. <a href="docs/screenshots/demo.mp4">(MP4)</a></sub></p>
+Every picture and video on this page shows the plugin running in Obsidian. The scripts that make them are in [`scripts/media`](scripts/media/README.md).
 
 ## Why
 
-Pgfplots is powerful but the syntax is fiddly and the feedback loop is "edit, recompile, squint". Easy TikZ is a visual editor with a live preview that renders the chart in your note directly - no TeX install needed for in-vault use, and the same model exports clean pgfplots when you want to publish.
+Pgfplots is powerful but the syntax is fiddly and the feedback loop is "edit, recompile, squint". Easy TikZ is a visual editor with a live preview that renders the chart in your note directly (no TeX install needed for in-vault use), and the same model exports clean pgfplots when you want to publish.
 
 Version 4 adds sliders that move the picture while you drag them, drag to edit (grab a line, curve or point in the preview and its numbers follow), and a handful of general tools (regions from inequalities, curves from equations, computed points) that cover lecture-style pictures: several areas between curves, linear programs with their optimum, level curves touching a constraint, market equilibria.
 
 ## Install
+
+Easy TikZ needs Obsidian 1.13 or newer and runs on desktop only.
 
 **From inside Obsidian** (recommended)
 
@@ -42,9 +67,9 @@ Version 4 adds sliders that move the picture while you drag them, drag to edit (
 2. BRAT settings → **Add Beta Plugin** → paste `Saiki77/easy-tikz`.
 3. Enable **Easy TikZ** under Settings → Community plugins.
 
-**Manual:** download `main.js`, `manifest.json`, `styles.css` from the [latest release](../../releases) into `<your vault>/.obsidian/plugins/easy-tikz/`.
+**Manual:** download `main.js`, `manifest.json`, `styles.css` from the [latest release](https://github.com/Saiki77/easy-tikz/releases/latest) into `<your vault>/.obsidian/plugins/easy-tikz/`.
 
-**Upgrading from 3.x.** Existing `easy-tikz` blocks keep working: they are migrated in memory when they render or open, and the note is only rewritten when you press **Save changes** in the editor. See the [CHANGELOG](CHANGELOG.md) for what migration does.
+**Upgrading from 3.x.** Existing `easy-tikz` blocks keep working: they are migrated in memory when they render or open, and the note is only rewritten when you press **Save changes** in the editor. See the guide [Coming from 3.x](docs/guides/from-3x.md) for where everything went and the [CHANGELOG](CHANGELOG.md) for what migration does.
 
 **Migrating from 2.x.** The plugin id changed to `easy-tikz` in 3.0. Rename `.obsidian/plugins/tikz_graph_helper/` to `.obsidian/plugins/easy-tikz/`, then re-enable. Settings carry over.
 
@@ -65,17 +90,46 @@ The editor has four tabs:
 | **Build** | Everything you draw, as cards: functions (or surfaces in 3D), then shapes, points and labels.              |
 | **Chart** | Ranges (formulas allowed), axes, axis variables, equal scale, grid, export size, note width, 3D view.      |
 | **Code**  | The LaTeX, with a **Standalone document** switch. Hand edits are kept until you press Regenerate.          |
-| **Help**  | The full reference, with **Open example** buttons.                                                         |
+| **Help**  | Step-by-step [guides](#guides) with live charts, and the full reference with **Open example** buttons.     |
 
 Under the preview sits the **Sliders** dock (visible in every tab). The header switches between 2D / 3D and Cartesian / Polar; its "more" menu opens the examples and your saved templates.
 
 Problems show under their field after a short pause, often with a one-click fix (**Add slider k**, **Use a\*x**, **Use sin**), and a status chip on the preview lists them all. A chart with an error still draws everything else. Deleting a card or finishing a drag shows an **Undo** bar, Cmd/Ctrl+Z and Cmd/Ctrl+Shift+Z undo and redo outside text fields, and a chart you close without inserting is kept as a draft that the editor offers to restore.
+
+<p align="center">
+  <img src="docs/media/clip-quickfix.gif" alt="A new chart: a x^2 - 3x is typed into the Start a chart field, the line under the field says the name a is unknown and offers Add slider a, a click on it adds the function and the slider, and dragging slider a reshapes the parabola." width="720">
+</p>
+<p align="center"><sub>A formula with an unknown name: the quick fix under the field adds the slider, and dragging it reshapes the parabola. <a href="docs/media/clip-quickfix.mp4">MP4</a></sub></p>
+
+## Guides
+
+Twenty step-by-step guides (142 steps) take you from the first formula to integer programs and LaTeX export. They come from one source and exist in two places:
+
+- **In the editor:** the **Help** tab. Search or pick a guide; every step shows a live chart and has a button **Open this step in the editor**, and the things to type are rows with a **Copy** button.
+- **On GitHub:** [docs/guides](docs/guides/README.md). The same steps with 137 screenshots of the plugin in Obsidian, one for nearly every step, and every guide ends with its finished chart as a block to paste into a note.
+
+Five to start with:
+
+| Finished chart | Guide |
+| --- | --- |
+| <a href="docs/guides/first-chart.md"><img src="docs/guides/img/first-chart-card.png" alt="Finished chart: 2 + sin(x) in blue and 2 + cos(x) in black on a grid, with a legend" width="260"></a> | **[Your first chart](docs/guides/first-chart.md)**<br>From an empty editor to a chart in your note: type a formula, style it, set the ranges and insert it.<br>Start here · 5 min · 8 steps |
+| <a href="docs/guides/drag-to-edit.md"><img src="docs/guides/img/drag-to-edit-card.png" alt="Finished chart: a blue wave and a black straight line that crosses it" width="260"></a> | **[Drag shapes to edit them](docs/guides/drag-to-edit.md)**<br>Grab a line or a curve in the preview and its numbers follow: move, turn, stretch, undo.<br>Start here · 7 min · 8 steps |
+| <a href="docs/guides/sliders.md"><img src="docs/guides/img/sliders-card.png" alt="Finished chart: a wave under a title that prints the slider value, Amplitude a = -1.2" width="260"></a> | **[Sliders that move the picture](docs/guides/sliders.md)**<br>Turn a letter in a formula into a slider, set its range, play it and print its value in the chart.<br>Core · 6 min · 7 steps |
+| <a href="docs/guides/areas-between.md"><img src="docs/guides/img/areas-between-card.png" alt="Finished chart: the areas A1 and A2 between two waves, shaded in blue and orange, with the crossing points marked" width="260"></a> | **[Shade the areas between two curves](docs/guides/areas-between.md)**<br>Two curves, the areas between them in two colours, and their crossing points as the limits of the shading.<br>Core · 7 min · 7 steps |
+| <a href="docs/guides/linear-program.md"><img src="docs/guides/img/linear-program-card.png" alt="Finished chart: a feasible region with two labelled constraint lines, its corner points, the dashed objective line and the optimum" width="260"></a> | **[Solve a linear program in a picture](docs/guides/linear-program.md)**<br>Feasible region, labelled constraint lines, an objective line on a slider, the optimum, the corners, and a sensitivity test by dragging.<br>Core · 10 min · 8 steps |
+
+All guides by topic: [Getting started](docs/guides/README.md#getting-started), [Functions and sliders](docs/guides/README.md#functions-and-sliders), [Regions and optimisation](docs/guides/README.md#regions-and-optimisation), [Points, lines and labels](docs/guides/README.md#points-lines-and-labels), [3D](docs/guides/README.md#3d), [Notes and export](docs/guides/README.md#notes-and-export) and [Reference](docs/guides/README.md#reference) (coming from 3.x, shortcuts and troubleshooting).
 
 ## Plot
 
 **2D.** Any formula in x. `^` is power, `sin`, `exp`, `ln`, `sqrt`, ... are bare names, `pi` and `e` are constants (`PI`, `E` and `Math.*` still work). You can leave out `*`: `2x`, `3(x + 1)`, `a x + b`. Each function card has a name (`f1`, `f2`, ...) that other formulas use: `f1(x - 1)`, `2 f1 + 1`, `f2 <= y <= f1`. Per function: legend (your own text or the formula typeset), fill to the x-axis (solid or pattern), dashed, thickness, tangent at a number, a slider or `min` / `max`, automatic extrema markers, parametric (`x(t), y(t)`), or polar (`r(θ)`) via the header switch. Drag empty space in the preview to pan (hold Space or use the middle mouse button to pan from on top of a shape) and scroll to zoom; the lock button switches both off, and axes whose bounds are formulas (`2a`) are left alone. A drag that starts on a shape edits it: see [Drag to edit](#drag-to-edit).
 
 **3D.** Formulas in x and y. Wireframe or filled with adjustable opacity, planes, points, arrows and labels with a z position. Drag the preview to rotate (arrow keys for fine steps when it has focus) and use the zoom buttons in its corner. A plugin setting controls the maximum samples-per-axis slider (default cap 80, up to 120).
+
+<p align="center">
+  <img src="docs/media/clip-3d.gif" alt="The Surface and plane example in the editor: dragging the 3D preview turns the surface z = x^2 + y^2 and its box, then dragging slider h moves the horizontal plane up and down through the surface." width="720">
+</p>
+<p align="center"><sub>3D: drag the preview to turn it; slider h moves the plane through the surface. <a href="docs/media/clip-3d.mp4">MP4</a></sub></p>
 
 ```
 sin(x)                       sin(x) exp(-x/5)              r = 1 + cos(θ)
@@ -84,6 +138,8 @@ sin(sqrt(x^2 + y^2))         exp(-(x^2 + y^2)/4)           x y
 ```
 
 Two traps: `ax` is one name (write `a x` or `a*x`; the error offers **Use a\*x**), and `1/2x` is `(1/2)*x`. The Help tab lists every operator and function. For models in other letters, set **Axis variables** in Chart > Axes to `x1, x2` or `q, p`.
+
+Guides: [Write formulas that work](docs/guides/formulas.md), [Tangents and extrema](docs/guides/tangents-extrema.md), [Parametric and polar curves](docs/guides/parametric-polar.md), [Surfaces, planes and points in 3D](docs/guides/surfaces-3d.md).
 
 ## Tools
 
@@ -103,6 +159,13 @@ You rarely pick a tool directly: **+ Add** lists recipes in plain words (Area be
 
 Names are stable: functions are `f1, f2, ...`, tools `R1, C1, P1, S1, PL1, ...`, all renameable on the card, and a rename updates every formula and label placeholder that uses the name.
 
+<p align="center">
+  <img src="docs/media/clip-areas.gif" alt="A chart with sin(x) and cos(x): + Add, Area between two functions shades the area between the two curves; + Add, Intersections of two functions marks the crossings with their coordinates; then sin(x) is dragged about half a unit to the right and the shaded area and the crossing points follow." width="720">
+</p>
+<p align="center"><sub>Two recipes from + Add (a region and a points tool), then a drag on one curve: the area and the crossings follow. <a href="docs/media/clip-areas.mp4">MP4</a></sub></p>
+
+Guides: [Shade a region with inequalities](docs/guides/regions.md), [Shade the areas between two curves](docs/guides/areas-between.md), [Shade between a curve and its tangent](docs/guides/tangent-area.md), [Points, intersections and live labels](docs/guides/points-labels.md), [Segments, arrows and braces](docs/guides/arrows-braces.md).
+
 ## Sliders and live values
 
 A slider is a named number you can use anywhere: in formulas, domains, region conditions, point lists, labels and axis ranges (`xmax = 2a`).
@@ -114,9 +177,21 @@ A slider is a named number you can use anywhere: in formulas, domains, region co
 - **Label templates.** Every text (title, text labels, region, condition, curve, point and segment labels) can show values: `{c}` (up to 3 decimals), `{P1_val:1}` (1 decimal). Points add `{x}`, `{y}`, `{z}`, `{val}` and `{i}`; curves add `{level}`. `$...$` is LaTeX math.
 - **In your notes** the chart shows its sliders underneath (up to three rows, then "Show N more", plus a reset button). Moving them changes the picture for the current session only and never edits the note. Switch them off in Chart > In your note.
 
+<p align="center">
+  <img src="docs/media/clip-sliders.gif" alt="The Tangent explorer example in the editor: slider a is dragged in the Sliders dock and the dashed tangent slides along the curve x^3 - 3x while the title of the chart prints the slope at that x; then the play button sweeps the slider on its own." width="720">
+</p>
+<p align="center"><sub>Drag a slider and the tangent and the slope in the title follow while you move; play sweeps it. <a href="docs/media/clip-sliders.mp4">MP4</a></sub></p>
+
+Guide: [Sliders that move the picture](docs/guides/sliders.md).
+
 ## Drag to edit
 
 In the editor's 2D preview, drag a line, curve, point or text label, and Easy TikZ rewrites the numbers in its formula so that the part you grabbed follows the pointer. Only numbers and their signs are rewritten (your spacing, `*` and `≤` stay as typed), and the card and the Sliders dock update while you drag.
+
+<p align="center">
+  <img src="docs/media/clip-drag.gif" alt="A linear program in the editor: the pointer rests on constraint line (2) and a tip shows R1 (2): x + 3y &lt;= 6 with the number a drag will change (the clip shows an enlarged copy of the tip in the top right); the line is dragged upward, the condition in the card becomes x + 3y &lt;= 7.5 and the region, the corner points and the optimum follow; Cmd/Ctrl+Z puts the 6 back." width="720">
+</p>
+<p align="center"><sub>Drag: rest on a line to see what will change, drag it and the number in the condition follows, undo with Cmd/Ctrl+Z. <a href="docs/media/clip-drag.mp4">MP4</a></sub></p>
 
 | Gesture                   | What it does                                                                                                         |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -132,6 +207,13 @@ In the editor's 2D preview, drag a line, curve, point or text label, and Easy Ti
 - **Snapping:** moved shapes snap to markers and the origin, lines snap through nearby markers, points, segment ends, labels and the vertex of a graph snap to the major grid, and turns click into simple slopes.
 - **Undo:** Esc cancels a running drag. Each finished drag is one step in the Undo bar and under Cmd/Ctrl+Z (redo: Cmd/Ctrl+Shift+Z), in one history with deletes and slider changes. After a drag that changed one typed number, **Make slider** turns that number into a slider.
 - **Switch:** the pointer button **Edit shapes by dragging** in the preview's action pill turns it off, and the preview then pans wherever you drag (text labels still move). Not draggable yet: parametric and polar curves, the inside of a region, 3D charts and charts in notes.
+
+<p align="center">
+  <img src="docs/media/clip-shift.gif" alt="Two functions in the editor: a Shift-drag turns the line 0.5x - 1 around its pivot until its formula reads x - 1, then a Shift-drag on the crest of sin(x) stretches the curve until its formula reads 2sin(x). The formulas in the cards change during the drags." width="720">
+</p>
+<p align="center"><sub>Shift-drag: a line turns around its pivot (<code>0.5x - 1</code> becomes <code>x - 1</code>), a curve stretches (<code>sin(x)</code> becomes <code>2sin(x)</code>). <a href="docs/media/clip-shift.mp4">MP4</a></sub></p>
+
+Guide: [Drag shapes to edit them](docs/guides/drag-to-edit.md). Every key and mouse gesture is in [Keyboard, mouse and troubleshooting](docs/guides/shortcuts.md).
 
 ## Optimisation diagrams
 
@@ -174,11 +256,18 @@ Missing fields take their defaults, and the editor fills them in when you save. 
 - **Nonlinear objectives:** draw the objective as a curve with levels (`x^2 + y^2` at `1, 3.2, 6`), shade the constraint as a region, find the minimum with a points tool over it (Min), and add a curve `x^2 + y^2` with levels `P1_val`: the level curve that touches the constraint at the optimum.
 - **Unbounded or infeasible:** the status chip says when the objective is unbounded within the view or the region is empty.
 
-Help > Optimisation recipes walks through these, and the examples *Linear program*, *Level curves and a constraint* and *Market equilibrium* open them ready-made.
+Four guides build such charts step by step: [Solve a linear program in a picture](docs/guides/linear-program.md), [Compare an integer program with its relaxation](docs/guides/integer-program.md), [Find a nonlinear optimum with level curves](docs/guides/level-curves.md) and [Draw a market with surplus areas](docs/guides/supply-demand.md). The reference in the Help tab has a section *Optimisation recipes*, and the examples *Linear program*, *Level curves and a constraint* and *Market equilibrium* open them ready-made.
 
 ## Inline rendering in notes
 
-The plugin registers an `easy-tikz` markdown code-block processor. **Insert into note** writes a JSON block; the same renderers that power the editor preview draw the chart in your note, and a chart with sliders gets its own slider strip underneath. Click the rendered chart to re-open the editor pre-filled with every setting - change something, **Save changes**, and the block in the source file is replaced in place. Hover the chart for alignment and width controls. If something in the chart cannot be drawn, a muted line under the chart names the problem; the rest of the chart still renders.
+The plugin registers an `easy-tikz` markdown code-block processor. **Insert into note** writes a JSON block; the same renderers that power the editor preview draw the chart in your note, and a chart with sliders gets its own slider strip underneath. Click the rendered chart to re-open the editor pre-filled with every setting: change something, **Save changes**, and the block in the source file is replaced in place. Hover the chart for alignment and width controls. If something in the chart cannot be drawn, a muted line under the chart names the problem; the rest of the chart still renders.
+
+<p align="center">
+  <img src="docs/media/clip-note.gif" alt="A note titled Market equilibrium with the chart rendered in it: the slider under the chart is dragged, the demand line turns and the shaded consumer and producer surplus follow; the reset button then puts the saved value back. The note file is not changed." width="600">
+</p>
+<p align="center"><sub>A chart in a note keeps its sliders. Dragging redraws the chart and does not write to the note; reset puts the saved value back. <a href="docs/media/clip-note.mp4">MP4</a></sub></p>
+
+Guide: [Charts in your notes](docs/guides/charts-in-notes.md).
 
 Plugin setting **"Also render plain `tikz` blocks"** opts in to claim the `tikz` language tag as well; off by default to coexist peacefully with `obsidian-tikzjax` and similar.
 
@@ -197,6 +286,8 @@ The preview and the export draw the same scene, so what you see is what pgfplots
 
 The editor's **Copy SVG** and **Copy PNG** buttons serialize the live preview with theme colours already resolved.
 
+Guide: [Export to LaTeX](docs/guides/export-latex.md) (standalone document or snippet, the size on paper, colours and label text, what the export freezes, hand edits).
+
 ## Plugin settings
 
 Settings → Community plugins → **Easy TikZ**:
@@ -208,16 +299,16 @@ Settings → Community plugins → **Easy TikZ**:
 
 ## Live rendering, briefly
 
-The preview is drawn in-process by a small custom pipeline - no shell-out, no LaTeX compile, no image round-trip - which is what lets sliders and the camera follow the cursor without lag. Expressions are parsed once and compiled into plain closures (no `eval`, no `Function`); sliders are read when the closure runs, so dragging one never recompiles anything. Regions, curves and points are memoised per tool and keyed by the sliders and names they use: dragging the objective slider `c` recomputes the objective line, not the feasible region. While a slider moves, the 2D preview draws at draft resolution on every animation frame and redraws at full quality once you stop. Drag to edit rides on the same loop: each pointer event solves for the new numbers, rewrites the text and requests a draft frame.
+The preview is drawn in-process by a small custom pipeline (no shell-out, no LaTeX compile, no image round-trip), which is what lets sliders and the camera follow the cursor without lag. Expressions are parsed once and compiled into plain closures (no `eval`, no `Function`); sliders are read when the closure runs, so dragging one never recompiles anything. Regions, curves and points are memoised per tool and keyed by the sliders and names they use: dragging the objective slider `c` recomputes the objective line, not the feasible region. While a slider moves, the 2D preview draws at draft resolution on every animation frame and redraws at full quality once you stop. Drag to edit rides on the same loop: each pointer event solves for the new numbers, rewrites the text and requests a draft frame.
 
 A typical 3D surface (samples=40, 1,600 quads) sits at ~60 fps; the slider's upper end (samples=120, 14,400 quads) settles above 30 fps. Sampled surface data is cached per surface, keyed by expression, domain, sample count, z-range and the sliders the surface uses, so a pure camera change (rotation, zoom) re-projects from the cache without re-evaluating the function.
 
 ## Permissions
 
-- **Clipboard:** writes TikZ code / SVG / PNG on the *Copy …* buttons. No reads.
+- **Clipboard:** writes TikZ code / SVG / PNG on the *Copy …* buttons, and the text of a "type" row when you press **Copy** in a guide. No reads.
 - **Active note:** inserts an `easy-tikz` block on **Insert into note**, replaces an existing block when saving from click-to-edit, and updates `displayWidth` / `displayAlign` when you use a chart's width or alignment controls. Inline sliders never write to the note.
 - **Plugin data:** the plugin settings above, your saved function templates, the state of the **Edit shapes by dragging** switch (and that its first-use tip was shown) and, while the editor is open, an autosaved draft of the chart (cleared when you insert or save).
-- **Network:** none.
+- **Network:** none. The guides in the Help tab are part of the plugin and their charts are drawn locally; each guide has a link to its page on GitHub, which opens in your browser only when you click it.
 - **Telemetry:** none.
 - **Math evaluation:** user expressions are parsed by a built-in parser and compiled into closures; no dynamically generated code runs. Nothing is persisted or transmitted.
 
@@ -229,9 +320,20 @@ npm run dev    # watch mode; also rebuilds styles.css when a stylesheet changes
 npm run build  # type check, production bundle, styles.css
 npm test       # unit tests, plus a pdflatex compile test when pdflatex is on PATH
 node scripts/run-tests.mjs geometry   # only the test files whose name contains "geometry"
+
+npm run media:smoke    # smoke test in a real, isolated Obsidian, about 30 s (macOS)
+npm run media:guides   # docs/guides: the guide pages and their screenshots, 2 to 3 minutes
+npm run media:promo    # docs/media/*.png: hero, feature cards, social images, about 30 s
+npm run media:video    # docs/media: the videos as MP4 and GIF with poster frames, about 4 minutes; name a scenario to film only that one
 ```
 
-`styles.css` in the repository root is generated: `scripts/build-css.mjs` concatenates `src/styles.css` and every `src/ui/*.css`, so edit those. Tests live in `tests/*.test.ts` and cover the pure modules (no `obsidian` import); `scripts/run-tests.mjs` bundles each file with esbuild and runs it in node. There are 18 test files with 558 tests (35 of them are the pdflatex compiles). `dom-classes` scans the sources for class names that only real Obsidian rejects (a space in a class given to `createSvg` or `addClass` throws there), since no node test can run Obsidian's DOM helpers. The eight `drag-*` files (264 tests) cover drag to edit: `drag-golden` is a table of real drags with the exact text each one must produce, and `drag-fuzz` rewrites 2300 random expressions and checks that the new text computes the same values. The LaTeX test compiles every example, a 3.x block of every legacy tool type and stress cases with pdflatex (30 s per file; set `ETZ_LATEX_KEEP=<dir>` to keep the `.tex`, `.pdf` and `.log` files).
+`styles.css` in the repository root is generated: `scripts/build-css.mjs` concatenates `src/styles.css` and every `src/ui/*.css`, so edit those. Tests live in `tests/*.test.ts` and cover the pure modules (no `obsidian` import); `scripts/run-tests.mjs` bundles each file with esbuild and runs it in node. There are 20 test files with 600 tests (35 of them are the pdflatex compiles). `dom-classes` scans the sources for class names that only real Obsidian rejects (a space in a class given to `createSvg` or `addClass` throws there), since no node test can run Obsidian's DOM helpers. The eight `drag-*` files (264 tests) cover drag to edit: `drag-golden` is a table of real drags with the exact text each one must produce, and `drag-fuzz` rewrites 2300 random expressions and checks that the new text computes the same values. `guides` loads every chart of every guide (the finished chart and each step) and fails on any problem, and checks ids, links between guides, step titles and that each "type" row is accepted by the field it names. `labels` takes the charts where labels used to be struck, stacked or clipped and fails when a label box meets a stroke, a function curve or another label, or leaves the plot frame. The LaTeX test compiles every example, a 3.x block of every legacy tool type and stress cases with pdflatex (30 s per file; set `ETZ_LATEX_KEEP=<dir>` to keep the `.tex`, `.pdf` and `.log` files).
+
+**Guides.** `src/guides` is the single source of the guides: the Help tab draws them with live charts, and `npm run media:guides` writes `docs/guides/<id>.md` with a screenshot for every step that has something to show in the app. The files in `docs/guides` are generated, so edit `src/guides/*.ts` and run the script again.
+
+**Media toolkit.** The four `media:*` scripts ([`scripts/media`](scripts/media/README.md), development only, no npm dependencies beyond esbuild) drive the real plugin in a second Obsidian that runs next to your own: its own profile, a throwaway vault and its own debugging port. Your own Obsidian, its profile and your vaults are never opened or written. The scripts click, drag and type through real input events, so every screenshot and video in `docs` shows the plugin as it runs. They need macOS, Obsidian in `/Applications` (or `OBSIDIAN_BIN`) and Node 22 or newer; the guides and promo images also need ImageMagick, the promo images a headless Chromium (the one Playwright keeps in its cache, or `CHROMIUM_BIN`) and `pdflatex`, and the videos `ffmpeg`.
+
+**Smoke test.** `npm run media:smoke` checks what no node test can see, because it needs Obsidian's DOM and real input: the plugin loads in a new profile, the editor opens, a guide figure in Help draws its math labels with their real boxes, every example and every chart of every guide loads with no problem, the four tabs show, a drag on the objective line of the Linear program example moves its slider and Shift-drag turns the line, Escape cancels a drag (also with Shift held), typing a formula adds a function, Insert into note renders the chart with its slider strip, a slider in the note does not write the file, a click on the chart reopens it and Save changes writes it back, the dark theme draws, and nothing is logged as an error. It prints one `PASS` / `FAIL` line per check and exits with code 1 when a check fails. Run it before tagging a release: `npm run build && npm run media:smoke -- --root` tests the `main.js` and `styles.css` that the release ships.
 
 ```
 main.ts              # plugin entry: code-block processor, inline charts and slider strip, settings tab
@@ -245,7 +347,7 @@ src/
     layerCards.ts    # region, curve, points, segment, plane and text label cards
     chartPanel.ts    # Chart tab
     codePanel.ts     # Code tab
-    helpPanel.ts     # Help tab (reference and Open example buttons)
+    helpPanel.ts     # Help tab: guides browser and reader, search, the reference with Open example buttons
     slidersDock.ts   # Sliders dock under the preview
     dragLayer.ts     # drag overlay over the chart (halo, ghost, pivot mark, snap ring) and the hint chip
     *.css            # per-panel styles
@@ -260,6 +362,12 @@ src/
     session.ts       # prepare, update, commit and cancel a drag; snapping; keyboard nudges
     describe.ts      # every user-facing string of drag to edit
     history.ts       # chart-level undo and redo
+  guides/            # the guides (pure data: no DOM, no Obsidian), read by the Help tab and by scripts/media/build-guides.mjs
+    types.ts         # the Guide, GuideStep and GuideShot contract
+    index.ts         # GUIDES in display order, categories, GitHub links, search
+    basics.ts        # Getting started; Functions and sliders
+    optimisation.ts  # Regions and optimisation
+    more.ts          # Points, lines and labels; 3D; Notes and export; Reference
   expr.ts            # expression parser, closure compiler, pgfmath and LaTeX printers
   mathcontext.ts     # MathContext: names, sliders, computed values, validation, quick fixes, templates
   geometry.ts        # regions from inequalities, contours, crossings, optimisation, integer points
@@ -280,7 +388,17 @@ src/
 scripts/
   build-css.mjs      # builds styles.css
   run-tests.mjs      # test runner
-tests/               # unit tests (drag-*.test.ts: drag to edit), helpers (_lib.ts, _drag.ts), the pdflatex compile test
+  media/             # media toolkit (development only), see scripts/media/README.md
+    lib/             # DevTools protocol client, isolated Obsidian launcher and input helpers, frame recorder, headless Chromium renderer
+    smoke.mjs        # real-Obsidian smoke test (npm run media:smoke)
+    build-guides.mjs # docs/guides from src/guides (npm run media:guides)
+    build-promo.mjs  # docs/media/*.png, composed by the templates in promo/ around real captures (npm run media:promo)
+    build-video.mjs  # docs/media videos, one scenario per file in video/ (npm run media:video)
+tests/               # unit tests (drag-*.test.ts: drag to edit, guides.test.ts: every guide chart), helpers (_lib.ts, _drag.ts), the pdflatex compile test
+docs/
+  guides/            # generated: one page per guide, README.md as the index, img/ with the screenshots
+  media/             # generated: hero, feature cards, social images, videos (MP4, GIF, poster)
+  release-posts/     # announcement texts per channel, each naming the media to attach
 ```
 
 ## License

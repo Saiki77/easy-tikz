@@ -2,6 +2,8 @@
 
 Paste this into the **description** field of the submission PR. Tick every box that's true (all of them should be).
 
+The text describes version 4 (checked against `manifest.json`, the README and the plugin settings of 4.0.0). `SUBMISSION.md` next to it is the walkthrough written for the first submission and still names 3.19.0 as the latest tag: read it for the steps, not for version numbers.
+
 ---
 
 ## I am submitting a new Community Plugin
@@ -36,21 +38,22 @@ Easy TikZ is a visual editor for TikZ / pgfplots charts in Obsidian. It renders 
 Highlights:
 
 - Live preview for 2D function plots (parametric `(x(t), y(t))`, polar `r(θ)`, fill / patterns / tangents / extrema markers) and 3D surfaces `f(x, y)` at ~60 fps with drag-rotate.
-- A composable **Tools** layer on top of functions: area between two curves (referenced by name), intersection markers (bisection root-finder), reference lines, free shapes (rectangles / circles / segments / braces), and 3D primitives (slice planes, points, segments). Each tool stacks with the others.
+- Five general tools on top of functions: **Region** (shade where inequalities hold: areas between curves, feasible regions), **Curve** (an equation in x and y, or its level curves), **Points** (lists, intersections, corner points, integer points, the optimum of an objective), **Segment** (lines, arrows, polygons, braces) and **Plane** (cuts a 3D surface). Each tool stacks with the others.
+- **Sliders** are named numbers usable in every formula; the preview redraws while one is dragged. A line, curve or point dragged in the preview rewrites the numbers in its formula (**drag to edit**).
 - Inserts an `easy-tikz` JSON code block on save. The plugin's own markdown post-processor renders it inline; clicking the rendered chart re-opens the modal pre-filled, and saving replaces the source block in place.
-- Plugin settings expose: invert vertical drag in 3D, max samples per 3D axis (40–400), 2D pan sensitivity (0.1–2.0), opt-in rendering of plain ` ```tikz ` blocks (off by default so it coexists with `obsidian-tikzjax`).
+- Plugin settings expose: invert vertical drag in 3D, max samples per 3D axis (40 to 120, default 80), 2D pan sensitivity (0.1 to 2.0), opt-in rendering of plain ` ```tikz ` blocks (off by default so it coexists with `obsidian-tikzjax`).
 - No telemetry. No network. No vault access beyond the active note's insertion point and the file that owns the rendered chart you're editing.
 
 ### Marketing screenshots / demo
 
-- Hero + 4 feature cards: `docs/screenshots/marketing-1-hero.png` … `marketing-5-tools.png` in the repo.
-- 60-second overview GIF: `docs/screenshots/demo-overview.gif` (mp4 alongside).
+- Hero + 7 feature cards: `docs/media/hero.png` and `docs/media/card-*.png` in the repo.
+- 54-second overview GIF: `docs/media/overview.gif` (mp4 alongside).
 - README has everything inlined.
 
 ### Notes for the reviewer
 
-- `minAppVersion` is set to **1.4.0** because the styling uses `color-mix()`, which needs Chromium 111+ (Obsidian 1.4.0 onwards).
-- The plugin compiles user math expressions with `new Function(...)` so the live preview can sample them at 500+ points per render without per-sample overhead. Compiled functions are LRU-cached (128 entries). This is in-renderer only - never persisted, never transmitted. Discussed in `README.md` → Permissions.
+- `minAppVersion` is set to **1.13.0**: the settings tab uses the declarative settings API, and sliders rely on 1.13's always-visible inline value. Users on older Obsidian versions keep 3.19.5 via `versions.json`.
+- User math expressions are parsed by a built-in parser and compiled into plain closures: no `eval`, no `new Function(...)`, no dynamically generated code. Nothing is persisted or transmitted. See `README.md` → Permissions.
 - All built-in icons are Lucide via `setIcon` - no bundled font assets.
 - License: MIT.
 

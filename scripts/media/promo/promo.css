@@ -1,0 +1,300 @@
+/* Shared look of the promo images: a calm neutral ground, slate text, one
+   blue accent, a brand strip, large type. Light only. Sizes are CSS px of
+   the final image (the build renders at device scale 1). */
+
+:root {
+    --ground: #f4f5f7;
+    --paper: #ffffff;
+    --ink: #0f172a;
+    --slate: #334155;
+    --muted: #64748b;
+    --rule: #dfe3e9;
+    --pill: #e9ecf1;
+    --accent: #2563eb;
+    --sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+    --shadow: 0 0 0 1px rgba(15, 23, 42, 0.07), 0 2px 6px rgba(15, 23, 42, 0.05), 0 28px 56px -18px rgba(15, 23, 42, 0.22);
+    --shadow-small: 0 0 0 1px rgba(15, 23, 42, 0.07), 0 1px 3px rgba(15, 23, 42, 0.05), 0 14px 28px -12px rgba(15, 23, 42, 0.18);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    background: var(--ground);
+}
+
+body {
+    position: relative;
+    overflow: hidden;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+}
+
+.accent {
+    color: var(--accent);
+}
+
+.mono {
+    font-family: var(--mono);
+}
+
+/* ------------------------------------------------------------- captures */
+
+/* A frame holding a crop of a real capture (filled by promo.js). */
+.shot {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    background: var(--paper);
+    box-shadow: var(--shadow);
+}
+
+.shot.is-small {
+    border-radius: 12px;
+    box-shadow: var(--shadow-small);
+}
+
+.shot.is-flat {
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.09);
+}
+
+.shot > img {
+    position: absolute;
+    max-width: none;
+    display: block;
+}
+
+.shot > .pointer {
+    position: absolute;
+    overflow: visible;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
+}
+
+/* A plain picture (the PDF render) in the same kind of frame. */
+.frame {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    background: var(--paper);
+    box-shadow: var(--shadow);
+}
+
+.frame.is-small {
+    border-radius: 12px;
+    box-shadow: var(--shadow-small);
+}
+
+.frame > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Small label over or under a capture. */
+.cap {
+    font: 500 21px/1.2 var(--mono);
+    color: var(--muted);
+    letter-spacing: -0.01em;
+}
+
+.cap b {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+/* ---------------------------------------------------------- brand strip */
+
+.brand {
+    position: absolute;
+    display: flex;
+    align-items: center;
+}
+
+.brand .mark {
+    display: block;
+    flex: none;
+}
+
+.brand .name {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+}
+
+.brand .version {
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(37, 99, 235, 0.1);
+    border-radius: 999px;
+}
+
+.crumb {
+    position: absolute;
+    font-family: var(--mono);
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+/* The repository address is set in the sans face: the hyphen of the mono face (SF Mono) is as
+   wide as a letter and reads as a dash, and nobody should type "easy" dash "tikz". */
+.crumb.is-url {
+    font-family: var(--sans);
+    font-weight: 500;
+    letter-spacing: 0.012em;
+}
+
+.rule {
+    position: absolute;
+    height: 0;
+    border-top: 1.5px solid var(--rule);
+}
+
+/* ---------------------------------------------------------------- cards */
+
+/* 1600 x 1000 feature card: brand strip, copy on the left, captures on the right. */
+body.card .brand {
+    left: 72px;
+    top: 40px;
+    height: 52px;
+    gap: 18px;
+}
+
+body.card .brand .mark {
+    width: 52px;
+    height: 52px;
+}
+
+body.card .brand .name {
+    font-size: 29px;
+}
+
+body.card .brand .version {
+    font-size: 19px;
+    padding: 6px 13px 5px;
+}
+
+body.card .crumb.is-top {
+    right: 72px;
+    top: 55px;
+    font-size: 21px;
+}
+
+body.card .rule.is-top {
+    left: 72px;
+    right: 72px;
+    top: 116px;
+}
+
+body.card .rule.is-bottom {
+    left: 72px;
+    right: 72px;
+    bottom: 96px;
+}
+
+body.card .crumb.is-left {
+    left: 72px;
+    bottom: 38px;
+    font-size: 21px;
+}
+
+body.card .crumb.is-right {
+    right: 72px;
+    bottom: 38px;
+    font-size: 21px;
+}
+
+body.card main {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    top: 118px;
+    bottom: 98px;
+    display: grid;
+    grid-template-columns: 612px 1fr;
+    column-gap: 52px;
+    align-items: center;
+}
+
+body.card .copy {
+    min-width: 0;
+}
+
+body.card h1 {
+    font-size: 84px;
+    line-height: 0.98;
+    font-weight: 780;
+    letter-spacing: -0.04em;
+    color: var(--ink);
+}
+
+body.card h1 span {
+    display: block;
+    white-space: nowrap;
+}
+
+body.card .lede {
+    margin-top: 34px;
+    font-size: 34px;
+    line-height: 1.34;
+    letter-spacing: -0.014em;
+    color: var(--slate);
+    text-wrap: pretty;
+}
+
+body.card .lede b {
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+}
+
+body.card .pill {
+    display: inline-block;
+    margin-top: 34px;
+    padding: 15px 20px 14px;
+    border-radius: 11px;
+    background: var(--pill);
+    font: 500 23px/1.25 var(--mono);
+    letter-spacing: -0.01em;
+    color: #3f4b5e;
+    white-space: nowrap;
+}
+
+body.card .pill .to {
+    color: var(--accent);
+    padding: 0 16px;
+    font-weight: 700;
+}
+
+body.card .visual {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+}
+
+body.card .row {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+body.card .tile {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+}

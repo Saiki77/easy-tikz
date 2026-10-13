@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Easy TikZ 4: social preview</title>
+<link rel="stylesheet" href="promo.css">
+<style>
+    /* 1280 x 640 (GitHub social preview) and 1200 x 675 (link cards): one layout, sized by
+       the width, centred in the height. Everything that matters keeps 56 px from the edges. */
+    :root { --u: calc(var(--W) / 1280 * 1px); }
+    body { background: radial-gradient(calc(820 * var(--u)) calc(600 * var(--u)) at 72% 50%, #e3e9f3 0%, var(--ground) 70%); }
+    .brand { left: calc(64 * var(--u)); top: calc(52 * var(--u)); gap: calc(15 * var(--u)); }
+    .brand .mark { width: calc(46 * var(--u)); height: calc(46 * var(--u)); }
+    .brand .name { font-size: calc(24 * var(--u)); }
+    .copy { position: absolute; left: calc(64 * var(--u)); top: calc(22 * var(--u)); bottom: 0; width: calc(470 * var(--u)); display: flex; flex-direction: column; justify-content: center; }
+    h1 { font-size: calc(92 * var(--u)); line-height: 0.95; font-weight: 790; letter-spacing: -0.045em; white-space: nowrap; }
+    .lede { margin-top: calc(26 * var(--u)); font-size: calc(31 * var(--u)); line-height: 1.3; letter-spacing: -0.014em; color: var(--slate); text-wrap: pretty; }
+    .editor { position: absolute; right: calc(56 * var(--u)); top: 50%; width: calc(666 * var(--u)); transform: translateY(-50%); border-radius: calc(13 * var(--u));
+        box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.1), 0 6px 14px rgba(15, 23, 42, 0.06), 0 30px 60px -20px rgba(15, 23, 42, 0.34); }
+    .crumb.is-left { left: calc(64 * var(--u)); bottom: calc(50 * var(--u)); font-size: calc(19 * var(--u)); }
+</style>
+</head>
+<body class="social" data-width="1280" data-height="640">
+    <header class="brand">
+        <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+            <rect width="40" height="40" rx="9" fill="#0f172a"/>
+            <g stroke="#ffffff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 28 L31 28"/><path d="M9 28 L9 10"/><path d="M11 24 Q20 -2 29 24"/>
+            </g>
+        </svg>
+        <span class="name">Obsidian plugin</span>
+    </header>
+
+    <div class="copy">
+        <h1>Easy TikZ <span class="accent">4</span></h1>
+        <p class="lede">TikZ and pgfplots charts with live sliders, drag to edit and LaTeX export.</p>
+    </div>
+
+    <div class="shot editor" data-shot="lp-editor" data-rect="editor"></div>
+
+    <div class="crumb is-left is-url">github.com/Saiki77/easy-tikz</div>
+
+    <script src="shots/meta.js"></script>
+    <script src="promo.js"></script>
+</body>
+</html>

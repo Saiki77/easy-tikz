@@ -1,32 +1,70 @@
-/* Help tab (src/ui/helpPanel.ts): a readable reference. Text stays
-   selectable so formulas can be copied into fields. */
+/* Help tab (src/ui/helpPanel.ts): the guides browser, the guide reader and
+   the reference. Text stays selectable so formulas can be copied into
+   fields. The tab panel around .etz-help provides the 16 px panel padding
+   and scrolls; colours come from the theme, so light and dark both work. */
 
 .etz-help {
-    display: flex;
-    flex-direction: column;
-    gap: 28px;
+    /* Containing block for the screen-reader-only labels inside: positioned
+       against the modal instead, they would give it a scrollable overflow. */
+    position: relative;
     max-width: 720px;
-    padding: var(--etz-panel-pad);
     color: var(--text-normal);
     font-size: var(--etz-font);
     line-height: 1.55;
     user-select: text;
     -webkit-user-select: text;
     cursor: auto;
-    /* The term lists stack when the help pane is narrow. */
+    /* Card grids and term lists adapt to the width of the help pane. */
     container: etz-help / inline-size;
 }
 
+/* Keyboard focus that scrolls a control into view keeps it clear of the
+   sticky "All guides" bar of a page. */
+.etz-tabpanel.mod-help {
+    scroll-padding-top: 44px;
+}
+
+.etz-help-home,
+.etz-help-browse,
+.etz-help-results {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.etz-help-home {
+    gap: 16px;
+}
+
+.etz-help-browse {
+    gap: 24px;
+}
+
+.etz-help-results {
+    gap: 12px;
+}
+
+.etz-help-page {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+}
+
+.etz-help-page.mod-reference {
+    gap: 28px;
+}
+
+.etz-help-category,
 .etz-help-intro,
-.etz-help-section {
+.etz-help-section,
+.etz-help-guide-head,
+.etz-help-outcomes,
+.etz-help-next {
     display: flex;
     flex-direction: column;
     gap: 8px;
     min-width: 0;
-}
-
-.etz-help-section {
-    scroll-margin-top: 8px;
 }
 
 h3.etz-help-h {
@@ -35,6 +73,16 @@ h3.etz-help-h {
     font-size: 16px;
     font-weight: 650;
     line-height: 1.3;
+}
+
+h3.etz-help-h.etz-help-title {
+    font-size: 19px;
+}
+
+.etz-help-category > h3.etz-help-h,
+.etz-help-next > h3.etz-help-h,
+.etz-help-results > h3.etz-help-h {
+    font-size: 14px;
 }
 
 h3.etz-help-h:focus {
@@ -56,6 +104,10 @@ h4.etz-help-sub {
     line-height: 1.3;
 }
 
+.etz-help-outcomes > h4.etz-help-sub {
+    margin-top: 0;
+}
+
 .etz-help-p,
 .etz-help-note {
     margin: 0;
@@ -68,6 +120,508 @@ h4.etz-help-sub {
 
 .etz-help strong {
     font-weight: 600;
+}
+
+/* ----------------------------------------------------------------- search */
+
+.etz-help-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.etz-help-search-icon {
+    position: absolute;
+    left: 9px;
+    display: inline-flex;
+    color: var(--text-faint);
+    pointer-events: none;
+}
+
+.etz-help-search-icon svg {
+    width: 15px;
+    height: 15px;
+}
+
+.etz-help-search input.etz-input.etz-help-search-input {
+    height: 32px;
+    padding: 0 32px 0 30px;
+}
+
+.etz-help-search button.etz-icon-btn.etz-help-search-clear {
+    position: absolute;
+    right: 5px;
+}
+
+.etz-help-status {
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+}
+
+/* ------------------------------------------------------------ guide cards */
+
+.etz-help-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 10px;
+}
+
+button.etz-help-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    height: auto;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--background-primary-alt);
+    box-shadow: none;
+    color: var(--text-normal);
+    font-weight: 400;
+    text-align: left;
+    white-space: normal;
+    cursor: pointer;
+    transition: border-color var(--etz-transition);
+}
+
+button.etz-help-card:hover {
+    border-color: var(--etz-accent-border);
+    background-color: var(--background-primary-alt);
+    box-shadow: none;
+}
+
+button.etz-help-card:focus-visible {
+    border-color: var(--background-modifier-border-focus);
+    box-shadow: var(--etz-focus-ring);
+}
+
+/* Fixed aspect: the card keeps its size when the picture arrives. */
+.etz-help-thumb {
+    display: block;
+    flex: 0 0 auto;
+    aspect-ratio: 2 / 1;
+    overflow: hidden;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+    pointer-events: none;
+}
+
+.etz-help-thumb > svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* The frame of a box-style chart (the renderer draws it with square caps)
+   is a quiet hairline here: the card already has a border. */
+.etz-help-thumb .etz-axes line[stroke-linecap='square'] {
+    stroke: var(--background-modifier-border);
+}
+
+/* At thumbnail scale the texts of a 3D chart are unreadable specks. */
+.etz-help-thumb text,
+.etz-help-thumb foreignObject {
+    display: none;
+}
+
+/* The renderers could not draw this chart: a quiet placeholder. */
+.etz-help-thumb.is-fallback,
+.etz-help-figure.is-fallback {
+    background-image: repeating-linear-gradient(
+        135deg,
+        transparent 0 8px,
+        color-mix(in srgb, var(--background-modifier-border) 60%, transparent) 8px 9px
+    );
+}
+
+.etz-help-card-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    padding: 8px 10px 9px;
+}
+
+.etz-help-card-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.etz-help-card-summary {
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    line-height: 1.4;
+}
+
+.etz-help-card-hit {
+    color: var(--text-accent);
+    font-size: var(--etz-font-small);
+    line-height: 1.4;
+}
+
+/* Level and minutes are what a reader picks a guide by: muted, not faint (faint is under 3:1 on a card). */
+.etz-help-card-meta,
+.etz-help-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+    line-height: 1.4;
+}
+
+.etz-help-card-meta {
+    margin-top: auto;
+    padding-top: 3px;
+}
+
+.etz-help-meta {
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+}
+
+.etz-help-card-meta > span + span::before,
+.etz-help-meta > span + span::before {
+    content: '\00b7';
+    margin: 0 6px;
+    color: var(--text-faint);
+}
+
+.etz-help-level.mod-start {
+    color: var(--text-accent);
+    font-weight: 600;
+}
+
+/* One column: the picture moves beside the text. */
+@container etz-help (max-width: 399px) {
+    .etz-help-cards {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+    }
+
+    button.etz-help-card {
+        flex-direction: row;
+    }
+
+    button.etz-help-card > .etz-help-thumb {
+        flex: 0 0 116px;
+        width: 116px;
+        min-height: 58px;
+        aspect-ratio: auto;
+        border-right: 1px solid var(--background-modifier-border);
+        border-bottom: none;
+    }
+}
+
+/* ------------------------------------------------------- reference topics */
+
+.etz-help-topics {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 6px 10px;
+}
+
+button.etz-help-topic {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 1px;
+    height: auto;
+    min-width: 0;
+    padding: 6px 10px 7px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-m);
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-normal);
+    font-weight: 400;
+    text-align: left;
+    white-space: normal;
+    cursor: pointer;
+    transition: border-color var(--etz-transition);
+}
+
+button.etz-help-topic:hover {
+    border-color: var(--etz-accent-border);
+    background-color: transparent;
+    box-shadow: none;
+}
+
+button.etz-help-topic:focus-visible {
+    border-color: var(--background-modifier-border-focus);
+    box-shadow: var(--etz-focus-ring);
+}
+
+.etz-help-topic-title {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.etz-help-topic-about {
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    line-height: 1.4;
+}
+
+@container etz-help (max-width: 399px) {
+    .etz-help-topics {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* ----------------------------------------------------------- page chrome */
+
+/* "All guides" stays reachable while a page scrolls. The bar spans the
+   panel padding, so the text below does not show beside it. */
+.etz-help-bar {
+    position: sticky;
+    /* Sticky offsets count from the content edge of the padded tab panel. */
+    top: calc(-1 * var(--etz-panel-pad));
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    box-sizing: border-box;
+    margin: calc(-1 * var(--etz-panel-pad)) calc(-1 * var(--etz-panel-pad)) -4px;
+    padding: 4px var(--etz-panel-pad) 4px calc(var(--etz-panel-pad) - 8px);
+    border-bottom: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.etz-help-bar button.etz-btn.mod-ghost.etz-help-back {
+    flex: 0 0 auto;
+    color: var(--text-accent);
+    font-weight: 500;
+}
+
+.etz-help-crumb {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-faint);
+    font-size: var(--etz-font-small);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.etz-help-requires button.etz-btn.mod-link,
+.etz-help-requires {
+    font-size: var(--etz-font-small);
+}
+
+.etz-help-requires {
+    color: var(--text-muted);
+}
+
+.etz-help-requires button.etz-btn.mod-link {
+    display: inline;
+    white-space: normal;
+}
+
+.etz-help-foot {
+    padding-top: 12px;
+    border-top: 1px solid var(--background-modifier-border);
+    font-size: var(--etz-font-small);
+}
+
+/* Outcomes beside the finished chart (below them in a narrow pane). */
+.etz-help-lead {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    min-width: 0;
+}
+
+.etz-help-lead > .etz-help-outcomes {
+    flex: 1 1 auto;
+}
+
+.etz-help-finished {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    width: 196px;
+    max-width: 100%;
+}
+
+.etz-help-finished > .etz-help-thumb {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+}
+
+.etz-help-finished button.etz-btn.mod-link.etz-help-open-finished {
+    font-size: var(--etz-font-small);
+}
+
+@container etz-help (max-width: 399px) {
+    .etz-help-lead {
+        flex-direction: column;
+    }
+}
+
+/* ------------------------------------------------------------------ steps */
+
+.etz-help-step {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.etz-help-step-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.etz-help-step-num {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background-color: var(--etz-accent-tint);
+    color: var(--text-accent);
+    font-size: var(--etz-font-small);
+    font-weight: 600;
+    line-height: 22px;
+    text-align: center;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+h4.etz-help-step-title {
+    margin: 0;
+    color: var(--text-normal);
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 22px;
+}
+
+/* A search result that opens a guide at a step puts the focus on that step's heading. */
+h4.etz-help-step-title:focus {
+    outline: none;
+}
+
+h4.etz-help-step-title:focus-visible {
+    border-radius: var(--etz-radius-s);
+    box-shadow: var(--etz-focus-ring);
+}
+
+/* Things to type: where, the text, Copy. */
+.etz-help-type {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.etz-help-type-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 4px 5px 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-m);
+    background-color: var(--background-primary-alt);
+}
+
+.etz-help-type-main {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.etz-help-type-where {
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+    line-height: 1.4;
+}
+
+code.etz-help-type-text {
+    padding: 0;
+    background: none;
+    color: var(--text-normal);
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-mono);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.etz-help-type-row button.etz-btn.mod-ghost.etz-help-copy {
+    flex: 0 0 auto;
+    min-width: 54px;
+    color: var(--text-accent);
+    font-weight: 500;
+}
+
+.etz-help-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: var(--etz-radius-m);
+    background-color: var(--etz-accent-tint);
+    font-size: var(--etz-font-small);
+}
+
+.etz-help-tip-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    margin-top: 2px;
+    color: var(--text-accent);
+}
+
+.etz-help-tip-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.etz-help-tip-text {
+    min-width: 0;
+}
+
+/* A live chart in a box with the chart's own proportions, sized before the
+   picture is drawn: no wider than 460 px and no taller than 380 px (a square
+   chart at 300 px had 8 px labels). */
+.etz-help-figure {
+    position: relative;
+    width: min(100%, 460px, calc(380px * var(--etz-help-aspect, 1.25)));
+    aspect-ratio: var(--etz-help-aspect, 1.25);
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--background-primary);
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.etz-help-figure > svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+button.etz-btn.etz-help-open {
+    align-self: flex-start;
 }
 
 /* --------------------------------------------------------------- contents */
@@ -109,6 +663,10 @@ code.etz-help-code-inline {
     font-family: var(--font-monospace);
     font-size: 0.92em;
     overflow-wrap: anywhere;
+}
+
+code.etz-help-code-inline.mod-short {
+    white-space: nowrap;
 }
 
 pre.etz-help-code {
@@ -241,6 +799,7 @@ dl.etz-help-terms.mod-keys dt {
 }
 
 .etz-help-badge {
+    flex: 0 0 auto;
     padding: 0 5px;
     border-radius: var(--etz-radius-s);
     background-color: var(--etz-accent-tint);

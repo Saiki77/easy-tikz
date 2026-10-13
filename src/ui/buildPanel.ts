@@ -68,6 +68,13 @@ export interface BuildPanelOptions {
      * ranges cut off most first formulas, a polar cardioid for one).
      */
     onStartAdded?: () => void;
+    /**
+     * True while the editor is still opening. Obsidian moves the focus to the
+     * first button of a modal it opens (the 2D / 3D switch): during that time
+     * the focus being there is not the user at work, and the empty state may
+     * take it for its formula field.
+     */
+    opening?: () => boolean;
 }
 
 /** Charts that arrive with more cards than this start with every card collapsed. */
@@ -619,9 +626,12 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
         thumbTimer = window.setTimeout(step, 0);
 
         // Autofocus, unless the user is busy with a control outside the panel (2D / 3D switch).
+        // An empty state built while the editor opens always takes the focus: what holds it then
+        // is the button Obsidian focused for the new modal, not a choice of the user.
+        const opening = options.opening ? options.opening() : false;
         window.setTimeout(() => {
             const a = activeDocument.activeElement;
-            const idle = !a || a === activeDocument.body || el.contains(a) || a.matches('.modal, .modal-container, .modal-content');
+            const idle = opening || !a || a === activeDocument.body || el.contains(a) || a.matches('.modal, .modal-container, .modal-content');
             if (idle && start.input.isConnected) start.input.focus();
         }, 0);
     }
@@ -651,16 +661,16 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
         notifyErrors();
     }
 
-    /** Expand, scroll to and focus `field` (default: the first input) of a freshly added card. */
-    function revealNew(item: object, field?: string): void {
+    /** Expand, scroll to and focus `field` (default: the first input) of a freshly added card; `selectText` is selected in it. */
+    function revealNew(item: object, field?: string, selectText?: string): void {
         const fnCard = fnCards.get(item);
         if (fnCard) {
-            fnCard.reveal(field);
+            fnCard.reveal(field, selectText);
             return;
         }
         const entry = layerCards.get(item);
         if (!entry) return;
-        entry.card.reveal(field);
+        entry.card.reveal(field, selectText);
         if (!entry.card.el.contains(activeDocument.activeElement)) {
             const first = entry.card.el.querySelector<HTMLElement>('.etz-card-body input:not([disabled]), .etz-card-body textarea, .etz-card-body select');
             if (first) first.focus();
@@ -822,7 +832,7 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
             moveDown: () => moveItem(item, 1),
             onErrorChange: notifyErrors,
             // The card has committed already, so reconcile has built the new card.
-            revealAdded: (added, field) => revealNew(added, field),
+            revealAdded: (added, field, selectText) => revealNew(added, field, selectText),
         };
     }
 

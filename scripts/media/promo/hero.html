@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Easy TikZ 4: hero</title>
+<link rel="stylesheet" href="promo.css">
+<style>
+    /* 2400 x 1350. Copy on the left; on the right the whole Obsidian window with the editor
+       open on the Linear program example (the dimmed workspace around the editor is part of it). */
+    body { background: radial-gradient(1500px 1100px at 74% 50%, #e3e9f3 0%, var(--ground) 68%); }
+    .brand { left: 120px; top: 88px; gap: 24px; }
+    .brand .mark { width: 76px; height: 76px; }
+    .brand .name { font-size: 38px; }
+    .copy { position: absolute; left: 120px; top: 30px; bottom: 0; width: 800px; display: flex; flex-direction: column; justify-content: center; }
+    h1 { font-size: 158px; line-height: 0.95; font-weight: 790; letter-spacing: -0.045em; white-space: nowrap; }
+    .lede { margin-top: 46px; font-size: 45px; line-height: 1.32; letter-spacing: -0.016em; color: var(--slate); text-wrap: pretty; }
+    .facts { margin-top: 50px; display: flex; flex-wrap: wrap; gap: 14px; list-style: none; }
+    .facts li { font: 500 27px/1 var(--mono); letter-spacing: -0.01em; color: #3f4b5e; background: rgba(15, 23, 42, 0.06); border-radius: 12px; padding: 17px 21px 16px; white-space: nowrap; }
+    .window { position: absolute; right: 108px; top: 50%; width: 1330px; transform: translateY(-50%); border-radius: 18px;
+        box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.1), 0 8px 20px rgba(15, 23, 42, 0.06), 0 44px 90px -28px rgba(15, 23, 42, 0.34); }
+    .crumb.is-left { left: 120px; bottom: 88px; font-size: 27px; }
+    .crumb.is-right { right: 108px; bottom: 88px; font-size: 27px; }
+</style>
+</head>
+<body class="hero" data-width="2400" data-height="1350">
+    <header class="brand">
+        <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+            <rect width="40" height="40" rx="9" fill="#0f172a"/>
+            <g stroke="#ffffff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 28 L31 28"/><path d="M9 28 L9 10"/><path d="M11 24 Q20 -2 29 24"/>
+            </g>
+        </svg>
+        <span class="name">Obsidian plugin</span>
+    </header>
+
+    <div class="copy">
+        <h1>Easy TikZ <span class="accent">4</span></h1>
+        <p class="lede">The visual editor for TikZ and pgfplots charts, rebuilt: sliders that move the picture, shapes you edit by dragging them, LaTeX you can compile.</p>
+        <ul class="facts">
+            <li>Live sliders</li>
+            <li>Drag to edit</li>
+            <li>2D and 3D</li>
+            <li>Charts in your notes</li>
+            <li>pgfplots export</li>
+        </ul>
+    </div>
+
+    <div class="shot window" data-shot="lp-editor" data-rect="window"></div>
+
+    <div class="crumb is-left is-url">github.com/Saiki77/easy-tikz</div>
+    <div class="crumb is-right">MIT licensed</div>
+
+    <script src="shots/meta.js"></script>
+    <script src="promo.js"></script>
+</body>
+</html>

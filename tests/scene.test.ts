@@ -13,6 +13,7 @@ import {
     computeScene2D,
     computeScene3D,
     labelMetricsFor,
+    textBoxPt,
 } from '../src/scene';
 import {
     AxisStyle,
@@ -1209,20 +1210,9 @@ test('intersections: touching curves give their touching point, misses say so', 
     );
 });
 
-/** Text box of a scene text in pt, as exported (same model as the placer: 0.56 em per character, 1.2 em high). */
-function exportBox(t: TextPrim, view: View, m: LabelMetrics, marker = 0): { x0: number; y0: number; x1: number; y1: number } {
-    const em = m.em[t.size];
-    const len = t.text.replace(/\$/g, '').length;
-    const w = len * 0.56 * em * (t.weight === 'bold' ? 1.08 : 1);
-    const h = 1.2 * em;
-    const X = ((t.x - view.xmin) / (view.xmax - view.xmin)) * m.w;
-    const Y = ((t.y - view.ymin) / (view.ymax - view.ymin)) * m.h;
-    const gap = 0.35 * em + marker;
-    const sx = /right/.test(t.anchor) ? 1 : /left/.test(t.anchor) ? -1 : 0;
-    const sy = /above/.test(t.anchor) ? 1 : /below/.test(t.anchor) ? -1 : 0;
-    const x0 = sx > 0 ? X + gap : sx < 0 ? X - gap - w : X - w / 2;
-    const y0 = sy > 0 ? Y + gap : sy < 0 ? Y - gap - h : Y - h / 2;
-    return { x0, y0, x1: x0 + w, y1: y0 + h };
+/** Text box of a scene text in pt of the plot, as the placer measures it and the preview draws it. */
+function exportBox(t: TextPrim, view: View, m: LabelMetrics): { x0: number; y0: number; x1: number; y1: number } {
+    return textBoxPt(t, view, m);
 }
 
 function boxesOverlap(a: { x0: number; y0: number; x1: number; y1: number }, b: { x0: number; y0: number; x1: number; y1: number }): boolean {
@@ -1239,9 +1229,9 @@ test('label placer: LP labels clear of each other and of the lines through the o
     const corner = item(s, 'P2').texts.find((t) => t.text === '(3, 1)');
     assert.ok(corner && corner.anchor !== opt.anchor);
     // Every label box in the exported figure is clear of every other one.
-    const all: Array<{ t: TextPrim; marker: number }> = [];
-    for (const it of s.items) for (const t of it.texts) all.push({ t, marker: it.source === 'P1' ? 2.8 : it.source === 'P2' ? 2 : 0 });
-    const boxes = all.map(({ t, marker }) => exportBox(t, c.view, c.metrics as LabelMetrics, marker));
+    const all: Array<{ t: TextPrim }> = [];
+    for (const it of s.items) for (const t of it.texts) all.push({ t });
+    const boxes = all.map(({ t }) => exportBox(t, c.view, c.metrics as LabelMetrics));
     for (let i = 0; i < boxes.length; i++) {
         for (let j = i + 1; j < boxes.length; j++) {
             assert.ok(!boxesOverlap(boxes[i], boxes[j]), `${all[i].t.text} overlaps ${all[j].t.text}`);

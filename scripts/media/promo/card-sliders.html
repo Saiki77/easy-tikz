@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Easy TikZ 4: sliders</title>
+<link rel="stylesheet" href="promo.css">
+<style>
+    /* The Market equilibrium example at two values of its slider a. The big picture is taken
+       while the thumb is held at the value the dock shows; that value is printed once more in
+       type that can be read at the size of a README (the dock's own text is 11 px). */
+    .states { margin-top: 32px; display: flex; gap: 22px; align-items: flex-end; }
+    .states .shot { width: 344px; }
+    .states .cap { padding-bottom: 8px; font-size: 25px; }
+    .col { width: 700px; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+    .col .main, .col .dock { width: 700px; }
+    .col .value { margin-left: 8px; font-size: 25px; }
+</style>
+</head>
+<body class="card" data-index="2" data-width="1600" data-height="1000">
+    <main>
+        <section class="copy">
+            <h1><span>Sliders move</span><span class="accent">the picture.</span></h1>
+            <p class="lede">A slider is a named number you can use in any formula, domain, condition or label. The preview redraws while you drag, and Play sweeps it.</p>
+            <div class="states">
+                <div class="shot is-small" data-shot="surplus-0" data-rect="preview"></div>
+                <div class="cap">a = <b data-value="surplus-0.a"></b></div>
+            </div>
+        </section>
+        <section class="visual">
+            <div class="col">
+                <div class="shot main" data-shot="surplus-2" data-rect="preview"></div>
+                <div class="shot is-small dock" data-shot="surplus-2" data-rect="dock" data-pointer="34"></div>
+                <div class="cap value">Sliders dock: a = <b data-value="surplus-2.a"></b></div>
+            </div>
+        </section>
+    </main>
+    <script src="shots/meta.js"></script>
+    <script src="promo.js"></script>
+</body>
+</html>

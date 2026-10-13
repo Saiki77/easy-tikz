@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Easy TikZ 4: regions</title>
+<link rel="stylesheet" href="promo.css">
+<style>
+    /* The Region tool twice: the areas between sin and cos, and the card of the feasible region
+       of the Linear program: one condition per row, large enough to read at the size of a README. */
+    .visual .areas { width: 728px; }
+    .visual .conditions { width: 728px; }
+</style>
+</head>
+<body class="card" data-index="3" data-width="1600" data-height="1000">
+    <main>
+        <section class="copy">
+            <h1><span>Shade by</span><span class="accent">inequality.</span></h1>
+            <p class="lede">A region is a list of conditions, one per row. That covers several areas between curves, and the feasible region of a linear program with its constraint lines.</p>
+            <div class="pill">f2 &lt;= y &lt;= f1 · 0 &lt;= x &lt;= 2pi</div>
+        </section>
+        <section class="visual">
+            <div class="shot areas" data-shot="areas-editor" data-rect="preview"></div>
+            <div class="shot is-small conditions" data-shot="lp-editor" data-rect="card" data-pad="0,0,0,-144"></div>
+        </section>
+    </main>
+    <script src="shots/meta.js"></script>
+    <script src="promo.js"></script>
+</body>
+</html>

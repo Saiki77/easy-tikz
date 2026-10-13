@@ -90,7 +90,7 @@ export interface TextPrim {
     /**
      * Side of the anchor point the text sits on ('center': centred on it).
      * Free labels get the side the label placer scored best (clear of other
-     * labels, strokes, markers, axes and the plot border).
+     * labels, strokes, function curves, markers, axes and the plot border).
      */
     anchor: TextAnchor;
     size: AnnotationSize;
@@ -98,6 +98,13 @@ export interface TextPrim {
     weight?: 'bold';
     /** Draw a background-coloured halo (labels on top of fills). */
     halo: boolean;
+    /**
+     * Extra shift of the text away from its anchor point, in pt of the
+     * exported figure (x right, y up). Set by the label placer when every
+     * spot right beside the point is taken or crossed by a line; absent
+     * otherwise.
+     */
+    offset?: Pt;
 }
 
 /**
@@ -214,6 +221,16 @@ export interface SceneInput2D {
      * figure.
      */
     labelMetrics?: LabelMetrics;
+    /**
+     * For the frames drawn while a slider or a drag moves (the preview's
+     * draft frames; needs `cache`): every free label stays on the spot it had
+     * in the previous frame for as long as nothing crosses it there, so
+     * labels do not jump about during the gesture. Leave it unset for the
+     * frame that settles the picture and for the export: placement is then
+     * a pure function of the chart, the same in the editor, in a note and in
+     * the PDF.
+     */
+    keepLabels?: boolean;
 }
 
 /** Plot size and font sizes for label placement, in pt. */
@@ -307,6 +324,12 @@ interface TextSpec {
     marker?: MarkerSize;
     /** A region's own label: centred somewhere inside the region, (x, y) = its labelPoint. */
     region?: boolean;
+    /**
+     * The polyline (math coordinates) the label belongs to: a label of a line
+     * or curve may slide along it to a spot where nothing crosses the text.
+     * Shared with the cached geometry, never mutated.
+     */
+    slide?: Pt[];
 }
 
 /** Brace geometry; the label is the segment's template, formatted per frame. */
@@ -402,6 +425,17 @@ interface CacheState {
     good: Map<string, Output>;
     /** Tool and function names of the previous frame (a name that disappears drops every last good output). */
     names: Set<string> | null;
+    /** Obstacle polylines of each function's curve for the label placer, with the key they were sampled for. */
+    curves: Map<string, { key: string; lines: Pt[][] }>;
+    /** Where each free label sat in the previous frame (SceneInput2D.keepLabels), by node id and text index. */
+    labels: Map<string, LabelSpot>;
+}
+
+/** A free label's spot: index into SPOTS, ring, and steps slid along its line (0: its own place). */
+interface LabelSpot {
+    dir: number;
+    ring: number;
+    k: number;
 }
 
 /** SceneCache state lives here, so the class keeps exactly its contract shape. */
@@ -714,7 +748,7 @@ export class SceneCache {
 function cacheState(cache: SceneCache): CacheState {
     let s = CACHE_STATES.get(cache);
     if (!s) {
-        s = { math: null, memo: new Map(), good: new Map(), names: null };
+        s = { math: null, memo: new Map(), good: new Map(), names: null, curves: new Map(), labels: new Map() };
         CACHE_STATES.set(cache, s);
     }
     return s;
@@ -1055,6 +1089,7 @@ function computeDecorations(f: FunctionParameters, info: FunctionInfo, ctx: Ctx)
             out.markers.push({ x: e.x, y: e.y, color, size: 'normal' });
             addHandle(out, { ref: { part: 'extremum', index }, point: { x: e.x, y: e.y } });
             const min = e.type === 'minimum';
+            // Below a minimum, above a maximum, unless a line (the tangent, another curve) runs there.
             out.texts.push({
                 x: e.x,
                 y: e.y,
@@ -1062,7 +1097,7 @@ function computeDecorations(f: FunctionParameters, info: FunctionInfo, ctx: Ctx)
                 literal: min ? 'min' : 'max',
                 color,
                 size: 'small',
-                anchor: min ? 'below' : 'above',
+                dir: { x: 0, y: min ? -1 : 1 },
                 marker: 'normal',
             });
         }
@@ -1284,12 +1319,12 @@ function computeRegionTool(t: RegionTool, ctx: Ctx): Output {
     conds.forEach((_, k) => {
         if (!(labels[k] || '').trim()) return;
         const own = clauses.filter((c) => c.entry === k);
-        let spot: { p: Pt; clause: Clause } | null = null;
+        let spot: { p: Pt; clause: Clause; line: Pt[] } | null = null;
         if (t.constraintLines) {
             for (const c of own) {
                 const line = labelLine(clauseLines.get(c.id) || [], view, !c.affine);
                 if (line) {
-                    spot = { p: labelSpot(line, view, !c.affine).p, clause: c };
+                    spot = { p: labelSpot(line, view, !c.affine).p, clause: c, line };
                     break;
                 }
             }
@@ -1299,7 +1334,7 @@ function computeRegionTool(t: RegionTool, ctx: Ctx): Output {
                 const c = own.find((x) => x.id === run.tag);
                 if (c && (!best || lineLength(run.line) > lineLength(best.line))) best = { line: run.line, clause: c };
             }
-            if (best) spot = { p: midSpot(best.line).p, clause: best.clause };
+            if (best) spot = { p: midSpot(best.line).p, clause: best.clause, line: best.line };
         }
         if (!spot) return;
         out.texts.push({
@@ -1309,6 +1344,7 @@ function computeRegionTool(t: RegionTool, ctx: Ctx): Output {
             color,
             size: 'small',
             dir: gradientDir(spot.clause.g, spot.clause.affine, spot.p, view),
+            slide: spot.line,
         });
     });
 
@@ -1392,6 +1428,7 @@ function computeCurveTool(t: CurveTool, ctx: Ctx): Output {
                 color,
                 size: 'small',
                 dir: towardCenter(p, dir, view),
+                slide: line,
             });
         });
     }
@@ -1967,7 +2004,7 @@ function computeSegmentTool(t: SegmentTool, ctx: Ctx): Output {
         const line = t.closed && pts.length > 2 ? [...pts, pts[0]] : pts;
         const { p, dir } = midSpot(line);
         const d = normDir(dir.x, dir.y, ctx.view, { x: 1, y: 0 });
-        out.texts.push({ x: p.x, y: p.y, template: 'label', color, size: 'normal', dir: { x: -d.y, y: d.x } });
+        out.texts.push({ x: p.x, y: p.y, template: 'label', color, size: 'normal', dir: { x: -d.y, y: d.x }, slide: line });
     }
     return out;
 }
@@ -2008,8 +2045,9 @@ function computeSegmentTool(t: SegmentTool, ctx: Ctx): Output {
  *
  * Template fields (labels) are formatted after every tool has run, so they
  * always see final derived values and never take part in cycles. Then the
- * label placer picks each free label's side (see layoutTexts), measuring
- * texts with `labelMetrics`.
+ * label placer picks each free label's spot (see layoutTexts), measuring
+ * texts with `labelMetrics`: clear of every stroke, function curve, marker
+ * and other label, and inside the plot frame, wherever such a spot exists.
  */
 export function computeScene2D(input: SceneInput2D): Scene2D {
     try {
@@ -2034,6 +2072,8 @@ function scene2D(input: SceneInput2D): Scene2D {
     if (state.math !== math) {
         state.math = math;
         state.memo.clear();
+        state.curves.clear();
+        state.labels.clear();
     }
     const axisStyle: AxisStyle = input.axisStyle || 'box';
     const ctx: Ctx = { math, view, grid, axisStyle, dim: 2, outputs: new Map(), toolsByName: toolMap(tools), functions: params };
@@ -2091,27 +2131,51 @@ function scene2D(input: SceneInput2D): Scene2D {
     // Texts last: final derived values, then sides (and region label spots)
     // chosen by the label placer, then halos over any drawn fill.
     const jobs: TextJob[] = [];
+    // Only asked for when there is a text to place.
+    let moving: Set<SceneNode> | null = null;
     for (const { item, node, out } of itemSpecs) {
         const formatter = labelFormatter(node, math, issues);
         for (const b of out.braces) item.braces.push({ from: b.from, to: b.to, color: b.color, label: formatter({ template: 'label' }) });
         const rank = labelRank(node);
-        for (const spec of out.texts) {
+        for (const [index, spec] of out.texts.entries()) {
             const text = formatter(spec);
             if (!text.trim()) continue;
+            if (!moving) moving = movingNodes(nodes, math);
             jobs.push({
+                key: `${node.id}#${index}`,
                 item,
                 spec,
                 text,
                 rank,
                 order: jobs.length,
+                moving: moving.has(node),
                 region: spec.region && out.region ? out.region.result : null,
                 x: spec.x,
                 y: spec.y,
                 anchor: spec.anchor || 'above right',
+                w: 0,
+                h: 0,
+                em: 0,
+                dir: 0,
+                ring: 0,
+                k: 0,
+                base: 0,
+                box: -1,
+                own: -1,
+                kept: false,
             });
         }
     }
-    layoutTexts(jobs, items, view, axisStyle, validMetrics(input.labelMetrics));
+    // The curves of the functions are obstacles too; sampled only when there is a label to place.
+    const curves = jobs.length ? functionCurves(math, params, view, input.cache ? state : null) : [];
+    const before = input.cache && input.keepLabels ? state.labels : null;
+    layoutTexts(jobs, items, curves, view, axisStyle, validMetrics(input.labelMetrics), before);
+    if (input.cache) {
+        // Every frame remembers its spots: the first frame of a gesture starts from the settled picture.
+        const spots = new Map<string, LabelSpot>();
+        for (const job of jobs) if (job.scored) spots.set(job.key, { dir: job.dir, ring: job.ring, k: job.k });
+        state.labels = spots;
+    }
     const fills = items.reduce<Pt[][][]>((acc, it) => {
         for (const f of it.fills) acc.push(f.rings);
         return acc;
@@ -2127,6 +2191,7 @@ function scene2D(input: SceneInput2D): Scene2D {
         const halo = !!spec.halo || fills.some((rings) => pointInRings(body, rings));
         const prim: TextPrim = { x: job.x, y: job.y, text: job.text, color: spec.color, anchor: job.anchor, size: spec.size, halo };
         if (spec.weight) prim.weight = spec.weight;
+        if (job.offset) prim.offset = job.offset;
         job.item.texts.push(prim);
     }
     return { items, issues, derived };
@@ -2186,49 +2251,187 @@ function anchorDir(anchor: Anchor): Pt {
 
 // ------------------------------------------------------------ label layout
 
-/** Text box model: average glyph advance and line height (em), extra width of bold text. */
+/**
+ * Text box model, in em: the advance of a glyph by class (digits, narrow
+ * punctuation, brackets, wide letters, capitals; CHAR_EM for the rest and
+ * for tick labels), the height of a line of text (ascender to descender,
+ * a little more than the ink), and the extra width of bold text. Close to
+ * both the preview's text font and the PDF's Computer Modern.
+ */
 const CHAR_EM = 0.56;
-const LINE_EM = 1.2;
+const DIGIT_EM = 0.6;
+const NARROW_EM = 0.3;
+const BRACKET_EM = 0.38;
+const WIDE_EM = 0.85;
+const CAPITAL_EM = 0.68;
+const LINE_EM = 1.1;
 const BOLD_WIDTH = 1.08;
-/** Distance of a text box from its anchor point (about TikZ's inner sep), in em. */
-const GAP_EM = 0.35;
-/** Strokes and markers that only graze a box (within this many em) do not count as crossing it. */
-const GRAZE_EM = 0.1;
+/**
+ * Where a text starts relative to its anchor point, per side, in pt (x right,
+ * y up): the gap the preview draws, about the inner sep of the exported node.
+ * The preview reads this table, so the placer measures what is drawn.
+ */
+export const TEXT_GAP_PT: Record<TextAnchor, Pt> = {
+    center: { x: 0, y: 0 },
+    above: { x: 0, y: 3 },
+    below: { x: 0, y: -3 },
+    left: { x: -4.5, y: 0 },
+    right: { x: 4.5, y: 0 },
+    'above right': { x: 3.75, y: 3 },
+    'below left': { x: -3.75, y: -3 },
+    'above left': { x: -3.75, y: 3 },
+    'below right': { x: 3.75, y: -3 },
+};
+/**
+ * Outer rings of label spots: per ring the text moves one line further out
+ * (straight for the four sides; up or down and a little outwards for the
+ * diagonals, so it clears a label on the ring before on the same side).
+ * RINGS counts them, the ring right beside the point included.
+ */
+const FAR_EM = 1.25;
+const FAR_DIAGONAL_EM = 0.5;
+const RINGS = 3;
+/**
+ * Strokes, markers and labels that only touch the edge of a box (within this
+ * many em: a hair, against rounding) do not count as crossing it. The box
+ * is no larger than the text needs: where the text begins, ink reaches its edge.
+ */
+const GRAZE_EM = 0.01;
+/**
+ * A stroke that passes a box closer than NEAR_EM (em) without crossing it
+ * brushes the text, and so does a label closer than NEAR_LABEL_EM (less
+ * than the gap between two labels that stand as two lines): spots to avoid
+ * when another is as good. The line a label belongs to never brushes it.
+ */
+const NEAR_EM = 0.15;
+const NEAR_LABEL_EM = 0.1;
+/** A label keeps this far (em) inside the plot frame. */
+const FRAME_EM = 0.25;
 /** Marker radii in pt, as exported. */
 const MARKER_PT: Record<MarkerSize, number> = { small: 1.5, normal: 2, large: 2.8 };
 /** Tick labels next to centred axes: tick length plus label sep, and the widest label in characters. */
 const TICK_PT = 3;
 const TICK_CHARS = 3;
 /**
- * Placement costs: per overlapped fraction of the box by an earlier label,
- * per stroke crossing it, per marker under it, per fraction on a tick-label
- * band, per fraction outside the plot. Preference costs at most 1.
+ * Placement costs, in two classes.
+ *
+ * Hits (LabelLayout.cost): a box that leaves the plot frame (COST_FRAME,
+ * up to twice as much by the share outside), a box on a label placed
+ * before (COST_LABEL, up to twice by the share covered), a stroke through
+ * the box (COST_STROKE for a clipped corner, up to twice for a line through
+ * its whole length), a marker under it, and the share on a tick-label band.
+ *
+ * Preferences (the `base` of a spot): the side (COST_SIDE for the side
+ * opposite to the one the label likes; half as much for the label of a
+ * line, which reads as well from either side of it), each ring further out
+ * (COST_FAR, more than the side, so a nearer ring wins), each step slid
+ * along a line (COST_SLIDE: all SLIDE_STEPS together cost less than a ring,
+ * and the other side of the line costs as much as a slide of half that
+ * length, so a line label first changes sides, then moves along its line,
+ * and leaves it last), a spot on the side a label of the
+ * same point already took (COST_SAME_SIDE: a corner that is also the
+ * optimum gets its two labels on different sides, or else as two lines),
+ * a spot that a stroke separates from its point or line (COST_SEPARATED:
+ * the text then reads as the label of something else), and a stroke or
+ * a label that brushes the box without touching it (COST_NEAR each, at
+ * most two count: LabelLayout.near).
+ *
+ * All preferences together stay below one COST_STROKE, so a spot with no
+ * hit always wins over a spot with one, and among spots with hits the one
+ * with the least overlap wins. The tick-label band is the one soft hit: it
+ * runs along the whole axis while tick labels stand only here and there,
+ * so a box pays for the share of it that lies on the band and no more.
  */
-const COST_OVERLAP = 8;
-const COST_STROKE = 3;
-const COST_MARKER = 2;
-const COST_BAND = 4;
-const COST_OUTSIDE = 6;
+const COST_FRAME = 48;
+const COST_LABEL = 32;
+const COST_STROKE = 8;
+const COST_MARKER = 8;
+const COST_BAND = 8;
+const COST_SIDE = 1;
+const COST_SIDE_LINE = 0.5;
+const COST_SAME_SIDE = 1;
+const COST_SEPARATED = 1.5;
+const COST_FAR = 1.2;
+const COST_SLIDE = 0.06;
+const COST_NEAR = 0.6;
+/**
+ * A text may sit a quarter of its width back over its point (between
+ * 'above' and 'above right', say): often the one spot beside a point that
+ * clears a line through it. NUDGE_COST makes the plain sides win ties.
+ */
+const NUDGE = 0.25;
+const NUDGE_COST = 0.05;
+/** The first pt of the way from a point to its label do not count as separating them: lines through the point itself start there. */
+const SEPARATED_SKIP_PT = 2;
+
+/**
+ * Candidate spots of a free label on one ring, in tie-break order: the
+ * eight sides (ANCHOR_DIRS), then the four diagonals nudged back over the
+ * point. `side` is the index into ANCHOR_DIRS of the text anchor, (x, y)
+ * the direction the spot lies in (for the side preference), `nudge` the
+ * share of the text width the box moves along x.
+ */
+const SPOTS: Array<{ side: number; x: number; y: number; nudge: number }> = [
+    ...ANCHOR_DIRS.map((d, side) => ({ side, x: d.x, y: d.y, nudge: 0 })),
+    ...ANCHOR_DIRS.map((d, side) => ({ side, x: d.x, y: d.y, nudge: 0 }))
+        .filter((d) => d.x !== 0 && d.y !== 0)
+        .map((d) => {
+            // Halfway between the diagonal and straight above / below.
+            const len = Math.hypot(d.x / 2, d.y);
+            return { side: d.side, x: d.x / 2 / len, y: d.y / len, nudge: d.x > 0 ? -NUDGE : NUDGE };
+        }),
+];
+
+/** Steps a line label may slide to either side, and a re-placed label moves only for a gain above SWEEP_GAIN. */
+const SLIDE_STEPS = 16;
+const SWEEP_GAIN = 0.05;
 /** A region label may move this many text heights off its labelPoint. */
 const REGION_STEPS = [1, 1.5, 2, 2.5, 3];
 /** Buckets per axis of the obstacle index. */
 const BUCKETS = 16;
+/** Samples per function for the obstacle polylines of its curve (the preview draws 500). */
+const OBSTACLE_SAMPLES = 128;
 
 const DEFAULT_METRICS = labelMetricsFor(10, 10);
 
 /** One text to place: its spec, final text and (after layoutTexts) its spot and side. */
 interface TextJob {
+    /** Node id and index of the text in the node's output: the same label in the next frame. */
+    key: string;
     item: SceneItem2D;
     spec: TextSpec;
     text: string;
     /** Placement order class (labelRank); ties keep list order. */
     rank: number;
     order: number;
+    /** The item's shapes follow a slider (movingNodes): placed after the labels of everything that stands still. */
+    moving: boolean;
     /** The region a region label belongs to. */
     region: RegionResult | null;
     x: number;
     y: number;
     anchor: Anchor;
+    /** Shift of the text off the plain spot beside its point (outer ring, nudge), in pt. */
+    offset?: Pt;
+    /** Text size in pt (set by LabelLayout.measure). */
+    w: number;
+    h: number;
+    em: number;
+    /** The spot chosen for a free label: index into SPOTS, ring, steps slid along its line, and its cost without obstacles. */
+    dir: number;
+    ring: number;
+    k: number;
+    base: number;
+    /** Id of the placed box, -1 while not placed. */
+    box: number;
+    /** The stroke the label belongs to (its slide line as an obstacle), -1 without one. */
+    own: number;
+    /** The spot was scored by the placer (a free label below SCORED_MAX). */
+    scored?: boolean;
+    /** The label stays on the spot of the previous frame (SceneInput2D.keepLabels). */
+    kept: boolean;
+    /** The slide line in plot pt, built on first use; null without one. */
+    track?: Track | null;
 }
 
 /** Axis-aligned box in plot pt (origin bottom-left, y up). */
@@ -2239,6 +2442,32 @@ interface Box {
     y1: number;
 }
 
+/** A candidate spot of a free label. */
+interface Choice {
+    /** Anchor point in plot pt. */
+    X: number;
+    Y: number;
+    /** Index into SPOTS, the ring, and the steps slid along the label's line (0: its own place). */
+    dir: number;
+    ring: number;
+    k: number;
+    /** Preference cost that belongs to the spot itself (side, ring, slide, nudge). */
+    base: number;
+    /** Obstacle cost (LabelLayout.cost): 0 for a clear spot. */
+    hit: number;
+    /** Everything: preferences plus hits. */
+    cost: number;
+}
+
+/** A polyline in plot pt with the arc length up to each vertex, for sliding a label along it. */
+interface Track {
+    xs: number[];
+    ys: number[];
+    acc: number[];
+    /** Arc length of the label's own spot. */
+    s0: number;
+}
+
 function validMetrics(m: LabelMetrics | undefined): LabelMetrics {
     const ok = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && v > 0;
     if (!m || !ok(m.w) || !ok(m.h) || !m.em || !ok(m.em.small) || !ok(m.em.normal) || !ok(m.em.large)) return DEFAULT_METRICS;
@@ -2246,28 +2475,119 @@ function validMetrics(m: LabelMetrics | undefined): LabelMetrics {
 }
 
 /**
+ * The nodes whose shapes follow a slider: a source of theirs reads a
+ * parameter (directly, through a function, or through the computed values of
+ * a tool that does). Their labels are placed after those of everything that
+ * stands still, so while a slider moves only the labels of what moves look
+ * for a new spot, and a standing label moves only when a line reaches it.
+ */
+function movingNodes(nodes: SceneNode[], math: MathContext): Set<SceneNode> {
+    const byName = new Map<string, SceneNode>();
+    for (const n of nodes) if (n.tool && !byName.has(n.name)) byName.set(n.name, n);
+    const state = new Map<SceneNode, boolean>();
+    const visit = (n: SceneNode): boolean => {
+        const known = state.get(n);
+        if (known !== undefined) return known;
+        // A node on a cycle is not computed: it stands still.
+        state.set(n, false);
+        let moves = n.sources.some((src) => math.deps(src).params.length > 0);
+        if (!moves) {
+            for (const r of n.refs) {
+                const producer = byName.get(r.name);
+                if (producer && producer !== n && visit(producer)) {
+                    moves = true;
+                    break;
+                }
+            }
+        }
+        state.set(n, moves);
+        return moves;
+    };
+    const out = new Set<SceneNode>();
+    for (const n of nodes) if (visit(n)) out.add(n);
+    return out;
+}
+
+/**
  * Who places first: labels of an optimum (points tool with an objective),
- * then other point labels, curve labels, condition labels, segment labels.
- * Fixed sides and region labels go before all of them.
+ * then other point labels (min / max of a function among them), curve
+ * labels, condition labels, segment labels. Fixed sides and region labels
+ * go before all of them.
  */
 function labelRank(node: SceneNode): number {
     const t = node.tool;
-    if (!t) return 5;
+    if (!t) return 1;
     if (t.type === 'points') return str(t.objective).trim() ? 0 : 1;
     if (t.type === 'curve') return 2;
     if (t.type === 'region') return 3;
     return 4;
 }
 
-/** Characters a label renders as, roughly: math delimiters and braces dropped, a command counts as one glyph. */
-function plainLength(text: string): number {
+/**
+ * Width of a label in em, roughly as it renders: math delimiters and braces
+ * dropped, a command counts as one glyph, every other character by its class.
+ */
+function plainWidth(text: string): number {
     const t = text
         .replace(/\\[()]/g, '')
         .replace(/\$/g, '')
         .replace(/\\[a-zA-Z]+\s*/g, 'x')
         .replace(/\\./g, 'x')
         .replace(/[{}^_]/g, '');
-    return Math.max(1, t.length);
+    let w = 0;
+    for (let i = 0; i < t.length; i++) {
+        const c = t.charCodeAt(i);
+        if (c >= 48 && c <= 57) w += DIGIT_EM;
+        else if (c === 32 || c === 46 || c === 44 || c === 58 || c === 59 || c === 39 || c === 33 || c === 124 || c === 105 || c === 106 || c === 108) w += NARROW_EM;
+        else if (c === 40 || c === 41 || c === 91 || c === 93 || c === 45 || c === 42 || c === 47 || c === 102 || c === 116 || c === 114) w += BRACKET_EM;
+        else if (c === 109 || c === 119 || c === 77 || c === 87) w += WIDE_EM;
+        else if (c >= 65 && c <= 90) w += CAPITAL_EM;
+        else w += CHAR_EM;
+    }
+    return Math.max(NARROW_EM, w);
+}
+
+/** Width and height of a label text in pt, as the placer measures it. */
+function textSize(text: string, size: AnnotationSize, weight: TextPrim['weight'], m: LabelMetrics): { w: number; h: number; em: number } {
+    const em = m.em[size] || m.em.normal;
+    return { w: plainWidth(text) * em * (weight === 'bold' ? BOLD_WIDTH : 1), h: LINE_EM * em, em };
+}
+
+/** Shift in pt of a text on ring `ring` (1 or more) of side `anchor`. */
+function farOffset(anchor: Anchor, em: number, ring: number): Pt {
+    const g = TEXT_GAP_PT[anchor] || TEXT_GAP_PT.center;
+    const sx = Math.sign(g.x);
+    const sy = Math.sign(g.y);
+    if (sx !== 0 && sy !== 0) return { x: sx * FAR_DIAGONAL_EM * em * ring, y: sy * FAR_EM * em * ring };
+    return { x: sx * FAR_EM * em * ring, y: sy * FAR_EM * em * ring };
+}
+
+/** Box of a w x h text on side `anchor` of the plot point (X, Y), shifted by (ox, oy) pt. */
+function boxAt(anchor: Anchor, X: number, Y: number, w: number, h: number, ox: number, oy: number): Box {
+    const g = TEXT_GAP_PT[anchor] || TEXT_GAP_PT.center;
+    const px = X + g.x + ox;
+    const py = Y + g.y + oy;
+    const x0 = g.x > 0 ? px : g.x < 0 ? px - w : px - w / 2;
+    const y0 = g.y > 0 ? py : g.y < 0 ? py - h : py - h / 2;
+    return { x0, y0, x1: x0 + w, y1: y0 + h };
+}
+
+/**
+ * The box of a scene text in pt of the plot area (origin bottom-left, y up),
+ * as the label placer measures it: as wide as its characters by class, one
+ * line high, beside its anchor point as the preview draws it (TEXT_GAP_PT
+ * plus the text's own `offset`). For checks and tests.
+ */
+export function textBoxPt(
+    t: Pick<TextPrim, 'x' | 'y' | 'text' | 'anchor' | 'size' | 'weight' | 'offset'>,
+    view: View,
+    metrics: LabelMetrics
+): { x0: number; y0: number; x1: number; y1: number } {
+    const m = validMetrics(metrics);
+    const { w, h } = textSize(t.text, t.size, t.weight, m);
+    const X = ((t.x - view.xmin) / (view.xmax - view.xmin)) * m.w;
+    const Y = ((t.y - view.ymin) / (view.ymax - view.ymin)) * m.h;
+    return boxAt(t.anchor, X, Y, w, h, t.offset ? t.offset.x : 0, t.offset ? t.offset.y : 0);
 }
 
 function overlapArea(a: Box, b: Box): number {
@@ -2276,34 +2596,43 @@ function overlapArea(a: Box, b: Box): number {
     return w > 0 && h > 0 ? w * h : 0;
 }
 
-/** Liang-Barsky: does the segment a-b pass through the box? */
-function segmentHitsBox(ax: number, ay: number, bx: number, by: number, r: Box): boolean {
+/** Liang-Barsky: length of the part of segment a-b inside the box, -1 when it misses the box. */
+function clippedLength(ax: number, ay: number, bx: number, by: number, r: Box): number {
     let t0 = 0;
     let t1 = 1;
     const dx = bx - ax;
     const dy = by - ay;
-    const ps = [-dx, dx, -dy, dy];
-    const qs = [ax - r.x0, r.x1 - ax, ay - r.y0, r.y1 - ay];
     for (let i = 0; i < 4; i++) {
-        const p = ps[i];
-        const q = qs[i];
+        const p = i === 0 ? -dx : i === 1 ? dx : i === 2 ? -dy : dy;
+        const q = i === 0 ? ax - r.x0 : i === 1 ? r.x1 - ax : i === 2 ? ay - r.y0 : r.y1 - ay;
         if (p === 0) {
-            if (q < 0) return false;
+            if (q < 0) return -1;
             continue;
         }
         const t = q / p;
         if (p < 0) {
-            if (t > t1) return false;
+            if (t > t1) return -1;
             if (t > t0) t0 = t;
         } else {
-            if (t < t0) return false;
+            if (t < t0) return -1;
             if (t < t1) t1 = t;
         }
     }
-    return true;
+    return (t1 - t0) * Math.hypot(dx, dy);
 }
 
-/** Uniform grid of buckets over the plot, for nearby-obstacle queries; ids are visited once per query. */
+/** True when segments a-b and c-d cross in a single point inside both. */
+function segmentsCross(ax: number, ay: number, bx: number, by: number, cx: number, cy: number, dx: number, dy: number): boolean {
+    const d1 = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    const d2 = (bx - ax) * (dy - ay) - (by - ay) * (dx - ax);
+    if ((d1 > 0 && d2 > 0) || (d1 < 0 && d2 < 0)) return false;
+    const d3 = (dx - cx) * (ay - cy) - (dy - cy) * (ax - cx);
+    const d4 = (dx - cx) * (by - cy) - (dy - cy) * (bx - cx);
+    if ((d3 > 0 && d4 > 0) || (d3 < 0 && d4 < 0)) return false;
+    return d1 !== d2 && d3 !== d4;
+}
+
+/** Uniform grid of buckets over the plot, for nearby-obstacle queries; ids are reported once per query. */
 class Buckets {
     private cells: number[][] = [];
     private seen: number[] = [];
@@ -2317,45 +2646,73 @@ class Buckets {
         for (let i = 0; i < BUCKETS * BUCKETS; i++) this.cells.push([]);
     }
 
-    private span(lo: number, hi: number, size: number): [number, number] {
-        const clamp = (v: number) => Math.max(0, Math.min(BUCKETS - 1, Math.floor((v / size) * BUCKETS)));
-        return [clamp(lo), clamp(hi)];
+    private cell(v: number, size: number): number {
+        return Math.max(0, Math.min(BUCKETS - 1, Math.floor((v / size) * BUCKETS)));
     }
 
-    add(id: number, b: Box): void {
-        if (!finite(b.x0) || !finite(b.x1) || !finite(b.y0) || !finite(b.y1)) return;
-        const [i0, i1] = this.span(b.x0, b.x1, this.w);
-        const [j0, j1] = this.span(b.y0, b.y1, this.h);
+    add(id: number, x0: number, y0: number, x1: number, y1: number): void {
+        if (!finite(x0) || !finite(x1) || !finite(y0) || !finite(y1)) return;
+        const i0 = this.cell(x0, this.w);
+        const i1 = this.cell(x1, this.w);
+        const j0 = this.cell(y0, this.h);
+        const j1 = this.cell(y1, this.h);
         for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) this.cells[j * BUCKETS + i].push(id);
     }
 
-    query(b: Box, visit: (id: number) => void): void {
-        const [i0, i1] = this.span(b.x0, b.x1, this.w);
-        const [j0, j1] = this.span(b.y0, b.y1, this.h);
-        this.mark++;
+    /** Writes the ids of the entries near box b into `out` and returns how many. */
+    query(b: Box, out: number[]): number {
+        const i0 = this.cell(b.x0, this.w);
+        const i1 = this.cell(b.x1, this.w);
+        const j0 = this.cell(b.y0, this.h);
+        const j1 = this.cell(b.y1, this.h);
+        const mark = ++this.mark;
+        const seen = this.seen;
+        let n = 0;
         for (let j = j0; j <= j1; j++) {
             for (let i = i0; i <= i1; i++) {
-                for (const id of this.cells[j * BUCKETS + i]) {
-                    if (this.seen[id] === this.mark) continue;
-                    this.seen[id] = this.mark;
-                    visit(id);
+                const cell = this.cells[j * BUCKETS + i];
+                for (let k = 0; k < cell.length; k++) {
+                    const id = cell[k];
+                    if (seen[id] === mark) continue;
+                    seen[id] = mark;
+                    out[n++] = id;
                 }
             }
         }
+        return n;
     }
 }
 
 /**
- * Obstacles of one frame in plot pt: drawn strokes and guides, markers,
- * axes through the origin with their tick-label bands, and the boxes of
- * labels placed so far.
+ * Preference cost of spot `spot` (index into SPOTS) on ring `ring`, `k`
+ * steps along the label's line, for a label that prefers direction `pref`.
+ * `side` is what the side opposite to `pref` costs: COST_SIDE for the
+ * label of a point, COST_SIDE_LINE for the label of a line.
+ */
+function spotBase(spot: number, ring: number, k: number, pref: Pt, side: number): number {
+    const d = SPOTS[spot];
+    return COST_FAR * ring + COST_SLIDE * Math.abs(k) + 0.5 * side * (1 - (d.x * pref.x + d.y * pref.y)) + (d.nudge ? NUDGE_COST : 0);
+}
+
+/**
+ * Obstacles of one frame in plot pt: drawn strokes and guides, the curves
+ * of the functions, markers, axes through the origin with their tick-label
+ * bands, the plot frame, and the boxes of labels placed so far.
  */
 class LabelLayout {
     private view: View;
     private m: LabelMetrics;
-    private plot: Box;
+    /** Segments as ax, ay, bx, by and the id of the stroke (one polyline) they belong to. */
     private segs: number[] = [];
     private segIndex: Buckets;
+    private strokes = 0;
+    /** Stroke id of each polyline, by the array itself: a label finds the line it belongs to (TextSpec.slide). */
+    private strokeOf = new Map<Pt[], number>();
+    /** Per stroke: the query that last hit it and the length inside that query's box. */
+    private hitMark: number[] = [];
+    private hitLen: number[] = [];
+    private hitList: number[] = [];
+    private query = 0;
     private marks: number[] = [];
     private markIndex: Buckets;
     /** Placed label boxes; null once removed (re-placed by the refinement sweeps). */
@@ -2363,24 +2720,27 @@ class LabelLayout {
     private boxIndex: Buckets;
     /** Tick-label bands (and the axis line) of centred axes. */
     private bands: Box[] = [];
+    /** Sides taken at each anchor point (key: the point in half pt), as indices into ANCHOR_DIRS. */
+    private sides = new Map<number, number[]>();
+    private ids: number[] = [];
+    /** Set by cost(): the preference cost of the strokes that brush the box it was asked about. */
+    near = 0;
+    /** More labels than the refinement sweeps take (REFINE_MAX): each one only tries the spots right beside its point. */
+    dense = false;
 
-    constructor(view: View, m: LabelMetrics, axisStyle: AxisStyle, items: SceneItem2D[]) {
+    constructor(view: View, m: LabelMetrics, axisStyle: AxisStyle, items: SceneItem2D[], curves: Pt[][]) {
         this.view = view;
         this.m = m;
-        this.plot = { x0: 0, y0: 0, x1: m.w, y1: m.h };
         this.segIndex = new Buckets(m.w, m.h);
         this.markIndex = new Buckets(m.w, m.h);
         this.boxIndex = new Buckets(m.w, m.h);
         for (const it of items) {
-            for (const s of [...it.strokes, ...it.guides]) {
-                for (const line of s.lines) {
-                    for (let i = 1; i < line.length; i++) this.addSegment(line[i - 1], line[i]);
-                    if (s.closed && line.length > 2) this.addSegment(line[line.length - 1], line[0]);
-                }
-            }
-            for (const b of it.braces) this.addSegment(b.from, b.to);
+            for (const s of it.strokes) for (const line of s.lines) this.addLine(line, !!s.closed);
+            for (const s of it.guides) for (const line of s.lines) this.addLine(line, !!s.closed);
+            for (const b of it.braces) this.addLine([b.from, b.to], false);
             for (const mk of it.markers) this.addMarker(mk);
         }
+        for (const line of curves) this.addLine(line, false);
         if (axisStyle === 'middle') this.addAxes();
     }
 
@@ -2397,15 +2757,24 @@ class LabelLayout {
         return { x: v.xmin + (X / this.m.w) * (v.xmax - v.xmin), y: v.ymin + (Y / this.m.h) * (v.ymax - v.ymin) };
     }
 
-    private addSegment(a: Pt, b: Pt): void {
+    /** One polyline as one stroke: a label it crosses counts it once, however many segments run through. */
+    private addLine(line: Pt[], closed: boolean): void {
+        if (!line || line.length < 2) return;
+        const id = this.strokes++;
+        this.strokeOf.set(line, id);
+        for (let i = 1; i < line.length; i++) this.addSegment(line[i - 1], line[i], id);
+        if (closed && line.length > 2) this.addSegment(line[line.length - 1], line[0], id);
+    }
+
+    private addSegment(a: Pt, b: Pt, stroke: number): void {
         const ax = this.X(a.x);
         const ay = this.Y(a.y);
         const bx = this.X(b.x);
         const by = this.Y(b.y);
         if (!finite(ax) || !finite(ay) || !finite(bx) || !finite(by)) return;
-        const id = this.segs.length / 4;
-        this.segs.push(ax, ay, bx, by);
-        this.segIndex.add(id, { x0: Math.min(ax, bx), y0: Math.min(ay, by), x1: Math.max(ax, bx), y1: Math.max(ay, by) });
+        const id = this.segs.length / 5;
+        this.segs.push(ax, ay, bx, by, stroke);
+        this.segIndex.add(id, Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by));
     }
 
     private addMarker(mk: MarkerPrim): void {
@@ -2415,7 +2784,7 @@ class LabelLayout {
         if (!finite(x) || !finite(y)) return;
         const id = this.marks.length / 3;
         this.marks.push(x, y, r);
-        this.markIndex.add(id, { x0: x - r, y0: y - r, x1: x + r, y1: y + r });
+        this.markIndex.add(id, x - r, y - r, x + r, y + r);
     }
 
     /** Centred axes (when 0 is inside the view): the axis lines plus the tick labels below / left of them. */
@@ -2423,98 +2792,389 @@ class LabelLayout {
         const { view, m } = this;
         const em = m.em.normal;
         // The axis line itself plus a label gap on its other side.
-        const above = GAP_EM * em;
+        const above = TEXT_GAP_PT.above.y;
         if (view.ymin < 0 && view.ymax > 0) {
             const y0 = this.Y(0);
-            this.addSegment({ x: view.xmin, y: 0 }, { x: view.xmax, y: 0 });
+            this.addLine([{ x: view.xmin, y: 0 }, { x: view.xmax, y: 0 }], false);
             this.bands.push({ x0: 0, x1: m.w, y0: y0 - TICK_PT - LINE_EM * em, y1: y0 + above });
         }
         if (view.xmin < 0 && view.xmax > 0) {
             const x0 = this.X(0);
-            this.addSegment({ x: 0, y: view.ymin }, { x: 0, y: view.ymax });
+            this.addLine([{ x: 0, y: view.ymin }, { x: 0, y: view.ymax }], false);
             this.bands.push({ x0: x0 - TICK_PT - TICK_CHARS * CHAR_EM * em, x1: x0 + above, y0: 0, y1: m.h });
         }
     }
 
-    /** Width and height of a job's text in pt. */
-    size(job: TextJob): { w: number; h: number; em: number } {
-        const em = this.m.em[job.spec.size] || this.m.em.normal;
-        const bold = job.spec.weight === 'bold' ? BOLD_WIDTH : 1;
-        return { w: plainLength(job.text) * CHAR_EM * em * bold, h: LINE_EM * em, em };
+    /** Sets the job's text size in pt, and the stroke it belongs to. */
+    measure(job: TextJob): void {
+        const s = textSize(job.text, job.spec.size, job.spec.weight, this.m);
+        job.w = s.w;
+        job.h = s.h;
+        job.em = s.em;
+        const own = job.spec.slide ? this.strokeOf.get(job.spec.slide) : undefined;
+        job.own = own === undefined ? -1 : own;
     }
 
-    /** The job's text box on side `anchor` of the plot point (X, Y). */
-    box(job: TextJob, anchor: Anchor, X: number, Y: number): Box {
-        const { w, h, em } = this.size(job);
-        if (anchor === 'center') return { x0: X - w / 2, y0: Y - h / 2, x1: X + w / 2, y1: Y + h / 2 };
-        const d = anchorDir(anchor);
-        const gap = GAP_EM * em + (job.spec.marker ? MARKER_PT[job.spec.marker] : 0);
-        const sx = d.x > 0.3 ? 1 : d.x < -0.3 ? -1 : 0;
-        const sy = d.y > 0.3 ? 1 : d.y < -0.3 ? -1 : 0;
-        const x0 = sx > 0 ? X + gap : sx < 0 ? X - gap - w : X - w / 2;
-        const y0 = sy > 0 ? Y + gap : sy < 0 ? Y - gap - h : Y - h / 2;
-        return { x0, y0, x1: x0 + w, y1: y0 + h };
+    /** Shift in pt of the job's text on spot `spot` of ring `ring`: the outer ring's distance plus the nudge. */
+    private shift(job: TextJob, spot: number, ring: number): Pt {
+        const sp = SPOTS[spot];
+        const o = ring ? farOffset(ANCHOR_DIRS[sp.side].anchor, job.em, ring) : { x: 0, y: 0 };
+        o.x += sp.nudge * job.w;
+        return o;
+    }
+
+    /** The job's text box on spot `spot` (index into SPOTS) of the plot point (X, Y), on ring `ring` (0: right beside the point). */
+    private spotBox(job: TextJob, spot: number, X: number, Y: number, ring: number): Box {
+        const o = this.shift(job, spot, ring);
+        return boxAt(ANCHOR_DIRS[SPOTS[spot].side].anchor, X, Y, job.w, job.h, o.x, o.y);
+    }
+
+    /**
+     * True when a stroke runs between the plot point (X, Y) and box b, on
+     * the way to the middle of the box; strokes through the point itself do
+     * not count.
+     */
+    private separated(X: number, Y: number, b: Box): boolean {
+        const qx = (b.x0 + b.x1) / 2;
+        const qy = (b.y0 + b.y1) / 2;
+        const len = Math.hypot(qx - X, qy - Y);
+        if (len <= SEPARATED_SKIP_PT) return false;
+        const t = SEPARATED_SKIP_PT / len;
+        const px = X + (qx - X) * t;
+        const py = Y + (qy - Y) * t;
+        const way: Box = { x0: Math.min(px, qx), y0: Math.min(py, qy), x1: Math.max(px, qx), y1: Math.max(py, qy) };
+        const segs = this.segs;
+        const ids = this.ids;
+        const n = this.segIndex.query(way, ids);
+        for (let i = 0; i < n; i++) {
+            const k = 5 * ids[i];
+            if (segmentsCross(px, py, qx, qy, segs[k], segs[k + 1], segs[k + 2], segs[k + 3])) return true;
+        }
+        return false;
     }
 
     /** Add a label box as an obstacle; returns its id. */
     place(b: Box): number {
         const id = this.boxes.length;
-        this.boxIndex.add(id, b);
+        this.boxIndex.add(id, b.x0, b.y0, b.x1, b.y1);
         this.boxes.push(b);
         return id;
     }
 
     remove(id: number): void {
-        this.boxes[id] = null;
+        if (id >= 0) this.boxes[id] = null;
     }
 
-    /** Cost of drawing a text in box b (preference excluded); `bands` false skips the tick-label bands. */
-    cost(b: Box, em: number, bands = true): number {
-        const area = Math.max(1e-9, (b.x1 - b.x0) * (b.y1 - b.y0));
+    /**
+     * Cost of drawing a text in box b (preferences excluded): 0 when the box
+     * lies inside the frame and nothing crosses it. `bands` false skips the
+     * tick-label bands. Also sets `near`, the preference cost of the
+     * strokes and labels that brush the box without touching it; the stroke
+     * `own`, the line the label belongs to, is not one of them.
+     */
+    cost(b: Box, em: number, bands = true, own = -1): number {
+        const full = Math.max(1e-9, (b.x1 - b.x0) * (b.y1 - b.y0));
         let c = 0;
-        this.boxIndex.query(b, (id) => {
-            const other = this.boxes[id];
-            if (other) c += (COST_OVERLAP * overlapArea(b, other)) / area;
-        });
-        const g = GRAZE_EM * em;
+        // The plot frame: fully inside, with a margin.
+        const f = FRAME_EM * em;
+        const fx1 = this.m.w - f;
+        const fy1 = this.m.h - f;
+        if (b.x0 < f || b.y0 < f || b.x1 > fx1 || b.y1 > fy1) {
+            const w = Math.max(0, Math.min(b.x1, fx1) - Math.max(b.x0, f));
+            const h = Math.max(0, Math.min(b.y1, fy1) - Math.max(b.y0, f));
+            c += COST_FRAME * (2 - (w * h) / full);
+        }
+        const g = Math.min(GRAZE_EM * em, 0.25 * (b.x1 - b.x0), 0.25 * (b.y1 - b.y0));
         const inner: Box = { x0: b.x0 + g, y0: b.y0 + g, x1: b.x1 - g, y1: b.y1 - g };
+        const area = Math.max(1e-9, (inner.x1 - inner.x0) * (inner.y1 - inner.y0));
+        const ids = this.ids;
+        let brushing = 0;
+        // Labels placed before.
+        const gap = NEAR_LABEL_EM * em;
+        const around: Box = { x0: b.x0 - gap, y0: b.y0 - gap, x1: b.x1 + gap, y1: b.y1 + gap };
+        let n = this.boxIndex.query(around, ids);
+        for (let i = 0; i < n; i++) {
+            const other = this.boxes[ids[i]];
+            if (!other) continue;
+            const a = overlapArea(inner, other);
+            if (a > 0) c += COST_LABEL * (1 + a / area);
+            else if (overlapArea(around, other) > 0) brushing++;
+        }
+        // Strokes: once per polyline, by the length that runs through the box. A polyline that only
+        // comes close (inside the box widened by NEAR_EM) is remembered with the length -1.
         const segs = this.segs;
-        this.segIndex.query(inner, (id) => {
-            const k = 4 * id;
-            if (segmentHitsBox(segs[k], segs[k + 1], segs[k + 2], segs[k + 3], inner)) c += COST_STROKE;
-        });
+        const q = ++this.query;
+        const hits = this.hitList;
+        const pad = NEAR_EM * em;
+        const outer: Box = { x0: b.x0 - pad, y0: b.y0 - pad, x1: b.x1 + pad, y1: b.y1 + pad };
+        let nh = 0;
+        n = this.segIndex.query(outer, ids);
+        for (let i = 0; i < n; i++) {
+            const k = 5 * ids[i];
+            const s = segs[k + 4];
+            const len = clippedLength(segs[k], segs[k + 1], segs[k + 2], segs[k + 3], inner);
+            if (len < 0) {
+                if (s !== own && this.hitMark[s] !== q && clippedLength(segs[k], segs[k + 1], segs[k + 2], segs[k + 3], outer) >= 0) {
+                    this.hitMark[s] = q;
+                    this.hitLen[s] = -1;
+                    hits[nh++] = s;
+                }
+                continue;
+            }
+            if (this.hitMark[s] !== q) {
+                this.hitMark[s] = q;
+                this.hitLen[s] = 0;
+                hits[nh++] = s;
+            } else if (this.hitLen[s] < 0) this.hitLen[s] = 0;
+            this.hitLen[s] += len;
+        }
+        if (nh) {
+            const diag = Math.hypot(inner.x1 - inner.x0, inner.y1 - inner.y0);
+            for (let i = 0; i < nh; i++) {
+                const len = this.hitLen[hits[i]];
+                if (len < 0) brushing++;
+                else c += COST_STROKE * (1 + Math.min(1, len / diag));
+            }
+        }
+        this.near = COST_NEAR * Math.min(2, brushing);
+        // Markers.
         const marks = this.marks;
-        this.markIndex.query(inner, (id) => {
-            const k = 3 * id;
+        n = this.markIndex.query(inner, ids);
+        for (let i = 0; i < n; i++) {
+            const k = 3 * ids[i];
             const dx = Math.max(inner.x0 - marks[k], 0, marks[k] - inner.x1);
             const dy = Math.max(inner.y0 - marks[k + 1], 0, marks[k + 1] - inner.y1);
             if (dx * dx + dy * dy < marks[k + 2] * marks[k + 2]) c += COST_MARKER;
-        });
-        if (bands) for (const band of this.bands) c += (COST_BAND * overlapArea(b, band)) / area;
-        c += COST_OUTSIDE * (1 - overlapArea(b, this.plot) / area);
+        }
+        if (bands) for (const band of this.bands) c += (COST_BAND * overlapArea(b, band)) / full;
         return c;
     }
 
-    /** Cost of a free label on side `anchor`: preference (at most 1) plus obstacles. */
-    sideCost(job: TextJob, anchor: Anchor): number {
-        const pref = job.spec.dir || UP_RIGHT;
-        const d = anchorDir(anchor);
-        const { em } = this.size(job);
-        return 0.5 * (1 - (d.x * pref.x + d.y * pref.y)) + this.cost(this.box(job, anchor, this.X(job.x), this.Y(job.y)), em);
+    private sideKey(X: number, Y: number): number {
+        return Math.round(X * 2) * 100003 + Math.round(Y * 2);
     }
 
-    /** The cheapest side for a free label, with its cost (preferred direction first among equals). */
-    bestSide(job: TextJob): { anchor: Anchor; cost: number } {
-        let best: Anchor = 'above right';
-        let bestCost = Infinity;
-        for (const d of ANCHOR_DIRS) {
-            const c = this.sideCost(job, d.anchor);
-            if (c < bestCost - 1e-9) {
-                bestCost = c;
-                best = d.anchor;
+    /** Bit set of the sides labels placed so far take at the plot point (X, Y). */
+    private taken(X: number, Y: number): number {
+        const list = this.sides.get(this.sideKey(X, Y));
+        let bits = 0;
+        if (list) for (const d of list) bits |= 1 << d;
+        return bits;
+    }
+
+    /** The spots of (X, Y) on one ring (SPOTS): the cheapest one replaces `best` when it costs less. */
+    private ring(job: TextJob, X: number, Y: number, pref: Pt, ring: number, k: number, best: Choice): void {
+        const taken = this.taken(X, Y);
+        for (let spot = 0; spot < SPOTS.length; spot++) {
+            const base = spotBase(spot, ring, k, pref, job.spec.slide ? COST_SIDE_LINE : COST_SIDE);
+            const start = base + (taken & (1 << SPOTS[spot].side) ? COST_SAME_SIDE : 0);
+            // Obstacles only add cost: a spot that starts above the best one cannot win.
+            if (start >= best.cost - 1e-9) continue;
+            const b = this.spotBox(job, spot, X, Y, ring);
+            const hit = this.cost(b, job.em, true, job.own);
+            let c = start + hit + this.near;
+            if (c < best.cost && this.separated(X, Y, b)) c += COST_SEPARATED;
+            if (c < best.cost - 1e-9) {
+                best.cost = c;
+                best.hit = hit;
+                best.X = X;
+                best.Y = Y;
+                best.dir = spot;
+                best.ring = ring;
+                best.k = k;
+                best.base = base;
             }
         }
-        return { anchor: best, cost: bestCost };
+    }
+
+    /** The slide polyline of a job in plot pt, with the arc length of the job's own spot on it. */
+    private track(line: Pt[], X0: number, Y0: number): Track | null {
+        const xs: number[] = [];
+        const ys: number[] = [];
+        const acc: number[] = [];
+        for (const p of line) {
+            const X = this.X(p.x);
+            const Y = this.Y(p.y);
+            if (!finite(X) || !finite(Y)) continue;
+            const n = xs.length;
+            if (n && X === xs[n - 1] && Y === ys[n - 1]) continue;
+            acc.push(n ? acc[n - 1] + Math.hypot(X - xs[n - 1], Y - ys[n - 1]) : 0);
+            xs.push(X);
+            ys.push(Y);
+        }
+        if (xs.length < 2) return null;
+        let s0 = 0;
+        let bestD = Infinity;
+        for (let i = 1; i < xs.length; i++) {
+            const dx = xs[i] - xs[i - 1];
+            const dy = ys[i] - ys[i - 1];
+            const len2 = dx * dx + dy * dy;
+            const t = Math.max(0, Math.min(1, ((X0 - xs[i - 1]) * dx + (Y0 - ys[i - 1]) * dy) / len2));
+            const d = Math.hypot(xs[i - 1] + t * dx - X0, ys[i - 1] + t * dy - Y0);
+            if (d < bestD - 1e-9) {
+                bestD = d;
+                s0 = acc[i - 1] + t * Math.sqrt(len2);
+            }
+        }
+        return { xs, ys, acc, s0 };
+    }
+
+    /** The job's slide line in plot pt (built once per frame); null when it has none. */
+    private trackOf(job: TextJob): Track | null {
+        if (job.track === undefined) job.track = job.spec.slide ? this.track(job.spec.slide, this.X(job.spec.x), this.Y(job.spec.y)) : null;
+        return job.track;
+    }
+
+    /**
+     * The plot point `k` steps along the job's line from its own spot (a
+     * step is a little more than half the text), with the side of the line
+     * the label prefers there. Null when the line ends before, or the point
+     * lies in the border inset the label's own spot keeps out of.
+     */
+    private slid(job: TextJob, track: Track, k: number, pref: Pt): { X: number; Y: number; pref: Pt } | null {
+        const { xs, ys, acc } = track;
+        const { w, h } = this.m;
+        const s = track.s0 + k * Math.max(0.6 * job.w, 1.5 * job.em);
+        if (s < 0 || s > acc[acc.length - 1]) return null;
+        let i = 1;
+        while (i < acc.length - 1 && acc[i] < s) i++;
+        const span = acc[i] - acc[i - 1];
+        const t = span > 0 ? (s - acc[i - 1]) / span : 0;
+        const tx = xs[i] - xs[i - 1];
+        const ty = ys[i] - ys[i - 1];
+        const X = xs[i - 1] + t * tx;
+        const Y = ys[i - 1] + t * ty;
+        if (X < LABEL_INSET * w || X > (1 - LABEL_INSET) * w || Y < LABEL_INSET * h || Y > (1 - LABEL_INSET) * h) return null;
+        // The normal of the line here, on the label's side of it (in pt, where the text sides are measured).
+        let nx = -ty;
+        let ny = tx;
+        if (nx * pref.x * w + ny * pref.y * h < 0) {
+            nx = -nx;
+            ny = -ny;
+        }
+        const len = Math.hypot(nx, ny);
+        return { X, Y, pref: len > 0 ? { x: nx / len, y: ny / len } : pref };
+    }
+
+    /**
+     * Slide a line label along its line: one step after the other to both
+     * sides of its own spot, nearest first, for as long as a step alone
+     * costs less than the best spot so far. So the label stops at the
+     * nearest clear place, and goes a little further only when a stroke
+     * brushes it there or runs between it and its line.
+     */
+    private slide(job: TextJob, pref: Pt, best: Choice): void {
+        const track = this.trackOf(job);
+        if (!track) return;
+        for (let k = 1; k <= SLIDE_STEPS; k++) {
+            if (COST_SLIDE * k >= best.cost - 1e-9) return;
+            for (let side = 0; side < 2; side++) {
+                const p = this.slid(job, track, side ? -k : k, pref);
+                if (p) this.ring(job, p.X, p.Y, p.pref, 0, side ? -k : k, best);
+            }
+        }
+    }
+
+    /**
+     * The spot a label had in the previous frame, scored against this
+     * frame; null when it no longer exists (the line got shorter).
+     */
+    revisit(job: TextJob, spot: LabelSpot): Choice | null {
+        if (!(spot.dir >= 0 && spot.dir < SPOTS.length && spot.ring >= 0 && spot.ring < RINGS)) return null;
+        let X = this.X(job.spec.x);
+        let Y = this.Y(job.spec.y);
+        let pref = job.spec.dir || UP_RIGHT;
+        if (spot.k) {
+            const track = this.trackOf(job);
+            const p = track ? this.slid(job, track, spot.k, pref) : null;
+            if (!p) return null;
+            X = p.X;
+            Y = p.Y;
+            pref = p.pref;
+        }
+        const base = spotBase(spot.dir, spot.ring, spot.k, pref, job.spec.slide ? COST_SIDE_LINE : COST_SIDE);
+        const hit = this.cost(this.spotBox(job, spot.dir, X, Y, spot.ring), job.em, true, job.own);
+        return { X, Y, dir: spot.dir, ring: spot.ring, k: spot.k, base, hit, cost: base + hit };
+    }
+
+    /**
+     * The best spot for a free label. It starts with the spots right beside
+     * the label's point or its place on its line (SPOTS). A clear one, with
+     * no stroke brushing it or running between it and its point, is taken
+     * at once: a label never moves for a nicer side alone. Otherwise a
+     * label of a line slides along its line, and then the same spots are
+     * tried one line further out and two lines out; each of these stages
+     * costs more than the one before, so it only wins when the nearer
+     * spots have a hit or that trouble. Earlier candidates win ties
+     * (preferred side first), so equal frames give equal labels.
+     */
+    choose(job: TextJob): Choice {
+        const X = this.X(job.spec.x);
+        const Y = this.Y(job.spec.y);
+        const pref = job.spec.dir || UP_RIGHT;
+        const best: Choice = { X, Y, dir: 0, ring: 0, k: 0, base: 0, hit: Infinity, cost: Infinity };
+        this.ring(job, X, Y, pref, 0, 0, best);
+        if (this.dense || (best.hit === 0 && best.cost - best.base < 1e-9)) return best;
+        if (job.spec.slide) this.slide(job, pref, best);
+        // Spots that start above the best one so far are skipped unscored, so this is cheap once a good spot is known.
+        for (let ring = 1; ring < RINGS; ring++) this.ring(job, X, Y, pref, ring, 0, best);
+        return best;
+    }
+
+    /** Obstacle cost of the job's current spot against the obstacles as they are now (0: clear). */
+    hits(job: TextJob): number {
+        return this.cost(this.spotBox(job, job.dir, this.X(job.x), this.Y(job.y), job.ring), job.em, true, job.own);
+    }
+
+    /** Preference cost of the job's current spot; call right after hits(job), whose strokes that brush the box it counts. */
+    prefs(job: TextJob): number {
+        const near = this.near;
+        const X = this.X(job.x);
+        const Y = this.Y(job.y);
+        const taken = this.taken(X, Y) & (1 << SPOTS[job.dir].side) ? COST_SAME_SIDE : 0;
+        return job.base + near + taken + (this.separated(X, Y, this.spotBox(job, job.dir, X, Y, job.ring)) ? COST_SEPARATED : 0);
+    }
+
+    /** Move the job to a chosen spot (not yet an obstacle: see put). */
+    apply(job: TextJob, c: Choice): void {
+        // Its own place keeps its exact coordinates.
+        const p = c.k === 0 ? { x: job.spec.x, y: job.spec.y } : this.toMath(c.X, c.Y);
+        job.x = p.x;
+        job.y = p.y;
+        job.anchor = ANCHOR_DIRS[SPOTS[c.dir].side].anchor;
+        job.dir = c.dir;
+        job.ring = c.ring;
+        job.k = c.k;
+        job.base = c.base;
+        job.scored = true;
+        const o = this.shift(job, c.dir, c.ring);
+        job.offset = o.x !== 0 || o.y !== 0 ? o : undefined;
+    }
+
+    /** Make the job's text an obstacle for the labels placed after it (`free`: a label on a spot of SPOTS). */
+    put(job: TextJob, free: boolean): void {
+        const X = this.X(job.x);
+        const Y = this.Y(job.y);
+        if (!free) {
+            job.box = this.place(boxAt(job.anchor, X, Y, job.w, job.h, 0, 0));
+            return;
+        }
+        job.box = this.place(this.spotBox(job, job.dir, X, Y, job.ring));
+        const side = SPOTS[job.dir].side;
+        const key = this.sideKey(X, Y);
+        const list = this.sides.get(key);
+        if (list) list.push(side);
+        else this.sides.set(key, [side]);
+    }
+
+    /** Take a free label off the obstacles again (it is being re-placed). */
+    lift(job: TextJob): void {
+        this.remove(job.box);
+        job.box = -1;
+        const list = this.sides.get(this.sideKey(this.X(job.x), this.Y(job.y)));
+        if (!list) return;
+        const at = list.indexOf(SPOTS[job.dir].side);
+        if (at >= 0) list.splice(at, 1);
     }
 
     /**
@@ -2526,7 +3186,7 @@ class LabelLayout {
     regionSpot(job: TextJob, region: RegionResult): Pt {
         const X0 = this.X(job.x);
         const Y0 = this.Y(job.y);
-        const { w, h, em } = this.size(job);
+        const { w, h, em } = job;
         let bestX = X0;
         let bestY = Y0;
         let bestCost = Infinity;
@@ -2545,7 +3205,7 @@ class LabelLayout {
                 [b.x0, Y],
             ];
             if (!probes.every(([px, py]) => pointInRings(this.toMath(px, py), region.rings))) return;
-            const c = dist + this.cost(b, em, false);
+            const c = dist + this.cost(b, em, false) + this.near;
             if (c < bestCost - 1e-9) {
                 bestCost = c;
                 bestX = X;
@@ -2562,37 +3222,161 @@ class LabelLayout {
     }
 }
 
-/** The side closest to direction `dir` (earlier sides win ties). */
-function preferredSide(dir: Pt): Anchor {
-    let best = ANCHOR_DIRS[0];
-    for (const d of ANCHOR_DIRS) if (d.x * dir.x + d.y * dir.y > best.x * dir.x + best.y * dir.y + 1e-9) best = d;
-    return best.anchor;
+/** Index into ANCHOR_DIRS of the side closest to direction `dir` (earlier sides win ties). */
+function preferredSide(dir: Pt): number {
+    let best = 0;
+    for (let k = 1; k < ANCHOR_DIRS.length; k++) {
+        const d = ANCHOR_DIRS[k];
+        const b = ANCHOR_DIRS[best];
+        if (d.x * dir.x + d.y * dir.y > b.x * dir.x + b.y * dir.y + 1e-9) best = k;
+    }
+    return best;
 }
 
 /** Sweeps that re-place each free label against all the others (greedy order effects). */
 const REFINE_SWEEPS = 2;
 /**
- * Free labels up to which the refinement sweeps run, and up to which sides
- * are scored at all: beyond that (a densely labelled lattice, unreadable
- * anyway) labels keep their preferred side so frames stay fast.
+ * Free labels up to which the refinement sweeps run and a label may slide
+ * or move out a line (REFINE_MAX), and up to which sides are scored at all
+ * (SCORED_MAX): beyond that (a densely labelled lattice, unreadable anyway)
+ * labels keep their preferred side so frames stay fast.
  */
 const REFINE_MAX = 200;
 const SCORED_MAX = 600;
 
 /**
- * Place every text of the frame: fixed sides (min / max) first as obstacles,
- * then region labels (centred inside their region, moved off the axes and
- * strokes when needed), then free labels in labelRank order, each on the
- * side with the lowest cost. Greedy placement cannot see labels placed after
- * it, so a few sweeps then move a label when another side is cheaper now
- * that every label is known. Sets each job's x, y and anchor.
+ * The curve of a visible function as obstacle polylines (math coordinates):
+ * coarser than the preview draws it, but a label only has to keep off it.
+ * A stretch that leaves the view is kept up to its first sample outside, so
+ * the curve reaches the frame; a jump across the whole view (a pole) breaks
+ * the polyline.
  */
-function layoutTexts(jobs: TextJob[], items: SceneItem2D[], view: View, axisStyle: AxisStyle, metrics: LabelMetrics): void {
+function obstacleCurve(info: FunctionInfo, view: View): Pt[][] {
+    const fn = info.fn;
+    let lo: number;
+    let hi: number;
+    let at: (t: number) => Pt;
+    if (info.kind === 'cartesian') {
+        const d = info.domain;
+        lo = d ? Math.max(d[0], view.xmin) : view.xmin;
+        hi = d ? Math.min(d[1], view.xmax) : view.xmax;
+        at = (x) => ({ x, y: fn(x) });
+    } else {
+        [lo, hi] = info.domain || [0, 2 * Math.PI];
+        const fy = info.fnY;
+        if (info.kind === 'parametric') {
+            if (!fy) return [];
+            at = (t) => ({ x: fn(t), y: fy(t) });
+        } else {
+            at = (theta) => {
+                const r = fn(theta);
+                return { x: r * Math.cos(theta), y: r * Math.sin(theta) };
+            };
+        }
+    }
+    if (!(hi > lo) || !finite(lo) || !finite(hi)) return [];
+    // Which side of the view a point lies on: 0 inside, else a code that is negated on the opposite side.
+    const side = (p: Pt): number => (p.y > view.ymax ? 1 : p.y < view.ymin ? -1 : 0) + (p.x > view.xmax ? 3 : p.x < view.xmin ? -3 : 0);
+    const lines: Pt[][] = [];
+    let cur: Pt[] = [];
+    let prev: Pt | null = null;
+    let prevSide = 0;
+    const flush = () => {
+        if (cur.length > 1) lines.push(cur);
+        cur = [];
+    };
+    for (let i = 0; i <= OBSTACLE_SAMPLES; i++) {
+        const p = at(lo + ((hi - lo) * i) / OBSTACLE_SAMPLES);
+        if (!finite(p.x) || !finite(p.y)) {
+            flush();
+            prev = null;
+            continue;
+        }
+        const s = side(p);
+        if (prev) {
+            // Both ends outside on the same side: not in the picture. On opposite sides in one step: a pole.
+            if (prevSide !== 0 && s !== 0 && (s === prevSide || s === -prevSide)) flush();
+            else {
+                if (!cur.length) cur.push(prev);
+                cur.push(p);
+            }
+        }
+        prev = p;
+        prevSide = s;
+    }
+    flush();
+    return lines;
+}
+
+/**
+ * Obstacle polylines of every visible function, sampled after the scene has
+ * published its derived values (a body may read P1_x). With a cache, a
+ * curve is sampled again only when something it depends on, or the view,
+ * changed.
+ */
+function functionCurves(math: MathContext, params: FunctionParameters[], view: View, state: CacheState | null): Pt[][] {
+    const out: Pt[][] = [];
+    const seen = new Set<string>();
+    const frame = `${view.xmin},${view.xmax},${view.ymin},${view.ymax}`;
+    for (const info of math.functions()) {
+        const f = params[info.index];
+        if (!f || info.hidden || info.error || info.domainError) continue;
+        if (!str(f.expression).trim() && !(f.parametric && str(f.expressionY).trim())) continue;
+        let lines: Pt[][] | null = null;
+        const key = state ? `${frame}|${math.depsKey([info.name])}` : '';
+        if (state) {
+            seen.add(info.name);
+            const hit = state.curves.get(info.name);
+            if (hit && hit.key === key) lines = hit.lines;
+        }
+        if (!lines) {
+            lines = obstacleCurve(info, view);
+            if (state) state.curves.set(info.name, { key, lines });
+        }
+        for (const line of lines) out.push(line);
+    }
+    if (state) for (const name of Array.from(state.curves.keys())) if (!seen.has(name)) state.curves.delete(name);
+    return out;
+}
+
+/**
+ * Place every text of the frame. Fixed sides first, as obstacles; then
+ * region labels (centred inside their region, moved off the axes and
+ * strokes when needed); then free labels in labelRank order, each on the
+ * spot with the lowest cost: no hit before any hit, then the least overlap
+ * (see the COST_ constants). Candidates are the eight sides of the label's
+ * point on two rings; a label of a line or curve also slides along it.
+ * Obstacles are every stroke and guide of the scene, the curves of the
+ * functions (`curves`), markers, centred axes with their tick labels,
+ * labels placed before, and the plot frame. Labels of shapes that stand
+ * still go before labels of shapes on a slider (movingNodes). Greedy
+ * placement cannot see labels placed after it, so a few sweeps then move a
+ * label that has a hit when another spot is cheaper now that every label is
+ * known.
+ *
+ * Without `before` the result is a pure function of the frame (no memory of
+ * earlier frames), so the settled preview, a chart in a note and the export
+ * agree; candidates are tried in a fixed order and only a strictly cheaper
+ * one wins. With `before` (the spots of the previous frame, see
+ * SceneInput2D.keepLabels) a label first tries the spot it had and keeps it
+ * while it is clear, so during a gesture a label moves only when something
+ * reaches it. Sets each job's x, y, anchor and offset.
+ */
+function layoutTexts(
+    jobs: TextJob[],
+    items: SceneItem2D[],
+    curves: Pt[][],
+    view: View,
+    axisStyle: AxisStyle,
+    metrics: LabelMetrics,
+    before: Map<string, LabelSpot> | null
+): void {
     if (!jobs.length) return;
-    const layout = new LabelLayout(view, metrics, axisStyle, items);
+    const layout = new LabelLayout(view, metrics, axisStyle, items, curves);
+    for (const job of jobs) layout.measure(job);
     for (const job of jobs) {
         if (!job.spec.anchor || job.spec.region) continue;
-        layout.place(layout.box(job, job.anchor, layout.X(job.x), layout.Y(job.y)));
+        layout.put(job, false);
     }
     for (const job of jobs) {
         if (!job.spec.region) continue;
@@ -2601,29 +3385,43 @@ function layoutTexts(jobs: TextJob[], items: SceneItem2D[], view: View, axisStyl
             job.x = p.x;
             job.y = p.y;
         }
-        layout.place(layout.box(job, 'center', layout.X(job.x), layout.Y(job.y)));
+        layout.put(job, false);
     }
-    const free = jobs.filter((j) => !j.spec.anchor).sort((a, b) => a.rank - b.rank || a.order - b.order);
+    const free = jobs.filter((j) => !j.spec.anchor).sort((a, b) => Number(a.moving) - Number(b.moving) || a.rank - b.rank || a.order - b.order);
     if (free.length > SCORED_MAX) {
-        for (const job of free) job.anchor = preferredSide(job.spec.dir || UP_RIGHT);
+        for (const job of free) {
+            // The first eight SPOTS are the sides of ANCHOR_DIRS.
+            job.dir = preferredSide(job.spec.dir || UP_RIGHT);
+            job.anchor = ANCHOR_DIRS[job.dir].anchor;
+        }
         return;
     }
-    const ids = free.map((job) => {
-        job.anchor = layout.bestSide(job).anchor;
-        return layout.place(layout.box(job, job.anchor, layout.X(job.x), layout.Y(job.y)));
-    });
+    layout.dense = free.length > REFINE_MAX;
+    for (const job of free) {
+        // During a gesture a label keeps the spot of the frame before while that spot is clear.
+        const spot = before ? before.get(job.key) : undefined;
+        const kept = spot ? layout.revisit(job, spot) : null;
+        job.kept = !!kept && kept.hit === 0;
+        layout.apply(job, kept && kept.hit === 0 ? kept : layout.choose(job));
+        layout.put(job, true);
+    }
     for (let sweep = 0; sweep < REFINE_SWEEPS && free.length <= REFINE_MAX; sweep++) {
         let moved = false;
-        free.forEach((job, k) => {
-            layout.remove(ids[k]);
-            const now = layout.sideCost(job, job.anchor);
-            const best = layout.bestSide(job);
-            if (best.cost < now - 1e-9) {
-                job.anchor = best.anchor;
-                moved = true;
+        for (const job of free) {
+            layout.lift(job);
+            const hit = layout.hits(job);
+            // A clear label beside its point stays where it is: nothing to gain but a nicer side.
+            if (hit > 0 || (job.ring > 0 && !job.kept)) {
+                const now = hit + layout.prefs(job);
+                const best = layout.choose(job);
+                if (best.cost < now - SWEEP_GAIN) {
+                    layout.apply(job, best);
+                    job.kept = false;
+                    moved = true;
+                }
             }
-            ids[k] = layout.place(layout.box(job, job.anchor, layout.X(job.x), layout.Y(job.y)));
-        });
+            layout.put(job, true);
+        }
         if (!moved) break;
     }
 }
@@ -2656,6 +3454,69 @@ function labelFormatter(node: SceneNode, math: MathContext, issues: SceneIssue[]
 }
 
 // --------------------------------------------------------------- 3D scene
+
+/**
+ * Where a 3D text label goes when it is centred on a point that lies on an
+ * edge or a corner of the box: 'left', 'right', 'above' or 'below', the
+ * side away from the middle of the box as the camera shows it, so the text
+ * stands beside the edge and the edge does not run through it. Null for
+ * any other point (the label stays centred).
+ *
+ * `ex`, `ey`, `ez` are the screen vectors (right, up) of one data unit
+ * along x, y and z: the preview's camera, which the export reproduces. The
+ * side depends only on the point, the box and the camera, never on text or
+ * picture sizes, so the preview and the PDF agree.
+ */
+export function edgeLabelSide3D(
+    p: [number, number, number],
+    box: View & { zmin: number; zmax: number },
+    ex: [number, number],
+    ey: [number, number],
+    ez: [number, number]
+): 'left' | 'right' | 'above' | 'below' | null {
+    const lo = [box.xmin, box.ymin, box.zmin];
+    const hi = [box.xmax, box.ymax, box.zmax];
+    const vecs = [ex, ey, ez];
+    // From the middle of the box to the point, as far as the point sits on a face: a screen vector.
+    let vx = 0;
+    let vy = 0;
+    let on = 0;
+    let free = -1;
+    for (let k = 0; k < 3; k++) {
+        const range = hi[k] - lo[k];
+        if (!(range > 0) || !finite(p[k]) || !finite(vecs[k][0]) || !finite(vecs[k][1])) return null;
+        const tol = 1e-6 * range;
+        const sign = Math.abs(p[k] - hi[k]) <= tol ? 1 : Math.abs(p[k] - lo[k]) <= tol ? -1 : 0;
+        if (!sign) {
+            if (p[k] < lo[k] || p[k] > hi[k]) return null;
+            free = k;
+            continue;
+        }
+        on++;
+        vx += sign * (range / 2) * vecs[k][0];
+        vy += sign * (range / 2) * vecs[k][1];
+    }
+    if (on < 2) return null;
+    if (on === 2) {
+        // Along an edge: only the part of the way out that is square to the edge counts.
+        const tx = vecs[free][0];
+        const ty = vecs[free][1];
+        const len2 = tx * tx + ty * ty;
+        if (len2 > 0) {
+            const along = (vx * tx + vy * ty) / len2;
+            vx -= along * tx;
+            vy -= along * ty;
+            // The edge runs through the middle of the picture: either side is as good, take the one on the right or above.
+            if (Math.hypot(vx, vy) < 1e-9 * Math.sqrt(len2)) {
+                vx = Math.abs(ty);
+                vy = ty === 0 ? Math.abs(tx) : 0;
+            }
+        }
+    }
+    if (!(Math.hypot(vx, vy) > 0)) return null;
+    if (Math.abs(vx) >= Math.abs(vy)) return vx > 0 ? 'right' : 'left';
+    return vy > 0 ? 'above' : 'below';
+}
 
 export interface Scene3D {
     points: Array<{ x: number; y: number; z: number; color: string; size: MarkerSize; label?: string }>;
@@ -2784,7 +3645,7 @@ function scene3D(input: SceneInput3D): Scene3D {
         return empty;
     }
     // 3D tools are cheap: no cross-frame memo, a fresh state per call.
-    const state: CacheState = { math, memo: new Map(), good: new Map(), names: null };
+    const state: CacheState = { math, memo: new Map(), good: new Map(), names: null, curves: new Map(), labels: new Map() };
     const outs = runNodes(
         nodes,
         ctx,

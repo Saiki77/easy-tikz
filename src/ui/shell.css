@@ -241,7 +241,8 @@ button.etz-tab.has-error .etz-tab-dot {
     padding: 8px 56px;
 }
 
-.etz-chart:focus-visible {
+/* Keyboard focus only: a preview focused by a press (is-pointer-focus) shows no ring until a key is used. */
+.etz-chart:focus-visible:not(.is-pointer-focus) {
     box-shadow: inset 0 0 0 2px var(--background-modifier-border-focus);
 }
 

@@ -2,6 +2,7 @@ import { App, MarkdownPostProcessorContext, Notice, Plugin, PluginSettingTab, Se
 import { TikzModal } from './src/modal';
 import { SettingsManager } from './src/settings';
 import { SVGRenderer } from './src/renderer';
+import { MATH_REDRAW_LIMIT } from './src/mathlabel';
 import { SVG3DRenderer } from './src/renderer3d';
 import { SceneCache, SceneIssue } from './src/scene';
 import { MathContext } from './src/mathcontext';
@@ -304,6 +305,8 @@ class InlineChart {
 
     private frameRaf: number | null = null;
     private fullTimer: number | null = null;
+    /** Redraws in a row that a new `$...$` label asked for (see render2D). */
+    private mathRedraws = 0;
 
     constructor(plugin: EasyTikzPlugin, el: HTMLElement, sourcePath: string, source: string, data: Record<string, unknown>, fenceTag: FenceTag) {
         this.plugin = plugin;
@@ -412,6 +415,14 @@ class InlineChart {
         const svg = renderer.render();
         svg.addClass('etz-inline-svg');
         this.placeChart(svg);
+        // A new `$...$` label is measured before MathJax has styled it: draw once more when it has.
+        void renderer.mathSettled?.then((redraw) => {
+            if (!redraw) this.mathRedraws = 0;
+            else if (this.chartEl === svg && svg.isConnected && this.mathRedraws < MATH_REDRAW_LIMIT) {
+                this.mathRedraws++;
+                this.render('full');
+            }
+        });
         return renderer.issues;
     }
 

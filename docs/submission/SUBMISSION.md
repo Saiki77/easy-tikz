@@ -12,18 +12,27 @@ End-to-end checklist for getting the plugin listed under **Settings → Communit
 - [x] `README.md` with install / usage / permissions
 - [x] GitHub Releases workflow that attaches `main.js`, `manifest.json`,
       `styles.css` as raw assets (not zipped) on every tag push
-- [x] Latest release tag (`3.19.0` at the time of writing) matches the
+- [x] Latest release tag (`4.0.0` at the time of writing) matches the
       `version` field in `manifest.json` - without a leading `v`
+- [x] `minAppVersion` is `1.13.0` in `manifest.json`, and `versions.json`
+      maps `4.0.0` (and `3.19.6`) to `1.13.0`, so users on older Obsidian
+      versions keep `3.19.5`
 
 Verify the latest release one more time before opening the PR:
 
 ```bash
 gh release view --repo Saiki77/easy-tikz --json tagName,assets \
     --jq '.tagName, [.assets[].name]'
-# Expect:
-# "3.19.0"
+# Expect (the tag is the `version` of manifest.json on the default branch):
+# "4.0.0"
 # ["main.js","manifest.json","styles.css"]
 ```
+
+If the default branch is ahead of the last tag (a `## [Unreleased]`
+section in `CHANGELOG.md`, features the README describes that the last
+release does not have), tag the next version first: the validator
+compares the latest release with `manifest.json` on the default branch,
+and a reviewer installs the latest release.
 
 The latest published `manifest.json` must be reachable at the raw URL:
 
@@ -88,7 +97,7 @@ issue, push another commit to the PR branch, and the workflow re-runs.
 | "Plugin id contains 'obsidian' or 'plugin'."                        | Naming convention. We're fine - `easy-tikz`.                                                       | n/a                                                                                                                                                |
 | "Plugin name starts with 'Obsidian'."                               | Naming convention. We're fine - `Easy TikZ`.                                                       | n/a                                                                                                                                                |
 | Manual: "`fundingUrl` link is broken / unrelated to the author."    | A real human reviewer hit a broken link.                                                           | Remove the field or fix the URL.                                                                                                                   |
-| Manual: "`minAppVersion` is older than the version that ships APIs you use." | The plugin uses an API the declared min version doesn't have.                                      | Bump `minAppVersion` to the floor that actually works. We use `color-mix()` CSS (Chromium 111 → Obsidian ≥ 1.4) and `setIcon` etc.; **1.4.0** is the safe floor we set. |
+| Manual: "`minAppVersion` is older than the version that ships APIs you use." | The plugin uses an API the declared min version doesn't have.                                      | Bump `minAppVersion` to the floor that actually works. Ours is **1.13.0** since 3.19.6: the settings tab uses the declarative settings API and sliders rely on 1.13's always-visible inline value (4.x also uses `color-mix()` CSS and `setIcon`, which 1.4 already had). Keep `versions.json` in step, so older Obsidian versions are offered 3.19.5. |
 
 ## Release artifacts checklist
 
@@ -100,9 +109,9 @@ the latest release:
 | `manifest.json`     | repo root + latest release asset       | Plugin metadata. Validator fetches both.                            |
 | `versions.json`     | repo root                              | Maps every version to its `minAppVersion`. Built-in updater reads this. |
 | `main.js`           | latest release asset                   | Compiled plugin entry point. Built by `npm run build`.              |
-| `styles.css`        | latest release asset (copied from `src/`) | Plugin styling. Our build copies `src/styles.css → styles.css`.    |
+| `styles.css`        | latest release asset (built from `src/`) | Plugin styling. `npm run build` joins `src/styles.css` and every `src/ui/*.css` into `styles.css` (`scripts/build-css.mjs`). |
 | `LICENSE.md`        | repo root                              | MIT.                                                                |
-| `README.md`         | repo root                              | Install / usage / permissions.                                      |
+| `README.md`         | repo root                              | Install / usage / permissions. Its pictures and videos are in `docs/media`, its guides in `docs/guides`. |
 | `CHANGELOG.md`      | repo root                              | Per-version history. Not required by Obsidian but expected.         |
 | `.github/workflows/release.yml` | repo root                  | Automates the release on tag push.                                  |
 
@@ -110,11 +119,19 @@ the latest release:
 
 To ship a new version after the plugin is listed:
 
-1. Bump `package.json`, `manifest.json`, `versions.json`, and
-   `CHANGELOG.md` (we have a script for this in `version-bump.mjs`,
-   wired up under `npm version`).
-2. Tag and push (`git tag 3.20.0 && git push origin 3.20.0`).
-3. The release workflow attaches `main.js`/`manifest.json`/`styles.css`
-   to the GitHub Release.
-4. Obsidian's auto-updater picks up the new release without any further
+1. Run the checks on what you are about to release: `npm run build`,
+   `npm test`, and `npm run media:smoke -- --root`, which loads the
+   built plugin in a real Obsidian (see `scripts/media/README.md`).
+2. In `CHANGELOG.md`, rename `## [Unreleased]` to the new version
+   heading (`## [4.0.1] - YYYY-MM-DD`): the release workflow takes the
+   release notes from the section of that version.
+3. Run `npm version 4.0.1`. It sets the version in `package.json`,
+   `manifest.json` and `versions.json` (`version-bump.mjs` maps the new
+   version to the current `minAppVersion`, `1.13.0`), commits them with
+   the changelog and creates the tag `4.0.1`, without a `v` (see `.npmrc`).
+4. Push the branch and the tag (`git push origin main 4.0.1`).
+5. The release workflow stops when the tag and the version in
+   `manifest.json` differ; otherwise it attaches
+   `main.js`/`manifest.json`/`styles.css` to the GitHub Release.
+6. Obsidian's auto-updater picks up the new release without any further
    PR - `community-plugins.json` only needs the initial entry.

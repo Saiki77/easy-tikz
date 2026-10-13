@@ -15,7 +15,19 @@ import { AnnotationSize, FillPattern, Function3DParameters, MarkerSize, Renderer
 import { THICKNESS_MAP, TIKZ_COLOR_DEFS } from './colors';
 import { FunctionInfo, MathContext, fmtNum, texLabel } from './mathcontext';
 import { Pt, View, clipPolylineToView, pointInRings, simplifyPolyline } from './geometry';
-import { ArrowHeads, BracePrim, Scene3D, SceneItem2D, StrokePrim, TextAnchor, TextPrim, computeScene2D, computeScene3D, labelMetricsFor } from './scene';
+import {
+    ArrowHeads,
+    BracePrim,
+    Scene3D,
+    SceneItem2D,
+    StrokePrim,
+    TextAnchor,
+    TextPrim,
+    computeScene2D,
+    computeScene3D,
+    edgeLabelSide3D,
+    labelMetricsFor,
+} from './scene';
 import { sampleCurve } from './util';
 
 // ------------------------------------------------------------------ tuning
@@ -82,6 +94,8 @@ const RESTRICT_MARGIN = 10;
 const TEXT_SLACK = 0.05;
 /** Relative tolerance for "on the view border" tests. */
 const VIEW_TOL = 1e-9;
+/** Centred axes: the title is lifted this far over the y label above the axis tip (the preview's label gap plus one line of the label font). */
+const MIDDLE_TITLE_LIFT_PT = 15;
 /** Brace label distance from the brace's base line: raise (2pt) + amplitude (5pt) + a gap. */
 const BRACE_LABEL_SHIFT = 9;
 
@@ -542,8 +556,14 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
     // Middle axes: the labels sit just beyond the arrow tips (x right of its
     // tip, y above its tip), where they cannot collide with the plot, as in
     // the preview. pgfplots' default puts them inside the plot next to the tips.
-    if (config.axisStyle === 'middle') opts.push('axis lines=middle, xlabel style={anchor=west}, ylabel style={anchor=south}');
-    else if (config.axisStyle === 'axes') opts.push('axis lines=left');
+    if (config.axisStyle === 'middle') {
+        opts.push('axis lines=middle, xlabel style={anchor=west}, ylabel style={anchor=south}');
+        // The y label now stands above the tip of its axis, which is where pgfplots puts the title: with
+        // the y axis in the middle of the plot the two would print on top of each other. The preview
+        // draws the title above the label, so lift it by the label's line.
+        const titled = !!labelText(ctx.formatTemplate(String(config.title ?? '')));
+        if (titled && config.showAxisLabels && labelText(String(config.yLabel ?? ''))) opts.push(`title style={yshift=${MIDDLE_TITLE_LIFT_PT}pt}`);
+    } else if (config.axisStyle === 'axes') opts.push('axis lines=left');
     if (config.gridMinor) opts.push(`grid=both, minor tick num=${Math.max(1, Math.round(num(config.minorTickNum, 5)))}`);
     else if (config.gridMajor) opts.push('grid=major');
     // Without rad, pgfplots evaluates sin(x) in degrees.
@@ -864,10 +884,29 @@ function braceSegment(b: BracePrim, view: View): [Pt, Pt] | null {
     return pieces.length ? [pieces[0][0], pieces[0][pieces[0].length - 1]] : null;
 }
 
-function nodeCmd(color: string, anchor: string, size: AnnotationSize, halo: boolean, at: string, text: string, weight?: TextPrim['weight']): string {
+/**
+ * A text node. `offset` (pt, x right, y up) is the label placer's shift for
+ * a text with no room right beside its point: it becomes xshift / yshift,
+ * so the node keeps its coordinate and the PDF matches the preview.
+ */
+function nodeCmd(
+    color: string,
+    anchor: string,
+    size: AnnotationSize,
+    halo: boolean,
+    at: string,
+    text: string,
+    weight?: TextPrim['weight'],
+    offset?: Pt
+): string {
     const bold = weight === 'bold';
     const opts = [bold ? color + BOLD_INK : color, `anchor=${anchor}`, `font=${FONT[size] || FONT.normal}${bold ? '\\bfseries' : ''}`];
     if (halo) opts.push(HALO);
+    if (offset && finitePt(offset)) {
+        const pt = (v: number) => `${fmtNum(Math.round(v * 100) / 100)}pt`;
+        if (Math.abs(offset.x) >= 0.005) opts.push(`xshift=${pt(offset.x)}`);
+        if (Math.abs(offset.y) >= 0.005) opts.push(`yshift=${pt(offset.y)}`);
+    }
     return `\\node[${opts.join(', ')}] at ${at} {${text}};`;
 }
 
@@ -877,7 +916,7 @@ function addTexts(layers: Layers, item: SceneItem2D, colors: ColorSet, view: Vie
     for (const t of item.texts || []) {
         const text = labelText(t.text);
         if (!text || !finitePt(t) || !inView(t, view, TEXT_SLACK)) continue;
-        lines.push(nodeCmd(colors.use(t.color), ANCHOR[t.anchor] || 'center', t.size, !!t.halo, axisCs(t, view), text, t.weight));
+        lines.push(nodeCmd(colors.use(t.color), ANCHOR[t.anchor] || 'center', t.size, !!t.halo, axisCs(t, view), text, t.weight, t.offset));
     }
     if (!lines.length) return;
     layers.texts.push(comment(item.source), ...lines);
@@ -937,7 +976,7 @@ export function generateTikz3D(settings: SettingsManager, ctx: MathContext): str
     const body = surfacesAndPlanes(surfaces, planes, camera, box);
     body.push(...pointCmds(scene, box, colors));
     body.push(...segmentCmds(scene, box, colors));
-    body.push(...annotationCmds3D(config, ctx, box, colors));
+    body.push(...annotationCmds3D(config, ctx, box, colors, camera));
 
     const vectors = unitVectors(camera, box, paper);
     const opts = commonOptions(config, ctx, vectors || sizeOption(paper));
@@ -1383,7 +1422,7 @@ function segmentCmds(scene: Scene3D, box: Box, colors: ColorSet): string[] {
     return out.length ? ['% segments', ...out] : [];
 }
 
-function annotationCmds3D(config: RendererConfig, ctx: MathContext, box: Box, colors: ColorSet): string[] {
+function annotationCmds3D(config: RendererConfig, ctx: MathContext, box: Box, colors: ColorSet, camera: Camera3D): string[] {
     const out: string[] = [];
     (config.annotations || []).forEach((a) => {
         if (!a || a.hidden) return;
@@ -1393,7 +1432,9 @@ function annotationCmds3D(config: RendererConfig, ctx: MathContext, box: Box, co
         const z = a.z === undefined || a.z === null || !String(a.z).trim() ? 0 : ctx.value(a.z);
         const p: [number, number, number] = [ctx.value(a.x), ctx.value(a.y), z];
         if (!in3D(p, box, TEXT_SLACK)) return;
-        out.push(nodeCmd(colors.use(a.color), ANCHOR[a.anchor] || 'center', a.size, false, `(axis cs:${tuple3(p).slice(1)}`, text));
+        // A centred label on an edge of the box steps aside, to the side the preview picks.
+        const side = !a.anchor || a.anchor === 'center' ? edgeLabelSide3D(p, box, camera.ex, camera.ey, camera.ez) : null;
+        out.push(nodeCmd(colors.use(a.color), ANCHOR[side || a.anchor] || 'center', a.size, false, `(axis cs:${tuple3(p).slice(1)}`, text));
     });
     return out.length ? ['% labels', ...out] : [];
 }

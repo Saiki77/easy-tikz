@@ -1911,7 +1911,9 @@ function exPoints(id: string, name: string, fields: Partial<PointsBody>): Points
  * 2. 'areas' Areas between two curves: f1 sin(x), f2 cos(x) on 0:2*pi;
  *    R1 'f2 <= y <= f1' + '0 <= x <= 2pi' blue label 'A1'; R2
  *    'f1 <= y <= f2' + same x range orange label 'A2'; P1 intersections f1 f2.
- * 3. 'tangent' Tangent explorer: slider a -2..2; f1 'x^3 - 3x' tangent at a, extrema on.
+ * 3. 'tangent' Tangent explorer: slider a -2..2; f1 'x^3 - 3x' tangent at a, extrema on;
+ *    the live slope is the chart title (a tangent that sweeps the plot would run through
+ *    any text inside it).
  * 4. 'levels' Level curves + constraint: C1 'x^2 + y^2' levels '1, 3.2, 6'
  *    with label '{level}'; R1 'x + 2y >= 4' light fill; P1 region R1 objective
  *    'x^2 + y^2' min; C2 'x^2 + y^2' levels 'P1_val' dashed (touches P1).
@@ -1993,6 +1995,7 @@ export const EXAMPLES: ChartExample[] = [
         description: 'Drag the tangent point, or the slider a, to slide the tangent along x^3 - 3x.',
         is3D: false,
         data: exampleChart({
+            title: 'slope at x = {a}: {3a^2 - 3:2}',
             xmin: '-3',
             xmax: '3',
             ymin: '-4',
@@ -2007,9 +2010,6 @@ export const EXAMPLES: ChartExample[] = [
                     tangentPoint: 'a',
                     extrema: true,
                 }),
-            ],
-            annotations: [
-                { x: '-2.8', y: '3.4', text: 'slope at x = {a}: {3a^2 - 3:2}', color: 'blue', size: 'normal', anchor: 'right' },
             ],
         }),
     },

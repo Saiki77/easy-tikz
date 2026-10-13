@@ -1,13 +1,17 @@
 {
     "name": "easy-tikz",
-    "version": "4.0.0",
+    "version": "4.1.0",
     "description": "Visually design TikZ and pgfplots graphs with a live SVG preview.",
     "main": "main.js",
     "scripts": {
         "dev": "node esbuild.config.mjs",
         "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production && node scripts/build-css.mjs",
         "version": "node version-bump.mjs && git add manifest.json versions.json CHANGELOG.md",
-        "test": "node scripts/run-tests.mjs"
+        "test": "node scripts/run-tests.mjs",
+        "media:smoke": "node scripts/media/smoke.mjs",
+        "media:guides": "node scripts/media/build-guides.mjs",
+        "media:promo": "node scripts/media/build-promo.mjs",
+        "media:video": "node scripts/media/build-video.mjs"
     },
     "keywords": [
         "obsidian",

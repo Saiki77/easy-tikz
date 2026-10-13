@@ -105,9 +105,11 @@ export interface LayerCardActions extends CardActions {
     /**
      * Reveal an item this card just added (Mark corners, Find optimum, Add
      * feasible region, Add function): expand its card, scroll it into view
-     * and focus `field`, or its first input when no field is given.
+     * and focus `field`, or its first input when no field is given. With
+     * `selectText` that part of the field's text is selected, so typing
+     * replaces it (the sample objective of Find optimum).
      */
-    revealAdded?(item: object, field?: string): void;
+    revealAdded?(item: object, field?: string, selectText?: string): void;
 }
 
 export function createLayerCard(parent: HTMLElement, item: LayerItem, host: PanelHost, actions: LayerCardActions): LayerCardHandle {
@@ -373,9 +375,9 @@ abstract class BaseCard implements LayerCardHandle {
      * of on a button that may hide itself. Not part of structural(): renames
      * and other commits keep focus where it is.
      */
-    protected structuralAdd(added: object, field?: string): void {
+    protected structuralAdd(added: object, field?: string, selectText?: string): void {
         this.structural();
-        if (!this.destroyed && this.actions.revealAdded) this.actions.revealAdded(added, field);
+        if (!this.destroyed && this.actions.revealAdded) this.actions.revealAdded(added, field, selectText);
     }
 
     protected settingsList<T>(key: string): T[] {
@@ -1142,8 +1144,8 @@ class RegionCard extends ToolCard<RegionTool> {
         p.label = '({x:2}, {y:2})';
         p.size = 'large';
         this.insertTool(p, 'after');
-        // The placeholder objective is what the user edits next.
-        this.structuralAdd(p, 'objective');
+        // The sample objective is what the user edits next: it is selected, so typing replaces it.
+        this.structuralAdd(p, 'objective', p.objective);
     }
 
     protected syncState(): void {

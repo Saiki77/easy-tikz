@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Easy TikZ 4: LaTeX export</title>
+<link rel="stylesheet" href="promo.css">
+<style>
+    /* Left: the preview in Obsidian. Right: the PDF pdflatex made from the code in the Code tab
+       (shots/export-lp.png, compiled by build-promo.mjs). Below: that code, as the Code tab shows it. */
+    body.card main { grid-template-columns: 540px 1fr; column-gap: 44px; }
+    .visual .pic { width: 427px; height: 385px; }
+    .visual .code { width: 872px; height: 236px; }
+    /* The code goes on below the crop: fade it out instead of cutting a line in half. */
+    .visual .code::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 72px; background: linear-gradient(rgba(255, 255, 255, 0), #ffffff 88%); }
+    .visual .tile { gap: 10px; }
+    .frame.pdf { padding: 14px 10px 6px 14px; }
+</style>
+</head>
+<body class="card" data-index="5" data-width="1600" data-height="1000" data-note="PDF compiled by pdflatex from the exported code">
+    <main>
+        <section class="copy">
+            <h1><span>Exports</span><span class="accent">to LaTeX.</span></h1>
+            <p class="lede">The Code tab holds a complete standalone document for pdflatex. Shapes, colours and labels in the PDF come from the same scene as the preview.</p>
+            <div class="pill">Copy TikZ · Standalone document</div>
+        </section>
+        <section class="visual">
+            <div class="row">
+                <div class="tile">
+                    <div class="cap">Preview in Obsidian</div>
+                    <div class="shot is-small pic" data-shot="lp-editor" data-rect="preview" data-fit="contain"></div>
+                </div>
+                <div class="tile">
+                    <div class="cap">PDF from pdflatex</div>
+                    <div class="frame is-small pic pdf"><img src="shots/export-lp.png" alt=""></div>
+                </div>
+            </div>
+            <div class="shot is-small code" data-shot="lp-code" data-rect="code" data-pad="0,0,0,-600" data-fit="cover" data-anchor="0,0"></div>
+        </section>
+    </main>
+    <script src="shots/meta.js"></script>
+    <script src="promo.js"></script>
+</body>
+</html>

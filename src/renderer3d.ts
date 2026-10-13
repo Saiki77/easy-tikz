@@ -1,6 +1,6 @@
 import { RendererConfig, Function3DParameters, MarkerSize, AnnotationSize } from './types';
 import { LABEL_LOCALS, MathContext, labelDisplayText } from './mathcontext';
-import { ArrowHeads, Scene3D, SceneIssue, computeScene3D } from './scene';
+import { ArrowHeads, Scene3D, SceneIssue, computeScene3D, edgeLabelSide3D } from './scene';
 import { COLOR_MAP, THICKNESS_MAP, resolveCssColor } from './colors';
 import { niceInterval, formatTick, stripLatex, hexToRgb, rgbStringToRgb } from './util';
 
@@ -21,12 +21,24 @@ export const MAX_PREVIEW_SAMPLES_3D = 120;
 /** Default target number of major ticks per 3D axis. */
 const DEFAULT_TARGET_TICKS = 5;
 
+/** Tick marks: length of a mark, distance of its label from the axis, and the label's font size (px). */
+const TICK_LENGTH = 6;
+const TICK_LABEL_OFFSET = 14;
+const TICK_FONT_SIZE = 10;
+/** The box a tick label needs, to tell when two would overlap: px per character, height, and air on each side. */
+const TICK_CHAR_WIDTH = 6;
+const TICK_LABEL_HEIGHT = 11;
+const TICK_LABEL_GAP = 3.5;
+
 /**
  * Planes are split into PLANE_CELLS x PLANE_CELLS cells that are depth
  * sorted together with the surface quads, so a surface visibly pokes through
  * a cutting plane instead of the whole plane being painted on top of it.
+ * The cut between plane and surface is a staircase of these cells: 48 per
+ * side keeps its steps at about 2 % of the plane (24 gave steps that showed
+ * in every screenshot), for about 4 ms per frame on the example chart.
  */
-const PLANE_CELLS = 24;
+const PLANE_CELLS = 48;
 
 /** Marker radius in px per points-tool size (same sizes as the 2D preview). */
 const MARKER_RADIUS: Record<MarkerSize, number> = { small: 3, normal: 4, large: 5.5 };
@@ -92,6 +104,17 @@ interface TickEdge {
     /** Unit vector in screen space pointing away from the box centroid. */
     outwardX: number;
     outwardY: number;
+}
+
+/** One tick of an axis in screen space. `text` is null when the label would overlap another one. */
+interface TickMark {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    labelX: number;
+    labelY: number;
+    text: string | null;
 }
 
 interface ColorInfo {
@@ -1081,7 +1104,9 @@ export class SVG3DRenderer {
             let align: TextMark['align'] = 'middle';
             let dx = 0;
             let dy = 4;
-            switch (a.anchor) {
+            // A centred label on an edge of the box would have the edge run through its text: it steps aside.
+            const side = !a.anchor || a.anchor === 'center' ? this.edgeSide(x, y, z) : null;
+            switch (side || a.anchor) {
                 case 'above': dy = -6; break;
                 case 'below': dy = 14; break;
                 case 'left': align = 'end'; dx = -6; break;
@@ -1097,6 +1122,22 @@ export class SVG3DRenderer {
                 align,
             });
         });
+    }
+
+    /** The side a centred label takes at a point on an edge or corner of the box (edgeLabelSide3D), else null. */
+    private edgeSide(x: number, y: number, z: number): 'left' | 'right' | 'above' | 'below' | null {
+        const cfg = this.requireConfig();
+        // Screen vectors (right, up) of one data unit per axis: the camera of `project`.
+        const fx = this.xNormFactor;
+        const fy = this.yNormFactor;
+        const fz = this.zNormFactor;
+        return edgeLabelSide3D(
+            [x, y, z],
+            { xmin: cfg.xmin, xmax: cfg.xmax, ymin: cfg.ymin, ymax: cfg.ymax, zmin: cfg.zmin, zmax: cfg.zmax },
+            [this.cosA * fx, this.sinA * this.sinE * fx],
+            [-this.sinA * fy, this.cosA * this.sinE * fy],
+            [0, this.cosE * fz]
+        );
     }
 
     private project(x: number, y: number, z: number): { sx: number; sy: number; depth: number } {
@@ -1266,41 +1307,75 @@ export class SVG3DRenderer {
         }
     }
 
-    private drawTicksToSvg(group: SVGElement) {
-        if (this.xTickEdge) this.drawTicksOnEdgeSvg(group, 'x', this.xTickEdge);
-        if (this.yTickEdge) this.drawTicksOnEdgeSvg(group, 'y', this.yTickEdge);
-        if (this.zTickEdge) this.drawTicksOnEdgeSvg(group, 'z', this.zTickEdge);
-    }
-
-    private drawTicksOnEdgeSvg(group: SVGElement, axis: 'x' | 'y' | 'z', edge: TickEdge) {
+    /**
+     * The ticks of the three axes for this frame: where each mark starts and
+     * ends, and its label. Labels have a fixed size, so on a short projected
+     * axis (a tall narrow box, a small picture) or at a corner two axes share
+     * they would print on top of each other: a label whose box overlaps one
+     * placed before it is left out (`text` is null) and its mark stays. The
+     * first and the last label of an axis are placed first, so thinning
+     * keeps the ends of the range.
+     */
+    private tickPlan(): TickMark[] {
         const cfg = this.requireConfig();
         const target = cfg.majorTickNum ? Math.max(2, Math.round(cfg.majorTickNum * 0.6)) : DEFAULT_TARGET_TICKS;
-        const [min, max] = axis === 'x' ? [cfg.xmin, cfg.xmax] : axis === 'y' ? [cfg.ymin, cfg.ymax] : [cfg.zmin, cfg.zmax];
-        const interval = niceInterval(max - min, target);
-        const start = Math.ceil(min / interval) * interval;
+        const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
+        const marks: TickMark[] = [];
+        const axes: Array<['x' | 'y' | 'z', TickEdge | null, number, number]> = [
+            ['x', this.xTickEdge, cfg.xmin, cfg.xmax],
+            ['y', this.yTickEdge, cfg.ymin, cfg.ymax],
+            ['z', this.zTickEdge, cfg.zmin, cfg.zmax],
+        ];
+        for (const [axis, edge, min, max] of axes) {
+            if (!edge) continue;
+            const interval = niceInterval(max - min, target);
+            const start = Math.ceil(min / interval) * interval;
+            const own: TickMark[] = [];
+            for (let v = start; v <= max + interval * 1e-6; v += interval) {
+                const p =
+                    axis === 'x' ? this.project(v, edge.fixedA, edge.fixedB) :
+                    axis === 'y' ? this.project(edge.fixedA, v, edge.fixedB) :
+                    this.project(edge.fixedA, edge.fixedB, v);
+                own.push({
+                    x1: p.sx,
+                    y1: p.sy,
+                    x2: p.sx + edge.outwardX * TICK_LENGTH,
+                    y2: p.sy + edge.outwardY * TICK_LENGTH,
+                    labelX: p.sx + edge.outwardX * TICK_LABEL_OFFSET,
+                    labelY: p.sy + edge.outwardY * TICK_LABEL_OFFSET,
+                    text: formatTick(v),
+                });
+            }
+            // Ends first, then from the first tick on.
+            const order = own.length > 2 ? [0, own.length - 1, ...own.slice(1, -1).map((_, i) => i + 1)] : own.map((_, i) => i);
+            for (const i of order) {
+                const mark = own[i];
+                const text = mark.text || '';
+                const halfW = (text.length * TICK_CHAR_WIDTH) / 2 + TICK_LABEL_GAP;
+                const halfH = TICK_LABEL_HEIGHT / 2;
+                const box = { x0: mark.labelX - halfW, y0: mark.labelY - halfH, x1: mark.labelX + halfW, y1: mark.labelY + halfH };
+                if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) mark.text = null;
+                else placed.push(box);
+            }
+            marks.push(...own);
+        }
+        return marks;
+    }
+
+    private drawTicksToSvg(group: SVGElement) {
         const tickColor = 'var(--text-muted)';
-        const TICK_LENGTH = 6;
-        const LABEL_OFFSET = 14;
-
-        for (let v = start; v <= max + interval * 1e-6; v += interval) {
-            const p =
-                axis === 'x' ? this.project(v, edge.fixedA, edge.fixedB) :
-                axis === 'y' ? this.project(edge.fixedA, v, edge.fixedB) :
-                this.project(edge.fixedA, edge.fixedB, v);
-
-            const markX2 = p.sx + edge.outwardX * TICK_LENGTH;
-            const markY2 = p.sy + edge.outwardY * TICK_LENGTH;
-            this.svgLine(group, p.sx, p.sy, markX2, markY2, tickColor, '1');
-
+        for (const mark of this.tickPlan()) {
+            this.svgLine(group, mark.x1, mark.y1, mark.x2, mark.y2, tickColor, '1');
+            if (mark.text === null) continue;
             const label = createSvg('text');
-            label.setAttribute('x', String(p.sx + edge.outwardX * LABEL_OFFSET));
-            label.setAttribute('y', String(p.sy + edge.outwardY * LABEL_OFFSET));
+            label.setAttribute('x', String(mark.labelX));
+            label.setAttribute('y', String(mark.labelY));
             label.setAttribute('text-anchor', 'middle');
             label.setAttribute('dominant-baseline', 'central');
             label.setAttribute('fill', tickColor);
-            label.setAttribute('font-size', '10');
+            label.setAttribute('font-size', String(TICK_FONT_SIZE));
             label.setAttribute('font-family', 'var(--font-text)');
-            label.textContent = formatTick(v);
+            label.textContent = mark.text;
             group.appendChild(label);
         }
     }
@@ -1506,42 +1581,19 @@ export class SVG3DRenderer {
     }
 
     private drawTicksToCanvas() {
-        if (this.xTickEdge) this.drawTicksOnEdgeCanvas('x', this.xTickEdge);
-        if (this.yTickEdge) this.drawTicksOnEdgeCanvas('y', this.yTickEdge);
-        if (this.zTickEdge) this.drawTicksOnEdgeCanvas('z', this.zTickEdge);
-    }
-
-    private drawTicksOnEdgeCanvas(axis: 'x' | 'y' | 'z', edge: TickEdge) {
-        const cfg = this.requireConfig();
         const ctx = this.ctx;
-        const target = cfg.majorTickNum ? Math.max(2, Math.round(cfg.majorTickNum * 0.6)) : DEFAULT_TARGET_TICKS;
-        const [min, max] = axis === 'x' ? [cfg.xmin, cfg.xmax] : axis === 'y' ? [cfg.ymin, cfg.ymax] : [cfg.zmin, cfg.zmax];
-        const interval = niceInterval(max - min, target);
-        const start = Math.ceil(min / interval) * interval;
-        const TICK_LENGTH = 6;
-        const LABEL_OFFSET = 14;
-
         ctx.strokeStyle = this.themeColors.textMuted;
         ctx.fillStyle = this.themeColors.textMuted;
         ctx.lineWidth = 1;
-        ctx.font = this.canvasFont(10);
+        ctx.font = this.canvasFont(TICK_FONT_SIZE);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-
-        for (let v = start; v <= max + interval * 1e-6; v += interval) {
-            const p =
-                axis === 'x' ? this.project(v, edge.fixedA, edge.fixedB) :
-                axis === 'y' ? this.project(edge.fixedA, v, edge.fixedB) :
-                this.project(edge.fixedA, edge.fixedB, v);
+        for (const mark of this.tickPlan()) {
             ctx.beginPath();
-            ctx.moveTo(p.sx, p.sy);
-            ctx.lineTo(p.sx + edge.outwardX * TICK_LENGTH, p.sy + edge.outwardY * TICK_LENGTH);
+            ctx.moveTo(mark.x1, mark.y1);
+            ctx.lineTo(mark.x2, mark.y2);
             ctx.stroke();
-            ctx.fillText(
-                formatTick(v),
-                p.sx + edge.outwardX * LABEL_OFFSET,
-                p.sy + edge.outwardY * LABEL_OFFSET
-            );
+            if (mark.text !== null) ctx.fillText(mark.text, mark.labelX, mark.labelY);
         }
     }
 

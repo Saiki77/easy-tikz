@@ -24,6 +24,7 @@ import {
     SceneIssue,
     SceneItem2D,
     StrokePrim,
+    TEXT_GAP_PT,
     TextAnchor,
     TextPrim,
     computeScene2D,
@@ -145,19 +146,20 @@ type HAnchor = 'start' | 'middle' | 'end';
 type VAnchor = 'above' | 'middle' | 'below';
 
 /**
- * Where a text sits relative to its anchor point: offset in pt (TikZ's
- * inner sep between the point and the text) plus text alignment.
+ * How a text is aligned on its anchor point, per side. The gap between the
+ * point and the text (TikZ's inner sep, in pt) is TEXT_GAP_PT of the scene:
+ * the label placer measures with the same numbers.
  */
-const TEXT_PLACEMENT: Record<TextAnchor, { dx: number; dy: number; h: HAnchor; v: VAnchor }> = {
-    center: { dx: 0, dy: 0, h: 'middle', v: 'middle' },
-    above: { dx: 0, dy: -3, h: 'middle', v: 'above' },
-    below: { dx: 0, dy: 3, h: 'middle', v: 'below' },
-    left: { dx: -4.5, dy: 0, h: 'end', v: 'middle' },
-    right: { dx: 4.5, dy: 0, h: 'start', v: 'middle' },
-    'above right': { dx: 3.75, dy: -3, h: 'start', v: 'above' },
-    'below left': { dx: -3.75, dy: 3, h: 'end', v: 'below' },
-    'above left': { dx: -3.75, dy: -3, h: 'end', v: 'above' },
-    'below right': { dx: 3.75, dy: 3, h: 'start', v: 'below' },
+const TEXT_ALIGN: Record<TextAnchor, { h: HAnchor; v: VAnchor }> = {
+    center: { h: 'middle', v: 'middle' },
+    above: { h: 'middle', v: 'above' },
+    below: { h: 'middle', v: 'below' },
+    left: { h: 'end', v: 'middle' },
+    right: { h: 'start', v: 'middle' },
+    'above right': { h: 'start', v: 'above' },
+    'below left': { h: 'end', v: 'below' },
+    'above left': { h: 'end', v: 'above' },
+    'below right': { h: 'start', v: 'below' },
 };
 
 /** Plot padding in viewBox units. */
@@ -335,6 +337,14 @@ export class SVGRenderer {
     layout: RenderLayout | null = null;
     /** CONTRACT (v4, drag to edit): scene items and function curves of the last render(), null before the first. */
     drawn: DrawnScene | null = null;
+    /**
+     * Set by render() when the drawing has `$...$` labels typeset by MathJax
+     * (null otherwise). MathJax styles the glyphs of a new label only after
+     * the pass, so its first box can be too small: the promise resolves true
+     * when that happened and drawing the chart again now gives the label
+     * its real size, false when nothing needs a redraw.
+     */
+    mathSettled: Promise<boolean> | null = null;
 
     constructor(config: RendererConfig, opts?: SVGRendererOptions) {
         this.config = config;
@@ -430,7 +440,7 @@ export class SVGRenderer {
         this.drawAnnotations(svg, items);
         this.drawLegend(svg, legend);
         this.drawTitle(svg);
-        if (this.usedMath) flushMathRenders();
+        this.mathSettled = this.usedMath ? flushMathRenders() : null;
         return svg;
     }
 
@@ -639,6 +649,9 @@ export class SVGRenderer {
                 cache: this.cache,
                 // The exported figure's sizes, so preview and PDF pick the same label sides.
                 labelMetrics: labelMetricsFor(cfg.paperWidthCm ?? 10, cfg.paperHeightCm ?? 10),
+                // Draft frames are the frames of a slider or drag gesture: labels hold their spots there.
+                // The full frame that follows places them afresh, as the export does.
+                keepLabels: this.quality === 'draft' && !!this.cache,
             });
             if (this.cache) lastGoodScene.set(this.cache, scene);
         } catch (e) {
@@ -830,10 +843,11 @@ export class SVGRenderer {
                 fo.appendChild(el);
                 let outer: SVGElement = fo;
                 if (o.halo) {
-                    // A stroke halo cannot reach into HTML, so math labels on fills get a soft backdrop.
+                    // A stroke halo cannot reach into HTML, so math labels on fills get a soft backdrop:
+                    // as light as the white box the export puts behind such a label (fill opacity 0.7).
                     outer = this.el('g');
-                    const padX = 0.17 * fs;
-                    const padY = 0.08 * fs;
+                    const padX = 0.12 * fs;
+                    const padY = 0.04 * fs;
                     outer.appendChild(
                         this.el('rect', {
                             x: num(fx - padX),
@@ -842,7 +856,7 @@ export class SVGRenderer {
                             height: num(h + 2 * padY),
                             rx: '3',
                             fill: BACKGROUND,
-                            'fill-opacity': '0.8',
+                            'fill-opacity': '0.7',
                         })
                     );
                     outer.appendChild(fo);
@@ -878,7 +892,11 @@ export class SVGRenderer {
         return { el: t, width: plain.length * fs * CHAR_WIDTH_EM, height: fs * 1.2 };
     }
 
-    /** Draw a text placed beside math point (x, y) per a TikZ-style anchor. */
+    /**
+     * Draw a text placed beside math point (x, y) per a TikZ-style anchor.
+     * `offset` moves it further, in pt of the figure (x right, y up): the
+     * label placer's shift for a text that has no room right beside its point.
+     */
     private drawPlaced(
         parent: SVGElement,
         text: string,
@@ -886,10 +904,15 @@ export class SVGRenderer {
         y: number,
         anchor: TextPrim['anchor'] | undefined,
         size: AnnotationSize | undefined,
-        o: { color: string; halo: boolean; weight?: string; attrs?: Record<string, string> }
+        o: { color: string; halo: boolean; weight?: string; attrs?: Record<string, string>; offset?: Pt }
     ): DrawnLabel | null {
-        const place = TEXT_PLACEMENT[anchor || 'center'] || TEXT_PLACEMENT.center;
-        return this.drawLabel(parent, text, this.sx(x) + place.dx * this.ptPx, this.sy(y) + place.dy * this.ptPx, {
+        const side = anchor && TEXT_ALIGN[anchor] ? anchor : 'center';
+        const place = TEXT_ALIGN[side];
+        const gap = TEXT_GAP_PT[side];
+        const dx = gap.x + (o.offset ? o.offset.x : 0);
+        const dy = gap.y + (o.offset ? o.offset.y : 0);
+        // Screen y points down.
+        return this.drawLabel(parent, text, this.sx(x) + dx * this.ptPx, this.sy(y) - dy * this.ptPx, {
             color: o.color,
             fontSize: this.fontPx(FONT_PT[size || 'normal'] || FONT_PT.normal),
             hAnchor: place.h,
@@ -1296,6 +1319,7 @@ export class SVGRenderer {
                     color: bold ? this.boldInk(t.color) : this.css(t.color),
                     halo: !!t.halo,
                     weight: bold ? '600' : undefined,
+                    offset: finitePt(t.offset) ? t.offset : undefined,
                 });
             }
         }

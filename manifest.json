@@ -1,9 +1,9 @@
 {
 	"id": "easy-tikz",
 	"name": "Easy TikZ",
-	"version": "4.0.0",
+	"version": "4.1.0",
 	"minAppVersion": "1.13.0",
-	"description": "Visually design TikZ and pgfplots graphs with a live SVG preview. Supports 2D functions, 3D surfaces, tangents, extrema, and one-click code insertion.",
+	"description": "Design TikZ and pgfplots charts visually: live sliders, shapes you edit by dragging, regions from inequalities, 2D and 3D. Charts render in your notes and export as LaTeX that compiles.",
 	"author": "Saiki77",
 	"authorUrl": "https://github.com/Saiki77",
 	"isDesktopOnly": true

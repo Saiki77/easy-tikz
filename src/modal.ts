@@ -4,6 +4,7 @@ import { issueText, mergeViewErrors } from './issues';
 import { Annotation, Function3DParameters, FunctionParameters, Parameter, RendererConfig, Tool } from './types';
 import { RANGE_DEFAULTS, RangeKey, SettingsManager } from './settings';
 import { RenderLayout, SVGRenderer } from './renderer';
+import { MATH_REDRAW_LIMIT } from './mathlabel';
 import { SVG3DRenderer } from './renderer3d';
 import { MathContext, renameIdentifier, renameToolReferences } from './mathcontext';
 import { SceneCache, SceneIssue } from './scene';
@@ -51,7 +52,7 @@ import { EditHistory, HistoryEntry, PatchIO, patchEntry } from './drag/history';
 import { makeSliderEdit } from './drag/numbers';
 import { DragHintHandle, DragLayerHandle, createDragHint, createDragLayer } from './ui/dragLayer';
 import { BuildPanelHandle, createBuildPanel } from './ui/buildPanel';
-import { createHelpPanel } from './ui/helpPanel';
+import { HelpPanelHandle, createHelpPanel } from './ui/helpPanel';
 import { SlidersDockHandle, createSlidersDock } from './ui/slidersDock';
 import { ChartPanelHandle, createChartPanel } from './ui/chartPanel';
 import { CodePanelHandle, createCodePanel } from './ui/codePanel';
@@ -412,6 +413,9 @@ export class TikzModal extends Modal implements PanelHost {
     private build: BuildPanelHandle | null = null;
     private chartPanel: ChartPanelHandle | null = null;
     private codePanel: CodePanelHandle | null = null;
+    private helpPanel: HelpPanelHandle | null = null;
+    /** Redraws in a row that a new `$...$` label asked for (see render2D). */
+    private mathRedraws = 0;
     private dock: SlidersDockHandle | null = null;
 
     private fields = new Set<FieldHandle>();
@@ -921,6 +925,9 @@ export class TikzModal extends Modal implements PanelHost {
         this.tabButtons.clear();
         this.tabPanels.clear();
         this.tabErrorLabels.clear();
+        // Help lets go of its lazy render jobs and of the Escape trap of its search field.
+        this.helpPanel?.destroy();
+        this.helpPanel = null;
         this.build = this.chartPanel = this.codePanel = this.dock = null;
         this.renderer3d = null;
         this.chartMode = null;
@@ -1027,6 +1034,8 @@ export class TikzModal extends Modal implements PanelHost {
 
         const panel = (id: TabId) => this.tabPanels.get(id) as HTMLElement;
         this.build = createBuildPanel(panel('build'), this, {
+            // Until onOpen has finished: the Start a chart field takes the focus of a new, empty editor.
+            opening: () => !this.ready,
             onErrorsChange: () => this.updateTabDots(),
             // The default view cuts off most first formulas: fit it once, unless the user already set ranges.
             onStartAdded: () => {
@@ -1042,7 +1051,7 @@ export class TikzModal extends Modal implements PanelHost {
             isVisible: () => this.activeTab === 'code',
             copy: (text, button) => void this.copyText(text, button),
         });
-        createHelpPanel(panel('help'), this);
+        this.helpPanel = createHelpPanel(panel('help'), this);
     }
 
     private syncHeader() {
@@ -1318,6 +1327,14 @@ export class TikzModal extends Modal implements PanelHost {
         else chart.appendChild(svg);
         this.chartSvg = svg;
         this.layout = renderer.layout;
+        // A new `$...$` label is measured before MathJax has styled it: draw once more when it has.
+        void renderer.mathSettled?.then((redraw) => {
+            if (!redraw) this.mathRedraws = 0;
+            else if (this.isOpen && this.chartSvg === svg && this.mathRedraws < MATH_REDRAW_LIMIT) {
+                this.mathRedraws++;
+                this.scheduleUpdate();
+            }
+        });
         this.afterRender2D(renderer.drawn);
         return quality === 'full' ? this.withViewErrors(renderer.issues ?? [], math) : [];
     }
@@ -1475,7 +1492,10 @@ export class TikzModal extends Modal implements PanelHost {
         // the drag state is gone and change nothing.
         chart.addEventListener('lostpointercapture', (e) => this.onLostCapture(e));
         // Focus leaving the chart (into a card input, the dock) ends a keyboard nudge session at once.
-        chart.addEventListener('focusout', () => this.flushKeySession());
+        chart.addEventListener('focusout', () => {
+            this.flushKeySession();
+            chart.removeClass('is-pointer-focus');
+        });
         chart.addEventListener('pointerleave', () => {
             this.lastPointer = null;
             if (this.drag) return;
@@ -1488,7 +1508,12 @@ export class TikzModal extends Modal implements PanelHost {
         });
         chart.addEventListener('dblclick', (e) => this.onDoubleClick(e));
         chart.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
-        chart.addEventListener('keydown', (e) => this.onPreviewKey(e));
+        chart.addEventListener('keydown', (e) => {
+            // The keyboard takes over a preview that was focused by a press: its focus ring shows again.
+            // Shift, Alt and the like only modify a drag, so they do not count.
+            if (!['Shift', 'Alt', 'Control', 'Meta'].includes(e.key)) chart.removeClass('is-pointer-focus');
+            this.onPreviewKey(e);
+        });
     }
 
     /** Index into settings 'annotations' of the label under `target`, or null. */
@@ -1557,6 +1582,10 @@ export class TikzModal extends Modal implements PanelHost {
         if (this.drag && (this.drag.kind === 'press' || this.drag.kind === 'object')) return;
         this.flushKeySession();
         this.readMods(e);
+        // A press focuses the preview for the keys that follow, without the keyboard focus ring: the
+        // browser would draw it after any key press before this one (Shift held for a Shift-drag,
+        // Enter in a field), since the focus is set by script.
+        chart.addClass('is-pointer-focus');
         chart.focus({ preventScroll: true });
         this.pendingClick = null;
         if (this.is3D()) {
@@ -2373,8 +2402,9 @@ export class TikzModal extends Modal implements PanelHost {
             session,
             lastX: e.clientX,
             lastY: e.clientY,
-            // Escape cancels the drag (restores every text and slider) instead of closing the editor.
-            releaseEscape: trapEscape(this, () => this.cancelObjectDrag()),
+            // Escape cancels the drag (restores every text and slider) instead of closing the editor,
+            // also while Shift or Alt is still held for the gesture.
+            releaseEscape: trapEscape(this, () => this.cancelObjectDrag(), true),
             mods,
             cursor,
             offset,

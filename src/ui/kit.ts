@@ -155,21 +155,25 @@ function sentenceCase(s: string): string {
  * function. Obsidian walks a scope's handlers in registration order and the
  * modal's own Escape handler comes first, so a child scope is pushed on the
  * keymap: it sees Escape first and hands every other key to its parent.
+ * `anyModifier` also catches Escape while Shift or Alt is held (a drag in
+ * the preview holds them: Shift turns, Alt switches snapping off).
  */
-export function trapEscape(keys: KeyContext, onEscape: () => void): () => void {
+export function trapEscape(keys: KeyContext, onEscape: () => void, anyModifier = false): () => void {
     const handler = () => {
         onEscape();
         return false;
     };
+    // null = whatever modifiers are held (Obsidian's Scope API).
+    const modifiers = anyModifier ? null : [];
     const keymap = keys.app.keymap;
     if (keymap) {
         const scope = new Scope(keys.scope);
-        scope.register([], 'Escape', handler);
+        scope.register(modifiers, 'Escape', handler);
         keymap.pushScope(scope);
         return () => keymap.popScope(scope);
     }
     // Hosts without a keymap (test shims) dispatch to the newest handler first.
-    const registered = keys.scope.register([], 'Escape', handler);
+    const registered = keys.scope.register(modifiers, 'Escape', handler);
     return () => keys.scope.unregister(registered);
 }
 
