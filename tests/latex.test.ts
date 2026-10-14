@@ -1,5 +1,6 @@
 /*
- * Compiles exported TikZ with pdflatex: every example, one 3.x block per
+ * Compiles exported TikZ with pdflatex: every example, the finished chart
+ * of every guide, the chart of the What's new popup, one 3.x block per
  * legacy tool type, and stress cases (steep functions, awkward label text,
  * a patterned region with a hole, parametric, polar, 3D surfaces at the
  * memory budget, surfaces cut at planes, turned cameras, extreme 3D
@@ -16,6 +17,7 @@ import { test, assert } from './_lib';
 import { SettingsManager } from '../src/settings';
 import { EXAMPLES } from '../src/migrate';
 import { whatsNewChart } from '../src/whatsnew';
+import { GUIDES } from '../src/guides';
 import { Function3DParameters, FunctionParameters } from '../src/types';
 
 const TIMEOUT_MS = 30000;
@@ -453,6 +455,8 @@ if (!hasLatex) {
     for (const ex of EXAMPLES) cases.push({ name: `example-${ex.id}`, data: ex.data });
     // The live chart of the "What's new" popup, which Try an example opens in the editor.
     cases.push({ name: 'whats-new', data: whatsNewChart() });
+    // The finished chart of every guide: the block its page on GitHub offers to paste.
+    for (const guide of GUIDES) cases.push({ name: `guide-${guide.id}`, data: guide.chart });
     for (const [k, data] of Object.entries(LEGACY_2D)) cases.push({ name: `legacy-${k}`, data });
     for (const [k, data] of Object.entries(LEGACY_3D)) cases.push({ name: `legacy-${k}`, data });
     for (const [k, data] of Object.entries(STRESS)) cases.push({ name: `stress-${k}`, data });

@@ -2,7 +2,7 @@
 
 # Easy TikZ guides
 
-20 step-by-step guides (142 steps) for Easy TikZ 4. Every picture is a screenshot of the plugin running in Obsidian, and every guide ends with its finished chart as a block you can paste into a note.
+24 step-by-step guides (171 steps) for Easy TikZ 4. Every picture is a screenshot of the plugin running in Obsidian, and every guide ends with its finished chart as a block you can paste into a note.
 
 The same guides are in the editor: open the Help tab. There each step shows a live chart and has a button that loads the step into the editor.
 
@@ -21,6 +21,9 @@ The same guides are in the editor: open the Help tab. There each step shows a li
 | <a href="sliders.md"><img src="img/sliders-card.png" alt="Finished chart of the guide: Sliders that move the picture" width="260"></a> | **[Sliders that move the picture](sliders.md)**<br>Turn a letter in a formula into a slider, set its range, play it and print its value in the chart.<br>Core · 6 min · 7 steps |
 | <a href="tangents-extrema.md"><img src="img/tangents-extrema-card.png" alt="Finished chart of the guide: Tangents and extrema" width="260"></a> | **[Tangents and extrema](tangents-extrema.md)**<br>Mark the turning points of a function, add a tangent, slide it along the curve and label its slope.<br>Core · 7 min · 7 steps |
 | <a href="parametric-polar.md"><img src="img/parametric-polar-card.png" alt="Finished chart of the guide: Parametric and polar curves" width="260"></a> | **[Parametric and polar curves](parametric-polar.md)**<br>Draw a curve from x(t) and y(t), then switch a chart to polar and grow a rose from r(θ).<br>Core · 7 min · 8 steps |
+| <a href="animate-play.md"><img src="img/animate-play-card.png" alt="Finished chart of the guide: Animate a chart with play" width="260"></a> | **[Animate a chart with play](animate-play.md)**<br>A point runs around the unit circle while the sine curve draws itself behind it: one slider in points, a domain, a path and the title, then press play.<br>Core · 8 min · 7 steps |
+| <a href="secant-tangent.md"><img src="img/secant-tangent-card.png" alt="Finished chart of the guide: From secant to tangent" width="260"></a> | **[From secant to tangent](secant-tangent.md)**<br>Draw the secant through two points of a curve, shrink their distance h with a slider and watch its slope approach the slope of the tangent.<br>Core · 9 min · 8 steps |
+| <a href="area-accumulation.md"><img src="img/area-accumulation-card.png" alt="Finished chart of the guide: An area that grows with a slider" width="260"></a> | **[An area that grows with a slider](area-accumulation.md)**<br>Shade the area under a curve from 0 to a slider b, print its size, and draw the function that adds it up, so the height of one curve shows the area under the other.<br>Core · 8 min · 7 steps |
 
 ## Regions and optimisation
 
@@ -40,6 +43,7 @@ The same guides are in the editor: open the Help tab. There each step shows a li
 | --- | --- |
 | <a href="points-labels.md"><img src="img/points-labels-card.png" alt="Finished chart of the guide: Points, intersections and live labels" width="260"></a> | **[Points, intersections and live labels](points-labels.md)**<br>Mark points from a list, find where two curves cross, and print values that update when a slider moves.<br>Core · 10 min · 7 steps |
 | <a href="arrows-braces.md"><img src="img/arrows-braces-card.png" alt="Finished chart of the guide: Segments, arrows and braces" width="260"></a> | **[Segments, arrows and braces](arrows-braces.md)**<br>Draw a slope triangle on a line: a polyline for run and rise, two braces with labels and an arrow that points at the line.<br>Core · 10 min · 7 steps |
+| <a href="computed-values.md"><img src="img/computed-values-card.png" alt="Finished chart of the guide: Calculate with computed points" width="260"></a> | **[Calculate with computed points](computed-values.md)**<br>Crossing points publish their coordinates and their count: use them in the title, in a new point and in an area formula, and see what they do while a slider plays.<br>Core · 9 min · 7 steps |
 
 ## 3D
 

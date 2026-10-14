@@ -361,7 +361,7 @@ const POINTS_LABELS: Guide = {
             tip: 'Every points card publishes its results: `P2_x`, `P2_y` for the first point, `P2_x2`, `P2_y2` for the second, and `P2_n` for the number of points. Any field can use them.',
         },
     ],
-    next: ['arrows-braces', 'areas-between', 'supply-demand'],
+    next: ['computed-values', 'arrows-braces', 'areas-between', 'supply-demand'],
 };
 
 const ARROWS_BRACES: Guide = {

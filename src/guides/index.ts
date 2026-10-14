@@ -8,6 +8,7 @@ import { ChartData, Guide, GuideCategory, GuideLevel } from './types';
 import { BASICS_GUIDES } from './basics';
 import { OPTIMISATION_GUIDES } from './optimisation';
 import { MORE_GUIDES } from './more';
+import { DYNAMIC_GUIDES } from './dynamic';
 
 /** Categories in display order (the order of the GuideCategory union). */
 export const GUIDE_CATEGORIES: readonly GuideCategory[] = [
@@ -37,7 +38,7 @@ function categoryRank(category: string): number {
  * Every guide, in display order: by category (GUIDE_CATEGORIES), and inside
  * a category in the order the data files list them.
  */
-export const GUIDES: Guide[] = [...BASICS_GUIDES, ...OPTIMISATION_GUIDES, ...MORE_GUIDES]
+export const GUIDES: Guide[] = [...BASICS_GUIDES, ...OPTIMISATION_GUIDES, ...MORE_GUIDES, ...DYNAMIC_GUIDES]
     .map((guide, index) => ({ guide, index }))
     .sort((a, b) => categoryRank(a.guide.category) - categoryRank(b.guide.category) || a.index - b.index)
     .map((entry) => entry.guide);

@@ -406,7 +406,7 @@ const SLIDERS: Guide = {
             shot: { frame: 'note', caption: 'The chart in a note with its slider strip.' },
         },
     ],
-    next: ['drag-to-edit', 'tangents-extrema', 'charts-in-notes'],
+    next: ['animate-play', 'tangents-extrema', 'drag-to-edit', 'charts-in-notes'],
 };
 
 // ------------------------------------------------------ 4. drag to edit
@@ -669,7 +669,7 @@ const TANGENTS_EXTREMA: Guide = {
             tip: 'The slope formula is typed by hand. For another function, replace `0.4 + cos(a)` with its derivative at `a`.',
         },
     ],
-    next: ['tangent-area', 'points-labels', 'drag-to-edit'],
+    next: ['secant-tangent', 'tangent-area', 'points-labels', 'drag-to-edit'],
 };
 
 // --------------------------------------------- 6. parametric and polar

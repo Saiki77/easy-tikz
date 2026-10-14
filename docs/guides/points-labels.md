@@ -260,6 +260,7 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 
 ## Next guides
 
+- [Calculate with computed points](computed-values.md): Crossing points publish their coordinates and their count: use them in the title, in a new point and in an area formula, and see what they do while a slider plays.
 - [Segments, arrows and braces](arrows-braces.md): Draw a slope triangle on a line: a polyline for run and rise, two braces with labels and an arrow that points at the line.
 - [Shade the areas between two curves](areas-between.md): Two curves, the areas between them in two colours, and their crossing points as the limits of the shading.
 - [Draw a market with surplus areas](supply-demand.md): Demand and supply, their equilibrium with guide lines, and consumer and producer surplus that follow a slider.

@@ -29,6 +29,7 @@ import {
 import { BASICS_GUIDES } from '../src/guides/basics';
 import { OPTIMISATION_GUIDES } from '../src/guides/optimisation';
 import { MORE_GUIDES } from '../src/guides/more';
+import { DYNAMIC_GUIDES } from '../src/guides/dynamic';
 import { issueText } from '../src/issues';
 import { FunctionKind, LABEL_LOCALS, MathContext, ValidateKind } from '../src/mathcontext';
 import { SCHEMA_VERSION, migrateSettings } from '../src/migrate';
@@ -42,8 +43,9 @@ const DOCUMENTED: Record<string, string[]> = {
     basics: ['first-chart', 'formulas', 'sliders', 'drag-to-edit', 'tangents-extrema', 'parametric-polar'],
     optimisation: ['regions', 'areas-between', 'tangent-area', 'linear-program', 'integer-program', 'level-curves', 'supply-demand'],
     more: ['points-labels', 'arrows-braces', 'surfaces-3d', 'charts-in-notes', 'export-latex', 'from-3x', 'shortcuts'],
+    dynamic: ['animate-play', 'secant-tangent', 'area-accumulation', 'computed-values'],
 };
-const FILES: Record<string, Guide[]> = { basics: BASICS_GUIDES, optimisation: OPTIMISATION_GUIDES, more: MORE_GUIDES };
+const FILES: Record<string, Guide[]> = { basics: BASICS_GUIDES, optimisation: OPTIMISATION_GUIDES, more: MORE_GUIDES, dynamic: DYNAMIC_GUIDES };
 
 const EM_DASH = String.fromCharCode(0x2014);
 
@@ -225,7 +227,7 @@ test('guides: the documented ids exist, each in the file that owns it', () => {
         const have = FILES[file].map((g) => g.id);
         for (const id of ids) assert.ok(have.includes(id), `src/guides/${file}.ts has no guide '${id}' (it has: ${have.join(', ') || 'none'})`);
     }
-    assert.equal(GUIDES.length, BASICS_GUIDES.length + OPTIMISATION_GUIDES.length + MORE_GUIDES.length);
+    assert.equal(GUIDES.length, BASICS_GUIDES.length + OPTIMISATION_GUIDES.length + MORE_GUIDES.length + DYNAMIC_GUIDES.length);
 });
 
 test('guides: ids are unique kebab-case, GUIDES is in category order, guideById finds each', () => {
@@ -461,6 +463,175 @@ test('chartIssues: reports what the editor would, and nothing for a clean chart'
     });
     assert.ok(empty.some((line) => line.endsWith('(info)')), `an empty region is an info note: ${empty.join(' | ')}`);
     assert.equal(chartIssues({ ...base, dimension: true, zmin: '0', zmax: '4', functions3D: [{ name: 'f1', expression: 'x^2 + q', xDomain: '', yDomain: '', color: 'blue', wireframe: false, opacity: 0.8, samples: 20 }] }).length, 1);
+});
+
+test('guides: every chart exports a complete picture with finite numbers', () => {
+    const problems: string[] = [];
+    let checked = 0;
+    for (const guide of GUIDES) {
+        for (const { where, chart } of chartsOf(guide)) {
+            const { settings, math } = chartOf(chart);
+            let code = '';
+            try {
+                code = settings.generateTikzCode(math);
+            } catch (e) {
+                problems.push(`${where}: the export threw ${e instanceof Error ? e.message : String(e)}`);
+                continue;
+            }
+            checked++;
+            if (!code.includes('\\begin{tikzpicture}') || !code.includes('\\end{tikzpicture}')) problems.push(`${where}: no complete tikzpicture`);
+            const bad = /\b(NaN|Infinity|undefined)\b/.exec(code);
+            if (bad) problems.push(`${where}: the code contains ${bad[0]} near '${code.slice(Math.max(0, bad.index - 40), bad.index + 20)}'`);
+        }
+    }
+    assert.deepEqual(problems, [], problems.join('\n'));
+    assert.ok(checked >= GUIDES.length);
+});
+
+// ------------------------------------------- what the dynamic guides promise
+
+/** The chart of step `n` (1-based) of a guide, with slider values replaced by `values`. */
+function stepOf(id: string, n: number, values: Record<string, number> = {}): ChartData {
+    const guide = guideById(id);
+    if (!guide) throw new Error(`no guide '${id}'`);
+    const chart = clone(n === 0 ? guide.chart : stepChart(guide, n - 1));
+    if (!chart) throw new Error(`${id} has no chart at step ${n}`);
+    for (const p of (chart.parameters ?? []) as Parameter[]) if (p.name in values) p.value = values[p.name];
+    return chart;
+}
+
+/** What a 2D chart shows once its scene has published its values: the title, every text and marker, the derived names. */
+function shown(chart: ChartData): { title: string; texts: string[]; markers: Array<[number, number]>; derived: Record<string, number> } {
+    const { math, config } = chartOf(chart);
+    const scene = computeScene2D({
+        functions: config.functions || [],
+        tools: config.tools,
+        math,
+        view: { xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax },
+        grid: marchingGrid(config.width * 0.85, config.height * 0.8, 1, 'full'),
+        axisStyle: config.axisStyle,
+        polar: false,
+        labelMetrics: labelMetricsFor(config.paperWidthCm ?? 10, config.paperHeightCm ?? 10),
+    });
+    return {
+        title: math.formatTemplate(String(config.title ?? '')),
+        texts: scene.items.flatMap((item) => item.texts.map((t) => t.text)),
+        markers: scene.items.flatMap((item) => item.markers.map((m): [number, number] => [m.x, m.y])),
+        derived: scene.derived,
+    };
+}
+
+function hasMarker(markers: Array<[number, number]>, x: number, y: number, what: string): void {
+    assert.ok(markers.some(([mx, my]) => Math.abs(mx - x) < 1e-6 && Math.abs(my - y) < 1e-6), `${what}: no marker at (${x}, ${y}) in ${JSON.stringify(markers)}`);
+}
+
+test('animate-play: the points sit on the circle and the curve, and the title prints the angle', () => {
+    for (const a of [0.01, 1, 2, 3.14, 4, 6.28]) {
+        const s = shown(stepOf('animate-play', 7, { a }));
+        hasMarker(s.markers, Math.cos(a) - 1.5, Math.sin(a), `a = ${a}, point on the circle`);
+        hasMarker(s.markers, a, Math.sin(a), `a = ${a}, end of the curve`);
+        // On the unit circle around (-1.5, 0).
+        const r = Math.hypot(s.derived.P1_x + 1.5, s.derived.P1_y);
+        assert.ok(Math.abs(r - 1) < 1e-9, `a = ${a}: radius ${r}`);
+    }
+    assert.equal(shown(stepOf('animate-play', 7)).title, 'a = 4, sin(a) = -0.76');
+    // The slider range of step 6 is one turn and stays above 0, where the domain 0:a would be empty.
+    const a = (stepOf('animate-play', 6).parameters as Parameter[])[0];
+    assert.deepEqual([a.min, a.max, a.step], [0.01, 6.28, 0.01]);
+    assert.ok(a.min > 0 && Math.abs(a.max - 2 * Math.PI) < 0.01);
+});
+
+test('secant-tangent: the titles print the slopes the steps name, and the gap is h/10', () => {
+    const titles: Array<[number, string]> = [
+        [4, 'secant slope = 0.9'],
+        [5, 'secant slope 0.9, tangent slope 0.6'],
+        [6, 'secant slope 0.65, tangent slope 0.6'],
+        [7, 'secant slope 0.601, tangent slope 0.6'],
+        [8, 'secant slope 1.1, tangent slope 1'],
+    ];
+    for (const [step, title] of titles) assert.equal(shown(stepOf('secant-tangent', step)).title, title, `step ${step}`);
+    const two = shown(stepOf('secant-tangent', 2));
+    hasMarker(two.markers, 3, 0.9, 'A');
+    hasMarker(two.markers, 6, 3.6, 'B');
+    assert.deepEqual(two.texts, ['A', 'B']);
+    // Secant slope (2a + h)/10 for every a and h; the secant f2 passes through A and B.
+    for (const a of [0, 1.5, 3, 6]) {
+        for (const h of [0.01, 0.5, 1, 3]) {
+            const { math } = chartOf(stepOf('secant-tangent', 8, { a, h }));
+            const slope = math.value('(f1(a + h) - f1(a))/h');
+            assert.ok(Math.abs(slope - (2 * a + h) / 10) < 1e-9, `a = ${a}, h = ${h}: slope ${slope}`);
+            const f2 = math.functionInfo('f2');
+            if (!f2) throw new Error('no f2');
+            assert.ok(Math.abs(f2.fn(a) - (a * a) / 10) < 1e-9 && Math.abs(f2.fn(a + h) - ((a + h) * (a + h)) / 10) < 1e-9, `a = ${a}, h = ${h}: the secant misses A or B`);
+        }
+    }
+    // At h = 0 the quotient is 0/0: the title prints a question mark, as the tip says.
+    assert.match(shown(stepOf('secant-tangent', 8, { h: 0 })).title, /^secant slope \?, tangent slope 1$/);
+});
+
+test('area-accumulation: the region and the point print the same area, and it tends to 4', () => {
+    const at3 = shown(stepOf('area-accumulation', 6));
+    assert.ok(at3.texts.includes('A = 3.11') && at3.texts.includes('F(b) = 3.11'), at3.texts.join(' | '));
+    const at6 = shown(stepOf('area-accumulation', 0));
+    assert.ok(at6.texts.includes('A = 3.8') && at6.texts.includes('F(b) = 3.8'), at6.texts.join(' | '));
+    for (const b of [0.1, 1, 3, 6, 10]) {
+        const s = shown(stepOf('area-accumulation', 0, { b }));
+        const area = 4 - 4 * Math.exp(-b / 2);
+        hasMarker(s.markers, b, area, `b = ${b}`);
+        // A numeric integral of f1 from 0 to b agrees with the antiderivative the guide types.
+        const { math } = chartOf(stepOf('area-accumulation', 0, { b }));
+        const f1 = math.functionInfo('f1');
+        if (!f1) throw new Error('no f1');
+        const n = 2000;
+        let sum = 0;
+        for (let i = 0; i < n; i++) sum += f1.fn(((i + 0.5) * b) / n);
+        assert.ok(Math.abs((sum * b) / n - area) < 1e-5, `b = ${b}: integral ${(sum * b) / n}, F(b) = ${area}`);
+        assert.ok(area < 4);
+    }
+    // The tip's other pair: ln(1 + x) has the slope 1/(1 + x) and starts at 0.
+    const pair = stepOf('area-accumulation', 0);
+    (pair.functions as FunctionParameters[])[0].expression = '1/(1 + x)';
+    (pair.functions as FunctionParameters[])[1].expression = 'ln(1 + x)';
+    assert.deepEqual(chartIssues(pair), []);
+    const both = shown(pair).texts;
+    assert.ok(both.includes('A = 1.95') && both.includes('F(b) = 1.95'), both.join(' | '));
+});
+
+test('computed-values: count, midpoint and area follow c, and a missing crossing prints a question mark', () => {
+    const two = shown(stepOf('computed-values', 2));
+    assert.deepEqual(two.texts, ['(2, 1)', '(8, 4)']);
+    assert.equal(shown(stepOf('computed-values', 3)).title, 'crossing points: 2');
+    assert.equal(shown(stepOf('computed-values', 3, { c: -2.25 })).title, 'crossing points: 1');
+    assert.equal(shown(stepOf('computed-values', 3, { c: -3 })).title, 'crossing points: 0');
+    const four = shown(stepOf('computed-values', 4));
+    hasMarker(four.markers, 5, 2.5, 'M');
+    assert.ok(shown(stepOf('computed-values', 5)).texts.includes('A = 9'));
+    const six = shown(stepOf('computed-values', 6));
+    assert.equal(six.title, 'crossing points: 2, midpoint x = 5');
+    assert.ok(six.texts.includes('A = 6.17'), six.texts.join(' | '));
+    // Over the whole play range where the line cuts the parabola, M stays above x = 5 and the area is the integral.
+    for (let k = -20; k <= 5; k++) {
+        const c = k / 10;
+        const s = shown(stepOf('computed-values', 6, { c }));
+        assert.equal(s.derived.P1_n, 2, `c = ${c}`);
+        assert.ok(Math.abs(s.derived.P2_x - 5) < 1e-6, `c = ${c}: midpoint x ${s.derived.P2_x}`);
+        const d = 2 * Math.sqrt(9 + 4 * c);
+        assert.ok(Math.abs(s.derived.P1_x2 - s.derived.P1_x - d) < 1e-6, `c = ${c}: chord ${s.derived.P1_x2 - s.derived.P1_x}, expected ${d}`);
+    }
+    // Step 6 says the 5 holds only while the line cuts twice: from the touching line at c = -2.25 down, the title prints `?`.
+    for (const c of [-2.25, -2.3, -2.8, -3]) {
+        assert.match(shown(stepOf('computed-values', 6, { c })).title, /^crossing points: [01], midpoint x = \?$/, `c = ${c}`);
+    }
+    // Step 7: the line misses at c = -2.5, the value its type row asks for.
+    assert.deepEqual(stepOf('computed-values', 7).parameters, stepOf('computed-values', 6).parameters);
+    assert.deepEqual(guideById('computed-values')?.steps[6].type, [{ where: 'Sliders, c: value', text: '-2.5' }]);
+    const miss = shown(stepOf('computed-values', 7, { c: -2.5 }));
+    assert.equal(miss.title, 'crossing points: 0, midpoint x = ?');
+    assert.deepEqual(miss.markers, []);
+    assert.deepEqual(miss.texts, []);
+    // Every chip the status line shows then is an info note: nothing is an error.
+    const notes = chartIssues(stepOf('computed-values', 7, { c: -2.5 }));
+    assert.ok(notes.length > 0 && notes.every((line) => line.endsWith('(info)')), notes.join(' | '));
 });
 
 test('search: every word must occur, titles first, spelling variants fold', () => {
