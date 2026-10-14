@@ -45,7 +45,7 @@
 
 **New in 4.2**
 
-- **A "What's new" popup.** After you update from 3.x or an earlier 4.x, Easy TikZ shows once what version 4 brings, with a live chart to drag and play (the area between x^3 - 3x and its tangent) and buttons to try it in the editor or open the guides. A new install never shows it. Open it again with the command **Show what's new in version 4** or the link **What's new in version 4** in the Help tab, or switch it off with the setting **Show what's new after updates**.
+- **A "What's new" popup.** After you update from 3.x or an earlier 4.x, Easy TikZ shows once what version 4 brings, with a live chart whose slider you can drag or play (the area between x^3 - 3x and its tangent) and buttons to try it in the editor or open the guides. A new install never shows it. Open it again with the command **Show what's new in version 4** or the link **What's new in version 4** in the Help tab, or switch it off with the setting **Show what's new after updates**.
 - **Four guides on live calculations and sliders:** [Animate a chart with play](docs/guides/animate-play.md), [From secant to tangent](docs/guides/secant-tangent.md), [An area that grows with a slider](docs/guides/area-accumulation.md) and [Calculate with computed points](docs/guides/computed-values.md).
 
 Every picture and film on this page shows the plugin running in Obsidian, moved by real mouse and keyboard input. The graph paper, the notes and the arrows around the captures are added afterwards. The scripts that make them are in [`scripts/media`](scripts/media/README.md).

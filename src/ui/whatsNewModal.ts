@@ -106,7 +106,7 @@ export class WhatsNewModal extends Modal {
         const liveList = side.createDiv({ cls: ['etz-whatsnew-list', 'mod-live'] });
         for (const item of WHATS_NEW_LIVE) this.item(liveList, item);
 
-        // How the chart beside is made: five lines, all of them live.
+        // How the chart beside is made: six lines, all of them live.
         const recipe = side.createDiv({ cls: 'etz-whatsnew-recipe' });
         const recipeTitle = recipe.createDiv({ cls: 'etz-whatsnew-recipe-title', text: 'What the chart is made of' });
         recipeTitle.id = uniqueId('whatsnew-recipe');
