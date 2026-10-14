@@ -102,6 +102,13 @@ export interface PluginData {
      * multiplier feels consistent regardless of zoom level.
      */
     dragSensitivity2D: number;
+    /** Setting "Show what's new after updates" (default on). See src/whatsnew.ts. */
+    showWhatsNew: boolean;
+    /**
+     * Version of the "What's new" popup that was shown (WHATS_NEW_VERSION),
+     * or that a fresh install skipped. Absent until then.
+     */
+    whatsNewSeen?: string;
 }
 
 export const DEFAULT_PLUGIN_DATA: PluginData = {
@@ -110,4 +117,5 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     maxSamples3D: 80,
     renderTikzBlocks: false,
     dragSensitivity2D: 1.0,
+    showWhatsNew: true,
 };

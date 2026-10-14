@@ -1170,6 +1170,30 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         }
     });
 
+    // "What's new in version 4": the popup people who updated see once, to open again. Its buttons stay in this editor.
+    const plugin = host.plugin;
+    if (plugin && typeof plugin.showWhatsNew === 'function') {
+        const news = browseEl.createDiv({ cls: 'etz-help-news' });
+        textButton(news, {
+            text: "What's new in version 4",
+            icon: 'sparkles',
+            variant: 'link',
+            size: 'sm',
+            cls: 'etz-help-news-link',
+            onClick: () =>
+                plugin.showWhatsNew?.({
+                    tryExample: (chart) => {
+                        host.loadChart(chart);
+                        host.showTab('build');
+                    },
+                    openGuides: (guideId) => {
+                        host.showTab('help');
+                        if (!guideId || !showGuide(guideId)) showHome();
+                    },
+                }),
+        });
+    }
+
     // Jump links: the reference is the last category, a long scroll below the guide cards.
     const jump = browseEl.createEl('nav', { cls: 'etz-help-toc' });
     const jumpLabel = visuallyHidden(jump, 'Categories');

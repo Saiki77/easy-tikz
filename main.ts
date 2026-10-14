@@ -13,6 +13,8 @@ import { PluginHost } from './src/ui/host';
 import { issueText, mergeViewErrors } from './src/issues';
 import { cloneData, errorText, fitPixelScale } from './src/util';
 import { IconButtonHandle, LiveSliderHandle, iconButton, liveSlider, textButton, uniqueId, visuallyHidden } from './src/ui/kit';
+import { WhatsNewActions, WhatsNewModal } from './src/ui/whatsNewModal';
+import { WHATS_NEW_VERSION, shouldShowWhatsNew, whatsNewSeen } from './src/whatsnew';
 
 type FenceTag = 'easy-tikz' | 'tikz';
 type Align = 'left' | 'center' | 'right';
@@ -112,6 +114,9 @@ function showBlockError(el: HTMLElement, message: string) {
 
 export default class EasyTikzPlugin extends Plugin implements PluginHost {
     data: PluginData = { ...DEFAULT_PLUGIN_DATA };
+    /** The open "What's new" popup, closed when the plugin unloads. */
+    private whatsNew: WhatsNewModal | null = null;
+    private unloaded = false;
 
     async onload() {
         const stored = (await this.loadData()) as Partial<PluginData> | null;
@@ -153,7 +158,69 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             });
         }
 
+        this.addCommand({
+            id: 'show-whats-new',
+            name: "Show what's new in version 4",
+            callback: () => this.showWhatsNew(),
+        });
+
         this.addSettingTab(new EasyTikzSettingTab(this.app, this));
+
+        this.register(() => {
+            this.unloaded = true;
+            this.whatsNew?.close();
+        });
+
+        // "What's new" for people who updated (src/whatsnew.ts): stored data without a record of it.
+        if (!whatsNewSeen(stored, WHATS_NEW_VERSION)) {
+            if (shouldShowWhatsNew(stored, WHATS_NEW_VERSION, this.data.showWhatsNew !== false)) {
+                this.app.workspace.onLayoutReady(() => {
+                    if (!this.unloaded && !this.whatsNew) this.showWhatsNew();
+                });
+            } else {
+                // A fresh install, or the popup switched off: record it as seen, silently.
+                void this.markWhatsNewSeen();
+            }
+        }
+    }
+
+    /**
+     * Open the "What's new" popup. `actions` lets the editor's Help tab keep
+     * the popup's buttons in that editor; by default they open a new editor.
+     */
+    showWhatsNew(actions?: WhatsNewActions) {
+        this.whatsNew?.close();
+        const modal = new WhatsNewModal(this.app, {
+            actions: actions ?? {
+                tryExample: (chart) => {
+                    const editor = new TikzModal(this.app, this);
+                    editor.open();
+                    editor.loadChart(chart);
+                },
+                openGuides: (guideId) => {
+                    const editor = new TikzModal(this.app, this);
+                    editor.open();
+                    editor.openHelp(guideId);
+                },
+            },
+            // Seen as soon as it opens, so a crash or a quick close never shows it twice.
+            onShown: () => void this.markWhatsNewSeen(),
+            onClosed: () => {
+                if (this.whatsNew === modal) this.whatsNew = null;
+            },
+        });
+        this.whatsNew = modal;
+        modal.open();
+    }
+
+    private async markWhatsNewSeen() {
+        if (whatsNewSeen(this.data, WHATS_NEW_VERSION)) return;
+        this.data.whatsNewSeen = WHATS_NEW_VERSION;
+        try {
+            await this.saveSettings();
+        } catch {
+            // Not saved: the popup may show once more after the next start, nothing worse.
+        }
     }
 
     async saveUserTemplates(templates: UserTemplate[]) {
@@ -743,6 +810,13 @@ class EasyTikzSettingTab extends PluginSettingTab {
                     'Reload Obsidian after changing this for the registration to take effect.',
                 control: { type: 'toggle', key: 'renderTikzBlocks', defaultValue: false },
             },
+            {
+                name: "Show what's new after updates",
+                desc:
+                    'On by default. After an update that brings something new, a short popup shows what changed, once. ' +
+                    'The command "Show what\'s new in version 4" and the Help tab of the editor open it at any time.',
+                control: { type: 'toggle', key: 'showWhatsNew', defaultValue: true },
+            },
         ];
     }
 
@@ -757,6 +831,9 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 break;
             case 'renderTikzBlocks':
                 this.plugin.data.renderTikzBlocks = Boolean(value);
+                break;
+            case 'showWhatsNew':
+                this.plugin.data.showWhatsNew = Boolean(value);
                 break;
             case 'maxSamples3D':
                 this.plugin.data.maxSamples3D = Number(value);

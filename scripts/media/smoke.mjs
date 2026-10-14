@@ -6,16 +6,19 @@
 // plugin loads, the editor opens, every example and every guide chart
 // loads without an issue, the tabs work, drag to edit works with real
 // mouse events, a chart can be inserted into a note, edited from the note
-// and saved back, and nothing is logged to the console as an error.
+// and saved back, the "What's new" popup opens once for a user who updated
+// (and never for a fresh install), and nothing is logged to the console as
+// an error.
 //
 //   npm run media:smoke                 # plugin bundled from the current sources
 //   npm run media:smoke -- --root       # the main.js / styles.css in the repository root (after npm run build)
 //   npm run media:smoke -- --port 9350 --work /tmp/etz-smoke
 //
 // Prints one PASS / FAIL line per check and exits non-zero when a check failed.
+import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { PORTS, defaultWorkDir, importTs, launch } from './lib/obsidian.mjs';
+import { PLUGIN_ID, PORTS, defaultWorkDir, importTs, launch } from './lib/obsidian.mjs';
 
 const { values: args } = parseArgs({
     options: {
@@ -120,6 +123,60 @@ await check('guides bundle from src/guides/index.ts', async () => {
     return `${GUIDES.length} guides`;
 });
 const lp = EXAMPLES.find((e) => e.id === 'lp');
+let WHATS_NEW = null;
+await check('the "What\'s new" popup is defined in src/whatsnew.ts', async () => {
+    WHATS_NEW = await importTs('src/whatsnew.ts');
+    assert(typeof WHATS_NEW.WHATS_NEW_VERSION === 'string', 'WHATS_NEW_VERSION is missing');
+    return `version ${WHATS_NEW.WHATS_NEW_VERSION}`;
+});
+
+// ---------------------------------------------------------- what's new
+
+/** The plugin's data.json in the capture vault. */
+const dataFile = () => path.join(obs.vault, '.obsidian', 'plugins', PLUGIN_ID, 'data.json');
+const readData = () => (fs.existsSync(dataFile()) ? JSON.parse(fs.readFileSync(dataFile(), 'utf8')) : null);
+
+/** What the open "What's new" popups show (normally one), with the state of the live example. */
+const whatsNewState = () =>
+    obs.call(() => {
+        const modals = Array.from(document.querySelectorAll('.modal.etz-whatsnew'));
+        const m = modals[0];
+        if (!m) return { count: 0 };
+        const svg = m.querySelector('.etz-whatsnew-chart svg');
+        const texts = svg ? Array.from(svg.querySelectorAll('text, foreignObject')).map((t) => (t.textContent || '').trim()) : [];
+        const input = m.querySelector('.etz-whatsnew-strip input[type=range]');
+        const play = m.querySelector('.etz-whatsnew-play');
+        return {
+            count: modals.length,
+            title: (m.querySelector('.etz-whatsnew-title') || { textContent: '' }).textContent.trim(),
+            items: m.querySelectorAll('.etz-whatsnew-item').length,
+            blankIcons: Array.from(m.querySelectorAll('.etz-whatsnew-icon, .etz-btn-icon, .etz-whatsnew-play')).filter((el) => !el.querySelector('svg')).length,
+            slope: texts.find((t) => t.startsWith('slope')) || null,
+            area: texts.find((t) => t.startsWith('A =')) || null,
+            value: input ? Number(input.value) : null,
+            playing: play ? play.getAttribute('aria-pressed') === 'true' : null,
+        };
+    });
+
+/** Unload and load the plugin, as Obsidian does after an update, and give a popup time to open. */
+async function reloadPlugin() {
+    await obs.call(async (id) => {
+        await app.plugins.disablePlugin(id);
+        await app.plugins.enablePlugin(id);
+    }, PLUGIN_ID);
+    await obs.waitFor(() => obs.call((id) => !!app.plugins.plugins[id], PLUGIN_ID), { timeout: 10000, message: 'the plugin to load again' });
+    await obs.sleep(700);
+}
+
+async function clickWhatsNewButton(text) {
+    const ok = await obs.call((t) => {
+        const button = Array.from(document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-actions button')).find((b) => (b.textContent || '').trim() === t);
+        if (button) button.click();
+        return !!button;
+    }, text);
+    assert(ok, `the popup has no button "${text}"`);
+    await obs.waitFor(() => obs.call(() => !document.querySelector('.modal.etz-whatsnew')), { timeout: 5000, message: 'the popup to close' });
+}
 
 // ------------------------------------------------------------------ app
 
@@ -131,6 +188,14 @@ const started = await check('Obsidian starts and the plugin loads', async () => 
 
 if (started) {
     try {
+        await check('no "What\'s new" popup at the start (the toolkit\'s data marks it seen)', async () => {
+            await obs.sleep(300);
+            const state = await whatsNewState();
+            assert(state.count === 0, `the popup "${state.title}" is open`);
+            const data = readData();
+            assert(data && data.whatsNewSeen === WHATS_NEW.WHATS_NEW_VERSION, `data.json: whatsNewSeen is ${data && data.whatsNewSeen}`);
+        });
+
         await check('the editor opens on an empty chart', async () => {
             await obs.openEditor();
             const state = await obs.editorState();
@@ -387,6 +452,134 @@ if (started) {
             assert((await obs.previewInfo()).shapes > 8, 'the preview looks empty');
             await obs.closeEditor();
             await obs.setTheme('light');
+        });
+
+        // "What's new": who sees it, once, and what it does. Obsidian reloads a plugin after an update,
+        // so each case writes data.json as that user would have it and reloads the plugin.
+        const version = WHATS_NEW ? WHATS_NEW.WHATS_NEW_VERSION : null;
+        const template = { name: 'Smoke parabola', is3D: false, expression: 'x^2', domain: '-2:2' };
+        await check('what\'s new: data like a 3.x user\'s shows the popup once, with its title', async () => {
+            await obs.openNote('Start');
+            // data.json as 3.19.x wrote it after a settings change: no record of the popup.
+            fs.writeFileSync(dataFile(), JSON.stringify({ userTemplates: [template], invertDrag3D: false, maxSamples3D: 100, renderTikzBlocks: false, dragSensitivity2D: 1 }, null, 2));
+            await reloadPlugin();
+            await obs.waitFor(async () => (await whatsNewState()).count > 0, { timeout: 5000, message: 'the popup to open after the plugin loaded' });
+            const state = await whatsNewState();
+            assert(state.count === 1, `${state.count} popups are open`);
+            assert(state.title === 'Easy TikZ 4', `the title is "${state.title}"`);
+            assert(state.items === 9, `${state.items} highlights`);
+            assert(state.blankIcons === 0, `${state.blankIcons} icons are blank (an icon id Obsidian does not know)`);
+            assert(state.slope === 'slope at x = 0.8: -1.08' && state.area === 'A = 2.76', `the live example shows "${state.slope}" and "${state.area}"`);
+            // Seen as soon as it opened, and nothing else of the user's data changed.
+            await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 3000, message: 'data.json to record the popup' });
+            const data = readData();
+            assert(data.maxSamples3D === 100 && data.userTemplates.length === 1 && data.userTemplates[0].name === template.name, `the user's data changed: ${JSON.stringify(data)}`);
+            return `whatsNewSeen ${data.whatsNewSeen}`;
+        });
+        await check('what\'s new: the live example responds to its slider and to play', async () => {
+            await obs.call(() => {
+                const input = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip input[type=range]');
+                input.value = '-0.9';
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            await obs.sleep(250);
+            let state = await whatsNewState();
+            // At a = -0.9 the slope is 3a^2 - 3 = -0.57 and the area 27a^4/4 = 4.43.
+            assert(state.slope === 'slope at x = -0.9: -0.57' && state.area === 'A = 4.43', `after the slider: "${state.slope}", "${state.area}"`);
+            await obs.mouse.click('.modal.etz-whatsnew .etz-whatsnew-play');
+            await obs.sleep(600);
+            state = await whatsNewState();
+            assert(state.playing === true, 'play is not pressed');
+            assert(state.slope !== 'slope at x = -0.9: -0.57', 'playing did not move the chart');
+            await obs.mouse.click('.modal.etz-whatsnew .etz-whatsnew-play');
+            await obs.sleep(250);
+            state = await whatsNewState();
+            const a = Number(/x = (-?[\d.]+)/.exec(state.slope || '')?.[1]);
+            assert(state.playing === false, 'play is still pressed');
+            assert(Number.isFinite(a) && Math.abs(a * 20 - Math.round(a * 20)) < 1e-9, `after play a = ${a} is not on the slider's step 0.05`);
+            return `slider to -0.9, play stopped at a = ${a}`;
+        });
+        await check('what\'s new: Close removes it, and reloading the plugin does not show it again', async () => {
+            await clickWhatsNewButton('Close');
+            await obs.sleep(300);
+            await reloadPlugin();
+            const state = await whatsNewState();
+            assert(state.count === 0, 'the popup opened a second time');
+        });
+        await check('what\'s new: a fresh install shows none and records it as seen', async () => {
+            fs.rmSync(dataFile(), { force: true });
+            await reloadPlugin();
+            const state = await whatsNewState();
+            assert(state.count === 0, 'a fresh install got the popup');
+            await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 3000, message: 'data.json to record the popup as seen' });
+            await reloadPlugin();
+            assert((await whatsNewState()).count === 0, 'the popup opened after the next start');
+        });
+        await check('what\'s new: the setting is on by default and switches it off', async () => {
+            const on = await obs.call((id) => app.plugins.plugins[id].data.showWhatsNew, PLUGIN_ID);
+            assert(on === true, `showWhatsNew is ${on}`);
+            fs.writeFileSync(dataFile(), JSON.stringify({ userTemplates: [], showWhatsNew: false }, null, 2));
+            await reloadPlugin();
+            assert((await whatsNewState()).count === 0, 'the popup opened with the setting off');
+        });
+        await check('what\'s new: the command opens it, and Try an example opens the editor on its chart', async () => {
+            const ok = await obs.call((id) => app.commands.executeCommandById(`${id}:show-whats-new`), PLUGIN_ID);
+            assert(ok !== false, 'the command easy-tikz:show-whats-new does not exist');
+            await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the command' });
+            await clickWhatsNewButton('Try an example');
+            await obs.waitFor(() => obs.call(() => {
+                const m = window.__etzMedia.editor();
+                return !!m && m.ready === true;
+            }), { timeout: 8000, message: 'the editor to open' });
+            await obs.waitForRender();
+            const chart = await obs.chart();
+            assert(chart.parameters.length === 1 && chart.parameters[0].name === 'a' && chart.parameters[0].value === 0.8, `sliders: ${JSON.stringify(chart.parameters)}`);
+            assert(chart.tools.length === 1 && chart.tools[0].name === 'R1', `tools: ${chart.tools.map((t) => t.name).join(', ')}`);
+            assert((await obs.issues()).length === 0 && (await obs.statusChip()) === null, 'the example has issues in the editor');
+            await obs.closeEditor();
+        });
+        // An icon id Obsidian does not know draws nothing: every id must show up as a drawn icon (svg.lucide-<id>).
+        const drawnIcons = (root) =>
+            obs.call((selector) => {
+                const out = new Set();
+                for (const svg of document.querySelectorAll(`${selector} svg`)) {
+                    for (const c of svg.classList) if (c.startsWith('lucide-')) out.add(c.slice('lucide-'.length));
+                }
+                return Array.from(out);
+            }, root);
+        await check('what\'s new: every icon it uses is one Obsidian draws', async () => {
+            const seen = new Set();
+            await obs.call((id) => app.commands.executeCommandById(`${id}:show-whats-new`), PLUGIN_ID);
+            await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the command' });
+            for (const icon of await drawnIcons('.modal.etz-whatsnew')) seen.add(icon);
+            await obs.mouse.click('.modal.etz-whatsnew .etz-whatsnew-play');
+            await obs.sleep(150);
+            for (const icon of await drawnIcons('.modal.etz-whatsnew')) seen.add(icon);
+            await clickWhatsNewButton('Close');
+            await obs.openEditor();
+            await obs.showTab('help');
+            for (const icon of await drawnIcons('.modal.tikz-modal .etz-help-news')) seen.add(icon);
+            await obs.closeEditor();
+            const missing = WHATS_NEW.WHATS_NEW_ICONS.filter((icon) => !seen.has(icon));
+            assert(!missing.length, `icons that did not draw (unknown ids?): ${missing.join(', ')}`);
+            return `${WHATS_NEW.WHATS_NEW_ICONS.length} icons`;
+        });
+        await check('what\'s new: the link in the Help tab opens it, and its buttons stay in that editor', async () => {
+            await obs.openEditor();
+            await obs.showTab('help');
+            assert(await obs.call(() => !!document.querySelector('.modal.tikz-modal .etz-help-news-link .etz-btn-icon svg')), 'the link in the Help tab has no icon');
+            await obs.mouse.click('.modal.tikz-modal .etz-help-news-link');
+            await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the Help tab' });
+            await clickWhatsNewButton('Try an example');
+            await obs.waitForRender();
+            const state = await obs.editorState();
+            assert(state.tab === 'build', `the editor shows the ${state.tab} tab`);
+            const chart = await obs.chart();
+            assert(chart.tools.length === 1 && chart.tools[0].name === 'R1', 'the example did not load into this editor');
+            const editors = await obs.call(() => document.querySelectorAll('.modal.tikz-modal').length);
+            assert(editors === 1, `${editors} editors are open`);
+            await obs.closeEditor();
         });
 
         await check('no console errors in the whole run', async () => {

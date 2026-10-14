@@ -819,6 +819,12 @@ export class TikzModal extends Modal implements PanelHost {
         if (tab === 'code') this.codePanel?.onShow();
     }
 
+    /** The Help tab on its list of guides, or on one guide (the "What's new" popup links here). */
+    openHelp(guideId?: string): void {
+        this.showTab('help');
+        if (!guideId || !this.helpPanel?.showGuide(guideId)) this.helpPanel?.showHome();
+    }
+
     // ================================================================ lifecycle
 
     onOpen() {
