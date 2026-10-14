@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Easy TikZ 4: hero (brand proof)</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+    /*
+     * The title page. Positions are in grid units (--u = 36 px on this 2400 px page) and text stands on grid
+     * lines (data-baseline): head rule on 2, title on 7, figure from 9 to 34, the bottom line on 36. Two units
+     * of clean paper lie between the title and the figure and between the figure and the bottom line.
+     */
+    .running-head { --head-size: 23; --head-rule: 2; } /* larger than on a feature page: it carries "Obsidian" and the news */
+    .title { left: var(--left); }
+    #sentence { left: calc(44.5 * var(--u)); width: calc(19.5 * var(--u)); font-size: calc(30 * var(--k)); line-height: calc(1.5 * var(--u)); } /* baselines on 4, 5.5 and 7: the last one is the title's */
+    #editor { left: var(--left); top: calc(9 * var(--u)); width: calc(37.5 * var(--u)); }
+    #caption { left: calc(44.5 * var(--u)); width: calc(19.5 * var(--u)); }
+    .note { left: calc(44.5 * var(--u)); white-space: nowrap; }
+    /* The formula the first note speaks of, as a numbered equation of the text column: (1) is its number on the chart. */
+    #formula { left: calc(45.5 * var(--u)); } /* indented one unit, as a display equation; the script ends it where the note ends */
+    #formula .eq { font-size: calc(28 * var(--k)); line-height: 1; } /* note size */
+    #print { left: var(--left); }
+</style>
+</head>
+<body class="page" data-width="2400" data-height="1350">
+    <div class="running-head"><span>An Obsidian plugin</span><span class="ink">Version 4 · new editor</span></div>
+
+    <h1 class="title abs" data-baseline="7" data-fade="0.45">Easy TikZ 4</h1>
+    <p class="lead abs" id="sentence" data-baseline="4" data-fade="0.4">TikZ and pgfplots charts for your Obsidian notes: drawn from formulas, <span class="hl">now edited by dragging</span>.</p>
+
+    <figure class="fig abs" id="editor">
+        <div class="shot" data-shot="lp-editor" data-rect="editor" data-pad="-1" data-radius="modal"></div>
+    </figure>
+    <p class="caption abs" id="caption" data-captop="9" data-fade="0.4"><b>Figure 1.</b>The redesigned editor,<br>on the Linear program example.</p>
+
+    <!-- Each note is acted out by capture.mjs before it is printed here. -->
+    <p class="note abs" id="note-line" data-baseline="14" data-fade="0.4">drag this line: its formula follows</p>
+    <!-- The formula of that line, read from the app: the condition of R1 that the chart numbers (1). -->
+    <div class="abs" id="formula" data-baseline="15.5" data-fade="0.4"></div>
+    <p class="note abs" id="note-optimum" data-baseline="22" data-fade="0.4">the optimum is computed</p>
+    <p class="note abs" id="note-slider" data-baseline="36" data-fade="0.4">slider <span data-math>c</span> moves the dashed line</p>
+
+    <p class="smallprint abs" id="print" data-baseline="36" data-fade="0.4">MIT licensed<span class="sep">·</span>Obsidian 1.13 or newer<span class="sep">·</span>github.com/Saiki77/easy-tikz</p>
+
+    <script src="shots/meta.js"></script>
+    <script type="module">
+        import { equation } from '../math.mjs';
+        import { ready } from '../page.mjs';
+
+        const meta = window.BRAND_SHOTS;
+        // The condition as the app holds it before the drag that capture.mjs acts out (x + y <= 4).
+        document.querySelector('#formula').innerHTML = equation(meta.constraint.before, 1);
+
+        await ready({ meta, shots: 'shots/' }, ({ fig, anchor, arrow, rect, k }) => {
+            const editor = fig('#editor');
+            // The equation is as wide as its note: the tag stands under the note's last word.
+            const note = rect('#note-line');
+            const formula = document.querySelector('#formula');
+            formula.style.width = `${note.x + note.width - rect(formula).x}px`;
+            // The tag (1) is the number the chart prints on that line: no label "(1)" in the picture, no equation (1) here.
+            editor.rect('text:(1)');
+            // Every arrow leaves its note horizontally, at the note's left end.
+            const from = (id) => anchor(id, 'left', { dx: -16 * k });
+            // 1. Constraint line (1), on its free upper stretch: nothing to cross on the way, and the note is
+            //    true of it as written (the drag rewrites x + y <= 4 in the R1 card).
+            arrow({ from: from('#note-line'), to: editor.point('constraint'), out: 180, in: 20, gap: 5 * k });
+            // 2. The optimum: the end of its label.
+            const label = editor.rect('text:x* = (3, 1)');
+            arrow({ from: from('#note-optimum'), to: [label.x + label.width, label.y + label.height * 0.52], out: 180, in: 8, gap: 12 * k });
+            // 3. The slider thumb, from below: under the corner of the figure and up through the empty middle of the action bar.
+            arrow({ from: from('#note-slider'), to: editor.point('sliderThumb'), out: 180, in: 282, looseness: 0.85, gap: 13 * k });
+        });
+    </script>
+</body>
+</html>

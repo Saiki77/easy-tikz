@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Brand font check</title>
+<link rel="stylesheet" href="brand.css">
+<style>
+    .row { position: absolute; left: 120px; right: 60px; display: grid; grid-template-columns: 300px 1fr 1fr; align-items: baseline; column-gap: 40px; }
+    .row .what { font: 400 20px/1.2 var(--serif-small); color: var(--ink-2); }
+    .row .tex, .row .sys { font-size: 84px; line-height: 1.1; white-space: nowrap; }
+    .sys { color: var(--red); }
+    .head { position: absolute; left: 120px; top: 96px; }
+</style>
+</head>
+<body class="page" data-width="1600" data-height="1000">
+    <div class="running-head"><span>Easy TikZ 4 · font check</span><span class="folio">TeX face (ink) beside the system fallback (red)</span></div>
+    <div class="row" style="top: 120px"><span class="what">LM Roman 17<br>display</span><span class="tex" id="t-display" style="font-family: 'LM Roman 17'">Easy TikZ 4 ag</span><span class="sys" style="font-family: serif">Easy TikZ 4 ag</span></div>
+    <div class="row" style="top: 250px"><span class="what">NewCM 10 Regular<br>text</span><span class="tex" id="t-text" style="font-family: 'NewCM'">Drag a g y 249</span><span class="sys" style="font-family: serif">Drag a g y 249</span></div>
+    <div class="row" style="top: 380px"><span class="what">NewCM 10 Italic<br>margin notes</span><span class="tex" id="t-italic" style="font: italic 400 84px 'NewCM'">a g k formula</span><span class="sys" style="font: italic 400 84px serif">a g k formula</span></div>
+    <div class="row" style="top: 510px"><span class="what">NewCM 10 Bold<br>labels</span><span class="tex" id="t-bold" style="font: 700 84px 'NewCM'">Figure 1. a g</span><span class="sys" style="font: 700 84px serif">Figure 1. a g</span></div>
+    <div class="row" style="top: 640px"><span class="what">NewCM Math<br>formulas</span><span class="tex" id="t-math"><span data-math>2x + 3y <= 12, a g</span></span><span class="sys" style="font: italic 400 84px serif">2x + 3y ≤ 12, a g</span></div>
+    <div class="row" style="top: 770px"><span class="what">NewCM Mono<br>typed input</span><span class="tex" id="t-mono" style="font-family: 'NewCM Mono'; font-size: 64px">a x^2 - 3x</span><span class="sys" style="font-family: monospace; font-size: 64px">a x^2 - 3x</span></div>
+    <div class="row" style="top: 880px"><span class="what">LM Roman Caps, Demi</span><span class="tex" id="t-caps" style="font-family: 'LM Roman Caps'; font-size: 54px; letter-spacing: .085em">easy tikz 4</span><span class="tex" id="t-demi" style="font-family: 'LM Roman Demi'; font-size: 54px">Sliders ag</span></div>
+    <script type="module">
+        import { ready } from './page.mjs';
+        await ready({ paper: {} });
+    </script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Easy TikZ 4: the stage of the videos</title>
+<!--
+  Every frame of a video is this page at one moment: compose.mjs loads it in headless Chromium, hands it a
+  film (edit.mjs) and asks for the picture at a time t (window.cinema.draw). Nothing here runs on a clock
+  of its own: no CSS animation, no transition, no timer.
+
+  Layers, from the back:
+    #paper     the graph paper of the page. It never moves and never changes its scale
+    #page      what is printed on the page: running head, title card, section cards, end card (with their figures)
+    #window    the figure: a crop of the app window (a raw frame of the capture). The camera moves and
+               scales this layer only
+    #band      the same paper again over the lower edge of the frame, fading in upwards: the ground of
+               the caption once the figure is larger than the frame. A mask, not a box
+    #chip      the film's title in small capitals, over the caption
+    #caption   one line, lower third, at the margin
+    #note      the note of a callout
+    #overlay   the callout arrow and the pointer (brand/callout.mjs, brand/pointer.mjs)
+-->
+<link rel="stylesheet" href="../brand/brand.css">
+<link rel="stylesheet" href="stage.css">
+</head>
+<body class="page stage">
+    <div id="paper"></div>
+    <div id="page">
+        <div class="running-head" id="head-main"><span></span><span></span></div>
+        <div class="running-head" id="head-end"><span></span><span class="ink"></span></div>
+        <section class="card" id="title">
+            <h1 class="title abs card-title" id="title-text"></h1>
+            <p class="lead abs card-lead" id="title-lead"></p>
+            <div class="card-side" id="title-side">
+                <figure class="fig card-fig" id="title-fig"><div class="shot"><img alt=""></div></figure>
+                <p class="caption abs card-cap" id="title-cap"></p>
+            </div>
+        </section>
+        <!-- Section cards (between two parts of a film) are made by stage.mjs in the shape of the title card. -->
+        <section id="end">
+            <h1 class="title abs" id="end-title"></h1>
+            <div class="rule" id="end-rule"></div>
+            <div class="abs" id="end-rows"></div>
+            <p class="smallprint footrule abs" id="end-print"></p>
+            <div class="card-side" id="end-side">
+                <figure class="fig card-fig" id="end-fig"><div class="shot"><img alt=""></div></figure>
+                <p class="caption abs card-cap" id="end-cap"></p>
+            </div>
+        </section>
+    </div>
+    <figure class="fig" id="window"><img id="frame" alt=""></figure>
+    <div id="band"></div>
+    <p id="chip"></p>
+    <p id="caption"></p>
+    <div class="note" id="note"></div>
+    <svg class="overlay" id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+    <script type="module" src="stage.mjs"></script>
+</body>
+</html>

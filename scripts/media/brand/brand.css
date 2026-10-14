@@ -1,0 +1,482 @@
+/*
+ * Easy TikZ brand kit: "Math notebook".
+ * A page of typeset lecture notes: graph paper, TeX type, thin ink arrows
+ * that point at parts of a real screenshot. The rules are in README.md.
+ *
+ * Sizes are written in design px for a page 1600 px wide and multiplied by
+ * --k, so one stylesheet serves 1600 x 1000 pages, the 2400 px hero and the
+ * 1920 px video stage: set --W (and --H) on :root or let page.mjs do it.
+ * The type scale in design px: title 130, heading 92, lead 33, body 29,
+ * note 28, caption 22, small print 20, running head 20. Nothing that is
+ * meant to be read is smaller than 19.2 (1.2 % of the page width), the
+ * label of the pointer's keycap included.
+ *
+ * fonts.css is generated (scripts/media/brand/fonts.mjs resolves the TeX
+ * fonts of this machine with kpsewhich). Run the build once before opening
+ * a template in a browser.
+ */
+@import url("fonts.css");
+
+:root {
+    /* Paper */
+    --paper: #FBFCFD;
+    --grid-minor: #DCE5F0;
+    --grid-major: #C3D2E4;
+    --margin-rule: #E3A6A0;
+    /* Ink */
+    --ink: #14171C;
+    --ink-2: #4A5261;
+    --hair: #8A94A6;
+    /* Accents: the plugin's own plot blue and optimum red, and one highlighter */
+    --blue: #1F6FD1;
+    --red: #C8452F;
+    --marker: rgba(255, 228, 92, 0.55);
+
+    /* Canvas and scale */
+    --W: 1600;
+    --H: 1000;
+    --zoom: 1; /* an image that is seen small (a social preview) sets <body data-zoom="1.3">: type, grid and strokes grow together */
+    --k: calc(var(--W) / 1600 * var(--zoom) * 1px); /* one design px */
+    --u: calc(24 * var(--k)); /* one grid unit (page.mjs rounds it to whole px) */
+    --margin-x: calc(4 * var(--u)); /* the red margin rule */
+    --left: calc(5 * var(--u)); /* where text and figures start */
+    /* Right margin. page.mjs replaces it by the distance to the last grid line that leaves 2.5 units:
+       line 64 on every page that is 66.67 units wide (64 px on a 1600 px page, 96 px on the title page). */
+    --right: calc(2.667 * var(--u));
+
+    /* Type */
+    --serif: "NewCM", serif;
+    --serif-small: "NewCM Book", "NewCM", serif;
+    --display: "LM Roman 17", "NewCM", serif;
+    --caps: "LM Roman Caps", "NewCM", serif;
+    --demi: "LM Roman Demi", "NewCM", serif;
+    --math: "NewCM Math", "NewCM", serif;
+    --mono: "NewCM Mono", monospace;
+
+    --hairline: max(1px, var(--k));
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
+/* ------------------------------------------------------------------ page */
+
+.page {
+    position: relative;
+    width: calc(var(--W) * 1px);
+    height: calc(var(--H) * 1px);
+    overflow: hidden;
+    isolation: isolate;
+    background: var(--paper);
+    color: var(--ink);
+    font: 400 calc(29 * var(--k)) / 1.36 var(--serif);
+    font-synthesis: none; /* never a faked bold or italic: a missing face must show as a mistake */
+    font-kerning: normal;
+    font-variant-ligatures: common-ligatures;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: antialiased;
+}
+.page *,
+.page *::before,
+.page *::after {
+    box-sizing: border-box;
+    font-synthesis: none;
+}
+/* :where() keeps this reset at the weight of a bare tag: a class such as .title can then set its own margin. */
+:where(.page) p,
+:where(.page) h1,
+:where(.page) h2,
+:where(.page) h3,
+:where(.page) figure {
+    margin: 0;
+}
+.page b,
+.page strong {
+    font-weight: 700;
+}
+.page i,
+.page em {
+    font-style: italic;
+}
+
+/* The grid (paper.mjs writes the SVG; page.mjs mounts it). */
+.paper-grid {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: -1;
+    display: block;
+    pointer-events: none;
+}
+
+/* Everything on a page is placed by hand: absolute boxes in design px. */
+.abs {
+    position: absolute;
+}
+
+/* ------------------------------------------------------- running head */
+
+/*
+ * A thin top rule with the running head on it and a folio at the right. The rule lies ON a grid line
+ * (--head-rule, counted from the top: 3 by default, 2 on the title page) and the text stands half a
+ * unit above it. A rule a few px beside a grid line would read as a doubled line.
+ */
+.running-head {
+    position: absolute;
+    left: var(--left);
+    right: var(--right);
+    top: 0;
+    height: calc(var(--head-rule, 3) * var(--u) + 1px);
+    display: flex;
+    align-items: baseline;
+    border-bottom: 1px solid var(--hair); /* one device pixel, the pixel row of the grid line */
+    /* Capitals and small capitals, as \textsc sets them: write "Easy TikZ 4" with its capitals, so the
+       lining 4 has capitals of its own height beside it (in all small capitals it stood a third too tall). */
+    font: 400 calc(var(--head-size, 20) * var(--k)) / 1 var(--caps);
+    letter-spacing: 0.085em;
+    color: var(--ink-2);
+    font-variant-numeric: lining-nums;
+    white-space: nowrap;
+}
+/* A strut: an empty flex item has its baseline on its lower edge, and the text of the head shares that
+   baseline (align-items: baseline). So the text stands half a unit above the rule, whatever the font. */
+.running-head::before {
+    content: "";
+    flex: 0 0 0;
+    height: calc((var(--head-rule, 3) - 0.5) * var(--u));
+}
+.running-head > :last-child:not(:first-child) {
+    margin-left: auto; /* the folio, or the second half of the head, ends on the right margin */
+}
+.running-head .folio {
+    font-family: var(--serif-small);
+    letter-spacing: 0.02em;
+    font-variant-numeric: lining-nums tabular-nums;
+}
+.running-head .ink {
+    color: var(--ink); /* the part of a running head that is news */
+}
+
+.eyebrow {
+    font: 400 calc(20 * var(--k)) / 1.2 var(--caps);
+    letter-spacing: 0.085em;
+    color: var(--ink-2);
+    font-variant-numeric: lining-nums;
+}
+
+/* ------------------------------------------------------------- headings */
+
+/* The title of the paper: Latin Modern 17, the cut drawn for display sizes. */
+.title {
+    font: 400 calc(130 * var(--k)) / 0.92 var(--display);
+    letter-spacing: -0.022em;
+    word-spacing: -0.09em; /* the 17 pt cut's word space is drawn for 17 pt: at display size it is too wide */
+    margin-left: -0.05em; /* optical: the stem of a capital stands on the left edge, not its side bearing */
+    color: var(--ink);
+    white-space: nowrap;
+    font-variant-numeric: lining-nums;
+}
+
+/* A section heading with its number: "§1 Drag to edit". */
+.heading {
+    font: 400 calc(92 * var(--k)) / 1 var(--display); /* 23 px when a page is shown 400 px wide (two pages side by side) */
+    letter-spacing: -0.018em;
+    word-spacing: -0.07em;
+    margin-left: -0.035em; /* optical, as for .title */
+    color: var(--ink);
+    text-wrap: balance;
+}
+.secno {
+    color: var(--hair);
+    margin-right: 0.22em;
+    letter-spacing: 0;
+}
+.subheading {
+    font: 400 calc(30 * var(--k)) / 1.2 var(--demi);
+    color: var(--ink);
+}
+
+/* ----------------------------------------------------------------- text */
+
+.lead {
+    font: 400 calc(33 * var(--k)) / 1.3 var(--serif);
+    word-spacing: -0.04em;
+    color: var(--ink);
+    text-wrap: pretty;
+}
+.body {
+    font: 400 calc(29 * var(--k)) / 1.36 var(--serif);
+    word-spacing: -0.035em; /* Computer Modern's word space is a third of an em, set for justified 10 pt text */
+    color: var(--ink);
+    text-wrap: pretty;
+}
+/* A margin note: italic, a few words, the start of a callout arrow. */
+.note {
+    font: italic 400 calc(28 * var(--k)) / 1.2 var(--serif);
+    word-spacing: -0.06em;
+    color: var(--ink);
+    text-wrap: balance;
+}
+.note .m,
+.note .typed,
+.note .rm {
+    font-style: normal;
+}
+/* A small numbered circle that ties a note to its spot. */
+.num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.28em;
+    height: 1.28em;
+    margin-right: 0.36em;
+    border: var(--hairline) solid var(--ink);
+    border-radius: 50%;
+    font: 400 0.72em/1 var(--serif-small);
+    font-style: normal;
+    font-variant-numeric: lining-nums;
+    vertical-align: 0.1em;
+}
+/* "Figure 1." in bold, then a plain sentence. */
+.caption {
+    font: 400 calc(22 * var(--k)) / 1.32 var(--serif-small);
+    word-spacing: -0.02em;
+    color: var(--ink-2);
+    text-wrap: balance;
+}
+.caption b {
+    font-family: var(--serif);
+    font-weight: 700;
+    color: var(--ink);
+    margin-right: 0.3em;
+}
+/* Footnote-style small print; .footrule draws the short rule above it. */
+.smallprint {
+    font: 400 calc(20 * var(--k)) / 1.36 var(--serif-small);
+    color: var(--ink-2);
+    font-variant-numeric: lining-nums;
+}
+.footrule::before {
+    content: "";
+    display: block;
+    width: calc(5 * var(--u));
+    border-top: var(--hairline) solid var(--hair);
+    margin-bottom: calc(10 * var(--k));
+}
+.smallprint .sep {
+    margin: 0 0.5em;
+    color: var(--hair);
+}
+
+/* What the user types into a field stays monospace. */
+.typed {
+    font-family: var(--mono);
+    font-size: 0.84em;
+    font-style: normal;
+    line-height: 1;
+    white-space: nowrap;
+    padding: 0.1em 0.36em 0.06em;
+    border: var(--hairline) solid rgba(138, 148, 166, 0.6);
+    border-radius: calc(5 * var(--k));
+    background: rgba(255, 255, 255, 0.7);
+}
+
+/* The one highlighted phrase of an image: a flat stroke of highlighter behind the lower part of the words. */
+.hl {
+    background: linear-gradient(to bottom, transparent 0 46%, var(--marker) 46% 90%, transparent 90%);
+    padding: 0 0.1em;
+    margin: 0 -0.1em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+
+.blue {
+    color: var(--blue);
+}
+.red {
+    color: var(--red);
+}
+.dim {
+    color: var(--ink-2);
+}
+
+.rule {
+    position: absolute;
+    height: 0;
+    border-top: var(--hairline) solid var(--hair);
+}
+
+/* ----------------------------------------------------------------- math */
+
+/* math.mjs writes this markup. Variables are the math font's own italic letters; nothing is slanted by CSS. */
+.m {
+    font-family: var(--math);
+    font-style: normal;
+    font-weight: 400;
+    letter-spacing: 0;
+    white-space: nowrap;
+    font-variant-numeric: lining-nums;
+    font-variant-ligatures: none;
+}
+.m .mbin {
+    margin: 0 0.2222em; /* TeX's medium space, 4 mu */
+}
+.m .mrel {
+    margin: 0 0.2778em; /* thick space, 5 mu */
+}
+.m .mpunct {
+    margin-right: 0.1667em; /* thin space, 3 mu */
+}
+.m .mthin {
+    display: inline-block;
+    width: 0.1667em;
+}
+.m .mquad {
+    display: inline-block;
+    width: 0.9em;
+}
+.m .msup,
+.m .msub {
+    font-size: 0.7em;
+    line-height: 0;
+}
+.m .msup {
+    vertical-align: 0.52em;
+    margin-left: 0.04em;
+}
+.m .msub {
+    vertical-align: -0.24em;
+    margin-left: 0.02em;
+}
+.m .mscripts {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: space-between;
+    vertical-align: -0.42em;
+    height: 1.5em;
+    font-size: 1em;
+    line-height: 1;
+    margin-left: 0.03em;
+}
+.m .mscripts .msup,
+.m .mscripts .msub {
+    vertical-align: baseline;
+    line-height: 1;
+}
+.m .msup .mbin,
+.m .msub .mbin,
+.m .msup .mrel,
+.m .msub .mrel {
+    margin: 0 0.06em; /* script style: operators are set tight */
+}
+.m .mstar {
+    font-size: 1.1em;
+}
+.m .mtext {
+    font-family: var(--serif);
+    margin-right: 0.34em;
+}
+.m .mtext:not(:first-child) {
+    margin-left: 0.34em;
+}
+.m-em {
+    color: var(--red);
+}
+
+/* A display equation with its tag at the right margin of its box. */
+.eq {
+    display: flex;
+    align-items: baseline;
+    font-size: calc(36 * var(--k));
+    line-height: 1.5;
+}
+.eq-body {
+    flex: 1 1 auto;
+}
+.eq-lead {
+    flex: 0 0 auto;
+    font: italic 400 0.64em/1 var(--serif);
+    color: var(--ink-2);
+    width: 4.6em;
+}
+.eq-tag {
+    flex: 0 0 auto;
+    margin-left: 1em;
+    font-family: var(--serif);
+    font-variant-numeric: lining-nums;
+    color: var(--ink);
+}
+
+/*
+ * Display equations aligned on their relation sign, as TeX's align sets them (math.mjs aligned()):
+ * left sides end on one line, tags stand at the right edge of the box.
+ */
+.eq-align {
+    display: grid;
+    grid-template-columns: max-content max-content 1fr;
+    align-items: baseline;
+    font-size: calc(36 * var(--k));
+    line-height: 1.5;
+}
+.eq-align .eq-row {
+    display: contents;
+}
+.eq-align .eq-l {
+    justify-self: end;
+}
+.eq-align .eq-tag {
+    justify-self: end;
+    line-height: 1; /* the text font sits elsewhere in a line box than the math font: at the row's line-height it would make the row 4 px taller */
+}
+.eq-align .eq-inter {
+    grid-column: 1 / -1;
+}
+
+/* -------------------------------------------------------------- figures */
+
+/*
+ * A real capture: straight, hairline edge, one soft shadow. page.mjs crops it (.shot).
+ * The shadow is a contact line and a short drop that has ended one grid unit under the figure,
+ * so a caption or small print below it stands on clean paper (keep them 1.25 units clear, see README).
+ */
+.fig {
+    position: absolute;
+    border-radius: var(--fig-radius, calc(10 * var(--k)));
+    background: #fff;
+    box-shadow:
+        0 0 0 var(--hairline) rgba(98, 110, 130, 0.42),
+        0 calc(1 * var(--k)) calc(2 * var(--k)) rgba(24, 40, 72, 0.1),
+        0 calc(10 * var(--k)) calc(24 * var(--k)) calc(-10 * var(--k)) rgba(24, 40, 72, 0.22);
+}
+.shot {
+    position: relative;
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    border-radius: inherit;
+}
+.shot img {
+    position: absolute;
+    display: block;
+    max-width: none;
+}
+/* An enlarged detail of a figure (TikZ: spy): its own hairline, a shorter shadow. callout.mjs spy() links it to its spot. */
+.fig.detail {
+    box-shadow:
+        0 0 0 var(--hairline) rgba(74, 82, 97, 0.7),
+        0 calc(1 * var(--k)) calc(2 * var(--k)) rgba(24, 40, 72, 0.1),
+        0 calc(8 * var(--k)) calc(18 * var(--k)) calc(-8 * var(--k)) rgba(24, 40, 72, 0.2);
+    border-radius: var(--fig-radius, calc(6 * var(--k)));
+}
+
+/* Overlay for callouts, spy frames and the drawn pointer: one SVG as large as the page. */
+.overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: visible;
+    pointer-events: none;
+}

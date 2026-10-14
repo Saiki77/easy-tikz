@@ -11,7 +11,9 @@
         "media:smoke": "node scripts/media/smoke.mjs",
         "media:guides": "node scripts/media/build-guides.mjs",
         "media:promo": "node scripts/media/build-promo.mjs",
-        "media:video": "node scripts/media/build-video.mjs"
+        "media:video": "node scripts/media/build-video.mjs",
+        "media:brand": "node scripts/media/brand/build.mjs",
+        "media:film": "node scripts/media/cinema/build.mjs"
     },
     "keywords": [
         "obsidian",

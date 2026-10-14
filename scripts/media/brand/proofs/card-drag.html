@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Easy TikZ 4: drag to edit (brand proof)</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+    /*
+     * A feature page: one idea, one big real figure. Positions in grid units (--u = 24 px on a 1600 px page),
+     * text on grid lines: head rule on 3, heading on 8, body on 11, 12.5 and 14, equations on 18 and 22,
+     * captions on 38. The figure is 37 x 26 units, from line 27 to 64 and from 10 to 36: all four edges lie
+     * on grid lines, and so do the edges of the enlarged tip (5 to 24, standing on 36). The left column is one
+     * measure wide: the equation tags and the tip share its right edge, line 24.
+     */
+    .heading { left: var(--left); }
+    #body { left: var(--left); width: calc(19 * var(--u)); font-size: calc(28 * var(--k)); line-height: calc(1.5 * var(--u)); }
+    #eqs { left: var(--left); width: calc(19 * var(--u)); }
+    #eqs .eq-align { font-size: calc(34 * var(--k)); line-height: calc(2.25 * var(--u)); }
+    #eqs .eq-inter { display: flex; align-items: center; height: calc(1.75 * var(--u)); padding-left: calc(0.25 * var(--u)); line-height: 1; }
+    #eqs .eq-inter svg { flex: 0 0 auto; margin-right: calc(0.55 * var(--u)); width: calc(14 * var(--k)); height: calc(30 * var(--k)); }
+    #eqs .eq-inter .note { font-size: calc(22 * var(--k)); color: var(--ink-2); }
+    #stage { left: calc(27 * var(--u)); top: calc(10 * var(--u)); width: calc(37 * var(--u)); }
+    #caption { left: calc(27 * var(--u)); width: calc(36 * var(--u)); }
+    #tip { left: var(--left); } /* shown pixel for pixel; the script stands it on the figure's lower edge, its right edge on line 24 */
+    #tip-label { left: var(--left); }
+    #note-pivot { right: var(--right); white-space: nowrap; } /* ends on the figure's right edge, on the heading's baseline */
+</style>
+</head>
+<body class="page" data-width="1600" data-height="1000">
+    <div class="running-head"><span>Easy TikZ 4</span><span class="folio">1 / 8</span></div>
+
+    <h1 class="heading abs" data-baseline="8" data-fade="0.45"><span class="secno">§1</span>Drag to edit</h1>
+    <p class="body abs" id="body" data-baseline="11" data-fade="0.4">Drag a line and <span class="hl">its numbers follow</span>.<br>Hold Shift and it turns about<br>the ringed point instead.</p>
+
+    <!-- Before and after one Shift-drag. The numbers come from the app (capture.mjs), not from this file.
+         The tags are (a) and (b): the chart in the figure prints (1) and (2) on its constraint lines, and a
+         tag names the same thing as the same mark in the figure, or is a mark the figure does not use. -->
+    <div class="abs" id="eqs" data-baseline="18" data-fade="0.4"></div>
+
+    <figure class="fig abs" id="stage">
+        <div class="shot" data-shot="lp-shift-hover" data-rect="720.2,290,862.8,605.8" data-rows="26"></div>
+    </figure>
+    <p class="caption abs" id="caption" data-baseline="38" data-fade="0.4"><b>Figure 1.</b>Shift held over the objective line of the Linear program example.</p>
+
+    <figure class="fig detail abs" id="tip">
+        <div class="shot" data-shot="lp-shift-hover" data-rect="hint" data-pad="-0.5" data-radius="hint" data-native></div>
+    </figure>
+    <p class="caption abs" id="tip-label" data-baseline="38" data-fade="0.4"><i>The hover tip, enlarged.</i></p>
+
+    <p class="note abs" id="note-pivot" data-baseline="8" data-fade="0.4">the pivot</p>
+
+    <script src="shots/meta.js"></script>
+    <script type="module">
+        import { aligned, math } from '../math.mjs';
+        import { ready } from '../page.mjs';
+        import { keycapSize } from '../pointer.mjs';
+
+        const meta = window.BRAND_SHOTS;
+        const turn = meta.turn;
+        // Mark the numbers the drag changed.
+        const marked = (after, before) => {
+            const old = String(before).match(/\d+(\.\d+)?/g) || [];
+            let i = 0;
+            return String(after).replace(/\d+(\.\d+)?/g, (n) => (n !== old[i++] ? `[[${n}]]` : n));
+        };
+        const down = '<svg viewBox="0 0 14 30" aria-hidden="true"><path d="M7 1V20" stroke="#4A5261" stroke-width="1.5" fill="none"/><path d="M7 29L2.4 17.6L7 20.6L11.6 17.6Z" fill="#4A5261"/></svg>';
+        document.querySelector('#eqs').innerHTML = aligned([
+            [`${turn.before.equation},  c = ${turn.before.c}`, 'a'],
+            { inter: `${down}<span class="note">Shift-drag from ${math(`(${turn.from.join(', ')})`)} to ${math(`(${turn.to.join(', ')})`)}</span>` },
+            [`${marked(turn.after.equation, turn.before.equation)},  c = ${marked(turn.after.c, turn.before.c)}`, 'b'],
+        ]);
+
+        await ready({ meta, shots: 'shots/' }, ({ fig, anchor, arrow, spy, pointer, rect, k, unit }) => {
+            const stage = fig('#stage');
+            // The enlarged tip stands on the figure's lower edge, and its right edge on line 24, where the tags end.
+            const tipEl = document.querySelector('#tip');
+            const stageBox = rect('#stage');
+            tipEl.style.top = `${Math.round(stageBox.y + stageBox.height - rect('#tip').height)}px`;
+            tipEl.style.left = `${24 * unit - rect('#tip').width}px`;
+            const tip = rect('#tip');
+            // One level line from the copy to the tip in the figure. The tip has an edge of its own: no second frame.
+            spy({ on: stage.rect('hint'), to: tip, radius: stage.shot.radii.hint * stage.scale, toRadius: parseFloat(getComputedStyle(tipEl).borderTopLeftRadius) || 0 });
+
+            // The pointer rests where the Shift-drag of the equations starts (a capture holds no pointer: it is drawn).
+            // Its keycap goes into the white wedge to the left, between the objective line and constraint line (2):
+            // as near to the pointer as it fits with clear paper to both lines.
+            const at = stage.point(stage.shot.pointer);
+            const scale = 1.3 * k;
+            const key = keycapSize('Shift', scale);
+            const through = (p, q) => (x) => p[1] + ((q[1] - p[1]) * (x - p[0])) / (q[0] - p[0]);
+            const origin = stage.point('origin');
+            const top = stage.point('lineTop'); // (0, 3)
+            const objective = through(top, stage.point('lineLow'));
+            const second = through([origin[0], origin[1] + ((top[1] - origin[1]) * 2) / 3], stage.point('optimum')); // (0, 2) to (3, 1)
+            const clear = 7 * k;
+            const foot = 2 * scale; // the darker foot of the key
+            let place = null;
+            for (let x = at[0] - key.width - 8 * k; x > stageBox.x && !place; x -= 1) {
+                const upper = objective(x + key.width) + clear; // under the objective line at the key's right end
+                const lower = second(x) - clear - foot; // above line (2) at its left end
+                if (lower - upper >= key.height) place = [x, (upper + lower - key.height) / 2];
+            }
+            const corner = stage.rect('text:(0, 2)');
+            if (!place || place[0] < corner.x + corner.width + 6 * k) throw new Error('card-drag: no free ground for the Shift keycap between the objective line and line (2)');
+            pointer({ x: at[0], y: at[1], keycap: 'Shift', keycapSide: 'left', keycapOffset: [place[0] - (at[0] - key.width - 6 * scale), place[1] - (at[1] - key.height / 2)] });
+
+            // The pivot ring, from above and a little from the left: between constraint line (1) and the optimum's label,
+            // the one side on which nothing of the chart sits. Like every callout it leaves its note horizontally; the
+            // long first handle spreads the turn over the way down.
+            const ring = stage.rect('pivot');
+            arrow({ from: anchor('#note-pivot', 'left', { dx: -14 * k }), to: [ring.x + ring.width / 2, ring.y + ring.height / 2], out: 180, in: 96, looseness: 1, gap: ring.height / 2 + 8 * k });
+        });
+    </script>
+</body>
+</html>

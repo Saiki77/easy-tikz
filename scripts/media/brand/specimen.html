@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Easy TikZ 4: brand sheet</title>
+<link rel="stylesheet" href="brand.css">
+<style>
+    /*
+     * The brand sheet, 2400 x 1872: 52 units of 36 px. Headings and text stand on grid lines (data-baseline),
+     * and every edge (swatches, the sample figure, the two page skeletons, the rules) lies on a grid line.
+     */
+    .col-a { left: var(--left); width: calc(26 * var(--u)); }
+    .col-b { left: calc(34 * var(--u)); width: calc(30 * var(--u)); }
+    .sec { font: 400 calc(30 * var(--k)) / 1 var(--demi); color: var(--ink); white-space: nowrap; }
+    .sec .secno { font-family: var(--display); color: var(--hair); margin-right: 0.4em; }
+    /* The sheet is a reference, read at full size: its labels are smaller than an image for the README may set (data-min-text). */
+    .meta { font: 400 calc(16 * var(--k)) / 1.3 var(--serif-small); color: var(--ink-2); font-variant-numeric: lining-nums; }
+    .meta code, .hex { font-family: var(--mono); font-size: 0.94em; }
+
+    #title { left: var(--left); }
+    #lead { left: calc(42 * var(--u)); width: calc(22 * var(--u)); font-size: calc(30 * var(--k)); line-height: calc(1.5 * var(--u)); }
+
+    /* §1 swatches: cells of the paper, coloured in (3 x 2 units, every 5 units) */
+    .swatches { top: calc(12 * var(--u)); display: grid; grid-template-columns: repeat(5, calc(5 * var(--u))); grid-auto-rows: calc(5 * var(--u)); }
+    .swatch .chip { width: calc(3 * var(--u)); height: calc(2 * var(--u)); border-radius: calc(2 * var(--k)); }
+    .swatch .chip.edge { box-shadow: inset 0 0 0 1px var(--hair); }
+    .swatch .name { margin-top: calc(9 * var(--k)); font: 400 calc(16 * var(--k)) / 1.2 var(--caps); letter-spacing: 0.06em; text-transform: lowercase; color: var(--ink); white-space: nowrap; }
+    .swatch .hex { display: block; margin-top: calc(2 * var(--k)); font-size: calc(15 * var(--k)); color: var(--ink-2); }
+
+    /* §2 type scale */
+    .scale { top: calc(12.3 * var(--u)); display: grid; grid-template-columns: calc(10.4 * var(--u)) 1fr; align-items: baseline; row-gap: calc(8 * var(--k)); }
+    .scale > * { white-space: nowrap; }
+    .scale .wide { grid-column: 1 / -1; } /* the heading at its real size needs the whole column */
+    .scale .heading { margin-top: calc(-4 * var(--k)); margin-bottom: calc(0.5 * var(--u)); } /* room for its descenders */
+    .scale .body, .scale .lead { line-height: 1.2; }
+
+    /* §3 formulas: one every two units */
+    .formulas { display: grid; grid-template-columns: calc(11.5 * var(--u)) calc(2.2 * var(--u)) 1fr; align-items: baseline; font-size: calc(28 * var(--k)); line-height: calc(2 * var(--u)); }
+    .formulas .typed { justify-self: start; font-size: calc(20 * var(--k)); }
+    .formulas .to { font-family: var(--math); color: var(--hair); }
+    #display { width: calc(22 * var(--u)); }
+    #display .eq { font-size: calc(34 * var(--k)); line-height: 1; }
+    #devices { width: calc(26 * var(--u)); }
+
+    /* §4 figure and callouts */
+    #sample { left: calc(34 * var(--u)); top: calc(33 * var(--u)); width: calc(17 * var(--u)); } /* 17 x 9 units */
+    #sample-caption { left: calc(34 * var(--u)); width: calc(17 * var(--u)); } /* its baseline 2 units under the figure */
+    .col-notes { left: calc(53 * var(--u)); width: calc(11 * var(--u)); }
+    #n2 { white-space: nowrap; }
+
+    /* §5 page skeletons, 4 units high, from line 42 to 46 */
+    .mini { position: absolute; top: calc(42 * var(--u)); height: calc(4 * var(--u)); background: var(--paper); box-shadow: 0 0 0 1px var(--hair); overflow: hidden; }
+    .mini i { position: absolute; display: block; font-style: normal; }
+    .mini .rule { background: var(--margin-rule); width: var(--hairline); top: 0; bottom: 0; border: 0; height: auto; }
+    .mini .head { border-top: var(--hairline) solid var(--hair); height: 0; }
+    .mini .ink { background: var(--ink); }
+    .mini .txt { background: var(--hair); opacity: 0.75; }
+    .mini .figure { background: rgba(31, 111, 209, 0.14); box-shadow: 0 0 0 var(--hairline) rgba(31, 111, 209, 0.55); border-radius: calc(2 * var(--k)); }
+    .mini-label { white-space: nowrap; }
+    #pages-rules { left: calc(21.5 * var(--u)); width: calc(9.5 * var(--u)); } /* 1.1 units clear of the skeleton beside it */
+    #foot { left: var(--left); top: calc(49 * var(--u)); } /* its short rule on line 49 */
+</style>
+</head>
+<body class="page" data-width="2400" data-height="1872" data-min-text="0.9">
+    <div class="running-head"><span>Easy TikZ 4 · Brand kit</span><span>Specimen</span></div>
+
+    <h1 class="title abs" id="title" data-baseline="8" data-fade="0.45">Math notebook</h1>
+    <p class="lead abs" id="lead" data-baseline="5" data-fade="0.4">A page of typeset lecture notes: graph paper, TeX type, and thin ink arrows that point at parts of a <span class="hl">real screenshot</span>.</p>
+
+    <!-- §1 -->
+    <h2 class="sec abs col-a" id="s1" data-baseline="11" data-fade="0.4"><span class="secno">§1</span>Paper and ink</h2>
+    <div class="swatches abs col-a" data-fade="0.5">
+        <div class="swatch"><div class="chip edge" data-edge style="background: var(--paper)"></div><div class="name">Paper</div><span class="hex">#FBFCFD</span></div>
+        <div class="swatch"><div class="chip" data-edge style="background: var(--grid-minor)"></div><div class="name">Grid, minor</div><span class="hex">#DCE5F0</span></div>
+        <div class="swatch"><div class="chip" data-edge style="background: var(--grid-major)"></div><div class="name">Grid, major</div><span class="hex">#C3D2E4</span></div>
+        <div class="swatch"><div class="chip" data-edge style="background: var(--margin-rule)"></div><div class="name">Margin rule</div><span class="hex">#E3A6A0</span></div>
+        <div class="swatch"><div class="chip" data-edge style="background: var(--marker)"></div><div class="name">Highlighter</div><span class="hex">#FFE45C, 55 %</span></div>
+        <div class="swatch"><div class="chip" data-edge style="background: var(--ink)"></div><div class="name">Ink</div><span class="hex">#14171C</span></div>
+        <div class="swatch"><div class="chip" data-edge style="background: var(--ink-2)"></div><div class="name">Secondary</div><span class="hex">#4A5261</span></div>
+        <div class="swatch"><div class="chip" data-edge style="background: var(--hair)"></div><div class="name">Hairline</div><span class="hex">#8A94A6</span></div>
+        <div class="swatch"><div class="chip" data-edge style="background: var(--blue)"></div><div class="name">Plot blue</div><span class="hex">#1F6FD1</span></div>
+        <div class="swatch"><div class="chip" data-edge style="background: var(--red)"></div><div class="name">Optimum red</div><span class="hex">#C8452F</span></div>
+    </div>
+
+    <!-- §2 -->
+    <h2 class="sec abs col-b" id="s2" data-baseline="11" data-fade="0.4"><span class="secno">§2</span>Type: Computer Modern, as TeX sets it</h2>
+    <div class="scale abs col-b" data-fade="0.5">
+        <span class="meta wide"><code>.heading</code> 92, Latin Modern Roman 17 (<code>.title</code> 130 above)</span>
+        <span class="heading wide"><span class="secno">§1</span>Drag to edit</span>
+        <span class="meta"><code>.lead</code> 33, NewCM 10</span><span class="lead">Drag a line. Its numbers follow.</span>
+        <span class="meta"><code>.body</code> 29</span><span class="body">Move a slider: the picture follows.</span>
+        <span class="meta"><code>.note</code> 28, italic</span><span class="note">slider <span data-math>c</span> moves the dashed line</span>
+        <span class="meta"><code>.caption</code> 22, NewCM Book</span><span class="caption"><b>Figure 1.</b>Shift held over the objective line.</span>
+        <span class="meta"><code>.smallprint</code> 20, Book</span><span class="smallprint">MIT licensed<span class="sep">·</span>Obsidian 1.13 or newer</span>
+        <span class="meta"><code>.eyebrow</code> 20, LM Roman Caps</span><span class="eyebrow">An Obsidian plugin for TikZ</span>
+        <span class="meta"><code>.typed</code>, NewCM Mono</span><span class="body">Type <span class="typed">a x^2 - 3x</span> and press Enter.</span>
+    </div>
+
+    <!-- §3 -->
+    <h2 class="sec abs col-a" id="s3" data-baseline="23" data-fade="0.4"><span class="secno">§3</span>Formulas are set as math</h2>
+    <div class="formulas abs col-a" data-baseline="25" data-fade="0.5">
+        <span class="typed">2x + 3y &lt;= 12</span><span class="to">→</span><span data-math>2x + 3y <= 12</span>
+        <span class="typed">a x^2 - 3x</span><span class="to">→</span><span data-math>a x^2 - 3x</span>
+        <span class="typed">x* = (3, 1)</span><span class="to">→</span><span data-math>x* = (3, 1)</span>
+        <span class="typed">a exp(-k x) cos(w x)</span><span class="to">→</span><span data-math>a exp(-k x) cos(w x)</span>
+        <span class="typed">min(f1, f2) &lt;= y</span><span class="to">→</span><span data-math>min(f1, f2) <= y</span>
+    </div>
+    <div class="abs col-a" id="display" data-baseline="36" data-fade="0.5"><div data-math="2x + 3y = c,  c = 9" data-tag="1"></div></div>
+    <p class="meta abs col-a" id="devices" data-baseline="38" data-fade="0.4">Variables are the math font’s own italic letters, numbers and functions stand upright, the signs in <span data-math>a - b</span> and <span data-math>a <= b</span> are real. An equation that is referred to carries a tag.</p>
+
+    <!-- §4 -->
+    <h2 class="sec abs col-b" id="s4" data-baseline="32" data-fade="0.4"><span class="secno">§4</span>Figures are real, callouts are ink</h2>
+    <figure class="fig abs" id="sample">
+        <div class="shot" data-shot="lp-editor" data-rect="1052,458,531,300" data-rows="9" data-rows-anchor="bottom"></div>
+    </figure>
+    <p class="caption abs" id="sample-caption" data-baseline="44" data-fade="0.4"><b>Figure 1.</b>A crop of a real capture: straight, hairline edge, one short shadow.</p>
+    <p class="note abs col-notes" id="n1" data-baseline="34.5" data-fade="0.4"><span class="num">1</span>the optimum is computed</p>
+    <p class="note abs col-notes" id="n2" data-baseline="41.25" data-fade="0.4"><span class="num">2</span>a marked corner</p>
+    <p class="meta abs col-notes" id="pointer-label" data-baseline="47" data-fade="0.4">The drawn pointer: a click ring,<br>a keycap while a key is held.</p>
+
+    <!-- §5 -->
+    <h2 class="sec abs col-a" id="s5" data-baseline="41" data-fade="0.4"><span class="secno">§5</span>Pages</h2>
+    <div class="mini" id="mini-hero" data-edge style="left: calc(5 * var(--u)); width: calc(7.111 * var(--u))">
+        <i class="rule" style="left: 6%"></i>
+        <i class="head" style="left: 7.5%; right: 4%; top: 5.3%"></i>
+        <i class="ink" style="left: 7.5%; top: 11%; width: 40%; height: 13%"></i>
+        <i class="figure" style="left: 7.5%; top: 29%; width: 56%; height: 63%"></i>
+        <i class="txt" style="left: 67%; top: 12%; width: 28%; height: 2.6%"></i><i class="txt" style="left: 67%; top: 17%; width: 26%; height: 2.6%"></i><i class="txt" style="left: 67%; top: 22%; width: 18%; height: 2.6%"></i>
+        <i class="txt" style="left: 67%; top: 42%; width: 22%; height: 2.4%"></i><i class="txt" style="left: 70%; top: 47%; width: 14%; height: 2.4%"></i><i class="txt" style="left: 67%; top: 59%; width: 17%; height: 2.4%"></i><i class="txt" style="left: 67%; top: 90%; width: 19%; height: 2.4%"></i>
+    </div>
+    <p class="meta abs mini-label" style="left: calc(5 * var(--u))" data-baseline="47">Title page<br>2400 × 1350</p>
+    <div class="mini" id="mini-card" data-edge style="left: calc(14 * var(--u)); width: calc(6.4 * var(--u))">
+        <i class="rule" style="left: 6%"></i>
+        <i class="head" style="left: 7.5%; right: 4%; top: 7.2%"></i>
+        <i class="ink" style="left: 7.5%; top: 12%; width: 27%; height: 6.5%"></i>
+        <i class="txt" style="left: 7.5%; top: 24%; width: 27%; height: 2.2%"></i><i class="txt" style="left: 7.5%; top: 28%; width: 22%; height: 2.2%"></i><i class="txt" style="left: 7.5%; top: 32%; width: 18%; height: 2.2%"></i>
+        <i class="ink" style="left: 7.5%; top: 43%; width: 20%; height: 3%"></i><i class="ink" style="left: 7.5%; top: 52%; width: 23%; height: 3%"></i>
+        <i class="figure" style="left: 40.5%; top: 24%; width: 55.5%; height: 62.4%"></i>
+        <i class="figure" style="left: 7.5%; top: 74%; width: 28.5%; height: 12.4%"></i>
+        <i class="txt" style="left: 40.5%; top: 90.5%; width: 40%; height: 2.2%"></i>
+    </div>
+    <p class="meta abs mini-label" style="left: calc(14 * var(--u))" data-baseline="47">Feature page<br>1600 × 1000</p>
+    <p class="meta abs" id="pages-rules" data-captop="42" data-fade="0.4">One idea and one big real figure, its edges on grid lines. A section number, at most 25 words, three callouts, one highlighted phrase. A running head on every page, a folio on feature pages.</p>
+
+    <p class="smallprint abs footrule" id="foot" data-fade="0.4">Set in New Computer Modern and Latin Modern. A fallback font fails the build.</p>
+
+    <script src="proofs/shots/meta.js"></script>
+    <script type="module">
+        import { ready } from './page.mjs';
+        await ready({ meta: window.BRAND_SHOTS, shots: 'proofs/shots/' }, ({ fig, anchor, arrow, pointer, rect, k, unit }) => {
+            const sample = fig('#sample');
+            // The house style: an arrow leaves its note horizontally, at the first line's left end, and arrives with a slight curve.
+            const from = (id) => anchor(id, 'left', { dx: -14 * k, line: 'first' });
+            const label = sample.rect('text:x* = (3, 1)');
+            arrow({ from: from('#n1'), to: [label.x + label.width, label.y + label.height * 0.5], out: 180, in: 14, gap: 10 * k });
+            // Aim at free ground: this one comes in low, under the end of constraint line (2), so it crosses nothing and
+            // cannot be read as pointing at the line's own label "(2)". It all but touches the corner's label.
+            const corner = sample.rect('text:(4, 0)');
+            arrow({ from: from('#n2'), to: [corner.x + corner.width, corner.y + corner.height * 0.5], out: 180, in: 338, gap: 6 * k });
+            // The pointer and its devices, on plain paper.
+            const base = rect('#pointer-label');
+            pointer({ x: base.x + 1.1 * unit, y: base.y - 3.3 * unit, ring: 0.45 });
+            pointer({ x: base.x + 5.2 * unit, y: base.y - 3.3 * unit, held: true, keycap: 'Shift' });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+/*
+ * The stage of the videos. Type, paper and ink are the brand's (../brand/brand.css); this file only
+ * places things. Sizes are design px of a 1600 px page times --k, as in the brand kit, so the stage
+ * follows the output size: stage.mjs sets --W, --H, --u and --right from the film's layout.
+ * Nothing here animates by itself: stage.mjs writes every moving value for the time it is asked to draw.
+ */
+html,
+body {
+    overflow: hidden;
+}
+.stage {
+    --head-rule: 2; /* the running head's rule lies on grid line 2, as on the title page of the images */
+    --head-size: 21;
+}
+
+#paper,
+#page,
+#window,
+#band,
+#chip,
+#caption,
+#note,
+#overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+#paper {
+    z-index: 0;
+}
+#paper .paper-grid,
+#band .paper-grid {
+    z-index: 0;
+}
+
+/* ------------------------------------------------------------- the page */
+
+#page {
+    z-index: 1;
+    width: calc(var(--W) * 1px);
+    height: calc(var(--H) * 1px);
+}
+
+/*
+ * Title card and section cards: the title of the film (or of the section, with its number), set like the
+ * title of a paper, and one sentence. A section card is the title card's twin; stage.mjs makes one per
+ * section and moves it as timeline.mjs says.
+ */
+.card,
+.card-side {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+}
+.card-title,
+#end-title {
+    left: var(--left);
+}
+.card-lead {
+    left: var(--left);
+    font-size: calc(36.7 * var(--k)); /* 44 px at 1080p */
+    white-space: nowrap;
+}
+/* The highlighter stroke draws on from the left: stage.mjs sets --ink from 0 to 1. */
+.card-lead .hl {
+    background-repeat: no-repeat;
+    background-size: calc(var(--ink, 1) * 100%) 100%;
+}
+
+/* The figure of a card: a picture of the capture, cropped, with a caption in the manner of a paper. */
+.card-fig {
+    overflow: hidden;
+}
+.card-fig .shot {
+    height: 100%;
+}
+.card-cap {
+    font-size: calc(23 * var(--k));
+    white-space: nowrap;
+}
+
+/* End card. */
+#end-rule {
+    left: var(--left);
+    transform-origin: 0 50%;
+}
+#end-rows {
+    left: var(--left);
+    display: grid;
+    grid-template-columns: max-content max-content;
+    column-gap: calc(1.5 * var(--u));
+    row-gap: 0;
+    align-items: baseline;
+}
+#end-rows .label {
+    font: 400 calc(24 * var(--k)) / calc(2 * var(--u)) var(--caps);
+    letter-spacing: 0.085em;
+    color: var(--ink-2);
+}
+#end-rows .value {
+    font: 400 calc(36.7 * var(--k)) / calc(2 * var(--u)) var(--serif);
+    word-spacing: -0.04em;
+    color: var(--ink);
+    white-space: nowrap;
+    font-variant-numeric: lining-nums;
+}
+#end-rows .step {
+    margin: 0 0.42em;
+    color: var(--hair);
+}
+#end-print {
+    left: var(--left);
+    font-size: calc(23 * var(--k));
+    white-space: nowrap;
+}
+
+/* ----------------------------------------------------------- the figure */
+
+/*
+ * The app window, cropped to the film's figure (the editor). Its picture is a raw frame of the capture.
+ * stage.mjs writes the camera into its transform. --lift (0 to 1) is how far it has come off the page:
+ * the drop shadow grows with it while the window settles into place.
+ */
+#window {
+    z-index: 2;
+    overflow: hidden;
+    transform-origin: 0 0;
+    --lift: 1;
+    box-shadow:
+        0 0 0 var(--hairline) rgba(98, 110, 130, 0.42),
+        0 calc(1 * var(--k)) calc(2 * var(--k)) rgba(24, 40, 72, 0.1),
+        0 calc(var(--lift) * 12 * var(--k)) calc(var(--lift) * 30 * var(--k)) calc(var(--lift) * -11 * var(--k)) rgba(24, 40, 72, calc(0.05 + 0.2 * var(--lift)));
+}
+#window img {
+    position: absolute;
+    display: block;
+    max-width: none;
+}
+
+/* ------------------------------------------------------- over the page */
+
+/* The band: paper over the lower edge of the frame, fading in from its top edge. */
+#band {
+    z-index: 3;
+    width: 100%;
+    overflow: hidden;
+    /* Eased, so the paper has taken over well before the ramp ends: nothing shows half through its lower part. */
+    --band-mask: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.3) calc(0.2 * var(--band-ramp)), rgba(0, 0, 0, 0.78) calc(0.42 * var(--band-ramp)), rgba(0, 0, 0, 0.97) calc(0.62 * var(--band-ramp)), #000 calc(0.8 * var(--band-ramp)));
+    -webkit-mask-image: var(--band-mask);
+    mask-image: var(--band-mask);
+}
+
+/* The chip: the film's title stays on screen, in small capitals over the caption. */
+#chip {
+    z-index: 4;
+    left: var(--left);
+    margin: 0;
+    white-space: nowrap;
+    font: 400 calc(22.5 * var(--k)) / 1 var(--caps); /* 27 px at 1080p */
+    letter-spacing: 0.085em;
+    color: var(--ink-2);
+    font-variant-numeric: lining-nums;
+}
+#chip .secno {
+    margin-right: 0.5em;
+}
+
+/* One caption at a time, lower third, at the margin, in the text face: 56 px at 1080p, 28 px in a 960 px loop. */
+#caption {
+    z-index: 4;
+    left: var(--left);
+    margin: 0;
+    font: 400 calc(46.7 * var(--k)) / 1.2 var(--serif);
+    word-spacing: -0.04em;
+    color: var(--ink);
+    white-space: nowrap;
+}
+#caption .m {
+    margin: 0 0.06em;
+}
+
+/* The note of a callout: the brand's margin note, 38 px at 1080p, on a soft halo of paper so it reads over the app. */
+#note {
+    z-index: 5;
+    margin: 0;
+    white-space: nowrap;
+    font-size: calc(31.7 * var(--k) * var(--note-size, 1)); /* --note-size: a callout's `size` */
+    line-height: 1.2;
+    padding: calc(4 * var(--k)) calc(12 * var(--k));
+}
+#note::before {
+    content: "";
+    position: absolute;
+    /* Wide, but hardly higher than the letters: it must not wash out the line of UI under or over the note. */
+    inset: calc(5 * var(--k)) calc(-8 * var(--k)) calc(7 * var(--k));
+    z-index: -1;
+    border-radius: calc(18 * var(--k));
+    background: var(--paper);
+    opacity: 0.92;
+    filter: blur(calc(7 * var(--k)));
+}
+/* Numbered equations in the margin: upright, as a display in a paper. */
+#note.equations {
+    font-style: normal;
+}
+#note.equations::before {
+    display: none; /* they stand on the paper itself */
+}
+#note .eq-align {
+    font-size: calc(41.7 * var(--k) * var(--note-size, 1)); /* 50 px at 1080p */
+    line-height: calc(3 * var(--u)); /* each equation on a grid line of the page */
+}
+#note .eq-tag {
+    margin-left: 1.3em;
+    color: var(--ink-2);
+}
+
+#overlay {
+    z-index: 6;
+}
