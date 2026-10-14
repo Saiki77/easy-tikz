@@ -101,7 +101,7 @@ Then type the label below into the field Label of R1. For a parabola with the le
 
 Click the small numbers at the two ends of the slider c and type -3 and 0.5. Add the midpoint to the title as below, then press play on c.
 
-The line sweeps up and down. The crossings slide along the parabola and the area grows and shrinks. M moves too, but only up and down: its drop line stays at x = 5, and the title keeps printing 5.
+The line sweeps up and down. The crossings slide along the parabola and the area grows and shrinks. M moves too, but only up and down: as long as the line cuts the parabola twice, its drop line stays at x = 5 and the title keeps printing 5. Below c = -2.25 the line misses, and the next step shows what prints then.
 
 That is a property of every parabola: the midpoints of parallel chords lie on one vertical line, through the point where the parabola has the slope of the chords. Here the slope of the parabola, (x - 4)/2, is 0.5 at x = 5.
 
@@ -117,9 +117,13 @@ That is a property of every parabola: the midpoints of parallel chords lie on on
 
 ## 7. Let the line miss the parabola
 
-Stop playing, or drag c, at c = -2.5. The line now passes below the parabola. There are no crossings, so the title reads crossing points: 0 and midpoint x = ?.
+Stop playing and type -2.5 into the value of c. The line now passes below the parabola. There are no crossings, so the title reads crossing points: 0 and midpoint x = ?.
 
 A value that cannot be computed prints a question mark, and whatever needs it is not drawn: no M and no shaded area. The status chip at the top left of the preview lists the reasons. Move c back above -2.25 and everything returns.
+
+| Where | Type |
+| --- | --- |
+| Sliders, c: value | `-2.5` |
 
 ![Screenshot of the editor for step 7: Let the line miss the parabola](img/computed-values-7.png)
 

@@ -618,7 +618,13 @@ test('computed-values: count, midpoint and area follow c, and a missing crossing
         const d = 2 * Math.sqrt(9 + 4 * c);
         assert.ok(Math.abs(s.derived.P1_x2 - s.derived.P1_x - d) < 1e-6, `c = ${c}: chord ${s.derived.P1_x2 - s.derived.P1_x}, expected ${d}`);
     }
-    // Step 7: the line misses at c = -2.5.
+    // Step 6 says the 5 holds only while the line cuts twice: from the touching line at c = -2.25 down, the title prints `?`.
+    for (const c of [-2.25, -2.3, -2.8, -3]) {
+        assert.match(shown(stepOf('computed-values', 6, { c })).title, /^crossing points: [01], midpoint x = \?$/, `c = ${c}`);
+    }
+    // Step 7: the line misses at c = -2.5, the value its type row asks for.
+    assert.deepEqual(stepOf('computed-values', 7).parameters, stepOf('computed-values', 6).parameters);
+    assert.deepEqual(guideById('computed-values')?.steps[6].type, [{ where: 'Sliders, c: value', text: '-2.5' }]);
     const miss = shown(stepOf('computed-values', 7, { c: -2.5 }));
     assert.equal(miss.title, 'crossing points: 0, midpoint x = ?');
     assert.deepEqual(miss.markers, []);

@@ -33,7 +33,7 @@ The picture will hold a circle on the left and one period of a sine wave on the 
 
 *Ranges, the Middle axis style, Equal scale and a wide export size, all in the Chart tab.*
 
-> **Tip:** With Equal scale on, one unit has the same length on both axes and the rest of the canvas stays empty. An export size with the same proportions as the ranges leaves no empty space.
+> **Tip:** With Equal scale on, one unit has the same length on both axes, and the part of the canvas the plot does not need stays empty. An export size of about the same shape as the ranges keeps that empty part small.
 
 ## 2. Draw the unit circle
 
@@ -122,7 +122,7 @@ Open the Chart tab and type the title below. Back in the Build tab, click the pl
 
 The point runs around the circle, the dashed path follows, and the sine curve grows behind the second point: one turn in about four seconds, then back again. The title prints the angle and its sine on every frame. Click the button again to stop, for example near a = 4.
 
-While it plays, a moves on a finer grid than its step, so the motion is smooth. When you stop, it snaps back onto the step.
+A step of 0.01 is already fine enough for smooth motion, so play moves a from one step to the next. With a coarse step such as 0.5, play moves on a finer grid while it runs and puts a back onto the step when you stop. A whole-number step such as 1 stays whole while it plays, so a count never turns into a fraction.
 
 | Where | Type |
 | --- | --- |

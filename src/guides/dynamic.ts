@@ -150,7 +150,7 @@ function animateGuide(): Guide {
                     actions: [{ focus: ['chart', 'ymax'] }],
                     caption: 'Ranges, the Middle axis style, Equal scale and a wide export size, all in the Chart tab.',
                 },
-                tip: 'With Equal scale on, one unit has the same length on both axes and the rest of the canvas stays empty. An export size with the same proportions as the ranges leaves no empty space.',
+                tip: 'With Equal scale on, one unit has the same length on both axes, and the part of the canvas the plot does not need stays empty. An export size of about the same shape as the ranges keeps that empty part small.',
             },
             {
                 title: 'Draw the unit circle',
@@ -238,7 +238,7 @@ function animateGuide(): Guide {
                 body: paragraphs(
                     'Open the Chart tab and type the title below. Back in the Build tab, click the play button on the row of a.',
                     'The point runs around the circle, the dashed path follows, and the sine curve grows behind the second point: one turn in about four seconds, then back again. The title prints the angle and its sine on every frame. Click the button again to stop, for example near a = 4.',
-                    'While it plays, a moves on a finer grid than its step, so the motion is smooth. When you stop, it snaps back onto the step.'
+                    'A step of 0.01 is already fine enough for smooth motion, so play moves a from one step to the next. With a coarse step such as 0.5, play moves on a finer grid while it runs and puts a back onto the step when you stop. A whole-number step such as 1 stays whole while it plays, so a count never turns into a fraction.'
                 ),
                 type: [{ where: 'Chart > Axes, Title', text: title }],
                 chart: finished,
@@ -402,7 +402,7 @@ function secantGuide(): Guide {
             {
                 title: 'Play a and h together',
                 body: paragraphs(
-                    'Click the small numbers at the two ends of the slider a and type 0 and 6, so that A stays in view. Then press play on a as well, while h keeps playing.',
+                    'Click the small numbers at the two ends of the slider a and type 0 and 6, so that A stays in view. Then press play on h again, and on a as well.',
                     'Each slider sweeps its own range in about four seconds, so A travels along the curve while B closes in on it and moves away again. The tangent, the secant and both numbers in the title follow on every frame.'
                 ),
                 type: [
@@ -685,7 +685,7 @@ function computedGuide(): Guide {
                 title: 'Play c and watch the midpoint',
                 body: paragraphs(
                     'Click the small numbers at the two ends of the slider c and type -3 and 0.5. Add the midpoint to the title as below, then press play on c.',
-                    'The line sweeps up and down. The crossings slide along the parabola and the area grows and shrinks. M moves too, but only up and down: its drop line stays at x = 5, and the title keeps printing 5.',
+                    'The line sweeps up and down. The crossings slide along the parabola and the area grows and shrinks. M moves too, but only up and down: as long as the line cuts the parabola twice, its drop line stays at x = 5 and the title keeps printing 5. Below c = -2.25 the line misses, and the next step shows what prints then.',
                     'That is a property of every parabola: the midpoints of parallel chords lie on one vertical line, through the point where the parabola has the slope of the chords. Here the slope of the parabola, (x - 4)/2, is 0.5 at x = 5.'
                 ),
                 type: [
@@ -703,9 +703,10 @@ function computedGuide(): Guide {
             {
                 title: 'Let the line miss the parabola',
                 body: paragraphs(
-                    'Stop playing, or drag c, at c = -2.5. The line now passes below the parabola. There are no crossings, so the title reads crossing points: 0 and midpoint x = ?.',
+                    'Stop playing and type -2.5 into the value of c. The line now passes below the parabola. There are no crossings, so the title reads crossing points: 0 and midpoint x = ?.',
                     'A value that cannot be computed prints a question mark, and whatever needs it is not drawn: no M and no shaded area. The status chip at the top left of the preview lists the reasons. Move c back above -2.25 and everything returns.'
                 ),
+                type: [{ where: 'Sliders, c: value', text: '-2.5' }],
                 shot: {
                     reveal: ['c'],
                     actions: [{ slider: ['c', -2.5] }],

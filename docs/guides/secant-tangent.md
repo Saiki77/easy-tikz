@@ -127,7 +127,7 @@ That is the derivative as a limit: the slope of the secant tends to the slope of
 
 ## 8. Play a and h together
 
-Click the small numbers at the two ends of the slider a and type 0 and 6, so that A stays in view. Then press play on a as well, while h keeps playing.
+Click the small numbers at the two ends of the slider a and type 0 and 6, so that A stays in view. Then press play on h again, and on a as well.
 
 Each slider sweeps its own range in about four seconds, so A travels along the curve while B closes in on it and moves away again. The tangent, the secant and both numbers in the title follow on every frame.
 
