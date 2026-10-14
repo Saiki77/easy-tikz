@@ -36,6 +36,30 @@ export const PLUGIN_ID = 'easy-tikz';
 /** Port convention: one port per script, so several can run at once. See README.md. */
 export const PORTS = { smoke: 9341, guides: 9342, promo: 9343, video: 9344 };
 
+/**
+ * Version of the "What's new" popup in the sources (WHATS_NEW_VERSION in
+ * src/whatsnew.ts). Read from the file, so pictures never show the popup
+ * after its content changes.
+ */
+function whatsNewVersion() {
+    try {
+        const src = fs.readFileSync(path.join(REPO, 'src', 'whatsnew.ts'), 'utf8');
+        const m = /export const WHATS_NEW_VERSION = '([^']+)'/.exec(src);
+        if (m) return m[1];
+    } catch {
+        // An older checkout without the popup: the record does no harm.
+    }
+    return '4.2.0';
+}
+
+/**
+ * What every capture vault starts with in the plugin's data.json:
+ *   dragTipSeen     the one-time first-hover tip of the editor preview stays away
+ *   whatsNewSeen    the "What's new" popup stays away (without it, data.json reads like that of a user who updated)
+ * Pass `pluginData` to launch() to change them, e.g. { whatsNewSeen: undefined } for a user coming from 3.x.
+ */
+export const DEFAULT_PLUGIN_DATA = Object.freeze({ dragTipSeen: true, whatsNewSeen: whatsNewVersion() });
+
 const OBSIDIAN_BIN = process.env.OBSIDIAN_BIN || '/Applications/Obsidian.app/Contents/MacOS/Obsidian';
 const USER_PROFILE = path.join(os.homedir(), 'Library', 'Application Support', 'obsidian');
 const MARKER = '.etz-media-workdir';
@@ -182,7 +206,9 @@ export async function importTs(entry) {
  *               'root': copy main.js, styles.css, manifest.json from the repository root (what `npm run build` made);
  *               a directory path: copy the three files from there
  *   theme       'light' (default) or 'dark'
- *   pluginData  merged into the plugin's data.json (default { dragTipSeen: true }, see README)
+ *   pluginData  merged into the plugin's data.json (over DEFAULT_PLUGIN_DATA, see README);
+ *               null writes no data.json at all (a fresh install; with an easy-tikz block in a note the
+ *               plugin takes it for a 3.x user and shows the "What's new" popup)
  *   notes       { 'Name.md': 'markdown' } written into the vault
  *   fresh       true (default): wipe the vault and the profile first
  *   appConfig   merged into .obsidian/app.json
@@ -229,8 +255,13 @@ export async function prepare({ workDir, plugin = process.env.ETZ_MEDIA_PLUGIN |
         }
     }
     const dataFile = path.join(pluginDir, 'data.json');
-    const stored = !fresh && fs.existsSync(dataFile) ? JSON.parse(fs.readFileSync(dataFile, 'utf8')) : {};
-    writeJson(dataFile, { dragTipSeen: true, ...stored, ...pluginData });
+    if (pluginData === null) {
+        // A fresh install: the plugin never saved anything.
+        fs.rmSync(dataFile, { force: true });
+    } else {
+        const stored = !fresh && fs.existsSync(dataFile) ? JSON.parse(fs.readFileSync(dataFile, 'utf8')) : {};
+        writeJson(dataFile, { ...DEFAULT_PLUGIN_DATA, ...stored, ...pluginData });
+    }
 
     // Vault configuration.
     const config = path.join(vault, '.obsidian');

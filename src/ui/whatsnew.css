@@ -1,0 +1,350 @@
+/* "What's new" popup (src/ui/whatsNewModal.ts): title, a live chart with
+   its slider strip beside the slider and calculation highlights, the other
+   highlights of version 4 in two columns, and the buttons. Theme colours
+   only, so light and dark both work; one column when the window is narrow. */
+
+/* Title, scrolling content, and the buttons as a footer that stays in view. */
+.modal.etz-whatsnew {
+    display: flex;
+    flex-direction: column;
+    width: min(940px, calc(100vw - 48px));
+    max-width: none;
+    max-height: calc(100vh - 48px);
+    overflow: hidden;
+}
+
+.modal.etz-whatsnew .modal-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.modal.etz-whatsnew .etz-whatsnew-title {
+    font-size: 26px;
+    font-weight: 750;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
+}
+
+.etz-whatsnew-version {
+    color: var(--interactive-accent);
+}
+
+p.etz-whatsnew-subtitle {
+    margin: 2px 0 18px;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+/* ---------------------------------------------------------------- hero */
+
+.etz-whatsnew-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 28px;
+    align-items: stretch;
+}
+
+.etz-whatsnew-side {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+}
+
+figure.etz-whatsnew-figure {
+    position: relative;
+    margin: 0;
+    padding: 10px 10px 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--background-primary);
+}
+
+.etz-whatsnew-chart {
+    width: 100%;
+    aspect-ratio: var(--etz-whatsnew-aspect, 1.25);
+}
+
+.etz-whatsnew-chart > svg.etz-whatsnew-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+}
+
+.etz-inline-strip.etz-whatsnew-strip {
+    margin-top: 6px;
+}
+
+button.etz-icon-btn.etz-whatsnew-play {
+    margin-top: 1px;
+}
+
+button.etz-icon-btn.etz-whatsnew-play[aria-pressed='true'] {
+    color: var(--interactive-accent);
+}
+
+figcaption.etz-whatsnew-caption {
+    margin-top: 8px;
+    padding: 0 2px;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    line-height: 1.45;
+}
+
+.etz-whatsnew-fallback {
+    padding: 24px 8px;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    text-align: center;
+}
+
+/* --------------------------------------------------------------- items */
+
+.etz-whatsnew-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.etz-whatsnew-list.mod-live {
+    padding-top: 2px;
+    gap: 20px;
+}
+
+.etz-whatsnew-list.mod-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 24px;
+}
+
+/* The lines the live chart is made of, level with the bottom of the chart. */
+.etz-whatsnew-recipe {
+    margin-top: auto;
+    padding: 12px 14px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--background-primary-alt);
+}
+
+.etz-whatsnew-recipe-title {
+    margin-bottom: 6px;
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+    font-variant-caps: all-small-caps;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+dl.etz-whatsnew-recipe-rows {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 4px 14px;
+    align-items: baseline;
+    margin: 0;
+}
+
+.etz-whatsnew-recipe-rows dt,
+.etz-whatsnew-recipe-rows dd {
+    margin: 0;
+    min-width: 0;
+}
+
+.etz-whatsnew-recipe-rows dt code {
+    color: var(--text-normal);
+    font-family: var(--font-monospace);
+    font-size: 11.5px;
+    white-space: nowrap;
+}
+
+/* Wraps in a narrow window instead of being cut off. */
+.etz-whatsnew-recipe-rows dd {
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+    line-height: 1.35;
+}
+
+.etz-whatsnew-item {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+
+.etz-whatsnew-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--etz-radius-l);
+    background-color: var(--etz-accent-tint);
+    color: var(--interactive-accent);
+}
+
+.etz-whatsnew-icon svg {
+    width: 17px;
+    height: 17px;
+    stroke-width: 1.9;
+}
+
+.etz-whatsnew-list.mod-grid .etz-whatsnew-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--etz-radius-m);
+    background-color: var(--background-secondary);
+    color: var(--text-muted);
+}
+
+.etz-whatsnew-list.mod-grid .etz-whatsnew-item {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 10px;
+}
+
+.etz-whatsnew-list.mod-grid .etz-whatsnew-icon svg {
+    width: 15px;
+    height: 15px;
+}
+
+.etz-whatsnew-item-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.etz-whatsnew-item-title {
+    min-width: 0;
+    color: var(--text-normal);
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.35;
+}
+
+button.etz-btn.mod-link.etz-whatsnew-item-guide {
+    flex: 0 0 auto;
+    height: auto;
+    margin-left: auto;
+    padding: 0;
+    font-size: var(--etz-font-small);
+    line-height: 1.35;
+}
+
+.etz-whatsnew-list.mod-grid .etz-whatsnew-item-title {
+    font-size: var(--etz-font);
+}
+
+.etz-whatsnew-item-text {
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: var(--etz-font);
+    line-height: 1.45;
+}
+
+.etz-whatsnew-list.mod-grid .etz-whatsnew-item-text {
+    font-size: var(--etz-font-small);
+}
+
+.etz-whatsnew-item-text code,
+.etz-whatsnew-caption code {
+    padding: 0 3px;
+    border-radius: var(--etz-radius-s);
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    font-family: var(--font-monospace);
+    font-size: 0.92em;
+    white-space: nowrap;
+}
+
+/* Links to guides read as part of the sentence. */
+button.etz-btn.mod-link.etz-whatsnew-guide {
+    display: inline;
+    height: auto;
+    padding: 0;
+    font-size: inherit;
+    line-height: inherit;
+    vertical-align: baseline;
+}
+
+/* ---------------------------------------------------------------- more */
+
+section.etz-whatsnew-more {
+    margin-top: 22px;
+    padding: 16px 0 18px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+h3.etz-whatsnew-h {
+    margin: 0 0 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-variant-caps: all-small-caps;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    line-height: 1.3;
+}
+
+/* ------------------------------------------------------------- actions */
+
+.etz-whatsnew-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.etz-whatsnew-hint {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-right: 8px;
+    color: var(--text-faint);
+    font-size: var(--etz-font-meta);
+    line-height: 1.4;
+}
+
+/* -------------------------------------------------------------- narrow */
+
+@media (max-width: 1000px) {
+    .etz-whatsnew-list.mod-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .etz-whatsnew-hero,
+    .etz-whatsnew-list.mod-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .etz-whatsnew-actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .etz-whatsnew-hint {
+        flex-basis: 100%;
+        margin: 0 0 4px;
+    }
+
+    .etz-whatsnew-recipe {
+        margin-top: 0;
+    }
+}
+
+/* ----------------------------------------------------------- Help link */
+
+.etz-help-news {
+    display: flex;
+    justify-content: flex-end;
+    margin: -8px 0 -4px;
+}
+
+.etz-help-news button.etz-btn.mod-link {
+    font-size: var(--etz-font-small);
+}

@@ -787,9 +787,10 @@ export class TikzModal extends Modal implements PanelHost {
         this.undoTimer = window.setTimeout(() => this.hideUndo(), UNDO_VISIBLE_MS);
     }
 
-    loadChart(data: Record<string, unknown>): void {
+    loadChart(data: Record<string, unknown>, onApplied?: () => void): void {
         if (!this.hasContent()) {
             this.applyChart(data);
+            if (onApplied) onApplied();
             return;
         }
         void confirmDialog(this.app, {
@@ -798,7 +799,9 @@ export class TikzModal extends Modal implements PanelHost {
             confirmText: 'Replace',
             destructive: true,
         }).then((ok) => {
-            if (ok && this.isOpen) this.applyChart(data);
+            if (!ok || !this.isOpen) return;
+            this.applyChart(data);
+            if (onApplied) onApplied();
         });
     }
 
@@ -817,6 +820,12 @@ export class TikzModal extends Modal implements PanelHost {
         const panel = this.tabPanels.get(tab);
         if (panel && previous !== tab) panel.scrollTop = this.tabScroll.get(tab) ?? 0;
         if (tab === 'code') this.codePanel?.onShow();
+    }
+
+    /** The Help tab on its list of guides, or on one guide (the "What's new" popup links here). */
+    openHelp(guideId?: string): void {
+        this.showTab('help');
+        if (!guideId || !this.helpPanel?.showGuide(guideId)) this.helpPanel?.showHome();
     }
 
     // ================================================================ lifecycle

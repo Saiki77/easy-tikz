@@ -10,6 +10,7 @@ import { Parameter } from '../types';
 import { UserTemplate } from '../templates';
 import type { ChartDraft } from '../templates';
 import type { HistoryEntry } from '../drag/history';
+import type { WhatsNewActions } from './whatsNewModal';
 
 /** The plugin object the modal receives (main.ts implements it). */
 export interface PluginHost {
@@ -28,6 +29,11 @@ export interface PluginHost {
     saveUserTemplates(templates: UserTemplate[]): Promise<void>;
     /** Persist `data` (drafts). */
     saveSettings(): Promise<void>;
+    /**
+     * Optional: open the "What's new" popup (src/ui/whatsNewModal.ts). The
+     * Help tab passes `actions` so the popup's buttons act on its editor.
+     */
+    showWhatsNew?(actions?: WhatsNewActions): void;
 }
 
 /** Something a panel registered so the modal can validate / focus it. */
@@ -113,8 +119,12 @@ export interface PanelHost {
      */
     pushHistory?(entry: HistoryEntry): void;
 
-    /** Replace the whole chart (examples, draft restore). Asks for confirmation when the chart is not empty. */
-    loadChart(data: Record<string, unknown>): void;
+    /**
+     * Replace the whole chart (examples, draft restore). Asks for confirmation
+     * when the chart is not empty; `onApplied` runs once the chart is in (not
+     * when the reader cancels).
+     */
+    loadChart(data: Record<string, unknown>, onApplied?: () => void): void;
 
     /** Switch the left panel to a tab. */
     showTab(tab: 'build' | 'chart' | 'code' | 'help'): void;

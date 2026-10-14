@@ -15,6 +15,7 @@ import * as path from 'node:path';
 import { test, assert } from './_lib';
 import { SettingsManager } from '../src/settings';
 import { EXAMPLES } from '../src/migrate';
+import { whatsNewChart } from '../src/whatsnew';
 import { Function3DParameters, FunctionParameters } from '../src/types';
 
 const TIMEOUT_MS = 30000;
@@ -450,6 +451,8 @@ if (!hasLatex) {
 
     const cases: Array<{ name: string; data: Record<string, unknown> }> = [];
     for (const ex of EXAMPLES) cases.push({ name: `example-${ex.id}`, data: ex.data });
+    // The live chart of the "What's new" popup, which Try an example opens in the editor.
+    cases.push({ name: 'whats-new', data: whatsNewChart() });
     for (const [k, data] of Object.entries(LEGACY_2D)) cases.push({ name: `legacy-${k}`, data });
     for (const [k, data] of Object.entries(LEGACY_3D)) cases.push({ name: `legacy-${k}`, data });
     for (const [k, data] of Object.entries(STRESS)) cases.push({ name: `stress-${k}`, data });
