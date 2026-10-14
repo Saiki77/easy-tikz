@@ -199,8 +199,9 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 
 ## Next guides
 
-- [Drag shapes to edit them](drag-to-edit.md): Grab a line or a curve in the preview and its numbers follow: move, turn, stretch, undo.
+- [Animate a chart with play](animate-play.md): A point runs around the unit circle while the sine curve draws itself behind it: one slider in points, a domain, a path and the title, then press play.
 - [Tangents and extrema](tangents-extrema.md): Mark the turning points of a function, add a tangent, slide it along the curve and label its slope.
+- [Drag shapes to edit them](drag-to-edit.md): Grab a line or a curve in the preview and its numbers follow: move, turn, stretch, undo.
 - [Charts in your notes](charts-in-notes.md): Insert a chart into a note, play with its sliders there, set its width and alignment, and open it again to change it.
 
 [All guides](README.md)
