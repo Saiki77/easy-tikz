@@ -24,3 +24,6 @@ data.json
 
 # test bundles
 .tmp-tests
+
+# local Claude Code sessions and worktrees
+.claude/
