@@ -17,10 +17,11 @@
  *   segmented(parent, {label, options, value, onChange, fill?})
  *                                           radiogroup; arrows / Home / End move and select
  *   chip(parent, {label, value, onChange})  toggle button (aria-pressed) with a check mark
- *   liveSlider(parent, {min, max, step, value, label, onInput, onCommit?, readout?, format?, onRangeChange?})
+ *   liveSlider(parent, {min, max, step, value, label, onInput, onCommit?, readout?, format?, onRangeChange?, fixedRange?})
  *                                           native range + Obsidian `slider` class; `input` event -> onInput,
  *                                           `change` -> onCommit; --slider-fill-ratio kept in sync on every set;
  *                                           ignores the wheel; values outside min..max widen the range
+ *                                           (fixedRange: are clamped instead)
  *                                           (handle.input is exposed for pointerdown / pointerup listeners)
  *   numberInput(parent, {value, label, step?, min?, max?, onCommit, onInput?})
  *                                           Arrow Up/Down = step, Shift x10, Alt x0.1; commits on blur / Enter
@@ -542,6 +543,8 @@ export interface LiveSliderOptions {
     format?: (value: number) => string;
     /** After the range widened to fit a typed or programmatic value (persist min / max here). */
     onRangeChange?: (min: number, max: number) => void;
+    /** Keep min..max: typed and programmatic values outside it are clamped instead of widening the range. */
+    fixedRange?: boolean;
     cls?: string;
 }
 
@@ -584,6 +587,8 @@ export function liveSlider(parent: HTMLElement, opts: LiveSliderOptions): LiveSl
                   step: step > 0 ? step : undefined,
                   // The typed readout must stay parseable, so it ignores opts.format ('20 %').
                   format: numeric,
+                  min: opts.fixedRange ? min : undefined,
+                  max: opts.fixedRange ? max : undefined,
                   cls: 'etz-slider-number',
                   onCommit: (v) => {
                       apply(v);
@@ -613,8 +618,9 @@ export function liveSlider(parent: HTMLElement, opts: LiveSliderOptions): LiveSl
         if (textReadout) textReadout.setText(text);
         if (typedReadout && activeDocument.activeElement !== typedReadout.el) typedReadout.setValue(value);
     };
-    const apply = (v: number) => {
-        if (!Number.isFinite(v)) return;
+    const apply = (next: number) => {
+        if (!Number.isFinite(next)) return;
+        const v = opts.fixedRange ? Math.min(max, Math.max(min, next)) : next;
         widenTo(v);
         value = v;
         input.value = String(v);

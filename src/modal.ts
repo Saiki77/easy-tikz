@@ -787,9 +787,10 @@ export class TikzModal extends Modal implements PanelHost {
         this.undoTimer = window.setTimeout(() => this.hideUndo(), UNDO_VISIBLE_MS);
     }
 
-    loadChart(data: Record<string, unknown>): void {
+    loadChart(data: Record<string, unknown>, onApplied?: () => void): void {
         if (!this.hasContent()) {
             this.applyChart(data);
+            if (onApplied) onApplied();
             return;
         }
         void confirmDialog(this.app, {
@@ -798,7 +799,9 @@ export class TikzModal extends Modal implements PanelHost {
             confirmText: 'Replace',
             destructive: true,
         }).then((ok) => {
-            if (ok && this.isOpen) this.applyChart(data);
+            if (!ok || !this.isOpen) return;
+            this.applyChart(data);
+            if (onApplied) onApplied();
         });
     }
 

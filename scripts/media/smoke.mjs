@@ -178,6 +178,53 @@ async function clickWhatsNewButton(text) {
     await obs.waitFor(() => obs.call(() => !document.querySelector('.modal.etz-whatsnew')), { timeout: 5000, message: 'the popup to close' });
 }
 
+/** Notes of the vault that hold an easy-tikz block (what the plugin looks for when it has no stored data). */
+const notesWithCharts = () =>
+    obs.call(async () => {
+        const out = [];
+        for (const file of app.vault.getMarkdownFiles()) {
+            if (/^[ \t>]*(?:`{3,}|~{3,})[ \t]*easy-tikz/m.test(await app.vault.cachedRead(file))) out.push(file.path);
+        }
+        return out;
+    });
+
+/** Turn every easy-tikz block of the vault into a json block (a vault without charts); returns the old texts. */
+const hideCharts = () =>
+    obs.call(async () => {
+        const held = {};
+        for (const file of app.vault.getMarkdownFiles()) {
+            const text = await app.vault.read(file);
+            const next = text.replace(/^([ \t>]*(?:`{3,}|~{3,})[ \t]*)easy-tikz/gm, '$1json');
+            if (next === text) continue;
+            held[file.path] = text;
+            await app.vault.modify(file, next);
+        }
+        return held;
+    });
+
+/** Put back what hideCharts changed. */
+const restoreCharts = (held) =>
+    obs.call(async (texts) => {
+        for (const [file, text] of Object.entries(texts)) {
+            const note = app.vault.getAbstractFileByPath(file);
+            if (note) await app.vault.modify(note, text);
+        }
+    }, held);
+
+/** Choose a button of the editor's "Replace the current chart?" dialog. */
+async function answerReplace(text) {
+    await obs.waitFor(() => obs.call(() => !!document.querySelector('.modal.etz-dialog')), { timeout: 5000, message: 'the Replace dialog' });
+    const ok = await obs.call((t) => {
+        const dialog = Array.from(document.querySelectorAll('.modal.etz-dialog')).pop();
+        const button = Array.from(dialog.querySelectorAll('.etz-dialog-actions button')).find((b) => (b.textContent || '').trim() === t);
+        if (button) button.click();
+        return !!button;
+    }, text);
+    assert(ok, `the Replace dialog has no button "${text}"`);
+    await obs.waitFor(() => obs.call(() => !document.querySelector('.modal.etz-dialog')), { timeout: 5000, message: 'the Replace dialog to close' });
+    await obs.sleep(150);
+}
+
 // ------------------------------------------------------------------ app
 
 const started = await check('Obsidian starts and the plugin loads', async () => {
@@ -498,7 +545,22 @@ if (started) {
             const a = Number(/x = (-?[\d.]+)/.exec(state.slope || '')?.[1]);
             assert(state.playing === false, 'play is still pressed');
             assert(Number.isFinite(a) && Math.abs(a * 20 - Math.round(a * 20)) < 1e-9, `after play a = ${a} is not on the slider's step 0.05`);
-            return `slider to -0.9, play stopped at a = ${a}`;
+            // A typed value outside -1.1..1.1 stops at the end (a wider slider would push the shading out of the view).
+            const typed = await obs.call(() => {
+                const box = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip .etz-slider-number');
+                const range = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip input[type=range]');
+                box.focus();
+                box.value = '5';
+                box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                box.blur();
+                return { box: box.value, max: range.max, value: range.value };
+            });
+            await obs.sleep(250);
+            state = await whatsNewState();
+            assert(typed.max === '1.1' && typed.value === '1.1' && typed.box === '1.1', `typing 5: ${JSON.stringify(typed)}`);
+            // At a = 1.1: slope 3(1.21) - 3 = 0.63, area 27(1.4641)/4 = 9.88.
+            assert(state.slope === 'slope at x = 1.1: 0.63' && state.area === 'A = 9.88', `after typing 5: "${state.slope}", "${state.area}"`);
+            return `slider to -0.9, play stopped at a = ${a}, typing 5 gives 1.1`;
         });
         await check('what\'s new: Close removes it, and reloading the plugin does not show it again', async () => {
             await clickWhatsNewButton('Close');
@@ -507,21 +569,53 @@ if (started) {
             const state = await whatsNewState();
             assert(state.count === 0, 'the popup opened a second time');
         });
-        await check('what\'s new: a fresh install shows none and records it as seen', async () => {
+        // No data.json: 3.x saved one only after a settings change, so most 3.x users have none. Charts in the vault tell.
+        await check('what\'s new: no data.json but a chart in a note (a 3.x user who never changed a setting) shows it once', async () => {
+            await obs.writeNote('Made with 3.x', 'A chart from before version 4:\n\n```easy-tikz\n' + JSON.stringify(lp.data, null, 2) + '\n```\n');
             fs.rmSync(dataFile(), { force: true });
             await reloadPlugin();
+            await obs.waitFor(async () => (await whatsNewState()).count > 0, { timeout: 8000, message: 'the popup to open after the vault check' });
             const state = await whatsNewState();
-            assert(state.count === 0, 'a fresh install got the popup');
-            await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 3000, message: 'data.json to record the popup as seen' });
+            assert(state.count === 1 && state.title === 'Easy TikZ 4', `${state.count} popups, title "${state.title}"`);
+            await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 3000, message: 'data.json to record the popup' });
+            await clickWhatsNewButton('Close');
+            await reloadPlugin();
+            assert((await whatsNewState()).count === 0, 'the popup opened a second time');
+            return `${(await notesWithCharts()).length} notes with charts`;
+        });
+        let held = null;
+        await check('what\'s new: no data.json and no chart in the vault (a fresh install) shows none and records it as seen', async () => {
+            held = await hideCharts();
+            await obs.sleep(300);
+            const left = await notesWithCharts();
+            assert(!left.length, `notes still holding a chart: ${left.join(', ')}`);
+            fs.rmSync(dataFile(), { force: true });
+            await reloadPlugin();
+            await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 5000, message: 'data.json to record the popup as seen' });
+            assert((await whatsNewState()).count === 0, 'a fresh install got the popup');
             await reloadPlugin();
             assert((await whatsNewState()).count === 0, 'the popup opened after the next start');
+            return `${Object.keys(held).length} notes held back`;
         });
-        await check('what\'s new: the setting is on by default and switches it off', async () => {
+        await check('what\'s new: an unreadable data.json is left on disk as it is', async () => {
+            const broken = '{ "userTemplates": [ broken';
+            fs.writeFileSync(dataFile(), broken);
+            await reloadPlugin();
+            await obs.sleep(1200);
+            assert((await whatsNewState()).count === 0, 'the popup opened');
+            assert(fs.readFileSync(dataFile(), 'utf8') === broken, `data.json was rewritten: ${fs.readFileSync(dataFile(), 'utf8').slice(0, 80)}`);
+            // Obsidian itself logs that it could not read the file: expected here, so it does not fail the run.
+            for (let i = obs.errors.length - 1; i >= seenErrors; i--) if (/json/i.test(obs.errors[i].text)) obs.errors.splice(i, 1);
+        });
+        if (held) await restoreCharts(held);
+        await check('what\'s new: the setting is on by default and switches it off, and loading writes nothing', async () => {
             const on = await obs.call((id) => app.plugins.plugins[id].data.showWhatsNew, PLUGIN_ID);
             assert(on === true, `showWhatsNew is ${on}`);
-            fs.writeFileSync(dataFile(), JSON.stringify({ userTemplates: [], showWhatsNew: false }, null, 2));
+            const off = JSON.stringify({ userTemplates: [], showWhatsNew: false }, null, 2);
+            fs.writeFileSync(dataFile(), off);
             await reloadPlugin();
             assert((await whatsNewState()).count === 0, 'the popup opened with the setting off');
+            assert(fs.readFileSync(dataFile(), 'utf8') === off, 'data.json was written while the plugin loaded');
         });
         await check('what\'s new: the command opens it, and Try an example opens the editor on its chart', async () => {
             const ok = await obs.call((id) => app.commands.executeCommandById(`${id}:show-whats-new`), PLUGIN_ID);
@@ -566,16 +660,25 @@ if (started) {
             return `${WHATS_NEW.WHATS_NEW_ICONS.length} icons`;
         });
         await check('what\'s new: the link in the Help tab opens it, and its buttons stay in that editor', async () => {
-            await obs.openEditor();
+            // An editor with a chart in it: Try an example asks before replacing it.
+            await obs.openEditor({ chart: lp.data });
             await obs.showTab('help');
             assert(await obs.call(() => !!document.querySelector('.modal.tikz-modal .etz-help-news-link .etz-btn-icon svg')), 'the link in the Help tab has no icon');
-            await obs.mouse.click('.modal.tikz-modal .etz-help-news-link');
-            await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the Help tab' });
-            await clickWhatsNewButton('Try an example');
-            await obs.waitForRender();
-            const state = await obs.editorState();
-            assert(state.tab === 'build', `the editor shows the ${state.tab} tab`);
-            const chart = await obs.chart();
+            const tryFromHelp = async (answer) => {
+                await obs.mouse.click('.modal.tikz-modal .etz-help-news-link');
+                await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the Help tab' });
+                await clickWhatsNewButton('Try an example');
+                await answerReplace(answer);
+                await obs.waitForRender();
+                return [await obs.editorState(), await obs.chart()];
+            };
+            // Cancel: the reader stays on the Help tab with the old chart.
+            let [state, chart] = await tryFromHelp('Cancel');
+            assert(state.tab === 'help', `after Cancel the editor shows the ${state.tab} tab`);
+            assert(sameJson(chart.tools.map((t) => t.name), lp.data.tools.map((t) => t.name)), 'Cancel replaced the chart');
+            // Replace: the example is in, on the Build tab.
+            [state, chart] = await tryFromHelp('Replace');
+            assert(state.tab === 'build', `after Replace the editor shows the ${state.tab} tab`);
             assert(chart.tools.length === 1 && chart.tools[0].name === 'R1', 'the example did not load into this editor');
             const editors = await obs.call(() => document.querySelectorAll('.modal.tikz-modal').length);
             assert(editors === 1, `${editors} editors are open`);

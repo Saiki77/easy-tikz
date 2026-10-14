@@ -112,7 +112,7 @@ figcaption.etz-whatsnew-caption {
 
 .etz-whatsnew-list.mod-live {
     padding-top: 2px;
-    gap: 16px;
+    gap: 20px;
 }
 
 .etz-whatsnew-list.mod-grid {
@@ -121,10 +121,10 @@ figcaption.etz-whatsnew-caption {
     gap: 16px 24px;
 }
 
-/* The five lines the live chart is made of, level with the bottom of the chart. */
+/* The lines the live chart is made of, level with the bottom of the chart. */
 .etz-whatsnew-recipe {
     margin-top: auto;
-    padding: 10px 12px;
+    padding: 12px 14px;
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--etz-radius-l);
     background-color: var(--background-primary-alt);
@@ -142,7 +142,7 @@ figcaption.etz-whatsnew-caption {
 dl.etz-whatsnew-recipe-rows {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
-    gap: 3px 12px;
+    gap: 4px 14px;
     align-items: baseline;
     margin: 0;
 }
@@ -160,12 +160,11 @@ dl.etz-whatsnew-recipe-rows {
     white-space: nowrap;
 }
 
+/* Wraps in a narrow window instead of being cut off. */
 .etz-whatsnew-recipe-rows dd {
-    overflow: hidden;
     color: var(--text-muted);
     font-size: var(--etz-font-meta);
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    line-height: 1.35;
 }
 
 .etz-whatsnew-item {

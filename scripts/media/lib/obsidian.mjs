@@ -207,7 +207,8 @@ export async function importTs(entry) {
  *               a directory path: copy the three files from there
  *   theme       'light' (default) or 'dark'
  *   pluginData  merged into the plugin's data.json (over DEFAULT_PLUGIN_DATA, see README);
- *               null writes no data.json at all (a fresh install)
+ *               null writes no data.json at all (a fresh install; with an easy-tikz block in a note the
+ *               plugin takes it for a 3.x user and shows the "What's new" popup)
  *   notes       { 'Name.md': 'markdown' } written into the vault
  *   fresh       true (default): wipe the vault and the profile first
  *   appConfig   merged into .obsidian/app.json

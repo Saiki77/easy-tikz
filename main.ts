@@ -1,4 +1,4 @@
-import { App, MarkdownPostProcessorContext, Notice, Plugin, PluginSettingTab, SettingDefinitionItem, TFile, setIcon } from 'obsidian';
+import { App, MarkdownPostProcessorContext, Notice, Plugin, PluginSettingTab, SettingDefinitionItem, TFile, normalizePath, setIcon } from 'obsidian';
 import { TikzModal } from './src/modal';
 import { SettingsManager } from './src/settings';
 import { SVGRenderer } from './src/renderer';
@@ -14,7 +14,7 @@ import { issueText, mergeViewErrors } from './src/issues';
 import { cloneData, errorText, fitPixelScale } from './src/util';
 import { IconButtonHandle, LiveSliderHandle, iconButton, liveSlider, textButton, uniqueId, visuallyHidden } from './src/ui/kit';
 import { WhatsNewActions, WhatsNewModal } from './src/ui/whatsNewModal';
-import { WHATS_NEW_VERSION, shouldShowWhatsNew, whatsNewSeen } from './src/whatsnew';
+import { WHATS_NEW_VERSION, chartScanRank, hasEasyTikzBlock, needsVaultCheck, shouldShowWhatsNew, whatsNewSeen } from './src/whatsnew';
 
 type FenceTag = 'easy-tikz' | 'tikz';
 type Align = 'left' | 'center' | 'right';
@@ -171,16 +171,76 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             this.whatsNew?.close();
         });
 
-        // "What's new" for people who updated (src/whatsnew.ts): stored data without a record of it.
-        if (!whatsNewSeen(stored, WHATS_NEW_VERSION)) {
-            if (shouldShowWhatsNew(stored, WHATS_NEW_VERSION, this.data.showWhatsNew !== false)) {
-                this.app.workspace.onLayoutReady(() => {
-                    if (!this.unloaded && !this.whatsNew) this.showWhatsNew();
-                });
-            } else {
-                // A fresh install, or the popup switched off: record it as seen, silently.
-                void this.markWhatsNewSeen();
+        // "What's new" for people who updated (src/whatsnew.ts). Nothing is written during onload.
+        const enabled = this.data.showWhatsNew !== false;
+        if (shouldShowWhatsNew(stored, WHATS_NEW_VERSION, enabled)) {
+            // Stored data without a record of the popup: an update.
+            this.app.workspace.onLayoutReady(() => {
+                if (!this.unloaded && !this.whatsNew) this.showWhatsNew();
+            });
+        } else if (needsVaultCheck(stored, WHATS_NEW_VERSION, enabled)) {
+            // No stored data: a fresh install, or a 3.x user who never changed a setting. Charts in the vault tell.
+            this.app.workspace.onLayoutReady(() => void this.checkEarlierUse(stored));
+        } else if (!whatsNewSeen(stored, WHATS_NEW_VERSION)) {
+            // Switched off: recorded in memory only; the next save of any kind (a setting, a draft) stores it.
+            this.data.whatsNewSeen = WHATS_NEW_VERSION;
+        }
+    }
+
+    /**
+     * No stored data at this load: show the popup if the vault holds an
+     * easy-tikz block from before (most 3.x users), otherwise record it as
+     * seen (a fresh install). Runs once: the record creates data.json.
+     */
+    private async checkEarlierUse(stored: unknown) {
+        // A data file that exists but could not be read stays on disk as it is: only the popup (if any) writes.
+        const unreadable = await this.dataFileExists();
+        let used = false;
+        try {
+            used = await this.vaultHasCharts();
+        } catch {
+            // Unknown: treated as a fresh install.
+        }
+        if (this.unloaded || whatsNewSeen(this.data, WHATS_NEW_VERSION)) return;
+        if (shouldShowWhatsNew(stored, WHATS_NEW_VERSION, this.data.showWhatsNew !== false, used)) {
+            if (!this.whatsNew) this.showWhatsNew();
+            return;
+        }
+        if (unreadable) this.data.whatsNewSeen = WHATS_NEW_VERSION;
+        else await this.markWhatsNewSeen();
+    }
+
+    /** The vault holds at least one easy-tikz block. Reads notes most likely to hold one first, and stops at the first. */
+    private async vaultHasCharts(): Promise<boolean> {
+        const { vault, metadataCache } = this.app;
+        const ranked: Array<{ file: TFile; rank: number }> = [];
+        for (const file of vault.getMarkdownFiles()) {
+            const cache = metadataCache.getFileCache(file);
+            const rank = chartScanRank(cache ? (cache.sections ?? []).map((s) => s.type) : null);
+            if (rank > 0) ranked.push({ file, rank });
+        }
+        ranked.sort((a, b) => b.rank - a.rank || b.file.stat.mtime - a.file.stat.mtime);
+        for (const { file } of ranked) {
+            if (this.unloaded) return false;
+            let text = '';
+            try {
+                text = await vault.cachedRead(file);
+            } catch {
+                continue;
             }
+            if (hasEasyTikzBlock(text)) return true;
+        }
+        return false;
+    }
+
+    /** The plugin's data.json exists (loadData returns null for a missing file and for one it cannot read). */
+    private async dataFileExists(): Promise<boolean> {
+        const dir = this.manifest.dir;
+        if (!dir) return false;
+        try {
+            return await this.app.vault.adapter.exists(normalizePath(`${dir}/data.json`));
+        } catch {
+            return false;
         }
     }
 

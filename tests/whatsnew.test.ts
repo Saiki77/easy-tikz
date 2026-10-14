@@ -25,8 +25,11 @@ import {
     WHATS_NEW_SUBTITLE,
     WHATS_NEW_TITLE,
     WHATS_NEW_VERSION,
+    chartScanRank,
     compareVersions,
+    hasEasyTikzBlock,
     isFreshInstall,
+    needsVaultCheck,
     shouldShowWhatsNew,
     whatsNewChart,
     whatsNewSeen,
@@ -42,12 +45,63 @@ const DATA_3X = { userTemplates: [], invertDrag3D: false, maxSamples3D: 80, rend
 /** data.json of 4.0 / 4.1 after some editing: a draft, the drag tip, still no record. */
 const DATA_41 = { ...DATA_3X, dragTipSeen: true, dragEdit: true, draft: { savedAt: 1, sourcePath: null, originalBlockText: null, data: { v: 4 } } };
 
-test('whats new: a fresh install (no stored data) never sees it', () => {
+test('whats new: a fresh install (no stored data, no charts in the vault) never sees it', () => {
     for (const stored of [null, undefined]) {
         assert.equal(isFreshInstall(stored), true);
         assert.equal(shouldShowWhatsNew(stored, V, true), false);
-        assert.equal(whatsNewSeen(stored, V), false, 'not seen yet, so main.ts records it silently');
+        assert.equal(shouldShowWhatsNew(stored, V, true, false), false);
+        assert.equal(whatsNewSeen(stored, V), false, 'not seen yet, so main.ts records it after the vault check');
+        assert.equal(needsVaultCheck(stored, V, true), true, 'no data: only the vault can tell');
     }
+});
+
+test('whats new: no stored data but charts in the vault (a 3.x user who never changed a setting) sees it', () => {
+    for (const stored of [null, undefined]) {
+        assert.equal(shouldShowWhatsNew(stored, V, true, true), true);
+        assert.equal(shouldShowWhatsNew(stored, V, false, true), false, 'the setting still wins');
+    }
+    // Stored data decides on its own: the vault is not looked at.
+    for (const stored of [DATA_3X, DATA_41, { ...DATA_3X, whatsNewSeen: V }]) {
+        assert.equal(needsVaultCheck(stored, V, true), false, JSON.stringify(stored));
+    }
+    assert.equal(shouldShowWhatsNew({ ...DATA_3X, whatsNewSeen: V }, V, true, true), false, 'seen is seen, charts or not');
+    assert.equal(needsVaultCheck(null, V, false), false, 'switched off: no need to look');
+});
+
+test('whats new: an easy-tikz block in a note is found, other code is not', () => {
+    const json = '{"v": 4, "functions": []}';
+    const yes = [
+        '```easy-tikz\n' + json + '\n```',
+        'Text before.\n\n```easy-tikz\n' + json + '\n```\nText after.',
+        '~~~easy-tikz\n' + json + '\n~~~',
+        '````easy-tikz\n' + json + '\n````',
+        '``` easy-tikz\n' + json + '\n```',
+        '```easy-tikz \n' + json + '\n```',
+        '> [!note] A chart\n> ```easy-tikz\n> ' + json + '\n> ```',
+        '- an item\n\n    ```easy-tikz\n    ' + json + '\n    ```',
+        '```easy-tikz\r\n' + json + '\r\n```',
+    ];
+    for (const text of yes) assert.equal(hasEasyTikzBlock(text), true, text);
+    const no = [
+        '',
+        'No charts here.',
+        '```tikz\n\\draw (0,0) -- (1,1);\n```',
+        '```easy-tikzx\n```',
+        '```easy-tikz-old\n```',
+        'The plugin renders `easy-tikz` blocks.',
+        'Write ```easy-tikz in a note to start.',
+        '```python\nprint("```easy-tikz")\n```',
+        '``easy-tikz\n``',
+    ];
+    for (const text of no) assert.equal(hasEasyTikzBlock(text), false, text);
+});
+
+test('whats new: the vault check reads notes with code blocks first, and skips notes without any', () => {
+    assert.equal(chartScanRank(['paragraph', 'code', 'heading']), 2);
+    assert.equal(chartScanRank(null), 1, 'not indexed yet: read it');
+    for (const t of ['list', 'callout', 'blockquote']) assert.equal(chartScanRank(['paragraph', t]), 1, t);
+    assert.equal(chartScanRank([]), 0);
+    assert.equal(chartScanRank(['yaml', 'heading', 'paragraph', 'table', 'math']), 0);
 });
 
 test('whats new: users of 3.x and of 4.0 / 4.1 see it once', () => {
@@ -135,7 +189,7 @@ test('whats new: the recipe beside the chart is what the chart holds', () => {
         ...(chart.tools as Array<{ conditions: string[]; label: string }>).flatMap((t) => [...t.conditions, t.label]),
         String(chart.title),
     ];
-    assert.equal(WHATS_NEW_RECIPE.length, 5);
+    assert.equal(WHATS_NEW_RECIPE.length, 6);
     for (const [code, where] of WHATS_NEW_RECIPE) {
         assert.ok(fields.includes(code), `"${code}" (${where}) is not a field of the chart`);
         assert.ok(!where.includes(EM_DASH) && where.length <= 40, where);

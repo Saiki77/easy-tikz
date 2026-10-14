@@ -1182,10 +1182,8 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
             cls: 'etz-help-news-link',
             onClick: () =>
                 plugin.showWhatsNew?.({
-                    tryExample: (chart) => {
-                        host.loadChart(chart);
-                        host.showTab('build');
-                    },
+                    // To the Build tab once the chart is in: a cancelled Replace leaves the reader here.
+                    tryExample: (chart) => host.loadChart(chart, () => host.showTab('build')),
                     openGuides: (guideId) => {
                         host.showTab('help');
                         if (!guideId || !showGuide(guideId)) showHome();

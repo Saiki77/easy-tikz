@@ -4,18 +4,21 @@
  * can check all of it; the popup itself is src/ui/whatsNewModal.ts and
  * main.ts decides when to open it.
  *
- * The popup is for people who UPDATED: the plugin had stored data before
- * this load (Obsidian's loadData returned an object) and that data holds no
- * record that this popup was seen. A fresh install has no data at all; it
- * never sees the popup and records it as seen right away. The record is the
- * version of the popup's content (WHATS_NEW_VERSION), not the version of
- * the plugin: a later release that keeps this content does not show it
- * again, and one that brings new content raises WHATS_NEW_VERSION.
- *
- * Known gap: 3.x wrote its data file only when a setting was changed or a
- * template saved, so a 3.x user who never did either has no data and is
- * taken for a fresh install. The command "Show what's new in version 4" and
- * the link in the Help tab reach the popup in any case.
+ * The popup is for people who UPDATED. Two signs tell an update from a
+ * fresh install:
+ *   - the plugin had stored data before this load (Obsidian's loadData
+ *     returned an object): everyone who changed a setting or saved a
+ *     template in 3.x, and everyone who opened the editor in 4.0 or 4.1;
+ *   - no stored data, but the vault already holds an easy-tikz block:
+ *     3.x wrote its data file only when a setting was changed or a
+ *     template saved, so most 3.x users have charts in their notes and no
+ *     data. main.ts looks for one block once the layout is ready
+ *     (hasEasyTikzBlock, chartScanRank) and stops at the first.
+ * Neither sign: a fresh install, which never sees the popup and records it
+ * as seen. The record is the version of the popup's content
+ * (WHATS_NEW_VERSION), not the version of the plugin: a later release that
+ * keeps this content does not show it again, and one that brings new
+ * content raises WHATS_NEW_VERSION.
  */
 import { defaultFunction, defaultTool, EXAMPLES } from './migrate';
 import type { FunctionParameters, Parameter, RegionTool } from './types';
@@ -45,7 +48,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** Obsidian's loadData returns null when the plugin never saved anything: a fresh install. */
+/**
+ * Obsidian's loadData returns null when the plugin never saved anything (or
+ * its data file cannot be read): a fresh install, unless the vault shows
+ * that Easy TikZ was used before (see shouldShowWhatsNew).
+ */
 export function isFreshInstall(stored: unknown): boolean {
     return !isRecord(stored);
 }
@@ -58,18 +65,52 @@ export function whatsNewSeen(stored: unknown, version: string = WHATS_NEW_VERSIO
 }
 
 /**
- * Show the popup on this load? Only to a user who updated (stored data
- * exists) and has not seen this version of it, with the setting "Show
- * what's new after updates" on (`enabled`).
+ * Show the popup on this load? Only to a user who updated and has not seen
+ * this version of it, with the setting "Show what's new after updates" on
+ * (`enabled`). A user who updated has stored data, or, without stored data,
+ * charts in the vault from before (`usedBefore`, found by main.ts).
  */
-export function shouldShowWhatsNew(stored: unknown, version: string, enabled: boolean): boolean {
-    return enabled && !isFreshInstall(stored) && !whatsNewSeen(stored, version);
+export function shouldShowWhatsNew(stored: unknown, version: string, enabled: boolean, usedBefore = false): boolean {
+    if (!enabled || whatsNewSeen(stored, version)) return false;
+    return !isFreshInstall(stored) || usedBefore;
+}
+
+/**
+ * Look through the vault for charts from before? Only when the stored data
+ * cannot tell: there is none, and the popup is switched on (the default).
+ */
+export function needsVaultCheck(stored: unknown, version: string, enabled: boolean): boolean {
+    return enabled && isFreshInstall(stored) && !whatsNewSeen(stored, version);
+}
+
+/**
+ * The opening line of an easy-tikz block: ``` or ~~~ (three or more), then
+ * the language. Also indented (a list) or quoted (a callout, a blockquote).
+ */
+const EASY_TIKZ_FENCE = /^[ \t>]*(?:`{3,}|~{3,})[ \t]*easy-tikz(?![\w-])/m;
+
+/** The note text holds an easy-tikz block. */
+export function hasEasyTikzBlock(text: string): boolean {
+    return EASY_TIKZ_FENCE.test(text);
+}
+
+/**
+ * How likely a note holds an easy-tikz block, from the section types of
+ * Obsidian's metadata cache (null: not indexed yet):
+ *   2  a code block: read it first
+ *   1  not indexed yet, or a list, callout or blockquote (a fence inside one is not a section of its own)
+ *   0  none of these: no need to read it
+ */
+export function chartScanRank(sectionTypes: readonly string[] | null): 0 | 1 | 2 {
+    if (!sectionTypes) return 1;
+    if (sectionTypes.includes('code')) return 2;
+    return sectionTypes.some((t) => t === 'list' || t === 'callout' || t === 'blockquote') ? 1 : 0;
 }
 
 // ---------------------------------------------------------------- content
 
 export interface WhatsNewItem {
-    /** Lucide id known to Obsidian 1.13 (the smoke test checks it against getIconIds()). */
+    /** Lucide id known to Obsidian 1.13 (the smoke test checks that it draws: svg.lucide-<id>). */
     icon: string;
     title: string;
     /** One line. Inline `backticks` become code. */
@@ -142,7 +183,8 @@ export const WHATS_NEW_MORE: WhatsNewItem[] = [
  * Each is a field of the chart returned by whatsNewChart (the test checks).
  */
 export const WHATS_NEW_RECIPE: ReadonlyArray<readonly [string, string]> = [
-    ['f1(a) + (3a^2 - 3)(x - a)', 'f2: the tangent at a'],
+    ['x^3 - 3x', 'f1: the curve, with its tangent at a'],
+    ['f1(a) + (3a^2 - 3)(x - a)', 'f2 (hidden): the same tangent'],
     ['min(f1, f2) <= y <= max(f1, f2)', 'R1: between curve and tangent'],
     ['min(a, -2a) <= x <= max(a, -2a)', 'R1: up to where they cross'],
     ['A = {27a^4/4:2}', 'R1 label: the area'],

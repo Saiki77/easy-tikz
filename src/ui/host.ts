@@ -119,8 +119,12 @@ export interface PanelHost {
      */
     pushHistory?(entry: HistoryEntry): void;
 
-    /** Replace the whole chart (examples, draft restore). Asks for confirmation when the chart is not empty. */
-    loadChart(data: Record<string, unknown>): void;
+    /**
+     * Replace the whole chart (examples, draft restore). Asks for confirmation
+     * when the chart is not empty; `onApplied` runs once the chart is in (not
+     * when the reader cancels).
+     */
+    loadChart(data: Record<string, unknown>, onApplied?: () => void): void;
 
     /** Switch the left panel to a tab. */
     showTab(tab: 'build' | 'chart' | 'code' | 'help'): void;

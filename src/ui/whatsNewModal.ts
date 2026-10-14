@@ -320,6 +320,8 @@ class LiveExample {
             value: p.value,
             label: p.name,
             readout: 'input',
+            // A typed 5 stays 1.1: outside its range the shading would leave the view.
+            fixedRange: true,
             onInput: (v) => {
                 this.setValue(v);
                 this.requestFrame();
