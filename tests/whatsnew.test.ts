@@ -177,9 +177,29 @@ test('whats new: icons are lucide ids, guides exist', () => {
     for (const item of ITEMS) if (item.guide) assert.ok(guideById(item.guide), `${item.title}: no guide ${item.guide}`);
     for (const item of WHATS_NEW_LIVE) assert.ok(item.guide, `${item.title} links no guide`);
     assert.ok(guideById(WHATS_NEW_CHART_GUIDE), `no guide ${WHATS_NEW_CHART_GUIDE}`);
+});
+
+test('whats new: the number of guides it names is the number in the Help tab, on GitHub and in the README', () => {
     const said = ITEMS.map((i) => /(\d+) step-by-step guides/.exec(i.text)).find((m) => m);
     assert.ok(said, 'no item counts the guides');
-    assert.equal(Number(said[1]), GUIDES.length, 'the number of guides in the text');
+    const count = Number(said[1]);
+    assert.equal(count, GUIDES.length, 'the number of guides in the text');
+    // The text takes its number from the guide list. The pages on GitHub are files made by
+    // `npm run media:guides`, so they tell independently whether a guide was added or removed
+    // without running the script: one page per guide, none left over.
+    const root = process.cwd();
+    const pages = fs
+        .readdirSync(path.join(root, 'docs', 'guides'))
+        .filter((f) => f.endsWith('.md') && f !== 'README.md')
+        .map((f) => f.slice(0, -'.md'.length))
+        .sort();
+    assert.deepEqual(pages, GUIDES.map((g) => g.id).sort(), 'docs/guides holds one page per guide');
+    // The index of the pages and the README say the same number.
+    for (const file of [path.join('docs', 'guides', 'README.md'), 'README.md']) {
+        const m = /(\d+) step-by-step guides/i.exec(fs.readFileSync(path.join(root, file), 'utf8'));
+        assert.ok(m, `${file} does not say how many guides there are`);
+        assert.equal(Number(m[1]), count, `${file} counts the guides differently`);
+    }
 });
 
 test('whats new: the recipe beside the chart is what the chart holds', () => {

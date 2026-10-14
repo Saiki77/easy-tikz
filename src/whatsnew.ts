@@ -20,6 +20,7 @@
  * keeps this content does not show it again, and one that brings new
  * content raises WHATS_NEW_VERSION.
  */
+import { GUIDES } from './guides';
 import { defaultFunction, defaultTool, EXAMPLES } from './migrate';
 import type { FunctionParameters, Parameter, RegionTool } from './types';
 
@@ -134,7 +135,7 @@ export const WHATS_NEW_LIVE: WhatsNewItem[] = [
         icon: 'calculator',
         title: 'Live calculations',
         text: 'Computed points publish values like `P1_x` and `P1_val`. Use them in other formulas, or print them in labels: `{P1_val:2}`.',
-        guide: 'points-labels',
+        guide: 'computed-values',
     },
     {
         icon: 'file-text',
@@ -169,7 +170,8 @@ export const WHATS_NEW_MORE: WhatsNewItem[] = [
     {
         icon: 'book-open',
         title: 'Guides in the Help tab',
-        text: '20 step-by-step guides with live charts, and a reference you can search.',
+        // The count comes from the guide list, so a new guide never leaves this line behind.
+        text: `${GUIDES.length} step-by-step guides with live charts, and a reference you can search.`,
     },
     {
         icon: 'history',
