@@ -1,11 +1,16 @@
 /* eslint-env browser, node */
-// Promo images for the README, the GitHub social preview and release posts:
-// docs/media/hero.png, card-*.png, social-*.png and square-1080.png.
+// The first-round promo images of the 4.0 relaunch, for the release posts and the GitHub social
+// preview: docs/media/card-*.png, social-*.png and square-1080.png.
 //
-//   npm run media:promo                         # everything, about 1 minute
-//   npm run media:promo -- --skip-capture       # only compose again from the last captures (design work)
-//   npm run media:promo -- --only hero,card-drag
-//   npm run media:promo -- --port 9343 --work /tmp/etz-promo --plugin root
+//   node scripts/media/build-promo.mjs                          # everything it may write, about 1 minute
+//   node scripts/media/build-promo.mjs --skip-capture           # only compose again from the last captures (design work)
+//   node scripts/media/build-promo.mjs --only card-sliders,card-3d
+//   node scripts/media/build-promo.mjs --port 9343 --work /tmp/etz-promo --plugin root
+//
+// Retired from npm (there is no media:promo any more): hero.png and card-drag.png in docs/media are
+// made by the brand kit now (scripts/media/brand, npm run media:brand), in the new design. This script
+// never writes those two into docs/media (lib/replaced.mjs): a run leaves them out, and --only with
+// one of them stops before anything is captured. With --out <dir> it still makes the old ones there.
 //
 // Four stages:
 //   1. capture   real screenshots of the plugin in the isolated Obsidian (promo/capture.mjs),
@@ -25,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs, promisify } from 'node:util';
 import { launchChromium } from './lib/chromium.mjs';
 import { PORTS, REPO, defaultWorkDir } from './lib/obsidian.mjs';
+import { guardReplaced, keepReplaced } from './lib/replaced.mjs';
 import { installImage } from './lib/stable.mjs';
 import { capture } from './promo/capture.mjs';
 
@@ -62,6 +68,7 @@ const { values } = parseArgs({
 if (values.help) {
     console.log('Usage: node scripts/media/build-promo.mjs [--skip-capture] [--only name,name] [--port 9343] [--work dir] [--plugin source|root|dir] [--out docs/media]');
     console.log(`Images: ${TARGETS.map((t) => t.name).join(', ')}`);
+    console.log('hero and card-drag are made by scripts/media/brand now: this script writes them only with --out <a dir other than docs/media>.');
     process.exit(0);
 }
 
@@ -69,12 +76,20 @@ const port = Number(values.port || process.env.ETZ_MEDIA_PORT || PORTS.promo);
 const workDir = path.resolve(values.work || defaultWorkDir(port));
 const outDir = path.resolve(values.out || path.join(REPO, 'docs', 'media'));
 const only = values.only ? values.only.split(',').map((s) => s.trim()).filter(Boolean) : null;
-const targets = only ? TARGETS.filter((t) => only.includes(t.name)) : TARGETS;
-if (only && targets.length !== only.length) {
-    const unknown = only.filter((n) => !TARGETS.some((t) => t.name === n));
-    throw new Error(`Unknown image(s): ${unknown.join(', ')}. Known: ${TARGETS.map((t) => t.name).join(', ')}`);
-}
 const log = (text) => process.stderr.write(`[promo] ${text}\n`);
+if (only) {
+    const unknown = only.filter((n) => !TARGETS.some((t) => t.name === n));
+    if (unknown.length) throw new Error(`Unknown image(s): ${unknown.join(', ')}. Known: ${TARGETS.map((t) => t.name).join(', ')}`);
+}
+// hero and card-drag in docs/media come from the brand kit now: never written there by this script.
+let allowed;
+try {
+    allowed = keepReplaced('promo', outDir, only || TARGETS.map((t) => t.name), { explicit: !!only, log });
+} catch (e) {
+    console.error(e.message);
+    process.exit(2);
+}
+const targets = TARGETS.filter((t) => allowed.includes(t.name));
 const kb = (file) => Math.round(fs.statSync(file).size / 1024);
 
 /** A program on the PATH, or null. */
@@ -192,6 +207,7 @@ async function optimise(file, budget) {
 const rows = [];
 for (const t of targets) {
     const staged = path.join(stageDir, `${t.name}.png`);
+    guardReplaced('promo', outDir, t.name);
     const file = path.join(outDir, `${t.name}.png`);
     const how = await optimise(staged, t.budget);
     const state = await installImage(staged, file);

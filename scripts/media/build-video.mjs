@@ -1,12 +1,18 @@
 /* eslint-env browser, node */
-// Record the videos of docs/media from the real plugin in the isolated
-// Obsidian (lib/obsidian.mjs): one scenario per file in ./video/.
+// Record the first-round videos of docs/media (the clips of the 4.0 relaunch) from the real plugin
+// in the isolated Obsidian (lib/obsidian.mjs): one scenario per file in ./video/.
 //
-//   npm run media:video                          # every scenario
-//   npm run media:video -- clip-drag clip-3d     # only these
-//   npm run media:video -- --list                # names and lengths
-//   npm run media:video -- --sheets /tmp/sheets  # also keep the contact sheets for review
-//   npm run media:video -- --retries 0           # do not film a failed scenario again (default: 2 more takes)
+//   node scripts/media/build-video.mjs                           # every scenario it may write
+//   node scripts/media/build-video.mjs clip-sliders clip-3d      # only these
+//   node scripts/media/build-video.mjs --list                    # names and lengths
+//   node scripts/media/build-video.mjs --sheets /tmp/sheets      # also keep the contact sheets for review
+//   node scripts/media/build-video.mjs --retries 0               # do not film a failed scenario again (default: 2 more takes)
+//
+// Retired from npm (there is no media:video any more): overview and clip-drag in docs/media are films
+// of the cinema pipeline now (scripts/media/cinema, npm run media:film), in the new design. This
+// script never writes overview.* or clip-drag.* into docs/media (lib/replaced.mjs): a run leaves the
+// two scenarios out, and naming one stops before anything is filmed. With --out <dir> it still films
+// them there.
 //
 // Per scenario it writes, into docs/media (or --out):
 //   <name>.mp4          H.264, CRF 18, 30 fps, at 1x of the filmed area (the overview is 1728 x 1116)
@@ -25,6 +31,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { PORTS, REPO, chartBlock, defaultWorkDir, importTs, launch } from './lib/obsidian.mjs';
+import { guardReplaced, keepReplaced } from './lib/replaced.mjs';
 import { installImage } from './lib/stable.mjs';
 import { FPS, GIF_BUDGET, WINDOW, clone, createDirector, encodeGif, probe, resetApp, reviewSheets, writePoster } from './video/common.mjs';
 
@@ -48,6 +55,7 @@ const { values, positionals } = parseArgs({
 if (values.help) {
     console.log('Usage: node scripts/media/build-video.mjs [name ...] [--port 9344] [--work DIR] [--out DIR] [--sheets DIR] [--retries 2] [--list] [--keep-frames] [--no-gif]');
     console.log(`Scenarios: ${ALL.join(', ')}`);
+    console.log('overview and clip-drag are films of scripts/media/cinema now: this script films them only with --out <a dir other than docs/media>.');
     process.exit(0);
 }
 
@@ -74,6 +82,16 @@ const sheetsDir = path.resolve(values.sheets || stageDir);
 const retries = values.retries === undefined ? 2 : Math.max(0, Number(values.retries) || 0);
 const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 const say = (text) => process.stderr.write(`[video] ${text}\n`);
+
+// overview and clip-drag in docs/media are films of the cinema pipeline now: never written there by this script.
+let allowed;
+try {
+    allowed = keepReplaced('video', outDir, names, { explicit: positionals.length > 0, log: say });
+} catch (e) {
+    console.error(e.message);
+    process.exit(2);
+}
+for (let i = scenarios.length - 1; i >= 0; i--) if (!allowed.includes(scenarios[i].name)) scenarios.splice(i, 1);
 
 // The plugin's own example charts: scenarios start from these, as a user would.
 const { EXAMPLES } = await importTs('src/migrate.ts');
@@ -157,6 +175,7 @@ try {
             // of a filmed scenario are always replaced: two takes differ in most frames, so nothing can
             // tell a small deliberate change from a new take (lib/stable.mjs). The poster is one picture
             // and stays when the new one shows the same.
+            guardReplaced('video', outDir, scenario.name);
             const target = (suffix) => path.join(outDir, `${scenario.name}${suffix}`);
             fs.copyFileSync(made.mp4, target('.mp4'));
             if (gif) fs.copyFileSync(gif.file, target('.gif'));

@@ -22,7 +22,7 @@
 // their frames (a drag is drawn at slightly different moments), so nothing
 // could tell a deliberate small change from a new take: a filmed scenario
 // always replaces its MP4 and GIF. Film only the scenarios that changed
-// (`npm run media:video -- clip-drag`).
+// (`node scripts/media/build-video.mjs clip-sliders`).
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';

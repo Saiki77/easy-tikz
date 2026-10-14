@@ -6,8 +6,23 @@ own `esbuild`.
 
 Every picture and video shows Easy TikZ as it runs. The toolkit clicks, drags and types through real input
 events; it never draws UI of its own, apart from the pointer and the caption bar in videos (the real mouse
-pointer is not part of a capture) and, in `clip-drag`, an enlarged copy of the hover tip (a clone of the real
-element, see [video/README.md](video/README.md)).
+pointer is not part of a capture) and, in the first-round `clip-drag`, an enlarged copy of the hover tip (a
+clone of the real element, see [video/README.md](video/README.md)).
+
+Two pipelines build on this toolkit and make the media of 4.2 in the "Math notebook" design (graph paper,
+TeX fonts, notes and arrows around real captures):
+
+- [`brand/`](brand/README.md), the brand kit: paper, type, callouts, pointer and page templates, with the
+  proofs of the hero picture and the drag page (`npm run media:brand`);
+- [`cinema/`](cinema/README.md), the films: a scene is captured in the isolated Obsidian, then edited and
+  composited on a stage page in headless Chromium (`npm run media:film`). It made the overview film and the
+  drag clip.
+
+They write to a folder of their own (a temporary one, or `--out`), never into `docs/media`: look at the
+result (the contact sheets and stills of a film, the 800 px copy of a page), then copy it there. The
+first-round scripts `build-promo.mjs` and `build-video.mjs` still make the other images and clips of
+`docs/media`, but have no npm script any more, and they never write the files the new pipelines replaced
+(see [The first-round scripts](#the-first-round-scripts)).
 
 ## What runs
 
@@ -22,8 +37,11 @@ profile is the newest `obsidian-*.asar` in `~/Library/Application Support/obsidi
 app bundle on its own is older than the plugin's `minAppVersion`.
 
 Requirements: macOS, Obsidian in `/Applications` (or `OBSIDIAN_BIN=/path/to/Obsidian`), Node 22 or newer.
-On the PATH: `ffmpeg` and `ffprobe` for videos, ImageMagick (`magick`) for the guide pictures and the promo
-images, and `pdflatex` with pgfplots for the promo card that shows the compiled export.
+On the PATH: `ffmpeg` and `ffprobe` for videos, ImageMagick (`magick`) for the guide pictures, the promo
+images and the two pipelines, and `pdflatex` with pgfplots for the promo card that shows the compiled export.
+The brand kit and the films also need a headless Chromium (the one Playwright keeps in its cache, or
+`CHROMIUM_BIN`) and a TeX Live with New Computer Modern and Latin Modern, found with `kpsewhich` (nothing is
+copied into the repository: `brand/fonts.css` is generated and not committed).
 
 While a script runs, an Obsidian window opens behind your other windows. It ignores your mouse and does not take
 the keyboard, so you can keep working. It closes when the script ends.
@@ -39,15 +57,52 @@ node scripts/media/lib/example.mjs       # tour of the toolkit: 4 pictures and a
 node scripts/media/lib/example.mjs --out ~/Desktop/etz-example
 
 npm run media:guides                     # docs/guides/*.md and their screenshots, about 2 minutes
-npm run media:promo                      # docs/media/hero.png, card-*.png, social-*.png, square-1080.png, about 30 s
-npm run media:video                      # docs/media/*.mp4, *.gif and posters, about 4 minutes
-npm run media:video -- clip-drag         # one scenario: film what changed, not everything
+
+npm run media:brand                      # brand kit: fonts.css, its tests, specimen.png, the proofs (to <tmp>/easy-tikz-media/brand)
+npm run media:brand -- --out /tmp/brand --only hero
+npm run media:film -- --list             # the scenes of cinema/scenes
+npm run media:film -- overview --out /tmp/film --port 9381   # a film: MP4, GIF loop, poster, contact sheets, stills
+npm run media:film -- overview --out /tmp/film --skip-capture # edit again from the last capture: composite only
+
+node scripts/media/build-promo.mjs       # first-round images: docs/media/card-*.png, social-*.png, square-1080.png
+node scripts/media/build-video.mjs clip-3d   # first-round clips: film what changed, not everything
 ```
 
-### The three build scripts
+The tests of the two pipelines are part of `npm test` (`scripts/run-tests.mjs` runs `brand/*.test.mjs` and
+`cinema/*.test.mjs` with node: pure functions, no Obsidian, browser, TeX fonts or ffmpeg). One at a time:
 
-Each one writes into the repository by default, so look at `git status` afterwards. `--out <dir>` sends the
-result somewhere else, for example to compare a fresh run with what is committed.
+```bash
+node scripts/media/brand/kit.test.mjs       # the paper's lines, the callout curve, the pointer's keycap
+node scripts/media/brand/math.test.mjs      # the formula formatter on the formulas of the media
+node scripts/media/cinema/timeline.test.mjs # layout, camera, cadence, the edit, a film with a section card
+```
+
+### The new pipelines
+
+`npm run media:brand` (`brand/build.mjs`) and `npm run media:film` (`cinema/build.mjs`) have their own
+notes: [brand/README.md](brand/README.md) and [cinema/README.md](cinema/README.md). By default the brand kit
+writes its proofs to `<tmp>/easy-tikz-media/brand` (only `brand/specimen.png`, the brand sheet, is written
+next to its README), and a film goes to `<work dir>/cinema-out`, the work dir being
+`<tmp>/easy-tikz-media/port-<port>`. Pass `--out <dir>` for another folder. Neither writes into `docs`.
+
+To publish a film, look at its contact sheets and stills, then copy `<name>.mp4`, `<name>.gif` and
+`<name>-poster.png` into `docs/media`. The drag clip of the README is the `sample` scene, named by
+`--name clip-drag` (19 s). The overview is the `overview` scene: 40.5 s at 1920 x 1080, and its GIF is the
+loop the scene sets (`loop: { from: 17.0, to: 34.6 }`: section 2, 17.6 s).
+
+### The first-round scripts
+
+`build-promo.mjs` and `build-video.mjs` made every image and video of the 4.0 relaunch. Since 4.2 the hero
+picture and the drag page (`hero.png`, `card-drag.png`) come from the brand kit and the films `overview.*`
+and `clip-drag.*` from the cinema pipeline. The npm scripts `media:promo` and `media:video` are retired, and
+the two scripts never write those names into `docs/media` (`lib/replaced.mjs`): a run leaves them out with a
+line on the log, and naming one (`--only hero`, `build-video.mjs overview`) stops with exit code 2 before
+anything is captured. With `--out <another dir>` they still make the old versions, for a comparison. They
+still make the other six feature cards, the social images and six clips, which the release posts use.
+
+The three build scripts below (`build-guides.mjs` and the two first-round scripts) write into the repository
+by default, so look at `git status` afterwards. `--out <dir>` sends the result somewhere else, for example to
+compare a fresh run with what is committed.
 
 **What a run changes.** No capture is byte stable (text is antialiased a little differently every time), so
 the scripts compare before they write. A PNG that shows the same picture as the file already in `docs` is
@@ -55,7 +110,7 @@ thrown away and the old file stays (`lib/stable.mjs`: at most 24 pixels may diff
 channel; one changed digit is more than that). After a run in which nothing looks different, `git status` is
 clean for the guide pictures, the promo images and the video posters. Videos cannot be compared that way (two
 takes of a scenario differ in most frames), so a scenario that is filmed always replaces its MP4 and GIF:
-pass the names of the scenarios that changed instead of filming all eight.
+pass the names of the scenarios that changed instead of filming all six.
 
 `build-guides.mjs` turns `src/guides` (the data the Help tab shows) into `docs/guides/<id>.md`,
 `docs/guides/README.md` and one real screenshot per step in `docs/guides/img/`. Run it again whenever a guide
@@ -80,19 +135,19 @@ a new chart for a first step: the menu is what the reader sees before the result
 templates in `promo/`. Its own notes are in [promo/README.md](promo/README.md).
 
 ```bash
-npm run media:promo -- --only hero,card-drag
-npm run media:promo -- --skip-capture              # compose again from the last captures in promo/shots
-npm run media:promo -- --plugin root --port 9353 --work /tmp/etz-promo --out /tmp/promo
+node scripts/media/build-promo.mjs --only card-sliders,card-3d
+node scripts/media/build-promo.mjs --skip-capture  # compose again from the last captures in promo/shots
+node scripts/media/build-promo.mjs --plugin root --port 9353 --work /tmp/etz-promo --out /tmp/promo
 ```
 
 `build-video.mjs` films one scenario per file in `video/`. Its own notes are in
 [video/README.md](video/README.md).
 
 ```bash
-npm run media:video -- clip-drag clip-3d           # only these scenarios
-npm run media:video -- --list                      # names and lengths
-npm run media:video -- --sheets /tmp/sheets        # keep the contact sheets: look at them before publishing
-npm run media:video -- --out /tmp/video --work /tmp/etz-video --retries 0
+node scripts/media/build-video.mjs clip-sliders clip-3d    # only these scenarios
+node scripts/media/build-video.mjs --list                  # names and lengths
+node scripts/media/build-video.mjs --sheets /tmp/sheets    # keep the contact sheets: look at them before publishing
+node scripts/media/build-video.mjs --out /tmp/video --work /tmp/etz-video --retries 0
 ```
 
 ### The smoke test
@@ -139,6 +194,8 @@ One port and one work dir per script, never shared:
 | `build-guides.mjs` | 9342 | `<tmp>/easy-tikz-media/port-9342` |
 | `build-promo.mjs` | 9343 | `<tmp>/easy-tikz-media/port-9343` |
 | `build-video.mjs` | 9344 | `<tmp>/easy-tikz-media/port-9344` |
+| `brand/build.mjs` | 9371 | `<tmp>/easy-tikz-media/brand-9371` |
+| `cinema/build.mjs` | 9373 | `<tmp>/easy-tikz-media/port-9373` |
 
 `<tmp>` is `os.tmpdir()`. Override with `--port` / `--work` where a script takes them, or with the environment
 variables `ETZ_MEDIA_PORT` and `ETZ_MEDIA_WORK`. `ETZ_MEDIA_PLUGIN=root` makes every script use the build in the
@@ -155,7 +212,10 @@ like a vault.
 - A build script replaces a picture in `docs` only when the new one shows something else (see "What a run
   changes" above).
 - `lib/example.mjs` writes to `--out` (default `<tmp>/easy-tikz-media/example`).
-- The build scripts write into the repository: `docs/guides/` and `docs/media/`.
+- `build-guides.mjs` and the first-round scripts write into the repository: `docs/guides/` and `docs/media/`
+  (the first-round scripts never write `hero.png`, `card-drag.png`, `overview.*` or `clip-drag.*` there).
+- `brand/build.mjs` and `cinema/build.mjs` write to `--out` or a temporary folder, never into `docs/`; only
+  the brand sheet `brand/specimen.png` is written into the repository.
 - A recording keeps its frame PNGs in the `dir` you give the recorder and deletes them after `encode()`
   (pass `keepFrames: true` to keep them; one minute at 30 fps is about 1 GB).
 

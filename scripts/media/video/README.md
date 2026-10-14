@@ -1,14 +1,20 @@
 # Video scenarios
 
-One file per video of `docs/media`. `../build-video.mjs` films them from the real plugin in the isolated
-Obsidian of the media toolkit (see `../README.md`): port 9344, window 1728 x 1117 CSS px at 2x, light theme.
+The first-round videos of the 4.0 relaunch, one file per video. `../build-video.mjs` films them from the real
+plugin in the isolated Obsidian of the media toolkit (see `../README.md`): port 9344, window 1728 x 1117 CSS px
+at 2x, light theme.
+
+Since 4.2, `overview` and `clip-drag` in `docs/media` are films of the cinema pipeline
+([`../cinema`](../cinema/README.md), `npm run media:film`). The npm script `media:video` is retired, and
+`build-video.mjs` never writes `overview.*` or `clip-drag.*` into `docs/media`: a run leaves the two scenarios
+out, and naming one of them stops before anything is filmed. With `--out <another dir>` it still films them.
 
 ```bash
-npm run media:video                          # all eight, about 4 minutes
-npm run media:video -- clip-drag clip-3d     # only these: film what changed, not everything
-npm run media:video -- --list                # names and allowed lengths
-npm run media:video -- --sheets ~/Desktop/sheets   # where the contact sheets go
-npm run media:video -- --out /tmp/try --retries 0  # try a scenario without touching docs/media
+node scripts/media/build-video.mjs                              # the six it may write into docs/media
+node scripts/media/build-video.mjs clip-sliders clip-3d         # only these: film what changed, not everything
+node scripts/media/build-video.mjs --list                       # names and allowed lengths
+node scripts/media/build-video.mjs --sheets ~/Desktop/sheets    # where the contact sheets go
+node scripts/media/build-video.mjs clip-drag --out /tmp/try --retries 0   # the old drag clip, outside docs/media
 ```
 
 | Scenario | Shows |

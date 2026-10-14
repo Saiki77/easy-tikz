@@ -1,14 +1,20 @@
 # Promo images
 
-`npm run media:promo` (`scripts/media/build-promo.mjs`) writes these to `docs/media/`:
+The first-round images of the 4.0 relaunch. `scripts/media/build-promo.mjs` makes them, by default into
+`docs/media/`:
 
 | File | Size | Used for |
 | --- | --- | --- |
-| `hero.png` | 2400 x 1350 | top of the README, release posts |
-| `card-drag.png`, `card-sliders.png`, `card-regions.png`, `card-notes.png`, `card-export.png`, `card-3d.png`, `card-tools.png` | 1600 x 1000 | feature grid in the README, one card per post |
+| `hero.png` | 2400 x 1350 | the first-round hero (not in `docs/media` any more, see below) |
+| `card-drag.png`, `card-sliders.png`, `card-regions.png`, `card-notes.png`, `card-export.png`, `card-3d.png`, `card-tools.png` | 1600 x 1000 | one card per post (`card-drag` not in `docs/media` any more) |
 | `social-1280x640.png` | 1280 x 640 | GitHub repository social preview (Settings > General > Social preview) |
 | `social-1200x675.png` | 1200 x 675 | link cards on X, Mastodon, Bluesky, the forum |
 | `square-1080.png` | 1080 x 1080 | square posts |
+
+Since 4.2, `hero.png` and `card-drag.png` in `docs/media` come from the brand kit
+([`../brand`](../brand/README.md), `npm run media:brand`) in the new design. The npm script `media:promo` is
+retired, and `build-promo.mjs` never writes those two into `docs/media`: a run leaves them out, and `--only`
+with one of them stops before anything is captured. With `--out <another dir>` it still makes the old ones.
 
 All of them are light: the captures are taken in Obsidian's light theme.
 
@@ -43,9 +49,9 @@ Two things to keep when you change a template:
 ## Working on the design
 
 ```bash
-npm run media:promo                               # captures, then all images
-npm run media:promo -- --skip-capture             # compose again from the last captures, about 15 s
-npm run media:promo -- --skip-capture --only hero,card-drag --out /tmp/promo-test
+node scripts/media/build-promo.mjs                                # captures, then every image it may write
+node scripts/media/build-promo.mjs --skip-capture                 # compose again from the last captures, about 15 s
+node scripts/media/build-promo.mjs --skip-capture --only hero,card-drag --out /tmp/promo-test
 ```
 
 After a first run you can also open a template in a browser (`open scripts/media/promo/card-drag.html`): it
