@@ -2,7 +2,7 @@
 
 Read the subreddit rules in the sidebar before posting and pick the flair it offers for plugins.
 
-**Attach:** [`overview.mp4`](../media/overview.mp4) (54 s, 1.6 MB, captions burnt in, no sound). Put it at the top of the post. If the post editor takes pictures only, use [`hero.png`](../media/hero.png), [`card-drag.png`](../media/card-drag.png), [`card-sliders.png`](../media/card-sliders.png) and [`card-regions.png`](../media/card-regions.png) as a gallery and link the video on GitHub.
+**Attach:** [`overview.mp4`](../media/overview.mp4) (40 s, 1920 x 1080, 8.4 MB, captions burnt in, no sound). Put it at the top of the post. If the post editor takes pictures only, use [`hero.png`](../media/hero.png), [`card-drag.png`](../media/card-drag.png), [`card-sliders.png`](../media/card-sliders.png) and [`card-regions.png`](../media/card-regions.png) as a gallery and link the video on GitHub.
 
 ## Title
 
@@ -19,7 +19,7 @@ Easy TikZ 4: draw TikZ / pgfplots charts in Obsidian with live sliders and drag 
 ````markdown
 I maintain Easy TikZ, a plugin for drawing function plots, shaded regions and optimisation diagrams in a visual editor instead of writing TikZ. The chart renders in your note with no TeX install, and when you need the figure in a paper, the Code tab holds pgfplots code that compiles with pdflatex.
 
-Version 4 is a redesign. The video shows it in 54 seconds. What changed:
+Version 4 is a redesign. The video (40 seconds) shows two things: a line dragged and turned in the preview, whose formula follows, and one slider that moves a tangent and the area between it and the curve. What changed:
 
 - **Sliders that move the picture.** A slider is a named number you can use in any formula, domain, condition or label. The preview redraws while you drag it, and play sweeps it.
 - **Drag to edit.** Grab a line, curve, point or label in the preview and the plugin rewrites the numbers in its formula so it stays under the pointer. Shift-drag turns a line around a pivot: the constraint `x + 3y <= 6` becomes `x + 2y <= 5`. Before you drag, a tip shows which numbers will change. Every drag is one undo step.

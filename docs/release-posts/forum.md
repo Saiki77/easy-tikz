@@ -2,7 +2,7 @@
 
 For [forum.obsidian.md](https://forum.obsidian.md), category Share & showcase. Add the tags the forum offers for plugins.
 
-**Attach:** nothing to upload if `docs/media` is on `main`: the text loads [`hero.png`](../media/hero.png), [`overview.gif`](../media/overview.gif), [`card-drag.png`](../media/card-drag.png), [`card-sliders.png`](../media/card-sliders.png) and [`card-regions.png`](../media/card-regions.png) by URL. If a picture does not show in the preview of the post, delete its line and upload the file in its place. Should the forum refuse the GIF (1.5 MB), use [`overview-poster.png`](../media/overview-poster.png) and keep the link to the video.
+**Attach:** nothing to upload if `docs/media` is on `main`: the text loads [`hero.png`](../media/hero.png), [`overview.gif`](../media/overview.gif), [`card-drag.png`](../media/card-drag.png), [`card-sliders.png`](../media/card-sliders.png) and [`card-regions.png`](../media/card-regions.png) by URL. If a picture does not show in the preview of the post, delete its line and upload the file in its place. Should the forum refuse the GIF (4.6 MB), use [`overview-poster.png`](../media/overview-poster.png) and keep the link to the video.
 
 ## Title
 
@@ -21,15 +21,15 @@ Easy TikZ 4: a visual editor for TikZ and pgfplots charts, with live sliders and
 
 Easy TikZ is a plugin for drawing function plots, shaded regions and optimisation diagrams in a visual editor instead of writing TikZ. A chart renders in your note with no TeX install, and the Code tab holds pgfplots code that compiles with pdflatex.
 
-Version 4 is a redesign of the whole editor. Here it is in 54 seconds ([MP4](https://github.com/Saiki77/easy-tikz/blob/main/docs/media/overview.mp4)):
+Version 4 is a redesign of the whole editor. Here is one slider at work: drag the point where the tangent touches the curve, and the tangent and the area between them follow. The whole film, 40 seconds with drag to edit first: [MP4](https://github.com/Saiki77/easy-tikz/blob/main/docs/media/overview.mp4).
 
-![Easy TikZ 4 in 54 seconds: load the Linear program example, move a slider, drag and Shift-turn the objective line, undo, edit a condition, read the LaTeX, insert into a note and edit again from there](https://raw.githubusercontent.com/Saiki77/easy-tikz/main/docs/media/overview.gif)
+![Part 2 of the Easy TikZ 4 overview film: on the Tangent explorer example, with the area between x^3 - 3x and its tangent added, the tangent point is dragged from a = 1 to a = -1, and tangent, slope and area follow; then play moves the slider by itself, and the three definitions behind the chart are shown](https://raw.githubusercontent.com/Saiki77/easy-tikz/main/docs/media/overview.gif)
 
 ## Drag a shape and its numbers follow
 
 Grab a line, curve, point or label in the preview. Easy TikZ rewrites the numbers in its formula so that the part you grabbed stays under the pointer, and only the numbers: your spacing and your way of writing the formula stay. Shift-drag turns a line or stretches a curve around a pivot. Rest the pointer on a shape and a tip shows in advance what will change. Every drag is one undo step.
 
-![Drag to edit: a constraint line of a linear program is turned with Shift-drag around the pivot at (3, 1), and the tip at the pointer reads x + 2y <= 5, slope -1/2](https://raw.githubusercontent.com/Saiki77/easy-tikz/main/docs/media/card-drag.png)
+![Drag to edit: Shift held over the dashed objective line 2x + 3y = c of a linear program, with the pivot ringed at the optimum (3, 1); beside it, 2x + 3y = c with c = 9 becomes 2.5x + 3y = c with c = 10.5 after a Shift-drag](https://raw.githubusercontent.com/Saiki77/easy-tikz/main/docs/media/card-drag.png)
 
 ## Sliders move the picture
 

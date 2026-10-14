@@ -2,7 +2,7 @@
 
 For the Release page of the relaunch. The release workflow has already filled the release with the changelog section of the tag; paste the text below **above** those notes.
 
-**Attach:** nothing to upload. The text loads [`hero.png`](../media/hero.png) and [`overview.gif`](../media/overview.gif) from the `main` branch, so `docs/media` has to be pushed first. To show the video as a player as well, drag [`overview.mp4`](../media/overview.mp4) into the text field under the GIF line.
+**Attach:** nothing to upload. The text loads [`hero.png`](../media/hero.png) and [`overview.gif`](../media/overview.gif) from the `main` branch, so `docs/media` has to be pushed first. The GIF is a 17.6 s loop of the film's second part; to show the whole film (40 s) as a player as well, drag [`overview.mp4`](../media/overview.mp4) into the text field under the GIF line.
 
 **Limit:** 125000 characters.
 
@@ -13,7 +13,7 @@ Easy TikZ is a visual editor for TikZ and pgfplots charts in Obsidian. Charts re
 
 Version 4 is a redesign around four goals: a clearer editor, sliders that move the picture while you drag them, shapes you edit by dragging them in the preview, and more power for complex pictures from fewer, more general tools.
 
-![Easy TikZ 4 in 54 seconds: load the Linear program example, move a slider, drag and Shift-turn the objective line, undo, edit a condition, read the LaTeX, insert into a note and edit again from there](https://raw.githubusercontent.com/Saiki77/easy-tikz/main/docs/media/overview.gif)
+![Part 2 of the Easy TikZ 4 overview film: on the Tangent explorer example, with the area between x^3 - 3x and its tangent added, the tangent point is dragged from a = 1 to a = -1, and tangent, slope and area follow; then play moves the slider by itself, and the three definitions behind the chart are shown](https://raw.githubusercontent.com/Saiki77/easy-tikz/main/docs/media/overview.gif)
 
 ## What is new in version 4
 

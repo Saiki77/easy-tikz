@@ -47,7 +47,7 @@ Highlights:
 ### Marketing screenshots / demo
 
 - Hero + 7 feature cards: `docs/media/hero.png` and `docs/media/card-*.png` in the repo.
-- 54-second overview GIF: `docs/media/overview.gif` (mp4 alongside).
+- Overview film, 40 seconds: `docs/media/overview.mp4`, with its second part as a 17.6 s GIF loop: `docs/media/overview.gif`.
 - README has everything inlined.
 
 ### Notes for the reviewer

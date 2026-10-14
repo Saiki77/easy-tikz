@@ -2,7 +2,7 @@
 
 One announcement per network, then a thread of replies that show one feature each, then alt texts and answers to the usual questions.
 
-**Attach to each announcement:** [`overview.mp4`](../media/overview.mp4) (54 s, 1728 x 1116, 1.6 MB, H.264, captions burnt in, no sound). If a network refuses the video, use [`overview.gif`](../media/overview.gif), or the still [`social-1200x675.png`](../media/social-1200x675.png). Use [`overview-poster.png`](../media/overview-poster.png) where a network asks for a cover picture.
+**Attach to each announcement:** [`overview.mp4`](../media/overview.mp4) (40 s, 1920 x 1080, 8.4 MB, H.264, captions burnt in, no sound). If a network refuses the video, use [`overview.gif`](../media/overview.gif) (a 17.6 s loop of the film's second part, 4.6 MB), or the still [`social-1200x675.png`](../media/social-1200x675.png). Use [`overview-poster.png`](../media/overview-poster.png) where a network asks for a cover picture.
 
 ## X
 
@@ -57,14 +57,14 @@ Replies to your own announcement, one feature each. Every text fits all three ne
 
 ### Reply 1: drag to edit
 
-**Attach:** [`clip-drag.mp4`](../media/clip-drag.mp4) (11 s), or the picture [`card-drag.png`](../media/card-drag.png).
+**Attach:** [`clip-drag.mp4`](../media/clip-drag.mp4) (19 s), or the picture [`card-drag.png`](../media/card-drag.png).
 
 **Limit:** 280 characters.
 
 ```text
 Drag to edit: grab a line, curve or point in the preview, and Easy TikZ rewrites the numbers in its formula so it stays under the pointer.
 
-Shift-drag turns a line around a pivot: x + 3y <= 6 becomes x + 2y <= 5. A tip shows beforehand which numbers will change.
+Shift-drag turns a line around a pivot: 2x + 3y = c becomes 2.5x + 3y = c. A tip shows beforehand which numbers will change.
 ```
 
 ### Reply 2: sliders
@@ -121,12 +121,28 @@ The same guides are in the editor's Help tab, with live charts.
 
 Paste into the description field of the media. Each is under 1000 characters.
 
-**`overview.mp4` and `overview.gif`**
+**`overview.mp4`**
 
 **Limit:** 1000 characters.
 
 ```text
-Screen recording of Easy TikZ 4 in Obsidian, 54 seconds, with a caption for each step. The editor is open on a new chart, and a click loads the Linear program example: a shaded feasible region with two constraint lines and a dashed objective line. A slider moves the objective line. The line is then dragged with the mouse until it snaps onto the optimum, and turned around it with Shift held. Undo takes the drag back. A new limit is typed into a condition and the region, its corners and the optimum follow. The Code tab shows the LaTeX. Insert into note puts the chart into a note, where its slider still works, and a click on the chart opens the editor again.
+Film of Easy TikZ 4 in Obsidian, 40 seconds, on a page of graph paper, with a caption for each step. A title card: Easy TikZ 4, TikZ charts from formulas, now fully interactive. Section 1, Drag to edit: on the Linear program example the dashed objective line 2x + 3y = c is dragged until it touches the optimum, and slider c follows from 5 to 9. With Shift held the line turns about the optimum (3, 1), and its Equation field now reads 2.5x + 3y = c. Section 2, Dynamics: the Tangent explorer example, with the area between the curve x^3 - 3x and its tangent added. The point where the tangent touches is dragged from a = 1 to a = -1: tangent, slope and area follow, and at a = 0 the area flips to the other side. Play then moves the slider by itself, and the three definitions behind the chart are shown as equations. An end card says how to install: Settings, Community plugins, Easy TikZ.
+```
+
+**`overview.gif`** (the loop of the film's section 2)
+
+**Limit:** 1000 characters.
+
+```text
+A loop of about 18 seconds from the Easy TikZ 4 film, on graph paper. On the Tangent explorer example, with the area between the curve x^3 - 3x and its tangent added, the point where the tangent touches is dragged from a = 1 to a = -1. Tangent, slope and area follow; at a = 0 the area shrinks to nothing and grows back on the other side, and at a = -1 the tangent lies flat on the maximum. Play then moves the slider by itself, and the three definitions behind the chart are shown as equations: the curve, the tangent and the region between them.
+```
+
+**`clip-drag.mp4` and `clip-drag.gif`**
+
+**Limit:** 1000 characters.
+
+```text
+A 19 second film on graph paper. It opens on the page Drag to edit with the Linear program example at c = 5, then moves into the editor. The dashed objective line 2x + 3y = c is dragged up through the feasible region and slider c follows from 5 to 9. With Shift held the line turns about the optimum (3, 1), marked as the pivot, and the tip at the pointer reads C1: 2.5x + 3y = c, c = 10.5, slope -5/6. The card then shows the new equation 2.5x + 3y = c, and the optimum card now reads Max of 2.5x + 3y over R1. The end card shows the install path: Settings, Community plugins, Easy TikZ.
 ```
 
 **`card-drag.png`**
@@ -134,7 +150,7 @@ Screen recording of Easy TikZ 4 in Obsidian, 54 seconds, with a caption for each
 **Limit:** 1000 characters.
 
 ```text
-Card with the headline "Drag a line. Numbers follow." A chart of a linear program in which a constraint line is being turned with Shift-drag around a pivot at (3, 1). A tip at the pointer reads: R1 (2): x + 2y <= 5, slope -1/2.
+A page on graph paper titled §1 Drag to edit. The text says: Drag a line and its numbers follow. Hold Shift and it turns about the ringed point instead. Below it, 2x + 3y = c with c = 9 becomes 2.5x + 3y = c with c = 10.5 after a Shift-drag from (1.5, 2) to (1.5, 2.25). Figure 1 shows Shift held over the dashed objective line of the Linear program example, with the pivot ringed at the optimum (3, 1) and a margin note: the pivot. The hover tip, enlarged beside the figure, reads: C1: 2x + 3y = c. Shift-drag turns around (3, 1). Also changes P1's objective (same text).
 ```
 
 **`card-sliders.png`**
