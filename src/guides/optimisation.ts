@@ -403,7 +403,7 @@ function areasBetweenGuide(): Guide {
                 tip: 'A label can show a value: `A1 = {P1_x2 - P1_x:2}` prints the width of the first area with two decimals.',
             },
         ],
-        next: ['tangent-area', 'supply-demand', 'points-labels'],
+        next: ['tangent-area', 'area-accumulation', 'supply-demand', 'points-labels'],
     };
 }
 
@@ -567,7 +567,7 @@ function tangentAreaGuide(): Guide {
                 tip: 'Give a a smaller range so the tangent stays in view: click the small numbers at the two ends of the slider and type -1.5 and 1.5.',
             },
         ],
-        next: ['tangents-extrema', 'drag-to-edit', 'export-latex'],
+        next: ['secant-tangent', 'tangents-extrema', 'drag-to-edit', 'export-latex'],
     };
 }
 

@@ -280,6 +280,13 @@ const KNOWN: Array<[string, () => ChartData]> = [
     ['example Level curves and a constraint', () => example('levels')],
     ['example Market equilibrium', () => example('surplus')],
     ['example Areas between two curves', () => example('areas')],
+    // The guides about live values: labels that follow sliders.
+    ['secant-tangent step 2: "A" and "B" on the curve', () => guideStep('secant-tangent', 2)],
+    ['secant-tangent step 8', () => guideStep('secant-tangent', 8)],
+    ['area-accumulation step 6: "A = 3.11" and "F(b) = 3.11"', () => guideStep('area-accumulation', 6)],
+    ['area-accumulation step 7', () => guideStep('area-accumulation', 7)],
+    ['computed-values step 5: "A = 9" beside the drop line of M', () => guideStep('computed-values', 5)],
+    ['computed-values step 6', () => guideStep('computed-values', 6)],
 ];
 
 for (const [name, chart] of KNOWN) {
