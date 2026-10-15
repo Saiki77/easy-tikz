@@ -15,6 +15,11 @@ import { cloneData, errorText, fitPixelScale } from './src/util';
 import { IconButtonHandle, LiveSliderHandle, iconButton, liveSlider, textButton, uniqueId, visuallyHidden } from './src/ui/kit';
 import { WhatsNewActions, WhatsNewModal } from './src/ui/whatsNewModal';
 import { WHATS_NEW_VERSION, chartScanRank, hasEasyTikzBlock, needsVaultCheck, shouldShowWhatsNew, whatsNewSeen } from './src/whatsnew';
+import { AiServer } from './src/ai/server';
+import { VaultChartHost } from './src/ai/vaultHost';
+import { AI_APPS, agentsSection, mcpUrl, mergeAgentsSection, newToken, shownSnippet } from './src/ai/connect';
+import AI_GUIDE from './docs/ai.md';
+import { impliedV4, parseLenientJson } from './src/blockjson';
 
 type FenceTag = 'easy-tikz' | 'tikz';
 type Align = 'left' | 'center' | 'right';
@@ -89,12 +94,15 @@ function sourceKey(sourcePath: string, data: Record<string, unknown>): string {
 function parseBlock(text: string): Record<string, unknown> | string {
     let parsed: unknown;
     try {
-        parsed = JSON.parse(text);
+        // Comments and trailing commas (blocks typed by hand or pasted from an AI chat) are fine.
+        parsed = parseLenientJson(text);
     } catch (e) {
         return e instanceof Error ? e.message : 'invalid JSON';
     }
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return 'the block must contain a JSON object';
-    return parsed as Record<string, unknown>;
+    const data = parsed as Record<string, unknown>;
+    // No "v" and nothing of a 3.x save: a version 4 chart someone wrote by hand.
+    return impliedV4(data) ? { v: 4, ...data } : data;
 }
 
 /** The fenced block exactly as the note stores it (trailing whitespace of the body dropped). */
@@ -164,12 +172,22 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             callback: () => this.showWhatsNew(),
         });
 
+        this.addCommand({
+            id: 'copy-ai-guide',
+            name: 'Copy the guide for AI chats (ChatGPT, Claude, Gemini)',
+            callback: () => void this.copyAiGuide(),
+        });
+
         this.addSettingTab(new EasyTikzSettingTab(this.app, this));
 
         this.register(() => {
             this.unloaded = true;
             this.whatsNew?.close();
         });
+
+        // The local AI server, when switched on (Settings > AI access).
+        if (this.data.aiServer) this.app.workspace.onLayoutReady(() => void this.startAi());
+        this.register(() => void this.stopAi());
 
         // "What's new" for people who updated (src/whatsnew.ts). Nothing is written during onload.
         const enabled = this.data.showWhatsNew !== false;
@@ -262,6 +280,11 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
                     editor.open();
                     editor.openHelp(guideId);
                 },
+                openAi: () => {
+                    const editor = new TikzModal(this.app, this);
+                    editor.open();
+                    editor.openAi();
+                },
             },
             // Seen as soon as it opens, so a crash or a quick close never shows it twice.
             onShown: () => void this.markWhatsNewSeen(),
@@ -281,6 +304,107 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         } catch {
             // Not saved: the popup may show once more after the next start, nothing worse.
         }
+    }
+
+    /** The running AI server, or null. */
+    aiServer: AiServer | null = null;
+    /** Why the AI server is not running although it is switched on (shown in the settings), or ''. */
+    aiStatus = '';
+
+    /** Starts and stops of the AI server run one after another (a fast double click on the switch must not leave one running). */
+    private aiChain: Promise<void> = Promise.resolve();
+
+    private aiStep(step: () => Promise<void>): Promise<void> {
+        const next = this.aiChain.then(step, step);
+        this.aiChain = next.catch(() => undefined);
+        return next;
+    }
+
+    /** Start (or restart) the local AI server (src/ai/server.ts) with the stored port and token, fixing them first when they are not valid. */
+    startAi(): Promise<void> {
+        return this.aiStep(async () => {
+            await this.closeAi();
+            if (!this.data.aiServer || this.unloaded) return;
+            let changed = false;
+            if (!/^[0-9a-f]{32}$/.test(this.data.aiToken || '')) {
+                this.data.aiToken = newToken();
+                changed = true;
+            }
+            if (!Number.isInteger(this.data.aiPort) || this.data.aiPort < 1024 || this.data.aiPort > 65535) {
+                this.data.aiPort = DEFAULT_PLUGIN_DATA.aiPort;
+                changed = true;
+            }
+            if (changed) await this.saveSettings();
+            const server = new AiServer(new VaultChartHost(this.app, this.manifest.version), { port: this.data.aiPort, token: this.data.aiToken });
+            try {
+                await server.start();
+            } catch (e) {
+                this.aiStatus = errorText(e);
+                new Notice(`Easy TikZ could not start the AI server: ${this.aiStatus}`);
+                return;
+            }
+            // Switched off or unloaded while it started: it does not stay up.
+            if (!this.data.aiServer || this.unloaded) {
+                await server.stop();
+                return;
+            }
+            this.aiServer = server;
+            this.aiStatus = '';
+        });
+    }
+
+    stopAi(): Promise<void> {
+        return this.aiStep(() => this.closeAi());
+    }
+
+    private async closeAi(): Promise<void> {
+        const server = this.aiServer;
+        this.aiServer = null;
+        if (server) await server.stop();
+    }
+
+    aiInfo(): { enabled: boolean; running: boolean; port: number; token: string; message: string } {
+        return { enabled: this.data.aiServer, running: !!this.aiServer, port: this.data.aiPort, token: this.data.aiToken, message: this.aiStatus };
+    }
+
+    async setAiServer(on: boolean): Promise<void> {
+        this.data.aiServer = on;
+        await this.saveSettings();
+        if (on) await this.startAi();
+        else await this.stopAi();
+    }
+
+    async newAiToken(): Promise<void> {
+        this.data.aiToken = newToken();
+        await this.saveSettings();
+        if (this.data.aiServer) await this.startAi();
+    }
+
+    aiGuideText(): string {
+        return AI_GUIDE;
+    }
+
+    /** The AI guide (docs/ai.md) on the clipboard, for chats that cannot reach the AI server. */
+    async copyAiGuide(): Promise<void> {
+        try {
+            await navigator.clipboard.writeText(AI_GUIDE);
+            new Notice('Easy TikZ: the AI guide is on the clipboard. Paste it into your AI chat, then describe the chart you want.');
+        } catch (e) {
+            new Notice(`Could not copy the guide: ${errorText(e)}`);
+        }
+    }
+
+    /** Add (or refresh) the Easy TikZ section of AGENTS.md and CLAUDE.md at the vault root, which AI agents read. */
+    async writeAgentFiles(): Promise<string[]> {
+        const section = agentsSection(this.app.vault.configDir, this.data.aiPort, this.manifest.version);
+        const written: string[] = [];
+        for (const name of ['AGENTS.md', 'CLAUDE.md']) {
+            const file = this.app.vault.getAbstractFileByPath(name);
+            if (file instanceof TFile) await this.app.vault.process(file, (old) => mergeAgentsSection(old, section));
+            else await this.app.vault.create(name, mergeAgentsSection('', section));
+            written.push(name);
+        }
+        return written;
     }
 
     async saveUserTemplates(templates: UserTemplate[]) {
@@ -877,6 +1001,105 @@ class EasyTikzSettingTab extends PluginSettingTab {
                     'The command "Show what\'s new in version 4" and the Help tab of the editor open it at any time.',
                 control: { type: 'toggle', key: 'showWhatsNew', defaultValue: true },
             },
+            {
+                type: 'group',
+                heading: 'AI access',
+                items: [
+                    {
+                        name: 'Let AI apps make charts',
+                        desc:
+                            'Off by default. Starts a small server on this computer only (127.0.0.1) that AI apps such as Claude Code, Codex, Cursor or VS Code use to read the chart guide, check charts, see them and add them to your notes. ' +
+                            'Every request needs the token below, web pages cannot use it, and it only adds Easy TikZ charts to notes or replaces them, never in files with instructions for AI agents. A notice shows each change, with Undo for changed notes.',
+                        aliases: ['MCP', 'AI', 'Claude', 'ChatGPT', 'Codex', 'Cursor', 'server', 'port'],
+                        control: { type: 'toggle', key: 'aiServer', defaultValue: false },
+                    },
+                    {
+                        name: 'Status',
+                        visible: () => this.plugin.data.aiServer,
+                        render: (setting) => {
+                            const running = this.plugin.aiServer;
+                            setting.setDesc(
+                                running ? `Running at ${mcpUrl(running.port)} (MCP) and http://127.0.0.1:${running.port}/guide.` : `Not running: ${this.plugin.aiStatus || 'starting...'}`
+                            );
+                            setting.addButton((b) =>
+                                b.setButtonText('Restart').onClick(async () => {
+                                    await this.plugin.startAi();
+                                    this.update();
+                                })
+                            );
+                        },
+                    },
+                    {
+                        name: 'Port',
+                        desc: 'Default 27150. After a change, update the address in your AI apps.',
+                        visible: () => this.plugin.data.aiServer,
+                        control: {
+                            type: 'number',
+                            key: 'aiPort',
+                            min: 1024,
+                            max: 65535,
+                            step: 1,
+                            defaultValue: 27150,
+                            validate: (v) => (Number.isInteger(v) && v >= 1024 && v <= 65535 ? undefined : 'A whole number from 1024 to 65535.'),
+                        },
+                    },
+                    {
+                        name: 'Token',
+                        visible: () => this.plugin.data.aiServer,
+                        render: (setting) => {
+                            const token = this.plugin.data.aiToken;
+                            setting.setDesc(`${token ? `${token.slice(0, 4)}...${token.slice(-4)}` : '(made when the server starts)'}. Every request must carry it. Make a new one if it got out, then update your apps.`);
+                            setting.addButton((b) => b.setButtonText('Copy').onClick(() => void copyText(token, 'Token copied.')));
+                            setting.addButton((b) =>
+                                b.setButtonText('New token').onClick(async () => {
+                                    await this.plugin.newAiToken();
+                                    this.update();
+                                })
+                            );
+                        },
+                    },
+                    {
+                        name: 'Connect an AI app',
+                        desc: 'Pick your app and copy what it needs, once. The app then reads the guide, checks charts and adds them to your notes by itself.',
+                        visible: () => this.plugin.data.aiServer,
+                        render: (setting) => {
+                            let app = AI_APPS[0];
+                            const where = setting.descEl.createDiv({ cls: 'etz-ai-where' });
+                            const snippet = setting.descEl.createEl('pre', { cls: 'etz-ai-snippet' });
+                            const text = () => app.snippet(mcpUrl(this.plugin.data.aiPort), this.plugin.data.aiToken);
+                            const refresh = () => {
+                                where.setText(app.where);
+                                // The token is masked on screen; Copy copies the real one.
+                                snippet.setText(shownSnippet(app, mcpUrl(this.plugin.data.aiPort), this.plugin.data.aiToken));
+                            };
+                            setting.addDropdown((d) => {
+                                for (const a of AI_APPS) d.addOption(a.id, a.name);
+                                d.setValue(app.id).onChange((id) => {
+                                    app = AI_APPS.find((a) => a.id === id) ?? AI_APPS[0];
+                                    refresh();
+                                });
+                            });
+                            setting.addButton((b) => b.setButtonText('Copy').setCta().onClick(() => void copyText(text(), `Copied for ${app.name}.`)));
+                            refresh();
+                        },
+                    },
+                    {
+                        name: 'Tell AI agents in this vault',
+                        desc: 'Adds a short Easy TikZ section to AGENTS.md and CLAUDE.md at the top of the vault (creating them if needed). Agents such as Claude Code, Codex, Cursor or Copilot read these files and then know how to make charts here, with or without the server.',
+                        action: () => {
+                            void this.plugin.writeAgentFiles().then(
+                                (files) => new Notice(`Easy TikZ: added the chart section to ${files.join(' and ')}.`),
+                                (e) => new Notice(`Could not write the agent files: ${errorText(e)}`)
+                            );
+                        },
+                    },
+                    {
+                        name: 'Copy the guide for AI chats',
+                        desc: 'For ChatGPT, Claude, Gemini or any chat that cannot reach this computer: paste the guide into the chat, describe your chart, and paste the block it writes into a note.',
+                        action: () => void this.plugin.copyAiGuide(),
+                    },
+                ],
+            },
         ];
     }
 
@@ -901,9 +1124,32 @@ class EasyTikzSettingTab extends PluginSettingTab {
             case 'dragSensitivity2D':
                 this.plugin.data.dragSensitivity2D = Number(value);
                 break;
+            case 'aiServer':
+                await this.plugin.setAiServer(Boolean(value));
+                this.update();
+                return;
+            case 'aiPort': {
+                const port = Number(value);
+                if (!Number.isInteger(port) || port < 1024 || port > 65535) return;
+                this.plugin.data.aiPort = port;
+                await this.plugin.saveSettings();
+                if (this.plugin.data.aiServer) await this.plugin.startAi();
+                this.update();
+                return;
+            }
             default:
                 return;
         }
         await this.plugin.saveSettings();
+    }
+}
+
+/** Put text on the clipboard and say so. */
+async function copyText(text: string, done: string): Promise<void> {
+    try {
+        await navigator.clipboard.writeText(text);
+        new Notice(done);
+    } catch (e) {
+        new Notice(`Could not copy: ${errorText(e)}`);
     }
 }

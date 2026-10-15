@@ -514,7 +514,7 @@ if (started) {
             const state = await whatsNewState();
             assert(state.count === 1, `${state.count} popups are open`);
             assert(state.title === 'Easy TikZ 4', `the title is "${state.title}"`);
-            assert(state.items === 9, `${state.items} highlights`);
+            assert(state.items === 10, `${state.items} highlights`);
             assert(state.blankIcons === 0, `${state.blankIcons} icons are blank (an icon id Obsidian does not know)`);
             assert(state.slope === 'slope at x = 0.8: -1.08' && state.area === 'A = 2.76', `the live example shows "${state.slope}" and "${state.area}"`);
             // Seen as soon as it opened, and nothing else of the user's data changed.
@@ -683,6 +683,89 @@ if (started) {
             const editors = await obs.call(() => document.querySelectorAll('.modal.tikz-modal').length);
             assert(editors === 1, `${editors} editors are open`);
             await obs.closeEditor();
+        });
+
+        // ---------------------------------------------------- AI access (src/ai)
+        // A port of its own, away from 27150 where the user's own Obsidian may answer.
+        const aiPort = 27190 + (port % 10);
+        const aiToken = '5a0e0123456789abcdef0123456789ab';
+        const ai = (pathname, init = {}) => fetch(`http://127.0.0.1:${aiPort}${pathname}`, init);
+        const aiTool = async (name, args) => {
+            const r = await ai(`/tools/${name}?token=${aiToken}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+            assert(r.status === 200, `${name}: HTTP ${r.status}`);
+            return r.json();
+        };
+
+        await check('AI access: off by default, nothing listens', async () => {
+            const off = await obs.call((id) => ({ on: app.plugins.plugins[id].data.aiServer, running: !!app.plugins.plugins[id].aiServer }), PLUGIN_ID);
+            assert(off.on === false && off.running === false, `AI access is ${JSON.stringify(off)} in a new vault`);
+            const reached = await ai('/').then(() => true, () => false);
+            assert(!reached, `something answers on ${aiPort} before AI access is on`);
+        });
+
+        await check('AI access: switching it on starts the server; every request needs the token and JSON, and may not come from a web page', async () => {
+            await obs.call(async (id, p, t) => {
+                const plugin = app.plugins.plugins[id];
+                Object.assign(plugin.data, { aiServer: true, aiPort: p, aiToken: t });
+                await plugin.startAi();
+            }, PLUGIN_ID, aiPort, aiToken);
+            assert((await ai('/')).status === 401, 'GET / answered without a token');
+            const info = await ai(`/?token=${aiToken}`);
+            assert(info.status === 200 && (await info.json()).name === 'easy-tikz', 'GET / does not name the server');
+            assert((await ai('/guide')).status === 401, 'the guide answered without a token');
+            const form = await ai(`/tools/list_examples?token=${aiToken}`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{}' });
+            assert(form.status === 415, `a POST that is not JSON got ${form.status}`);
+            const page = await ai('/guide', { headers: { Authorization: `Bearer ${aiToken}`, Origin: 'https://example.com' } });
+            assert(page.status === 403, `a request with an Origin header got ${page.status}`);
+            const guide = await ai('/guide', { headers: { Authorization: `Bearer ${aiToken}` } });
+            assert(guide.status === 200 && (await guide.text()).startsWith('# Easy TikZ: guide for AI assistants'), 'the guide did not come back');
+        });
+
+        await check('AI access: MCP initialize and tools/list', async () => {
+            const rpc = async (body) => (await ai(`/mcp?token=${aiToken}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify(body) })).json();
+            const init = await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'smoke', version: '1' } } });
+            assert(init.result && init.result.serverInfo.name === 'easy-tikz' && /get_guide/.test(init.result.instructions), 'initialize did not answer as the server');
+            const list = await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+            const names = list.result.tools.map((t) => t.name);
+            for (const want of ['check_chart', 'render_chart', 'add_chart', 'update_chart']) assert(names.includes(want), `tools/list lacks ${want}`);
+        });
+
+        const aiChart = { v: 4, xmin: '0', xmax: '5', ymin: '0', ymax: '4.5', tools: [{ type: 'region', name: 'R1', conditions: ['x + y <= 4', 'x + 3y <= 6', 'x >= 0', 'y >= 0'] }, { type: 'points', name: 'P1', source: 'region', regionName: 'R1', objective: '2x + 3y', label: 'z* = {val}' }] };
+
+        await check('AI access: check_chart reports what the chart computes, and refuses mistakes', async () => {
+            const good = await aiTool('check_chart', { chart: aiChart });
+            assert(good.ok && /^OK/.test(good.text) && /\(3, 1\)/.test(good.text), `check_chart: ${good.text.slice(0, 200)}`);
+            const bad = await aiTool('add_chart', { chart: { v: 4, functions: [{ name: 'f1', expression: 'ax^2' }] }, note: 'AI smoke', create: true });
+            assert(!bad.ok && /Unknown name 'ax'/.test(bad.text), 'a chart with a problem was not refused');
+        });
+
+        await check('AI access: render_chart returns a PNG of the chart', async () => {
+            const r = await aiTool('render_chart', { chart: aiChart });
+            assert(r.ok && r.image && r.image.mimeType === 'image/png', 'no image came back');
+            const bytes = Buffer.from(r.image.base64, 'base64');
+            assert(bytes.length > 5000 && bytes.slice(1, 4).toString() === 'PNG', `not a PNG (${bytes.length} bytes)`);
+        });
+
+        await check('AI access: add_chart writes the chart into a note, which renders it', async () => {
+            const missing = await aiTool('add_chart', { chart: aiChart, note: 'AI smoke' });
+            assert(!missing.ok && /create/.test(missing.text), 'a missing note was made without "create"');
+            const added = await aiTool('add_chart', { chart: aiChart, note: 'AI smoke', create: true });
+            assert(added.ok, `add_chart: ${added.text.slice(0, 200)}`);
+            await obs.openNote('AI smoke');
+            const charts = await obs.noteCharts();
+            assert(charts.length === 1 && charts[0].drawn && !charts[0].issues, `the note shows ${JSON.stringify(charts)}`);
+            const listed = await aiTool('list_charts', { note: 'AI smoke' });
+            assert(listed.ok && /1 chart/.test(listed.text), 'list_charts does not see the chart');
+        });
+
+        await check('AI access: switching it off stops the server', async () => {
+            await obs.call(async (id) => {
+                const plugin = app.plugins.plugins[id];
+                plugin.data.aiServer = false;
+                await plugin.stopAi();
+            }, PLUGIN_ID);
+            const reached = await ai('/').then(() => true, () => false);
+            assert(!reached, 'the server still answers after it was switched off');
         });
 
         await check('no console errors in the whole run', async () => {

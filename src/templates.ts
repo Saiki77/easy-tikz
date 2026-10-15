@@ -109,6 +109,12 @@ export interface PluginData {
      * or that a fresh install skipped. Absent until then.
      */
     whatsNewSeen?: string;
+    /** Setting "Let AI apps make charts": the local AI server (src/ai/server.ts) runs. Off by default. */
+    aiServer: boolean;
+    /** Port of the local AI server (127.0.0.1 only). */
+    aiPort: number;
+    /** Secret every request to the AI server must carry; made when the server is first switched on. */
+    aiToken: string;
 }
 
 export const DEFAULT_PLUGIN_DATA: PluginData = {
@@ -118,4 +124,7 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     renderTikzBlocks: false,
     dragSensitivity2D: 1.0,
     showWhatsNew: true,
+    aiServer: false,
+    aiPort: 27150,
+    aiToken: '',
 };

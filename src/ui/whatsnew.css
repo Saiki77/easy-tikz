@@ -348,3 +348,22 @@ h3.etz-whatsnew-h {
 .etz-help-news button.etz-btn.mod-link {
     font-size: var(--etz-font-small);
 }
+
+/* New in 4.3: AI makes charts. One highlighted row with its button, between the live chart and the rest of version 4. */
+.etz-whatsnew-ai {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 20px;
+    margin-top: 20px;
+    padding: 12px 16px;
+    border: 1px solid var(--etz-accent-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--etz-accent-tint);
+}
+
+.etz-whatsnew-ai > .etz-whatsnew-item {
+    flex: 1 1 360px;
+    min-width: 0;
+}

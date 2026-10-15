@@ -13,9 +13,20 @@
   <a href="#install">Install</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="docs/guides/README.md">Guides</a> ·
+  <a href="#make-charts-with-ai">Make charts with AI</a> ·
   <a href="#what-is-new-in-version-4">What is new in 4</a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
+
+## Make charts with AI
+
+Describe the chart and let an AI build it. Easy TikZ hands the AI everything it needs, checks every chart with the plugin's own code, and the chart lands in your note, ready to drag and slide. Open the **AI** tab in the editor; it has three ways in:
+
+- **AI apps on this computer** (Claude Code, Codex, Cursor, VS Code, Gemini CLI, Claude Desktop, LM Studio). Switch on **Let AI apps make charts** and copy the one line your app needs. The app then reads the chart guide, checks charts, looks at a picture of them and adds them to your notes by itself, through a small server that answers only on this computer ([how it works](docs/ai.md#the-local-ai-server)).
+- **AI chats** (ChatGPT, Claude, Gemini in the browser). **Copy the guide** into the chat, describe your chart, then **Paste the chart** the AI writes: it opens in the editor, checked. Blocks pasted straight into a note work too, also with the comments and trailing commas AI chats like to write.
+- **AI agents in your vault folder.** **Add the section** puts a short Easy TikZ part into `AGENTS.md` and `CLAUDE.md`, which agents read on their own.
+
+The guide the AI gets is [docs/ai.md](docs/ai.md). Then ask, for example: *"In this note, add a chart of the feasible region x + y <= 4, x + 3y <= 6, x >= 0, y >= 0, with the line 2x + 3y = c on a slider and the point where 2x + 3y is largest."*
 
 ## What is new in version 4
 
@@ -36,10 +47,15 @@
 - **Live calculations.** Points publish their results (`P1_x`, `P1_val`, `P1_n`), and any formula or label can use them: `z* = {P1_val:2}`.
 - **Five general tools, not eleven.** Regions from inequalities, curves from equations, points (intersections, corners, the optimum, integer points), segments and 3D planes. [Tools](#tools)
 - **Charts in your notes keep their sliders.** Moving them never changes the note. [Inline rendering](#inline-rendering-in-notes)
-- **A redesigned editor.** Four tabs, one card per object, problems shown under their field (often with a one-click fix), undo, and a draft that survives closing. [Quick start](#quick-start)
+- **A redesigned editor.** Five tabs, one card per object, problems shown under their field (often with a one-click fix), undo, and a draft that survives closing. [Quick start](#quick-start)
 - **LaTeX that compiles.** A standalone document by default, in the colours and layers of the preview. [Export](#export)
 - **Guides in the Help tab.** 24 step-by-step guides with live charts, and the same guides with screenshots on GitHub. [Guides](#guides)
 - **Charts from 3.x keep working.** They are converted when they render or open, and a note is only rewritten when you press **Save changes**. The guide [Coming from 3.x](docs/guides/from-3x.md) shows where the eight old tabs went.
+
+**New in 4.3**
+
+- **Make charts with AI**, from the editor's new **AI** tab (see [above](#make-charts-with-ai)): a local AI server for AI apps on this computer (off until you switch it on), a guide to paste into AI chats with **Paste the chart** to bring the answer back, and a section for `AGENTS.md` and `CLAUDE.md`. The What's new popup has a line about it.
+- **Blocks written by hand or by an AI render even when they are a little off:** `//` and `/* */` comments, trailing commas, and a missing `"v": 4` (a block without it, and without anything only 3.x saved, is read as version 4).
 
 **New in 4.2**
 
@@ -273,6 +289,7 @@ Settings → Community plugins → **Easy TikZ**:
 - **2D pan sensitivity.** Default 1.0 (direct: 1 mouse pixel = 1 chart pixel), from 0.1 to 2.0.
 - **Also render plain `tikz` blocks.** Off by default; on if you want one tag for everything (conflicts with obsidian-tikzjax).
 - **Show what's new after updates.** On by default. After an update that brings something new, a short popup shows what changed, once. The command **Show what's new in version 4** and the link in the Help tab open it at any time.
+- **AI access.** **Let AI apps make charts** (off by default) starts the local AI server; below it: its status, the **Port** (default 27150), the **Token** with **Copy** and **New token**, **Connect an AI app** with the line each app needs, **Tell AI agents in this vault** and **Copy the guide for AI chats**. The editor's **AI** tab has the same switch.
 
 ## Live rendering, briefly
 
@@ -282,11 +299,12 @@ A typical 3D surface (samples=40, 1,600 quads) sits at ~60 fps; the slider's upp
 
 ## Permissions
 
-- **Clipboard:** writes TikZ code / SVG / PNG on the *Copy …* buttons, and the text of a "type" row when you press **Copy** in a guide. No reads.
+- **Clipboard:** writes TikZ code / SVG / PNG on the *Copy …* buttons, the text of a "type" row when you press **Copy** in a guide, and the AI guide, connection lines and token when you press their **Copy** buttons in the AI tab or the settings. It reads the clipboard only when you press **Paste the chart** in the AI tab.
 - **Active note:** inserts an `easy-tikz` block on **Insert into note**, replaces an existing block when saving from click-to-edit, and updates `displayWidth` / `displayAlign` when you use a chart's width or alignment controls. Inline sliders never write to the note.
-- **Plugin data:** the plugin settings above, your saved function templates, the state of the **Edit shapes by dragging** switch (and that its first-use tip was shown), which version of the What's new popup was shown and, while the editor is open, an autosaved draft of the chart (cleared when you insert or save).
+- **Plugin data:** the plugin settings above (with the AI access token), your saved function templates, the state of the **Edit shapes by dragging** switch (and that its first-use tip was shown), which version of the What's new popup was shown and, while the editor is open, an autosaved draft of the chart (cleared when you insert or save).
 - **Your notes, read only:** when the plugin starts without any stored data and What's new is switched on, it looks through your notes for an `easy-tikz` block and stops at the first one. A 3.x user who never changed a setting has charts but no stored data, and this tells such an update from a new install. It runs once, since its answer is stored, and it never writes to a note.
-- **Network:** none. The guides in the Help tab are part of the plugin and their charts are drawn locally; each guide has a link to its page on GitHub, which opens in your browser only when you click it.
+- **Network:** nothing goes to the internet. The guides in the Help tab are part of the plugin and their charts are drawn locally; each guide has a link to its page on GitHub, which opens in your browser only when you click it. With **Let AI apps make charts** switched on (off by default), the plugin answers HTTP on `127.0.0.1` at the port you choose, which only programs on this computer can reach. Every request needs the token from the settings, and a POST must carry JSON; requests from web pages (with an `Origin` header) and for other host names are refused. It serves the AI guide, checks and draws charts one at a time (charts over its size limits are refused before anything is computed), and adds `easy-tikz` blocks to Markdown notes (at the end, below a heading, or in place of a placeholder line) or replaces them, nothing else: never in hidden folders and never in instruction files for AI agents such as `AGENTS.md` or `CLAUDE.md`. A new note is only made when the AI asks for it. Each change shows a notice, with **Undo** when an existing note changed.
+- **Vault root, on request:** **Tell AI agents in this vault** adds or updates a marked Easy TikZ section in `AGENTS.md` and `CLAUDE.md` at the top of the vault (creating them if needed). It never touches the rest of those files.
 - **Telemetry:** none.
 - **Math evaluation:** user expressions are parsed by a built-in parser and compiled into closures; no dynamically generated code runs. Nothing is persisted or transmitted.
 

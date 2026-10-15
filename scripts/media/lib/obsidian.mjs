@@ -163,6 +163,8 @@ export async function buildPlugin(outDir) {
         target: 'es2016',
         logLevel: 'silent',
         treeShaking: true,
+        // docs/ai.md is bundled as text (the AI server's guide), as esbuild.config.mjs does.
+        loader: { '.md': 'text' },
         outfile: path.join(outDir, 'main.js'),
     });
     const uiDir = path.join(REPO, 'src', 'ui');
@@ -187,7 +189,7 @@ export async function importTs(entry) {
     fs.mkdirSync(outDir, { recursive: true });
     const stamp = crypto.createHash('sha1').update(abs).digest('hex').slice(0, 10);
     const outfile = path.join(outDir, `${path.basename(entry).replace(/\.ts$/, '')}-${stamp}-${process.pid}-${Date.now()}.mjs`);
-    await esbuild.build({ entryPoints: [abs], bundle: true, platform: 'node', format: 'esm', target: 'node18', outfile, logLevel: 'silent', external: ['obsidian'] });
+    await esbuild.build({ entryPoints: [abs], bundle: true, platform: 'node', format: 'esm', target: 'node18', outfile, logLevel: 'silent', external: ['obsidian'], loader: { '.md': 'text' } });
     try {
         return await import(outfile);
     } finally {
@@ -655,8 +657,14 @@ export async function launch(options = {}) {
     );
     fs.closeSync(logFd);
     let exited = false;
-    child.on('exit', () => {
+    child.on('exit', (code, signal) => {
         exited = true;
+        // How it ended, for runs where the app goes away on its own.
+        try {
+            fs.appendFileSync(logFile, `\n[media] Obsidian exited at ${new Date().toISOString()} with code ${code} signal ${signal}\n`);
+        } catch {
+            // the work dir may be gone already
+        }
     });
     const killOnExit = () => {
         if (!exited) child.kill('SIGKILL');

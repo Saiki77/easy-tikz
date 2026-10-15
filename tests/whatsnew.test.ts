@@ -17,6 +17,7 @@ import { marchingGrid } from '../src/util';
 import {
     AREA_FORMULA,
     WHATS_NEW_CHART_GUIDE,
+    WHATS_NEW_AI,
     WHATS_NEW_ICONS,
     WHATS_NEW_LIVE,
     WHATS_NEW_MORE,
@@ -146,7 +147,7 @@ test('whats new: compareVersions', () => {
 
 // ---------------------------------------------------------------- content
 
-const ITEMS = [...WHATS_NEW_LIVE, ...WHATS_NEW_MORE];
+const ITEMS = [...WHATS_NEW_LIVE, WHATS_NEW_AI, ...WHATS_NEW_MORE];
 
 test('whats new: every line is short, plain and free of em dashes', () => {
     const texts = [WHATS_NEW_TITLE, WHATS_NEW_SUBTITLE, ...ITEMS.flatMap((i) => [i.title, i.text])];

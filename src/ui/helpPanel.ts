@@ -1188,6 +1188,7 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
                         host.showTab('help');
                         if (!guideId || !showGuide(guideId)) showHome();
                     },
+                    openAi: () => host.showTab('ai'),
                 }),
         });
     }

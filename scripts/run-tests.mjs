@@ -52,6 +52,7 @@ for (const file of files) {
             sourcemap: 'inline',
             logLevel: 'silent',
             external: ['obsidian'],
+            loader: { '.md': 'text' },
         });
     } catch (e) {
         failed++;

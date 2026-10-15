@@ -1,5 +1,6 @@
 import { App, MarkdownView, Menu, Modal, Notice, Platform, TFile, loadMathJax } from 'obsidian';
-import { cloneData, errorText, fitPixelScale, niceInterval, stripLatex } from './util';
+import { cloneData, errorText, fitPixelScale, niceInterval } from './util';
+import { exportableSvg, svgToPng } from './svgExport';
 import { issueText, mergeViewErrors } from './issues';
 import { Annotation, Function3DParameters, FunctionParameters, Parameter, RendererConfig, Tool } from './types';
 import { RANGE_DEFAULTS, RangeKey, SettingsManager } from './settings';
@@ -53,6 +54,7 @@ import { makeSliderEdit } from './drag/numbers';
 import { DragHintHandle, DragLayerHandle, createDragHint, createDragLayer } from './ui/dragLayer';
 import { BuildPanelHandle, createBuildPanel } from './ui/buildPanel';
 import { HelpPanelHandle, createHelpPanel } from './ui/helpPanel';
+import { AiPanelHandle, createAiPanel } from './ui/aiPanel';
 import { SlidersDockHandle, createSlidersDock } from './ui/slidersDock';
 import { ChartPanelHandle, createChartPanel } from './ui/chartPanel';
 import { CodePanelHandle, createCodePanel } from './ui/codePanel';
@@ -88,13 +90,14 @@ export interface TikzModalInitialState {
     fenceTag?: 'easy-tikz' | 'tikz';
 }
 
-type TabId = 'build' | 'chart' | 'code' | 'help';
+type TabId = 'build' | 'chart' | 'code' | 'help' | 'ai';
 
 const TABS: Array<{ id: TabId; label: string }> = [
     { id: 'build', label: 'Build' },
     { id: 'chart', label: 'Chart' },
     { id: 'code', label: 'Code' },
     { id: 'help', label: 'Help' },
+    { id: 'ai', label: 'AI' },
 ];
 
 /** Typing: full render this long after the last keystroke. */
@@ -414,6 +417,7 @@ export class TikzModal extends Modal implements PanelHost {
     private chartPanel: ChartPanelHandle | null = null;
     private codePanel: CodePanelHandle | null = null;
     private helpPanel: HelpPanelHandle | null = null;
+    private aiPanel: AiPanelHandle | null = null;
     /** Redraws in a row that a new `$...$` label asked for (see render2D). */
     private mathRedraws = 0;
     private dock: SlidersDockHandle | null = null;
@@ -820,6 +824,12 @@ export class TikzModal extends Modal implements PanelHost {
         const panel = this.tabPanels.get(tab);
         if (panel && previous !== tab) panel.scrollTop = this.tabScroll.get(tab) ?? 0;
         if (tab === 'code') this.codePanel?.onShow();
+        if (tab === 'ai') this.aiPanel?.refresh();
+    }
+
+    /** The AI tab (the "What's new" popup links here). */
+    openAi(): void {
+        this.showTab('ai');
     }
 
     /** The Help tab on its list of guides, or on one guide (the "What's new" popup links here). */
@@ -1061,6 +1071,7 @@ export class TikzModal extends Modal implements PanelHost {
             copy: (text, button) => void this.copyText(text, button),
         });
         this.helpPanel = createHelpPanel(panel('help'), this);
+        this.aiPanel = createAiPanel(panel('ai'), this);
     }
 
     private syncHeader() {
@@ -3388,53 +3399,7 @@ export class TikzModal extends Modal implements PanelHost {
             svg = this.chartSvg;
         }
         if (!svg) return null;
-        const clone = svg.cloneNode(true) as SVGElement;
-        clone.removeAttribute('class');
-        clone.removeAttribute('style');
-
-        // MathJax labels live in <foreignObject> nodes whose rendering
-        // depends on MathJax's document-level stylesheet: serialized
-        // standalone they'd show unstyled markup, and foreignObject content
-        // breaks PNG rasterization. Swap each for the plain-text
-        // stripLatex() approximation carried in its data attributes.
-        clone.querySelectorAll('foreignObject[data-export-text]').forEach((fo) => {
-            const t = createSvg('text');
-            t.setAttribute('x', fo.getAttribute('data-export-x') || '0');
-            t.setAttribute('y', fo.getAttribute('data-export-y') || '0');
-            t.setAttribute('text-anchor', fo.getAttribute('data-export-anchor') || 'start');
-            t.setAttribute('fill', fo.getAttribute('data-export-fill') || 'var(--text-normal)');
-            t.setAttribute('font-size', fo.getAttribute('data-export-font-size') || '11');
-            t.setAttribute('font-family', 'var(--font-text)');
-            const weight = fo.getAttribute('font-weight');
-            if (weight) t.setAttribute('font-weight', weight);
-            t.textContent = stripLatex(fo.getAttribute('data-export-text') || '');
-            fo.replaceWith(t);
-        });
-
-        // The background rect is the first child, fill="var(--background-primary)".
-        const background = clone.querySelector(':scope > rect');
-        if (background && (background.getAttribute('fill') ?? '').includes('--background-primary')) background.remove();
-
-        const computed = getComputedStyle(this.modalEl.ownerDocument.body);
-        const resolveVars = (value: string): string =>
-            value.replace(/var\((--[^,)]+)(?:,\s*([^)]+))?\)/g, (_match: string, name: string, fallback: string | undefined) => {
-                const v = computed.getPropertyValue(name).trim();
-                return v || (fallback ? fallback.trim() : '');
-            });
-        const nodes: Element[] = [clone, ...Array.from(clone.querySelectorAll('*'))];
-        for (const el of nodes) {
-            for (const attrName of ['fill', 'stroke', 'font-family', 'stop-color']) {
-                const v = el.getAttribute(attrName);
-                if (v && v.includes('var(')) el.setAttribute(attrName, resolveVars(v));
-            }
-            const styleAttr = el.getAttribute('style');
-            if (styleAttr && styleAttr.includes('var(')) el.setAttribute('style', resolveVars(styleAttr));
-        }
-
-        // Proper xmlns so it renders standalone outside the page.
-        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-        return clone;
+        return exportableSvg(svg, this.modalEl.ownerDocument);
     }
 
     private async copySvg(button: TextButtonHandle) {
@@ -3470,36 +3435,14 @@ export class TikzModal extends Modal implements PanelHost {
             new Notice('Nothing to copy yet: the chart has not rendered.');
             return;
         }
-        const svgString = new XMLSerializer().serializeToString(clone);
-        const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const width = parseFloat(clone.getAttribute('width') || '760');
-        const height = parseFloat(clone.getAttribute('height') || '532');
         try {
-            const img = new Image();
-            await new Promise<void>((resolve, reject) => {
-                img.onload = () => resolve();
-                img.onerror = () => reject(new Error('Failed to rasterize SVG'));
-                img.src = url;
-            });
             // 2x for a sharper result on Hi-DPI displays.
-            const scale = 2;
-            const canvas = createEl('canvas');
-            canvas.width = Math.round(width * scale);
-            canvas.height = Math.round(height * scale);
-            const ctx = canvas.getContext('2d');
-            if (!ctx) throw new Error('Canvas 2D context unavailable');
-            ctx.scale(scale, scale);
-            ctx.drawImage(img, 0, 0, width, height);
-            const pngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-            if (!pngBlob) throw new Error('Could not encode PNG');
+            const pngBlob = await svgToPng(clone, 2);
             // Older lib.dom.d.ts in this toolchain requires Promise<Blob>; the runtime accepts a Blob too.
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': Promise.resolve(pngBlob) })]);
             this.flashButton(button, 'Copied');
         } catch (e) {
             new Notice(`Could not copy the PNG: ${errorText(e)}`);
-        } finally {
-            URL.revokeObjectURL(url);
         }
     }
 

@@ -22,16 +22,7 @@ import { SceneCache } from '../scene';
 import { SettingsManager } from '../settings';
 import { Parameter } from '../types';
 import { cloneData, errorText, fitPixelScale } from '../util';
-import {
-    WHATS_NEW_CHART_GUIDE,
-    WHATS_NEW_LIVE,
-    WHATS_NEW_MORE,
-    WHATS_NEW_RECIPE,
-    WHATS_NEW_SUBTITLE,
-    WHATS_NEW_TITLE,
-    WhatsNewItem,
-    whatsNewChart,
-} from '../whatsnew';
+import { WHATS_NEW_AI, WHATS_NEW_CHART_GUIDE, WHATS_NEW_LIVE, WHATS_NEW_MORE, WHATS_NEW_RECIPE, WHATS_NEW_SUBTITLE, WHATS_NEW_TITLE, whatsNewChart, WhatsNewItem } from '../whatsnew';
 import { IconButtonHandle, LiveSliderHandle, formatDecimals, iconButton, liveSlider, textButton, uniqueId, visuallyHidden } from './kit';
 
 /** What the buttons of the popup do; the caller decides (a new editor, or the editor the popup was opened from). */
@@ -40,6 +31,8 @@ export interface WhatsNewActions {
     tryExample(chart: Record<string, unknown>): void;
     /** Open the editor's Help tab: the guides, or one guide by id. */
     openGuides(guideId?: string): void;
+    /** Open the editor's AI tab. */
+    openAi?(): void;
 }
 
 export interface WhatsNewOptions {
@@ -114,6 +107,13 @@ export class WhatsNewModal extends Modal {
         for (const [code, where] of WHATS_NEW_RECIPE) {
             rows.createEl('dt').createEl('code', { text: code });
             rows.createEl('dd', { text: where });
+        }
+
+        // --- new in 4.3: AI makes charts
+        const ai = contentEl.createEl('section', { cls: 'etz-whatsnew-ai' });
+        this.item(ai, WHATS_NEW_AI);
+        if (this.opts.actions.openAi) {
+            textButton(ai, { text: 'Open the AI tab', icon: 'bot', size: 'sm', onClick: () => this.run((a) => a.openAi?.()) });
         }
 
         // --- the rest of version 4

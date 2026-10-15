@@ -70,5 +70,6 @@ esbuild.build({
 	logLevel: "info",
 	sourcemap: prod ? false : 'inline',
 	treeShaking: true,
+	loader: { '.md': 'text' },
 	outfile: 'main.js',
 }).catch(() => process.exit(1));

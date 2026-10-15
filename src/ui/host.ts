@@ -34,6 +34,16 @@ export interface PluginHost {
      * Help tab passes `actions` so the popup's buttons act on its editor.
      */
     showWhatsNew?(actions?: WhatsNewActions): void;
+    /** Optional (AI tab, src/ui/aiPanel.ts): state of the local AI server, same as Settings > AI access. */
+    aiInfo?(): { enabled: boolean; running: boolean; port: number; token: string; message: string };
+    /** Optional: switch the local AI server on or off (stored, like the setting). */
+    setAiServer?(on: boolean): Promise<void>;
+    /** Optional: a new token for the AI server; running servers restart with it. */
+    newAiToken?(): Promise<void>;
+    /** Optional: add the Easy TikZ section to AGENTS.md and CLAUDE.md; returns the files written. */
+    writeAgentFiles?(): Promise<string[]>;
+    /** Optional: the guide for AI assistants (docs/ai.md). */
+    aiGuideText?(): string;
 }
 
 /** Something a panel registered so the modal can validate / focus it. */
@@ -127,7 +137,7 @@ export interface PanelHost {
     loadChart(data: Record<string, unknown>, onApplied?: () => void): void;
 
     /** Switch the left panel to a tab. */
-    showTab(tab: 'build' | 'chart' | 'code' | 'help'): void;
+    showTab(tab: 'build' | 'chart' | 'code' | 'help' | 'ai'): void;
 }
 
 /** Common card actions handed to function and layer cards by the Build panel. */

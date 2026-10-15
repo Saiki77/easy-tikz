@@ -150,7 +150,7 @@ export const WHATS_NEW_MORE: WhatsNewItem[] = [
     {
         icon: 'layout-panel-left',
         title: 'A redesigned editor',
-        text: 'Four tabs, one card per object, and a preview that follows as you type.',
+        text: 'Five tabs, one card per object, and a preview that follows as you type.',
     },
     {
         icon: 'move',
@@ -193,9 +193,17 @@ export const WHATS_NEW_RECIPE: ReadonlyArray<readonly [string, string]> = [
     ['slope at x = {a}: {3a^2 - 3:2}', 'title: the slope'],
 ];
 
+/** New in 4.3, above the rest: AI makes charts. Its button opens the editor's AI tab. */
+export const WHATS_NEW_AI: WhatsNewItem = {
+    icon: 'bot',
+    title: 'New: let AI make your charts',
+    text: 'Claude Code, Codex, Cursor and other AI apps check charts and add them to your notes. ChatGPT gets a guide to paste.',
+};
+
 /** Every icon the popup uses (its items, buttons and the Help tab link). */
 export const WHATS_NEW_ICONS: readonly string[] = [
     ...WHATS_NEW_LIVE.map((i) => i.icon),
+    WHATS_NEW_AI.icon,
     ...WHATS_NEW_MORE.map((i) => i.icon),
     'play',
     'pause',
