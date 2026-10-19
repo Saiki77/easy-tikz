@@ -2,7 +2,7 @@
 
 Read the subreddit rules in the sidebar before posting and pick the flair it offers for plugins.
 
-**Attach:** [`overview.mp4`](../media/overview.mp4) (40 s, 1920 x 1080, 8.4 MB, captions burnt in, no sound). Put it at the top of the post. If the post editor takes pictures only, use [`hero.png`](../media/hero.png), [`card-drag.png`](../media/card-drag.png), [`card-sliders.png`](../media/card-sliders.png) and [`card-regions.png`](../media/card-regions.png) as a gallery and link the video on GitHub.
+**Attach:** [`overview.mp4`](../media/overview.mp4) (40 s, 1920 x 1080, 7.8 MB, captions burnt in, no sound). Put it at the top of the post. If the post editor takes pictures only, use [`hero.png`](../media/hero.png), [`card-drag.png`](../media/card-drag.png), [`card-sliders.png`](../media/card-sliders.png) and [`card-regions.png`](../media/card-regions.png) as a gallery and link the video on GitHub.
 
 ## Title
 

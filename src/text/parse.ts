@@ -19,6 +19,7 @@
  * words do not cover.
  */
 import { RESERVED_NAMES } from '../migrate';
+import { ChartWords, chartWords, hasWords, readWords, shadowed, typedColumn } from './words';
 
 type Data = Record<string, unknown>;
 
@@ -679,8 +680,39 @@ function addTool(b: Builder, type: string, name: string | null, fields: Data, op
     return tool;
 }
 
-/** Parse a text block into a v4 chart; with { trace: true } also what each line made. */
-export function parseChartText(text: string, opts: { trace?: boolean } = {}): TextChart {
+/**
+ * Parse a text block into a v4 chart; with { trace: true } also what each
+ * line made. A person's own chart words (src/text/words.ts, the settings'
+ * by default) are read as the built-in ones; problems point at the line as
+ * it was typed.
+ */
+export function parseChartText(text: string, opts: { trace?: boolean; words?: ChartWords } = {}): TextChart {
+    const words = opts.words ?? chartWords();
+    if (!hasWords(words)) return parseBuiltin(text, opts);
+    let read = readWords(text, words);
+    let out = parseBuiltin(read.text, opts);
+    // A name the chart defines stays a name, even when it is spelled like one of their words.
+    const names = definedNames(out.data);
+    if (shadowed(words, names)) {
+        read = readWords(text, words, names);
+        out = parseBuiltin(read.text, opts);
+    }
+    for (const p of out.problems) p.column = typedColumn(read.maps, p.line, p.column);
+    return out;
+}
+
+/** The names a chart defines (sliders, functions, surfaces, shapes), lowercase. */
+export function definedNames(data: Data): Set<string> {
+    const names = new Set<string>();
+    for (const key of ['parameters', 'functions', 'functions3D', 'tools']) {
+        const list = data[key];
+        if (!Array.isArray(list)) continue;
+        for (const item of list) if (item && typeof item === 'object' && typeof (item as Data).name === 'string') names.add(((item as Data).name as string).toLowerCase());
+    }
+    return names;
+}
+
+function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
     const b = new Builder();
     const lines = text.split(LINE_BREAK);
     // Names first, so a line may use a name defined further down; and 3D charts read their tuples as (x, y, z).

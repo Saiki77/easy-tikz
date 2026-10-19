@@ -41,12 +41,13 @@ const ff = (args, what) =>
  * Open the stage with a film and return { draw(t), still(t, file), close(), measured }.
  * For the composite pass and for looking at single frames while editing.
  */
-export async function openStage(film, { port }) {
+export async function openStage(film, { port, scale = 1 }) {
     writeFontsCss();
     const chrome = await launchStageChromium({ port });
     const cdp = chrome.cdp;
     try {
-        await cdp.send('Emulation.setDeviceMetricsOverride', { width: film.width, height: film.height, deviceScaleFactor: 1, mobile: false });
+        // At scale 2 the stage keeps its layout and draws every text and line at twice the pixels (a 4K film of a 1080p layout).
+        await cdp.send('Emulation.setDeviceMetricsOverride', { width: film.width, height: film.height, deviceScaleFactor: scale, mobile: false });
         const nav = await cdp.send('Page.navigate', { url: pathToFileURL(path.join(HERE, 'stage.html')).href });
         if (nav.errorText) throw new Error(`stage: ${nav.errorText}`);
         await waitFor(() => cdp.evaluate('window.cinemaReady === true'), { timeout: 20000, interval: 50, message: 'the stage page to load' });
@@ -98,11 +99,15 @@ export async function openStage(film, { port }) {
  *   crf       H.264 quality of the MP4 (default 18)
  *   loop      { width: 960, budget: 8 MB, from, to } for the GIF; false for none. `from` and `to` are film
  *             seconds: the loop is that part of the film only (the highlight of a long film)
+ *   scale     pixels per px of the 1920 x 1080 layout (2: drawn at 3840 x 2160, sharp on high-density
+ *             screens). The MP4 and the poster keep the film's size, drawn from the larger master; the film
+ *             at the master's size is <out>-2x.mp4; the WebP loop is 960 times the scale wide, the GIF
+ *             stays at its width
  *   stills    [{ name, t }]: full size stills (default: reviewMoments(film), the moments worth a close look)
  *   keepMaster   keep <out>-master.mkv (lossless), for encoding again without drawing
  * Returns { mp4, gif, webp, poster, sheets, stills, frames, drawn, seconds, timing, bytes }.
  */
-export async function compose(film, { out, port, crf = 18, loop = {}, stills = null, keepMaster = false, say = () => {} } = {}) {
+export async function compose(film, { out, port, crf = 18, loop = {}, stills = null, keepMaster = false, scale = 1, say = () => {} } = {}) {
     if (!out) throw new Error('compose: out is required (path without extension)');
     out = path.resolve(out);
     fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -113,7 +118,7 @@ export async function compose(film, { out, port, crf = 18, loop = {}, stills = n
     const started = Date.now();
 
     // ---- draw: stage -> PNG -> ffmpeg (lossless RGB master)
-    const stage = await openStage(film, { port });
+    const stage = await openStage(film, { port, scale });
     let drawn = 0;
     const holds = [];
     const fontProblems = [];
@@ -154,17 +159,26 @@ export async function compose(film, { out, port, crf = 18, loop = {}, stills = n
     const result = { frames: total, drawn, seconds: total / fps, fps, bytes: {}, timing, masterBytes: fs.statSync(master).size };
     let mark = Date.now();
     result.mp4 = `${out}.mp4`;
-    // RGB to BT.709 limited range, and tagged as such: players then show the paper in its own colour.
-    await ff(
-        ['-i', master, '-vf', 'scale=out_color_matrix=bt709:out_range=tv:flags=accurate_rnd+full_chroma_int,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv', '-c:v', 'libx264', '-preset', 'slow', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv', '-movflags', '+faststart', '-an', result.mp4],
-        result.mp4
-    );
+    // RGB to BT.709 limited range, and tagged as such: players then show the paper in its own colour. At a
+    // scale above 1 the MP4 is still the film's own size (1920 x 1080, what a post or a page takes), drawn
+    // from the larger master, and the film at the master's size is <out>-2x.mp4 beside it.
+    const mp4 = (file, width) =>
+        ff(
+            ['-i', master, '-vf', `scale=${width ? `${width}:-2:` : ''}out_color_matrix=bt709:out_range=tv:flags=${width ? 'lanczos+' : ''}accurate_rnd+full_chroma_int,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv`, '-c:v', 'libx264', '-preset', 'slow', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv', '-movflags', '+faststart', '-an', file],
+            file
+        );
+    await mp4(result.mp4, scale > 1 ? film.width : null);
     result.bytes.mp4 = fs.statSync(result.mp4).size;
+    if (scale > 1) {
+        result.large = `${out}-${scale}x.mp4`;
+        await mp4(result.large, null);
+        result.bytes.large = fs.statSync(result.large).size;
+    }
     timing.mp4 = (Date.now() - mark) / 1000;
 
     mark = Date.now();
     if (loop !== false) {
-        const made = await encodeLoop(master, out, { fps: film.fps, ...loop });
+        const made = await encodeLoop(master, out, { fps: film.fps, webpWidth: Math.round(960 * scale), ...loop });
         Object.assign(result, { gif: made.gif, webp: made.webp, loop: made });
         if (made.gif) result.bytes.gif = made.gif.bytes;
         if (made.webp) result.bytes.webp = made.webp.bytes;
@@ -176,7 +190,7 @@ export async function compose(film, { out, port, crf = 18, loop = {}, stills = n
     const posterAt = film.marks.poster === null || film.marks.poster === undefined ? film.duration / 2 : film.marks.poster;
     result.poster = `${out}-poster.png`;
     await frameOf(master, posterAt, result.poster);
-    await run('magick', [result.poster, '-strip', '-define', 'png:compression-level=9', result.poster]);
+    await run('magick', [result.poster, ...(scale > 1 ? ['-filter', 'Lanczos', '-resize', `${film.width}x`] : []), '-strip', '-define', 'png:compression-level=9', result.poster]);
     result.bytes.poster = fs.statSync(result.poster).size;
     result.posterAt = posterAt;
 
@@ -267,7 +281,7 @@ export async function contactSheets(video, outBase, { frames, fps, every = 0.5, 
  *   from, to   film seconds: only this part of the film (default: all of it). A film of 45 s does not fit
  *              a README as a GIF of this size; its loop is a highlight of 12 to 15 s, with a link to the MP4
  */
-export async function encodeLoop(master, outBase, { width = 960, fps = 60, budget = 8 * 1024 * 1024, webp = true, from = null, to = null } = {}) {
+export async function encodeLoop(master, outBase, { width = 960, webpWidth = width, fps = 60, budget = 8 * 1024 * 1024, webp = true, from = null, to = null } = {}) {
     const made = { gif: null, webp: null };
     const part = from === null && to === null ? '' : `trim=start=${from || 0}${to === null ? '' : `:end=${to}`},setpts=PTS-STARTPTS,`;
     const rates = [20, 15, 12, 10].filter((r) => r <= fps);
@@ -289,13 +303,13 @@ export async function encodeLoop(master, outBase, { width = 960, fps = 60, budge
             const rate = 20 <= fps ? 20 : fps;
             const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'easy-tikz-loop-'));
             try {
-                await ff(['-i', master, '-vf', `${part}fps=${rate},scale=${width}:-1:flags=lanczos`, path.join(dir, 'f-%05d.png')], 'the frames of the WebP loop');
+                await ff(['-i', master, '-vf', `${part}fps=${rate},scale=${webpWidth}:-1:flags=lanczos`, path.join(dir, 'f-%05d.png')], 'the frames of the WebP loop');
                 const frames = fs.readdirSync(dir).filter((n) => n.endsWith('.png')).sort().map((n) => path.join(dir, n));
                 const file = `${outBase}.webp`;
                 // Lossless: every pixel as drawn. (img2webp's lossy mode leaves ghosts where something small
                 // disappeared, such as the editor's hover tip: it was tried and looked at.)
                 await run(tool, ['-loop', '0', '-lossless', '-m', '4', '-d', String(Math.round(1000 / rate)), ...frames, '-o', file], { maxBuffer: 1 << 26 });
-                made.webp = { file, bytes: fs.statSync(file).size, fps: rate, width, lossless: true };
+                made.webp = { file, bytes: fs.statSync(file).size, fps: rate, width: webpWidth, lossless: true };
             } finally {
                 fs.rmSync(dir, { recursive: true, force: true });
             }

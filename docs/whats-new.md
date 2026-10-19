@@ -2,10 +2,19 @@
 
 [Overview](../README.md) · [Guides](guides/README.md) · [Reference](reference.md) · [Changelog](../CHANGELOG.md)
 
+## 4.6: your own chart words
+
+- **Your words for the chart language.** Settings, Chart words, **Edit words**: every piece of the language (lines such as `plot` and `shade`, phrases such as `the maximum of`, options and colours) can get your own words, in your language or your own terms. Several words for one piece are fine; the first is the one the plugin writes. The built-in words keep working beside yours, so notes from others, the guides and AI apps still draw.
+- **One word for several options.** `objective` = `in red, dashed`, then `draw 2x + 3y = c, objective`.
+- **Written in your words.** Insert into note, Save changes and the AI tools write your words (setting **Write charts with**: your words or the built-in ones). Your words are read where their pieces go, so a formula, a name, a title or a label is never touched.
+- **Share them.** **Copy your words** gives them as text for a class or another vault; paste text into the box to take words over.
+- **Change a word later.** Charts in your notes that used the old word are offered for rewriting, line by line, with their comments.
+- **AI apps** see your words: the guide they read ends with a list of them.
+
 ## 4.5: charts in plain words, drawn as you type
 
 <p align="center">
-  <a href="media/text.mp4"><img src="media/text.gif" alt="A 37 second film on graph paper: §3 Charts as text. Write the chart in plain words. A note in Obsidian holds one sentence and no chart. A block is opened with three backticks and easy-tikz; Obsidian closes it, and nothing shows under the empty block. The first line, size 12 x 6, makes the chart fade up under the block on the default range; the next, show x from 0 to 5.5 and y from 0 to 3, makes its axes glide there as the numbers are typed, and axes on the edges moves them to the edges. Then, one line each: shade where x + y &lt;= 4 and x + 3y &lt;= 6 and x &gt;= 0 and y &gt;= 0, numbered (the region fades in), slider c from 0 to 15, starting at 6 (a slider appears under the chart), draw 2x + 3y = c in red, dashed (the dashed line draws itself) and mark the maximum of 2x + 3y in the region, large, with coordinates (the optimum (3, 1) pops in). The 4 in x + y &lt;= 4 becomes a 5: the region grows and the optimum slides to (4.5, 0.5), and a note says: the optimum slides. A click on the note's first line hands the lines over to the chart." width="100%"></a>
+  <a href="media/text.mp4"><img src="media/text.webp" alt="A 37 second film on graph paper: §3 Charts as text. Write the chart in plain words. A note in Obsidian holds one sentence and no chart. A block is opened with three backticks and easy-tikz; Obsidian closes it, and nothing shows under the empty block. The first line, size 12 x 6, makes the chart fade up under the block on the default range; the next, show x from 0 to 5.5 and y from 0 to 3, makes its axes glide there as the numbers are typed, and axes on the edges moves them to the edges. Then, one line each: shade where x + y &lt;= 4 and x + 3y &lt;= 6 and x &gt;= 0 and y &gt;= 0, numbered (the region fades in), slider c from 0 to 15, starting at 6 (a slider appears under the chart), draw 2x + 3y = c in red, dashed (the dashed line draws itself) and mark the maximum of 2x + 3y in the region, large, with coordinates (the optimum (3, 1) pops in). The 4 in x + y &lt;= 4 becomes a 5: the region grows and the optimum slides to (4.5, 0.5), and a note says: the optimum slides. A click on the note's first line hands the lines over to the chart." width="100%"></a>
 </p>
 <p align="center">One note in Live Preview, from no chart at all: a block is opened, each line is typed in words, and the chart appears under the block and follows every key. <a href="media/text.mp4">Watch the MP4</a> (37 s).</p>
 
@@ -51,7 +60,7 @@ mark the maximum of 2x + 3y in the region, large, with coordinates
 </p>
 
 <p align="center">
-  <a href="media/clip-drag.mp4"><img src="media/clip-drag.gif" alt="A 19 second film on graph paper. It opens on the page Drag to edit with the Linear program example at c = 5, then moves into the editor. The dashed objective line 2x + 3y = c is dragged up through the feasible region and slider c follows from 5 to 9. With Shift held the line turns about the optimum (3, 1), marked as the pivot, and the tip at the pointer reads C1: 2.5x + 3y = c, c = 10.5, slope -5/6. The card then shows the new equation 2.5x + 3y = c, and the optimum card now reads Max of 2.5x + 3y over R1. The end card shows the install path: Settings, Community plugins, Easy TikZ." width="100%"></a>
+  <a href="media/clip-drag.mp4"><img src="media/clip-drag.webp" alt="A 19 second film on graph paper. It opens on the page Drag to edit with the Linear program example at c = 5, then moves into the editor. The dashed objective line 2x + 3y = c is dragged up through the feasible region and slider c follows from 5 to 9. With Shift held the line turns about the optimum (3, 1), marked as the pivot, and the tip at the pointer reads C1: 2.5x + 3y = c, c = 10.5, slope -5/6. The card then shows the new equation 2.5x + 3y = c, and the optimum card now reads Max of 2.5x + 3y over R1. The end card shows the install path: Settings, Community plugins, Easy TikZ." width="100%"></a>
 </p>
 <p align="center">Drag the line and slider c follows. Hold Shift and it turns about the optimum, and its formula follows: 2x + 3y = c becomes 2.5x + 3y = c. <a href="media/clip-drag.mp4">Watch the MP4</a> (19 s).</p>
 

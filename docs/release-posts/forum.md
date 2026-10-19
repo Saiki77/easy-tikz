@@ -2,7 +2,7 @@
 
 For [forum.obsidian.md](https://forum.obsidian.md), category Share & showcase. Add the tags the forum offers for plugins.
 
-**Attach:** nothing to upload if `docs/media` is on `main`: the text loads [`hero.png`](../media/hero.png), [`overview.gif`](../media/overview.gif), [`card-drag.png`](../media/card-drag.png), [`card-sliders.png`](../media/card-sliders.png) and [`card-regions.png`](../media/card-regions.png) by URL. If a picture does not show in the preview of the post, delete its line and upload the file in its place. Should the forum refuse the GIF (4.6 MB), use [`overview-poster.png`](../media/overview-poster.png) and keep the link to the video.
+**Attach:** nothing to upload if `docs/media` is on `main`: the text loads [`hero.png`](../media/hero.png), [`overview.gif`](../media/overview.gif), [`card-drag.png`](../media/card-drag.png), [`card-sliders.png`](../media/card-sliders.png) and [`card-regions.png`](../media/card-regions.png) by URL. If a picture does not show in the preview of the post, delete its line and upload the file in its place. Should the forum refuse the GIF (4.4 MB), use [`overview-poster.png`](../media/overview-poster.png) and keep the link to the video.
 
 ## Title
 

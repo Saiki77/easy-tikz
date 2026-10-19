@@ -48,6 +48,21 @@ mark the maximum of 2x + 3y in the region, large, labelled "x* = ({x:2}, {y:2})"
 
 The Help tab has the reference (**Charts as text**), and the AI guide lists every line and option: [ai.md](ai.md#the-text-syntax). The short forms of 4.4 (`view x 0..5, y 0..4.5`, `f(x) = x^2 | blue`) still work.
 
+## Chart words
+
+Settings, Chart words, **Edit words** gives every piece of the chart language your own words. The pieces are grouped: lines (`show`, `plot`, `shade`, `draw`, `mark`, `write`, `slider`, `title`, ...), phrases (`from`, `to`, `and`, `where`, `the maximum of`, `the region`, `an arrow`, ...), options (`in` before a colour, `dashed`, `thick`, `numbered`, `with its tangent at`, `labelled`, ...) and colours.
+
+- **Several words for one piece:** separate them with commas; the first is the one the plugin writes. Empty: only the built-in word.
+- **The built-in words keep working** beside yours. A word can belong to one piece only, and never be a name formulas use (`sin`, `x`, `pi`); the window says when a word clashes.
+- **One word for several options:** `objective` = `in red, dashed`, written like any option: `draw 2x + 3y = c, objective`.
+- **Where words are read:** in the places their pieces go. A formula, a name the chart defines (a slider called `rot`), a function call (`rot(x)`), a title, a label in quotes and comment lines stay as typed.
+- **What the plugin writes:** your words (setting **Write charts with**), or the built-in ones while yours are only read. Lines you did not change keep their words either way.
+- **Changing a word later:** charts in your notes that used the old word are offered for rewriting (**Rewrite N charts**): only the changed words are replaced, each chart only when it stays exactly the same chart.
+- **Sharing:** **Copy your words** gives them as text (`plot = graph`, `objective := in red, dashed`); paste such text into the box to take words over.
+- **AI apps** get your words with the guide they read, so they can read your charts. They may write the built-in words, which always work.
+
+Problem messages under a chart use the built-in words, and their columns point at what you typed.
+
 ## Make charts with AI
 
 Describe the chart and let an AI build it. Easy TikZ hands the AI everything it needs, checks every chart with the plugin's own code, and the chart lands in your note, ready to drag and slide. Open the **AI** tab in the editor; it has three ways in:

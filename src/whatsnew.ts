@@ -26,7 +26,7 @@ import { printChartText } from './text/print';
 import type { FunctionParameters, Parameter, RegionTool } from './types';
 
 /** Version of the popup's content. Raise it when the popup says something new. */
-export const WHATS_NEW_VERSION = '4.5.0';
+export const WHATS_NEW_VERSION = '4.6.0';
 
 /**
  * Compare two version strings numerically, part by part ('4.10.0' > '4.9.1',
@@ -122,13 +122,18 @@ export interface WhatsNewItem {
 }
 
 export const WHATS_NEW_TITLE = 'Easy TikZ 4';
-export const WHATS_NEW_SUBTITLE = 'Write a chart in plain words, and watch it draw under the block as you type. On your phone too.';
+export const WHATS_NEW_SUBTITLE = 'Write a chart in plain words, or in your own, and watch it draw under the block as you type.';
 
 /** The heading of the newest items, at the top. */
-export const WHATS_NEW_RECENT_TITLE = 'New in 4.4 and 4.5';
+export const WHATS_NEW_RECENT_TITLE = 'New in 4.5 and 4.6';
 
-/** New in 4.4 and 4.5, at the top. */
+/** New in 4.5 and 4.6, at the top. */
 export const WHATS_NEW_RECENT: WhatsNewItem[] = [
+    {
+        icon: 'languages',
+        title: 'Your own chart words',
+        text: 'Give any piece of the chart language your own words, in your language or your own terms. Settings, Chart words.',
+    },
     {
         icon: 'type',
         title: 'Charts in plain words',
@@ -138,11 +143,6 @@ export const WHATS_NEW_RECENT: WhatsNewItem[] = [
         icon: 'eye',
         title: 'The chart under the block',
         text: 'While you edit a block in Live Preview, its chart sits right under it and changes as you type.',
-    },
-    {
-        icon: 'sparkles',
-        title: 'Charts that move',
-        text: 'Change a number in the note and the chart glides to it; new objects pop in.',
     },
     {
         icon: 'smartphone',

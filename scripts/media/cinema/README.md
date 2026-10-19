@@ -26,7 +26,9 @@ there. The overview and the drag clip of the README are `overview` and `sample -
 Options: `--port 9373` (Obsidian for the capture, then headless Chromium for the composite, one after the
 other), `--work DIR` (profile, vault and the raw frames; default `<tmp>/easy-tikz-media/port-<port>`),
 `--name NAME` (file name of the outputs), `--fps 60`, `--retries 2`, `--keep-master`, `--no-loop`,
-`--plugin root`.
+`--plugin root`, `--scale 2` (the same 1920 x 1080 layout drawn at twice the pixels, so the type of the
+page stays sharp on a high-density screen: a 1920 px WebP loop, and beside the MP4, which stays 1920 x
+1080, the film at 3840 x 2160 as `<name>-2x.mp4`; the GIF stays at 960 px).
 
 Requirements, besides those of the media toolkit: `ffmpeg`, ImageMagick (`magick`), a TeX Live with New
 Computer Modern and Latin Modern (the brand's fonts, found with `kpsewhich`), and optionally `img2webp`
@@ -227,7 +229,11 @@ play, and the definitions that make it (17.6 s, 4.4 MB).
 - **Disk.** Raw frames stay in the work dir (about 0.5 MB each) until the next capture of that scene. The
   lossless master (about 4 MB per second) is deleted after encoding unless `--keep-master` is given.
 - **Sharpness.** The figure's picture is scaled once, by the browser, from the 2x capture. At the closest
-  zoom one pixel of the capture is one pixel of the output. Nothing is ever enlarged.
+  zoom one pixel of the capture is one pixel of a 1920 x 1080 output: nothing of a film at scale 1 is ever
+  enlarged. At `--scale 2` the page, the captions, the notes and the pointer are drawn at 4K, and in
+  `<name>-2x.mp4` the capture is shown at up to twice its pixels in the close-ups (about 1.3 times in the
+  wide shot of the editor), as sharp as the capture itself; the 1920 px MP4 and loop made from that
+  master are never enlarged.
 - **Holds.** A frame that looks the same as the one before it is not drawn again: the same PNG goes to the
   encoder, so a hold cannot jitter. What is left in the MP4 is the encoder's own rounding (the build prints
   it).

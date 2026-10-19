@@ -155,6 +155,7 @@ const SECTIONS: Section[] = [
                 ],
             },
             { note: 'A typo shows under the chart in the note with its line and column, such as "Line 4, column 9: unknown option". The AI guide (AI tab) lists every line and option.' },
+            'Your own words: in the settings, **Chart words** gives any piece of the language your own words, in your language or your own terms (plot can be graph, or zeichne), and one word of your own for several options. The built-in words keep working beside yours.',
         ],
     },
     {

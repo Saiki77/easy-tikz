@@ -66,6 +66,8 @@ shade between f and g from x = min(a, -2a) to max(a, -2a) in orange
 
 A block holds one statement per line, in words. Empty lines and lines that start with `#`, `%` or `//` are skipped. A statement's options follow it after commas (`plot f(x) = x^2 in blue, thick, dashed`); a colour, a range and a `with ...` phrase may also follow without a comma (`plot f(x) = sqrt(x) from x = 0 to 4 in green`). Options joined by `and` are two options (`with its tangent at a and its extrema`). Options may instead follow a `|` (not part of `||`, which is "or"): then everything before it is the statement. Any line can start with a name and a colon: `R1: shade where ...`, `eq: mark where f and g cross`.
 
+Someone may have given pieces their own words (Settings, Chart words): their blocks may read `graph f(x) = x^2` or `zeichne 2x + 3y = c`. The guide their plugin serves then ends with a section that lists those words. The built-in words of this guide always work, so you may write either.
+
 The short forms of version 4.4 still work and mean the same: `view x -3..3, y -4..4`, `axes middle`, `slider a = 0.8 in -1.1..1.1 step 0.05`, `f(x) = x^2 | blue, tangent at a`, `shade x + y <= 4, x >= 0 | numbered`, `2x + 3y = c | red`, `corners of R1`, `max 2x + 3y over R1`, `arrow (0, 0) -> (3, 2)`, `text "A" at (1, 2)`. Write the words.
 
 **The chart**

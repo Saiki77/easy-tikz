@@ -8,7 +8,8 @@
 //   node scripts/media/cinema/build.mjs sample --stills every:0.5 --skip-capture  # a frame every half second
 //   node scripts/media/cinema/build.mjs --list
 //
-// Options: --port 9373 (Obsidian for the capture, then headless Chromium for the composite),
+// Options: --scale 2 (draw at twice the pixels, sharp on high-density screens: a 1920 px WebP loop and,
+// beside the 1920 x 1080 MP4, the film at 3840 x 2160 as <name>-2x.mp4), --port 9373 (Obsidian for the capture, then headless Chromium for the composite),
 // --work DIR (profile, vault and the raw frames; default <tmp>/easy-tikz-media/port-<port>),
 // --fps 60, --retries 2, --keep-master, --no-loop, --plugin root.
 //
@@ -38,6 +39,7 @@ const { values, positionals } = parseArgs({
         retries: { type: 'string' },
         stills: { type: 'string' },
         plugin: { type: 'string' },
+        scale: { type: 'string' },
         'skip-capture': { type: 'boolean' },
         'keep-master': { type: 'boolean' },
         'no-loop': { type: 'boolean' },
@@ -167,13 +169,15 @@ if (values.stills) {
 }
 
 // ---------------------------------------------------------------- pass 2
-const made = await compose(film, { out, port, loop: values['no-loop'] ? false : { ...(scene.loop || {}) }, keepMaster: !!values['keep-master'], say });
+const scale = Math.max(1, Math.min(3, Number(values.scale || 1) || 1));
+const made = await compose(film, { out, port, loop: values['no-loop'] ? false : { ...(scene.loop || {}) }, keepMaster: !!values['keep-master'], scale, say });
 const video = await probe(made.mp4);
 const rawBytes = dirBytes(rawDir);
 
 console.log('');
 console.log(`${scene.name}: ${made.seconds.toFixed(2)} s, ${video.width} x ${video.height}, ${video.fps} fps, ${video.codec} ${video.pixfmt}`);
 console.log(`  mp4     ${made.mp4}  ${mb(made.bytes.mp4)}`);
+if (made.large) console.log(`  mp4     ${made.large}  ${mb(made.bytes.large)}  (${scale}x, ${film.width * scale} x ${film.height * scale})`);
 if (made.gif) console.log(`  gif     ${made.gif.file}  ${mb(made.gif.bytes)}  (${made.gif.width} px, ${made.gif.fps} fps, ${made.gif.colors} colours)`);
 if (made.webp) console.log(`  webp    ${made.webp.file}  ${mb(made.webp.bytes)}  (${made.webp.width} px, ${made.webp.fps} fps, lossless)`);
 console.log(`  poster  ${made.poster}  ${mb(made.bytes.poster)}  (the frame at ${made.posterAt.toFixed(2)} s)`);

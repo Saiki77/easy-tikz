@@ -4,6 +4,7 @@
  * persistence layer for user-defined templates. Whole-chart starter
  * examples live in migrate.ts (EXAMPLES).
  */
+import type { ChartWords } from './text/words';
 
 export interface Template2D {
     name: string;
@@ -121,6 +122,8 @@ export interface PluginData {
     animateCharts: boolean;
     /** In Live Preview, a block being edited shows its chart under its lines (src/live.ts). */
     liveChart: boolean;
+    /** Their own words for the pieces of the chart language (src/text/words.ts). */
+    chartWords: ChartWords;
     /** Chart colours: the theme's own (default) or the fixed colours of the LaTeX export. */
     chartColours: 'theme' | 'export';
 }
@@ -138,5 +141,6 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     blockFormat: 'text',
     animateCharts: true,
     liveChart: true,
+    chartWords: { words: {}, bundles: [], write: 'yours' },
     chartColours: 'theme',
 };

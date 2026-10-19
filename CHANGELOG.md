@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [4.6.0] - 2026-10-19
+
+Your own chart words. Every piece of the chart language can get your own words, in your language or your own terms, and one word of your own can stand for several options. The built-in words keep working beside yours; the editor and the AI tools write yours. Charts that used a word you change later are offered for rewriting.
+
+### Added
+
+- **Chart words** (`src/text/words.ts`, Settings, Chart words, **Edit words**). About 80 pieces in four groups: lines (`show`, `plot`, `shade`, `draw`, `mark`, `write`, `slider`, `title`, `size`, `axes`, ...), phrases (`from`, `to`, `and`, `where`, `between`, `starting at`, `the maximum of`, `the region`, `an arrow`, `the level curves of`, ...), options (`in` before a colour, `dashed`, `thick`, `numbered`, `with its tangent at`, `labelled`, `with coordinates`, ...) and colours. Each takes several words (the first is the one written). The two pieces that are both the built-in `in` (before a colour, before a region) are told apart by what follows, so `en rouge` and `dans R1` work. Words are read where their pieces go: a formula, a name the chart defines, a function call, a title, a label in quotes and comment lines stay as typed. A word belongs to one piece only and never to a name formulas use; the window says when a word clashes. Problems still point at the column as typed.
+- **Bundles:** a word of your own for several options (`objective` = `in red, dashed`), written like any option.
+- **Write charts with:** your words (default) or the built-in ones, for Insert into note, Save changes and the AI tools. Lines you did not change keep their words.
+- **Rewrite charts after a change** (`src/text/reword.ts`). When words change, the notes with `easy-tikz` blocks are checked for charts that used a changed word; after a yes (**Rewrite N charts**) only those words are replaced, each chart only when it stays exactly the same chart, comments and callouts kept.
+- **Sharing:** **Copy your words** gives them as text (`plot = graph`, `objective := in red, dashed`); pasted into the box, such text is taken over.
+- **AI apps** get the person's words with the guide (`get_guide`, `GET /guide`, Copy the guide), so they can read their charts; the built-in words always work for them.
+- **What's new** opens once more: "New in 4.5 and 4.6" names your own chart words first.
+
+### Changed
+
+- **The README** names 4.6 first; the reference has a section **Chart words**; the privacy notes say when the plugin reads and rewrites notes after a change of words, and that **Copy your words** writes to the clipboard.
+- **Sharper films.** The loops in the README and on the What's new page are 1920 px WebP (they were 960 px GIFs), drawn at twice the pixels, so captions and notes stay sharp on high-density screens. The overview and the drag clip are filmed again with this version. The MP4s stay 1920 x 1080, and the GIFs stay for where WebP does not play. `npm run media:film -- <scene> --scale 2` makes them, with a 3840 x 2160 film beside them; Obsidian's tooltips are off while a film is captured (on a busy machine one could appear in it).
+
 ## [4.5.1] - 2026-10-19
 
 The chart under a block you are writing appears when there is something to draw, fading up, and its problems wait until you pause typing. The film §3 Charts as text starts from a note with no chart.

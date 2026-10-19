@@ -372,8 +372,9 @@ export function stateAt(film, t) {
     const head = { main: r3((1 - ramp(t, endAt - 0.05, 0.2)) * (1 - away)), end: r3(ramp(t, endAt + 0.15, 0.3)) };
 
     // The paper band under the picture: only once the figure has grown past it. With it comes the chip:
-    // the film's title in small capitals over the caption.
-    const band = on ? r3(smoothstep(1.03, 1.2, cam.z)) : 0;
+    // the film's title in small capitals over the caption. A clean film (the screen alone, no words of
+    // ours) has none.
+    const band = on && !film.clean ? r3(smoothstep(1.03, 1.2, cam.z)) : 0;
     // What is written on the band waits until the band has all but covered the figure under it.
     const ground = r3(smoothstep(0.6, 1, band));
 

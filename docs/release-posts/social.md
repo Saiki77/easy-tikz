@@ -2,7 +2,7 @@
 
 One announcement per network, then a thread of replies that show one feature each, then alt texts and answers to the usual questions.
 
-**Attach to each announcement:** [`overview.mp4`](../media/overview.mp4) (40 s, 1920 x 1080, 8.4 MB, H.264, captions burnt in, no sound). If a network refuses the video, use [`overview.gif`](../media/overview.gif) (a 17.6 s loop of the film's second part, 4.6 MB), or the still [`social-1200x675.png`](../media/social-1200x675.png). Use [`overview-poster.png`](../media/overview-poster.png) where a network asks for a cover picture.
+**Attach to each announcement:** [`overview.mp4`](../media/overview.mp4) (40 s, 1920 x 1080, 7.8 MB, H.264, captions burnt in, no sound). If a network refuses the video, use [`overview.gif`](../media/overview.gif) (a 17.6 s loop of the film's second part, 4.4 MB), or the still [`social-1200x675.png`](../media/social-1200x675.png). Use [`overview-poster.png`](../media/overview-poster.png) where a network asks for a cover picture.
 
 ## X
 

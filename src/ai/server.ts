@@ -16,6 +16,7 @@
  *     anything else and never in files with instructions for AI agents, and
  *     the plugin shows a notice for every write.
  */
+import { guideWithWords } from '../text/words';
 import GUIDE from '../../docs/ai.md';
 import { ChartHost, SERVER_NAME, callTool, handleMcp, toolList } from './mcp';
 
@@ -177,7 +178,7 @@ export class AiServer {
             if (head.method === 'GET' && path === '/') {
                 return send(res, 200, { name: SERVER_NAME, mcp: '/mcp', guide: '/guide', tools: '/tools', call: 'POST /tools/<name> with the arguments as JSON' });
             }
-            if (head.method === 'GET' && path === '/guide') return sendText(res, 200, GUIDE, 'text/markdown; charset=utf-8');
+            if (head.method === 'GET' && path === '/guide') return sendText(res, 200, guideWithWords(GUIDE), 'text/markdown; charset=utf-8');
             if (head.method === 'GET' && path === '/tools') return send(res, 200, { tools: toolList() });
             if (path === '/mcp') {
                 if (head.method !== 'POST') {

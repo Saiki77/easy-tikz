@@ -215,6 +215,13 @@ export async function createCapture(obs, scene, { dir, fps = SOURCE_FPS, charts 
             fail(`capture: the page is ${view.width} x ${view.height} at ${view.dpr}x (${view.light ? 'light' : 'dark'}), expected ${VIEW.width} x ${VIEW.height} at ${VIEW.dpr}x in the light theme`);
         }
         if (await obs.call(() => !!document.getElementById('etz-media-overlay'))) fail('capture: the pointer overlay of lib/record.mjs is in the page; raw frames must not contain it');
+        // Obsidian shows a control's tooltip after a second of real time under the pointer, and on a busy
+        // machine the film's clock runs slower than real time: a short rest on a button could grow one into
+        // the film. No film wants them, so they are off while filming (Obsidian's own switch, --no-tooltip).
+        await obs.call(() => {
+            if (!document.getElementById('etz-media-no-tooltip')) document.head.createEl('style', { attr: { id: 'etz-media-no-tooltip' }, text: 'body { --no-tooltip: true; }' });
+            document.querySelectorAll('.tooltip').forEach((t) => t.remove());
+        });
         // The figure of the film: the editor when it is open (so no dimmed workspace can come into a close-up), else the whole window.
         if (!track.figure) {
             if (await obs.call(() => !!window.__etzMedia.editor())) await d.figure('editor');

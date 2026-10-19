@@ -31,12 +31,13 @@ Everything is in [`docs/media`](../media), captured from the plugin running in O
 | File | What it is | Use it for |
 | --- | --- | --- |
 | [`hero.png`](../media/hero.png) | 2400 x 1350, the title page on graph paper: the redesigned editor on the Linear program example, with notes | top of a long post |
-| [`overview.mp4`](../media/overview.mp4) | 40.5 s, 1920 x 1080, 60 fps, 8.4 MB, no sound. Title card, §1 Drag to edit (the Linear program example: drag the objective line, Shift-turn it about the optimum), §2 Dynamics (the Tangent explorer example with the area between curve and tangent added: drag the tangent point, press play, the three definitions), end card | the main video on every channel |
-| [`overview.gif`](../media/overview.gif) | §2 of the film as a 17.6 s loop, 960 x 540, 4.6 MB | where a video cannot be embedded |
+| [`overview.mp4`](../media/overview.mp4) | 40.5 s, 1920 x 1080, 60 fps, 7.8 MB, no sound. Title card, §1 Drag to edit (the Linear program example: drag the objective line, Shift-turn it about the optimum), §2 Dynamics (the Tangent explorer example with the area between curve and tangent added: drag the tangent point, press play, the three definitions), end card | the main video on every channel |
+| [`overview.gif`](../media/overview.gif) | §2 of the film as a 17.6 s loop, 960 x 540, 4.4 MB | where a video cannot be embedded |
+| [`overview.webp`](../media/overview.webp) | the same loop at 1920 x 1080, 9.7 MB (lossless WebP, sharp on high-density screens): the loop the README shows | where WebP plays (GitHub, Obsidian) |
 | [`overview-poster.png`](../media/overview-poster.png) | 1920 x 1080, a frame of §2: the tangent flat on the maximum, the area beside it | video cover, or a still where no video is possible |
 | [`card-drag.png`](../media/card-drag.png) | 1600 x 1000, the page "§1 Drag to edit" in the same design as the film (Shift held over the objective line, the pivot, the equations before and after) | the drag to edit reply or section |
 | `card-sliders.png`, `card-regions.png`, `card-notes.png`, `card-export.png`, `card-3d.png`, `card-tools.png` | 1600 x 1000 feature cards of the first round, numbered 02 to 07 in this order | one card per reply or per section |
-| [`clip-drag`](../media/clip-drag.mp4) | 19 s, `.mp4` at 1920 x 1080 (4.2 MB), `.gif` at 960 x 540 (6.9 MB), `-poster.png` at 1920 x 1080. Drag to edit as a film of its own, with the moves of the overview's §1: drag the objective line, Shift-turn it, its formula follows | the drag to edit post |
+| [`clip-drag`](../media/clip-drag.mp4) | 19 s, `.mp4` at 1920 x 1080 (3.8 MB), `.gif` at 960 x 540 (6.5 MB), `.webp` at 1920 x 1080 (13.7 MB), `-poster.png` at 1920 x 1080. Drag to edit as a film of its own, with the moves of the overview's §1: drag the objective line, Shift-turn it, its formula follows | the drag to edit post |
 | `clip-shift`, `clip-sliders`, `clip-areas`, `clip-quickfix`, `clip-3d`, `clip-note` | 10 to 14 s each, as `.mp4`, `.gif` and `-poster.png` (a still at twice the size of the video) | one feature per post |
 | [`social-1280x640.png`](../media/social-1280x640.png) | GitHub social preview | repository settings (step 3 above) |
 | [`social-1200x675.png`](../media/social-1200x675.png) | 16:9 card | a single-image post, a link card |

@@ -8,6 +8,7 @@
  * notices come through a ChartHost (src/ai/vaultHost.ts in the plugin, a
  * fake one in tests/ai.test.ts). The HTTP side is src/ai/server.ts.
  */
+import { guideWithWords } from '../text/words';
 import GUIDE from '../../docs/ai.md';
 import { Data, Report, blocksOf, check, examples, fenced, minimize, parseJson, tikzOf, withSliders } from './charttool';
 import { LINE_BREAK, TextProblem, isChartText, parseChartText } from '../text/parse';
@@ -258,8 +259,9 @@ const TOOLS: ToolDef[] = [
         annotations: { readOnlyHint: true },
         async run(args) {
             const section = stringArg(args, 'section');
-            if (!section) return text(GUIDE);
-            const parts = GUIDE.split(/\n(?=#{2,3} )/);
+            const guide = guideWithWords(GUIDE);
+            if (!section) return text(guide);
+            const parts = guide.split(/\n(?=#{2,3} )/);
             const want = section.toLowerCase();
             const hit = parts.filter((p) => (p.split('\n')[0] || '').toLowerCase().includes(want));
             if (!hit.length) {

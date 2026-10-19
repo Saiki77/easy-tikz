@@ -1,4 +1,4 @@
-import { App, MarkdownPostProcessorContext, MarkdownRenderChild, Notice, Platform, Plugin, PluginSettingTab, SettingDefinitionItem, SettingGroupItem, TFile, normalizePath, setIcon } from 'obsidian';
+import { App, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, Notice, Platform, Plugin, PluginSettingTab, SettingDefinitionItem, SettingGroupItem, TFile, normalizePath, setIcon } from 'obsidian';
 import { TikzModal } from './src/modal';
 import { SettingsManager } from './src/settings';
 import { SVGRenderer } from './src/renderer';
@@ -12,7 +12,7 @@ import { ChartDraft, DEFAULT_PLUGIN_DATA, PluginData, UserTemplate } from './src
 import { PluginHost } from './src/ui/host';
 import { issueText, mergeViewErrors } from './src/issues';
 import { cloneData, errorText, fitPixelScale } from './src/util';
-import { IconButtonHandle, LiveSliderHandle, iconButton, liveSlider, textButton, uniqueId, visuallyHidden } from './src/ui/kit';
+import { IconButtonHandle, LiveSliderHandle, confirmDialog, iconButton, liveSlider, textButton, uniqueId, visuallyHidden } from './src/ui/kit';
 import { WhatsNewActions, WhatsNewModal } from './src/ui/whatsNewModal';
 import { WHATS_NEW_VERSION, chartScanRank, hasEasyTikzBlock, needsVaultCheck, shouldShowWhatsNew, whatsNewSeen } from './src/whatsnew';
 import { AiServer, Http } from './src/ai/server';
@@ -24,6 +24,9 @@ import { TextProblem } from './src/text/parse';
 import { printChartText, writeChartText } from './src/text/print';
 import { GLIDE_MS, PopIn, PopInState, drawnNames, ease, glides, mixCharts, reducedMotion } from './src/motion';
 import { LiveHost, editingCharts } from './src/live';
+import { ChartWords, NO_WORDS, clean, guideWithWords, setChartWords } from './src/text/words';
+import { rewordNote } from './src/text/reword';
+import { ChartWordsModal } from './src/ui/wordsModal';
 import type { Extension } from '@codemirror/state';
 
 type FenceTag = 'easy-tikz' | 'tikz';
@@ -273,7 +276,11 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             userTemplates: Array.isArray(storedTemplates) ? storedTemplates : [],
             // A damaged draft is dropped instead of offered for restore.
             draft: isDraft(storedDraft) ? storedDraft : null,
+            chartWords: clean(stored?.chartWords ?? NO_WORDS),
         };
+        // Their own words for the chart language (src/text/words.ts): read in every block, written by the editor and the AI tools.
+        setChartWords(this.data.chartWords);
+        this.register(() => setChartWords(NO_WORDS));
 
         this.addRibbonIcon('square-function', 'Easy TikZ', () => {
             new TikzModal(this.app, this).open();
@@ -555,13 +562,13 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
     }
 
     aiGuideText(): string {
-        return AI_GUIDE;
+        return guideWithWords(AI_GUIDE);
     }
 
-    /** The AI guide (docs/ai.md) on the clipboard, for chats that cannot reach the AI server. */
+    /** The AI guide (docs/ai.md) on the clipboard, for chats that cannot reach the AI server; with the person's chart words when they set some. */
     async copyAiGuide(): Promise<void> {
         try {
-            await navigator.clipboard.writeText(AI_GUIDE);
+            await navigator.clipboard.writeText(guideWithWords(AI_GUIDE));
             new Notice('Easy TikZ: the AI guide is on the clipboard. Paste it into your AI chat, then describe the chart you want.');
         } catch (e) {
             new Notice(`Could not copy the guide: ${errorText(e)}`);
@@ -621,6 +628,71 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         const child = new MarkdownRenderChild(el);
         child.register(() => chart.unload());
         ctx.addChild(child);
+    }
+
+    /** The window that edits the chart words; when they changed, they are saved and charts that used old words can be rewritten. */
+    openChartWords(onChange?: () => void) {
+        new ChartWordsModal(this.app, {
+            words: () => this.data.chartWords,
+            copy: (text, done) => void copyText(text, done),
+            changed: (before, after) => {
+                void this.changeChartWords(before, after).then(() => onChange?.());
+            },
+        }).open();
+    }
+
+    private async changeChartWords(before: ChartWords, after: ChartWords) {
+        this.data.chartWords = after;
+        setChartWords(after);
+        await this.saveSettings();
+        this.redrawNotes();
+        await this.rewordVault(before, after);
+    }
+
+    /** Charts in open notes in reading view draw again (with new chart words). */
+    private redrawNotes() {
+        for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
+            const view = leaf.view;
+            if (view instanceof MarkdownView) view.previewMode?.rerender(true);
+        }
+    }
+
+    /**
+     * After the chart words changed: charts in the vault that read
+     * differently now (they used a word that is gone or means another
+     * piece) can be written in the new words, after a yes.
+     */
+    private async rewordVault(before: ChartWords, after: ChartWords) {
+        const { vault, metadataCache } = this.app;
+        const found: Array<{ file: TFile; changed: number }> = [];
+        for (const file of vault.getMarkdownFiles()) {
+            const cache = metadataCache.getFileCache(file);
+            if (chartScanRank(cache ? (cache.sections ?? []).map((s) => s.type) : null) === 0) continue;
+            const text = await vault.cachedRead(file);
+            if (!hasEasyTikzBlock(text)) continue;
+            const { changed } = rewordNote(text, before, after);
+            if (changed) found.push({ file, changed });
+        }
+        if (!found.length) return;
+        const charts = found.reduce((n, f) => n + f.changed, 0);
+        const ok = await confirmDialog(this.app, {
+            title: 'Rewrite charts with your new words?',
+            message:
+                `${charts} chart${charts === 1 ? '' : 's'} in ${found.length} note${found.length === 1 ? '' : 's'} ${charts === 1 ? 'uses' : 'use'} words you changed, so ${charts === 1 ? 'it no longer reads' : 'they no longer read'} as before. ` +
+                'Rewrite them in your new words? Each line keeps its place and its comments; a chart is only rewritten when it stays exactly the same chart.',
+            confirmText: `Rewrite ${charts} chart${charts === 1 ? '' : 's'}`,
+            cancelText: 'Not now',
+        });
+        if (!ok) return;
+        let done = 0;
+        for (const { file } of found) {
+            await vault.process(file, (text) => {
+                const r = rewordNote(text, before, after);
+                done += r.changed;
+                return r.text;
+            });
+        }
+        new Notice(`Rewrote ${done} chart${done === 1 ? '' : 's'} with your new words.`);
     }
 
     /** The chart under a block being edited: on or off as the setting says (every open editor follows). */
@@ -1450,6 +1522,32 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 control: { type: 'toggle', key: 'liveChart', defaultValue: true },
             },
             {
+                type: 'group',
+                heading: 'Chart words',
+                items: [
+                    {
+                        name: 'Your words',
+                        aliases: ['words', 'language', 'vocabulary', 'translate', 'German', 'Deutsch', 'terms', 'syntax'],
+                        render: (setting) => {
+                            const w = this.plugin.data.chartWords;
+                            const pieces = Object.keys(w.words).length;
+                            const bundles = w.bundles.length;
+                            setting.setDesc(
+                                pieces || bundles
+                                    ? `${pieces} piece${pieces === 1 ? '' : 's'} of the chart language with your words${bundles ? `, and ${bundles} word${bundles === 1 ? '' : 's'} of your own for several options` : ''}. The built-in words keep working.`
+                                    : 'Give the pieces of the chart language your own words, in your language or your own terms (plot can be graph, or zeichne), and bundle options under one word of your own. The built-in words keep working.'
+                            );
+                            setting.addButton((b) => b.setButtonText('Edit words').setCta().onClick(() => this.plugin.openChartWords(() => this.update())));
+                        },
+                    },
+                    {
+                        name: 'Write charts with',
+                        desc: 'Your words (default): the editor and the AI tools write charts in your words. The built-in words: they write the built-in ones, and your words are only read.',
+                        control: { type: 'dropdown', key: 'chartWordsWrite', options: { yours: 'Your words', builtin: 'The built-in words' }, defaultValue: 'yours' },
+                    },
+                ],
+            },
+            {
                 name: 'Animate chart changes',
                 desc:
                     'On by default. When a block in a note changes, numbers glide to their new values and new objects pop in. ' +
@@ -1602,6 +1700,7 @@ class EasyTikzSettingTab extends PluginSettingTab {
     }
 
     getControlValue(key: string): unknown {
+        if (key === 'chartWordsWrite') return this.plugin.data.chartWords.write;
         return this.plugin.data[key as keyof PluginData];
     }
 
@@ -1625,6 +1724,10 @@ class EasyTikzSettingTab extends PluginSettingTab {
             case 'liveChart':
                 this.plugin.data.liveChart = Boolean(value);
                 this.plugin.syncLiveCharts();
+                break;
+            case 'chartWordsWrite':
+                this.plugin.data.chartWords = { ...this.plugin.data.chartWords, write: value === 'builtin' ? 'builtin' : 'yours' };
+                setChartWords(this.plugin.data.chartWords);
                 break;
             case 'chartColours':
                 this.plugin.data.chartColours = value === 'export' ? 'export' : 'theme';

@@ -551,6 +551,57 @@ if (started) {
             assert(popped, `the new function did not pop in: ${JSON.stringify(now.g)}${now.reduced ? ' (the system asks for reduced motion)' : ''}`);
             assert(!now.f.some((c) => /\betz-pop\b/.test(c)), 'the function that was there popped in again');
         });
+        await check('chart words: a note in your own words draws, a bundle stands for its options, and a changed word can be rewritten', async () => {
+            const field = (label, value) =>
+                obs.call(
+                    (l, v) => {
+                        const input = Array.from(document.querySelectorAll('.modal.etz-words input')).find((i) => i.getAttribute('aria-label') === l);
+                        if (!input) return `no field ${l}`;
+                        input.value = v;
+                        input.dispatchEvent(new Event('change'));
+                        return input.parentElement.querySelector('.etz-words-note')?.textContent || '';
+                    },
+                    label,
+                    value
+                );
+            const press = (text, scope = '.modal.etz-words') =>
+                obs.call((t, s) => Array.from(document.querySelectorAll(`${s} button`)).find((b) => b.textContent === t || new RegExp(t).test(b.textContent)).click(), text, scope);
+            await obs.call(() => app.plugins.plugins['easy-tikz'].openChartWords());
+            await obs.waitFor(() => obs.call(() => !!document.querySelector('.modal.etz-words')), { timeout: 3000, message: 'the chart words window' });
+            assert((await field('Your words for plot', 'graph')) === '', 'the word graph was refused');
+            assert(/already your word/.test(await field('Your words for shade', 'graph')), 'a clash was not named');
+            await press('Add a word');
+            await field('Your own word', 'objective');
+            await field('What it stands for', 'in red, dashed');
+            await press('Done');
+            await obs.sleep(300);
+            const wordsNote = 'My words';
+            await obs.writeNote(wordsNote, 'Mine:\n\n```easy-tikz\nshow x from 0 to 5 and y from 0 to 4\ngraph f(x) = x^2/4 in blue\ndraw 2x + 3y = 6, objective\n```\n');
+            await obs.openNote(wordsNote, { mode: 'reading' });
+            const charts = await obs.noteCharts();
+            assert(charts.length === 1 && charts[0].drawn && !charts[0].issues, `the chart in my words: ${JSON.stringify(charts)}`);
+            const red = await obs.call(() => (document.querySelector('.workspace-leaf.mod-active [data-etz-item="C1"]')?.getAttribute('stroke') || '').includes('red'));
+            assert(red, 'the bundle objective did not make the line red');
+            // A changed word: the vault's charts that used it are offered for rewriting.
+            await obs.call(() => app.plugins.plugins['easy-tikz'].openChartWords());
+            await obs.waitFor(() => obs.call(() => !!document.querySelector('.modal.etz-words')), { timeout: 3000, message: 'the chart words window' });
+            await field('Your words for plot', 'curve of');
+            await press('Done');
+            await obs.waitFor(() => obs.call(() => !!document.querySelector('.modal.etz-dialog')), { timeout: 5000, message: 'the offer to rewrite' });
+            await press('Rewrite', '.modal.etz-dialog');
+            await obs.waitFor(async () => /curve of f\(x\)/.test(await obs.readNote(wordsNote)), { timeout: 5000, message: 'the rewritten note' });
+            assert(/draw 2x \+ 3y = 6, objective/.test(await obs.readNote(wordsNote)), 'the rewrite touched a line without the changed word');
+            // Back to the built-in words only; the note keeps its words (Not now).
+            await obs.call(() => app.plugins.plugins['easy-tikz'].openChartWords());
+            await obs.waitFor(() => obs.call(() => !!document.querySelector('.modal.etz-words')), { timeout: 3000, message: 'the chart words window' });
+            await field('Your words for plot', '');
+            await obs.call(() => document.querySelectorAll('.modal.etz-words .etz-words-bundle button')[0]?.click());
+            await press('Done');
+            await obs.waitFor(() => obs.call(() => !!document.querySelector('.modal.etz-dialog')), { timeout: 5000, message: 'the offer to rewrite' });
+            await press('Not now', '.modal.etz-dialog');
+            const left = await obs.call(() => app.plugins.plugins['easy-tikz'].data.chartWords);
+            assert(!Object.keys(left.words).length && !left.bundles.length, `words left over: ${JSON.stringify(left)}`);
+        });
         await check('live: an empty block shows nothing under it, and its first line makes the chart appear', async () => {
             const emptyNote = 'Empty block';
             // Lines 0-4; line 3 is the empty line in the block.

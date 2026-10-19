@@ -217,16 +217,16 @@ test('whats new: the text beside the chart is the whole chart, in a few lines', 
     assert.ok(!lines.some((l) => l.startsWith('raw ') || l.startsWith('set ')), text);
 });
 
-test('whats new: 4.4 and 4.5 come first and name the words, the chart under the block, motion and phones', () => {
+test('whats new: 4.5 and 4.6 come first and name your own words, the lines in words, the chart under the block and phones', () => {
     assert.deepEqual(
         WHATS_NEW_RECENT.map((i) => i.title),
-        ['Charts in plain words', 'The chart under the block', 'Charts that move', 'On phones and tablets']
+        ['Your own chart words', 'Charts in plain words', 'The chart under the block', 'On phones and tablets']
     );
-    assert.equal(WHATS_NEW_RECENT_TITLE, 'New in 4.4 and 4.5');
-    assert.equal(WHATS_NEW_VERSION, '4.5.0');
-    // The example in the first item is a line the plugin reads.
-    const example = /`([^`]+)`/.exec(WHATS_NEW_RECENT[0].text);
-    assert.ok(example && parseChartText(example[1]).problems.length === 0, WHATS_NEW_RECENT[0].text);
+    assert.equal(WHATS_NEW_RECENT_TITLE, 'New in 4.5 and 4.6');
+    assert.equal(WHATS_NEW_VERSION, '4.6.0');
+    // The example of the lines in words is a line the plugin reads.
+    const example = /`([^`]+)`/.exec(WHATS_NEW_RECENT[1].text);
+    assert.ok(example && parseChartText(example[1]).problems.length === 0, WHATS_NEW_RECENT[1].text);
 });
 
 test('whats new: the popup loads nothing from the network', () => {

@@ -14,7 +14,8 @@
  * chart is printed instead.
  */
 import { Data, canonicalData, minimize, stableJson } from '../chartdata';
-import { ANCHORS, COLORS, NAME_RE, ObjectList, PATTERNS, THICKNESSES, TOOL_PREFIX, isSignCondition, niceStep, parseChartText, splitStatement, splitTop } from './parse';
+import { ANCHORS, COLORS, NAME_RE, ObjectList, PATTERNS, THICKNESSES, TOOL_PREFIX, definedNames, isSignCondition, niceStep, parseChartText, splitStatement, splitTop } from './parse';
+import { chartWords, hasWords, writeWords } from './words';
 
 // ---------------------------------------------------------------- values
 
@@ -597,6 +598,16 @@ function pairs(min: Data, full: Data, key: ObjectList): Array<{ min: Data; full:
 interface Printed {
     chart: string[];
     objects: Record<ObjectList, string[]>;
+    /** A printed line in the words the plugin writes (a person's own words, when they set some). */
+    say: (line: string) => string;
+}
+
+/** Lines in a person's own words, when they set some and want them written (src/text/words.ts). */
+function sayer(full: Data): (line: string) => string {
+    const words = chartWords();
+    if (!hasWords(words) || words.write !== 'yours') return (line) => line;
+    const names = definedNames(full);
+    return (line) => writeWords(line, words, names);
 }
 
 function printParts(data: Data): Printed {
@@ -614,15 +625,17 @@ function printParts(data: Data): Printed {
         if (toolLine(t.min, t.full, probe).startsWith('raw ')) rawTools.add(i);
     });
     const ctx: Ctx = { is3D, polar, shown: shownNames(full, rawTools, region), region };
+    const say = sayer(full);
     return {
-        chart: chartLines(min, full, null),
+        chart: chartLines(min, full, null).map(say),
         objects: {
-            parameters: list(full.parameters).map(sliderLine),
-            functions: pairs(min, full, 'functions').map((p) => functionLine(p.min, p.full, ctx)),
-            functions3D: pairs(min, full, 'functions3D').map((p) => surfaceLine(p.min, p.full, ctx)),
-            tools: tools.map((p) => toolLine(p.min, p.full, ctx)),
-            annotations: pairs(min, full, 'annotations').map((p) => labelLine(p.min, p.full)),
+            parameters: list(full.parameters).map(sliderLine).map(say),
+            functions: pairs(min, full, 'functions').map((p) => say(functionLine(p.min, p.full, ctx))),
+            functions3D: pairs(min, full, 'functions3D').map((p) => say(surfaceLine(p.min, p.full, ctx))),
+            tools: tools.map((p) => say(toolLine(p.min, p.full, ctx))),
+            annotations: pairs(min, full, 'annotations').map((p) => say(labelLine(p.min, p.full))),
         },
+        say,
     };
 }
 
@@ -800,7 +813,7 @@ function rewrite(oldText: string, data: Data): string {
             for (const g of groups) {
                 if (written.has(g)) continue;
                 written.add(g);
-                for (const l of chartLines(newMin, newFull, new Set(g.split(' ')))) out.push({ text: indent + l, list: null, chart: true });
+                for (const l of chartLines(newMin, newFull, new Set(g.split(' ')))) out.push({ text: indent + printed.say(l), list: null, chart: true });
             }
             continue;
         }
@@ -821,7 +834,7 @@ function rewrite(oldText: string, data: Data): string {
             const first = out.findIndex((l) => l.list !== null);
             at = first < 0 ? out.length : first;
         }
-        out.splice(at, 0, ...chartLines(newMin, newFull, new Set(rest.flatMap((g) => g.split(' ')))).map((t) => ({ text: t, list: null, chart: true })));
+        out.splice(at, 0, ...chartLines(newMin, newFull, new Set(rest.flatMap((g) => g.split(' ')))).map((t) => ({ text: printed.say(t), list: null, chart: true })));
     }
 
     // New objects: after the last line of their kind, else before the first line of a later kind, else at the end.

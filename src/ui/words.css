@@ -1,0 +1,138 @@
+/* Chart words (src/ui/wordsModal.ts): the pieces of the chart language by
+   group, one row each with the words a person gives it, then their own
+   words for several options, then sharing. */
+
+.modal.etz-words {
+    width: min(880px, 94vw);
+}
+
+.etz-words-intro {
+    margin: 0 0 10px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    line-height: 1.5;
+}
+
+.etz-words-find {
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.etz-words-groups {
+    columns: 360px 2;
+    column-gap: 24px;
+}
+
+.etz-words-group {
+    break-inside: avoid;
+    padding-block: 6px 12px;
+}
+
+.etz-words-h {
+    margin: 0 0 6px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    font-weight: var(--font-semibold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.etz-words-piece {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 2px 10px;
+    align-items: center;
+    padding-block: 3px;
+}
+
+.etz-words-what {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.etz-words-what code {
+    overflow: hidden;
+    color: var(--text-accent);
+    font-size: var(--font-ui-small);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.etz-words-what span {
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    line-height: 1.35;
+}
+
+.etz-words-piece input,
+.etz-words-bundle input {
+    width: 100%;
+    min-width: 0;
+    font-family: var(--font-monospace);
+    font-size: var(--font-ui-small);
+}
+
+.etz-words input.is-bad {
+    border-color: var(--text-error);
+}
+
+.etz-words-note {
+    grid-column: 1 / -1;
+    color: var(--text-error);
+    font-size: var(--font-ui-smaller);
+}
+
+.etz-words-note:empty {
+    display: none;
+}
+
+.etz-words-bundles,
+.etz-words-share {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.etz-words-hint {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+}
+
+.etz-words-bundle-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-self: stretch;
+}
+
+.etz-words-bundle {
+    display: grid;
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.5fr) auto;
+    gap: 4px 8px;
+    align-items: center;
+}
+
+.etz-words-share-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.etz-words-paste {
+    align-self: stretch;
+    font-family: var(--font-monospace);
+    font-size: var(--font-ui-small);
+}
+
+@media (max-width: 560px) {
+    .etz-words-piece,
+    .etz-words-bundle {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
