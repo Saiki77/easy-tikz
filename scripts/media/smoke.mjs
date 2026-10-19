@@ -551,6 +551,27 @@ if (started) {
             assert(popped, `the new function did not pop in: ${JSON.stringify(now.g)}${now.reduced ? ' (the system asks for reduced motion)' : ''}`);
             assert(!now.f.some((c) => /\betz-pop\b/.test(c)), 'the function that was there popped in again');
         });
+        await check('live: an empty block shows nothing under it, and its first line makes the chart appear', async () => {
+            const emptyNote = 'Empty block';
+            // Lines 0-4; line 3 is the empty line in the block.
+            await obs.writeNote(emptyNote, 'A chart to come:\n\n```easy-tikz\n\n```\n');
+            await obs.openNote(emptyNote, { mode: 'live', cursor: 'end', charts: 0 });
+            await obs.call(() => {
+                const ed = app.workspace.activeEditor.editor;
+                ed.setCursor({ line: 3, ch: 0 });
+                ed.focus();
+            });
+            await obs.sleep(400);
+            const under = () =>
+                obs.call(() => {
+                    const ed = document.querySelector('.workspace-leaf.mod-active .cm-editor');
+                    return { chart: !!ed.querySelector('.etz-live .etz-inline svg'), error: !!ed.querySelector('.etz-live .tikz-block-error') };
+                });
+            const before = await under();
+            assert(!before.chart && !before.error, `under the empty block: ${JSON.stringify(before)}`);
+            await obs.type('size 12 x 6', { instant: true });
+            await obs.waitFor(async () => (await under()).chart, { timeout: 4000, message: 'the chart under the block after its first line' });
+        });
         await check('live: the chart sits under a block while you edit it, changes as you type, and hands over when you leave', async () => {
             const liveNote = 'Live chart';
             // Lines 0-8; line 5 is the empty line in the block.

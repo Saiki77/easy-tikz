@@ -178,6 +178,11 @@ button.etz-icon-btn.etz-inline-reset {
     margin-block: 6px 0;
 }
 
+/* A block that draws nothing yet takes no room under its lines. */
+.etz-live[data-etz-blank] {
+    padding-block: 0;
+}
+
 .etz-live-error {
     margin-block: 6px 0;
 }
@@ -191,6 +196,18 @@ button.etz-icon-btn.etz-inline-reset {
 .etz-inline-live .etz-inline-issues.tikz-hidden:not(#etz-none) {
     display: block;
     visibility: hidden;
+}
+
+/* While you type, problems wait until you pause (main.ts quietWhileTyping); their room stays. */
+.etz-live.etz-live-typing .etz-inline-issues,
+.etz-live.etz-live-typing .etz-live-error {
+    visibility: hidden;
+}
+
+/* The first chart under a block that had none fades up (main.ts appearIn sets the variables per frame). */
+.etz-live.etz-live-appear {
+    opacity: var(--etz-appear-o, 1);
+    translate: 0 var(--etz-appear-y, 0px);
 }
 
 /* Nothing to click there: the cursor is in the block already. */

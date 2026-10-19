@@ -184,6 +184,64 @@ function isDraft(value: unknown): value is ChartDraft {
     return typeof draft.savedAt === 'number' && Number.isFinite(draft.savedAt) && !!draft.data && typeof draft.data === 'object';
 }
 
+// ------------------------------------------------- the chart under a block
+
+/** How long the first chart of a block takes to fade up (ms). */
+const APPEAR_MS = 380;
+/** Problems under the chart wait this long after the last key (ms). */
+const QUIET_MS = 700;
+
+/**
+ * The first chart under a block that had none fades up and rises into
+ * place. Frame-driven like the pop-ins (src/motion.ts): the variables follow
+ * the time of the animation frames, and they sit on the block's element, so
+ * the next key (which draws the chart again) does not start it over.
+ */
+function appearIn(el: HTMLElement) {
+    let start: number | null = null;
+    el.addClass('etz-live-appear');
+    const frame = (t: number) => {
+        if (start === null) start = t;
+        const k = Math.min(1, (t - start) / APPEAR_MS);
+        const e = 1 - Math.pow(1 - k, 3);
+        el.setCssProps({ '--etz-appear-o': String(e), '--etz-appear-y': `${(1 - e) * 10}px` });
+        if (k < 1 && el.isConnected) window.requestAnimationFrame(frame);
+        else el.removeClass('etz-live-appear');
+    };
+    el.setCssProps({ '--etz-appear-o': '0', '--etz-appear-y': '10px' });
+    window.requestAnimationFrame(frame);
+}
+
+/** Per element under a block: since when (frame time) no key was typed, and the frame that checks. */
+const quiet = new WeakMap<HTMLElement, { since: number | null; raf: number | null }>();
+
+/**
+ * While you type, the problem line under the chart waits: a line is wrong at
+ * almost every key until it is whole. It shows once no key came for
+ * QUIET_MS, measured in the time of the animation frames. Its room stays.
+ */
+function quietWhileTyping(el: HTMLElement) {
+    let state = quiet.get(el);
+    if (!state) {
+        state = { since: null, raf: null };
+        quiet.set(el, state);
+    }
+    const s = state;
+    s.since = null;
+    el.addClass('etz-live-typing');
+    if (s.raf !== null) return;
+    const frame = (t: number) => {
+        if (s.since === null) s.since = t;
+        if (t - s.since >= QUIET_MS || !el.isConnected) {
+            s.raf = null;
+            el.removeClass('etz-live-typing');
+            return;
+        }
+        s.raf = window.requestAnimationFrame(frame);
+    };
+    s.raf = window.requestAnimationFrame(frame);
+}
+
 /** Node's http module for the AI server, on a computer only: phones and tablets have no Node. */
 async function loadHttp(): Promise<Http | null> {
     if (!Platform.isDesktop) return null;
@@ -577,7 +635,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         return {
             enabled: () => this.data.liveChart !== false,
             tags: () => tags,
-            draw: (el, sourcePath, tag, body) => this.drawLive(el, sourcePath, tag, body),
+            draw: (el, sourcePath, tag, body, typed) => this.drawLive(el, sourcePath, tag, body, typed),
             release: (el) => {
                 this.liveDrawn.get(el)?.unload();
                 this.liveDrawn.delete(el);
@@ -587,26 +645,40 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
 
     /**
      * Draw the chart under a block being edited, in place of the one drawn
-     * there before: the new chart moves from that one's picture. While the
-     * block cannot be read (JSON half typed), the last chart stays, with the
-     * reason under it.
+     * there before: the new chart moves from that one's picture. A block that
+     * draws nothing yet (empty, or its first line still being typed) shows
+     * nothing, and its first chart fades up. While the block cannot be read
+     * (JSON half typed), the last chart stays, with the reason under it.
+     * Problems wait while you type (quietWhileTyping).
      */
-    private drawLive(el: HTMLElement, sourcePath: string, tag: string, body: string) {
+    private drawLive(el: HTMLElement, sourcePath: string, tag: string, body: string, typed: boolean) {
         const fromTikzTag = tag === 'tikz';
         // A plain tikz block that is not JSON is real TikZ: nothing to draw.
         const block = fromTikzTag && !body.trim().startsWith('{') ? null : readBlock(fromTikzTag ? body.trim() : body);
         const before = this.liveDrawn.get(el);
+        if (typed) quietWhileTyping(el);
         el.querySelector(':scope > .etz-live-error')?.remove();
-        if (block === null || typeof block === 'string') {
-            if (!before) el.empty();
-            if (block) el.createDiv({ cls: 'tikz-block-error etz-live-error', text: 'Easy TikZ: ' + block });
+        const empty = !body.split(/\r\n?|\n/).some((l) => l.trim() && !/^(%|\/\/|#)/.test(l.trim()));
+        const blank = block === null || empty || (typeof block === 'string' ? !before : !Object.keys(block.data).some((k) => k !== 'v'));
+        if (blank) {
+            before?.unload();
+            this.liveDrawn.delete(el);
+            el.empty();
+            el.setAttr('data-etz-blank', 'true');
             return;
         }
+        if (typeof block === 'string') {
+            el.createDiv({ cls: 'tikz-block-error etz-live-error', text: 'Easy TikZ: ' + block });
+            return;
+        }
+        const appear = !before && el.hasAttribute('data-etz-blank') && this.data.animateCharts !== false && !reducedMotion();
+        el.removeAttribute('data-etz-blank');
         before?.unload();
         el.empty();
         const chart = new InlineChart(this, el, sourcePath, body, block.data, fromTikzTag ? 'tikz' : 'easy-tikz', block.format, block.problems, true);
         chart.mount();
         this.liveDrawn.set(el, chart);
+        if (appear) appearIn(el);
     }
 
     /**

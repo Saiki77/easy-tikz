@@ -18,8 +18,8 @@ export interface LiveHost {
     enabled(): boolean;
     /** The fence languages charts are drawn for (easy-tikz, and tikz when that setting is on). */
     tags(): ReadonlySet<string>;
-    /** Draw the chart of `body` into `el`, replacing the one drawn there before. */
-    draw(el: HTMLElement, sourcePath: string, tag: string, body: string): void;
+    /** Draw the chart of `body` into `el`, replacing the one drawn there before; `typed`: the block changed (not: the cursor came in). */
+    draw(el: HTMLElement, sourcePath: string, tag: string, body: string, typed: boolean): void;
     /** `el` left the editor: let go of its chart. */
     release(el: HTMLElement): void;
 }
@@ -40,13 +40,13 @@ class LiveChart extends WidgetType {
 
     toDOM(): HTMLElement {
         const el = createDiv({ cls: 'etz-live' });
-        this.host.draw(el, this.sourcePath, this.tag, this.body);
+        this.host.draw(el, this.sourcePath, this.tag, this.body, false);
         return el;
     }
 
     /** The block changed: the same element draws the new chart, which moves from the old one. */
     updateDOM(dom: HTMLElement): boolean {
-        this.host.draw(dom, this.sourcePath, this.tag, this.body);
+        this.host.draw(dom, this.sourcePath, this.tag, this.body, true);
         return true;
     }
 

@@ -1,14 +1,17 @@
 /* eslint-env browser, node */
-// text: charts as text (4.5), about twenty-eight seconds, in one note in Live Preview.
+// text: charts as text (4.5), about thirty-five seconds, in one note in Live Preview.
 //
 //   title card "§3 Charts as text" (Figure 1: the finished chart)
-//   the window is put onto the page: a note with a block in it, the cursor in the block, its chart under it
-//   1. one line per object, typed in words: the feasible region fades in as soon as its first condition is
+//   the window is put onto the page: a note with one sentence and no chart yet, the cursor under it
+//   1. a block is opened (Obsidian closes the fence), and its first line gives the chart its size: the chart
+//      fades up under the block the moment the line is whole, on the default range; the next line says what
+//      to show, and the axes glide there as its numbers are typed; then the axes move to the edges
+//   2. one line per object, typed in words: the feasible region fades in as soon as its first condition is
 //      whole, the slider line brings its slider, the dashed objective line draws itself, the optimum pops in
 //      with its coordinates
-//   2. a number changes: 4 becomes 5 in x + y <= 4, the region grows and the optimum slides along the
+//   3. a number changes: 4 becomes 5 in x + y <= 4, the region grows and the optimum slides along the
 //      constraint, its coordinates counting along (a glide)
-//   3. a click on the note's first line: the cursor leaves the block, the lines give way to the chart
+//   4. a click on the note's first line: the cursor leaves the block, the lines give way to the chart
 //   the camera pulls back, the window is taken off the page
 //   end card (Figure 2: the chart after the change)
 //
@@ -23,9 +26,13 @@
 
 const NOTE = 'Production plan';
 const TEXT = 'Maximise $z = 2x + 3y$ subject to $x + y \\le 4$ and $x + 3y \\le 6$.';
-/** What the block holds before the film: the view, nothing drawn yet. */
-const START = ['show x from 0 to 5.5 and y from 0 to 3', 'axes on the edges', 'size 12 x 6'];
-/** The lines typed, in order. */
+/** The fence typed to open the block (Obsidian adds the closing one at Enter). */
+const FENCE = '```easy-tikz';
+/** The first lines: the chart's size (in its final shape from the start, it fits the frame), what to show, the axes. */
+const SIZE = 'size 12 x 6';
+const SHOW = 'show x from 0 to 5.5 and y from 0 to 3';
+const AXES = 'axes on the edges';
+/** The objects, typed one line each. */
 const REGION = 'shade where x + y <= 4 and x + 3y <= 6 and x >= 0 and y >= 0, numbered';
 const SLIDER = 'slider c from 0 to 15, starting at 6';
 const LINE = 'draw 2x + 3y = c in red, dashed';
@@ -35,10 +42,8 @@ const FONT_PX = 24;
 /** Width of the note's column: the longest line fits on one line, the chart sits in the middle. */
 const COLUMN_PX = 1080;
 
-/** The note as markdown, with these lines in its block (the empty line under them is where the cursor goes). */
-const noteWith = (lines) => `${TEXT}\n\n\`\`\`easy-tikz\n${lines.join('\n')}\n\n\`\`\`\n`;
-/** The empty line in the block: the note's line 0 is the text, 1 is empty, 2 the fence, then the lines. */
-const cursorLine = (lines) => 3 + lines.length;
+/** The finished note: the sentence and the block with every line (the cursor goes on its last line). */
+const finishedNote = (lines) => `${TEXT}\n\n${FENCE}\n${lines.join('\n')}\n\`\`\`\n`;
 
 /** The rectangle of an element of the workspace, in window px. */
 const rectOf = (d, selector) =>
@@ -73,17 +78,18 @@ const cursorAt = (d, line) =>
 /** The frame of the film: the note's column, from its first line to the bottom of the chart and its sliders as they are at the end. */
 let frame = null;
 
+
 export default {
     name: 'text',
     title: { secno: '§3', text: 'Charts as text', lead: 'Write the chart [[in plain words]].', seconds: 2.2 },
     end: { seconds: 2.6 },
-    seconds: [22, 36],
+    seconds: [28, 42],
 
     async setup(d) {
         const { obs } = d;
-        const all = [...START, REGION, SLIDER, LINE, OPTIMUM];
+        const all = [SIZE, SHOW, AXES, REGION, SLIDER, LINE, OPTIMUM];
         // First the finished note, to measure where the chart and its sliders end up.
-        await obs.writeNote(NOTE, noteWith(all));
+        await obs.writeNote(NOTE, finishedNote(all));
         await obs.call(
             async (note, size, column) => {
                 app.vault.setConfig('baseFontSize', size);
@@ -99,7 +105,8 @@ export default {
             FONT_PX,
             COLUMN_PX
         );
-        await cursorAt(d, cursorLine(all));
+        // The note's line 0 is the sentence, 1 is empty, 2 the fence, then the block's lines.
+        await cursorAt(d, 2 + all.length);
         await obs.sleep(1200);
         const root = await rectOf(d, '.workspace-split.mod-root');
         const column = await rectOf(d, '.workspace-leaf.mod-active .cm-sizer');
@@ -117,14 +124,14 @@ export default {
         const finished = await drawn(d);
         d.expect(finished && finished.live && finished.names.includes('P1'), `the finished chart under the block: ${JSON.stringify(finished)}`);
 
-        // Then the note as the film begins: the view only, the cursor on the empty line in the block.
-        await obs.call((text) => app.workspace.activeEditor.editor.setValue(text), noteWith(START));
-        await cursorAt(d, cursorLine(START));
+        // Then the note as the film begins: the sentence and no chart, the cursor on the empty line under it.
+        await obs.call((text) => app.workspace.activeEditor.editor.setValue(text), `${TEXT}\n\n`);
+        await cursorAt(d, 2);
         await obs.sleep(1200);
         await d.figure(root);
         const start = await drawn(d);
-        d.expect(start && start.live && start.charts === 1 && start.names.length === 0, `the chart under the block starts empty: ${JSON.stringify(start)}`);
-        // The hand waits beside the block's short lines, inside the first framing.
+        d.expect(start === null, `the note starts without a chart: ${JSON.stringify(start)}`);
+        // The hand waits at the right of the column, inside the first framing.
         await d.park({ rect: frame, at: [0.86, 0.26] });
     },
 
@@ -135,9 +142,28 @@ export default {
         await d.hold(0.35);
         await d.clock('film');
 
-        // ---- 1. One line per object, in words.
-        await d.beat({ id: 'region', caption: 'One line per object, in words.', focus: frame, pad: 0, move: 0.8 });
+        // ---- 1. A block, and the chart appears under it.
+        await d.beat({ id: 'open', caption: 'Open a block. The chart appears below.', focus: frame, pad: 0, move: 0.8 });
         await d.hold(0.4);
+        await d.type(FENCE, { cps: 14 });
+        await d.key('Enter', {}, { pause: 0.3 });
+        const opened = await drawn(d);
+        d.expect(opened === null, `an empty block shows nothing under it: ${JSON.stringify(opened)}`);
+        await d.type(SIZE, { cps: 12 });
+        await d.hold(1.3);
+        const sized = await drawn(d);
+        d.expect(sized && sized.live && sized.names.length === 0, `the first line draws the empty chart under the block: ${JSON.stringify(sized)}`);
+        await d.key('Enter', {}, { pause: 0.15 });
+        await d.beat({ id: 'show', caption: 'Say what to show. The axes follow.', focus: frame, pad: 0 });
+        await d.type(SHOW, { cps: 17 });
+        await d.hold(0.6);
+        await d.key('Enter', {}, { pause: 0.15 });
+        await d.type(AXES, { cps: 18 });
+        await d.hold(0.8);
+
+        // ---- 2. One line per object, in words.
+        await d.key('Enter', {}, { pause: 0.15 });
+        await d.beat({ id: 'region', caption: 'One line per object, in words.', focus: frame, pad: 0 });
         await d.type(REGION, { cps: 21 });
         await d.hold(0.7);
         const region = await drawn(d);
@@ -163,7 +189,7 @@ export default {
         d.expect(!optimum.issues, `a problem line under the finished chart: "${optimum.issues}"`);
         await d.cardFigure('title', await rectOf(d, '.workspace-leaf.mod-active .etz-live .etz-inline-box'), { label: 'Figure 1.', text: 'Seven lines of text.' });
 
-        // ---- 2. A number changes: the chart glides.
+        // ---- 3. A number changes: the chart glides.
         const four = await obs.call((wanted) => {
             const cm = app.workspace.activeEditor.editor.cm;
             const doc = cm.state.doc;
@@ -194,7 +220,7 @@ export default {
         d.expect(after && after.texts.some((t) => /\(4\.5, 0\.5\)/.test(t)), `after the change: ${JSON.stringify(after)}`);
         d.fact('optimum', ['(3, 1)', '(4.5, 0.5)']);
 
-        // ---- 3. Click away: the lines give way to the chart.
+        // ---- 4. Click away: the lines give way to the chart.
         const word = await obs.call(() => {
             const c = app.workspace.activeEditor.editor.cm.coordsAtPos(4);
             return c ? { x: c.left, y: (c.top + c.bottom) / 2 } : null;

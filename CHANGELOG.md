@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [4.5.1] - 2026-10-19
+
+The chart under a block you are writing appears when there is something to draw, fading up, and its problems wait until you pause typing. The film §3 Charts as text starts from a note with no chart.
+
+### Changed
+
+- **The chart under a new block appears when there is something to draw.** An empty block, or one whose first line is still being typed, shows nothing under it (no "the block is empty" box), and its first chart fades up as the line becomes whole. A block you come back to shows its chart at once, as before.
+- **Problems wait while you type.** The problem line under the chart of a block being edited shows once you pause (0.7 s): a line is wrong at almost every key until it is whole. Its room stays, so nothing under it moves.
+- **The film §3 Charts as text** (`docs/media/text.mp4`, `text.gif`) starts from a note with no chart: the block is opened, and the chart appears under it and is built line by line.
+
 ## [4.5.0] - 2026-10-19
 
 Charts in plain words, drawn under the block as you type. A line says what it does (`show`, `plot`, `shade`, `draw`, `mark`, `write`), its options read like words, and while you edit a block in Live Preview its chart sits right under it and moves with every key. The editor, the AI tools and the guides write the new lines; every 4.4 line keeps working. The README is now an overview; the reference and the notes for developers have their own pages.

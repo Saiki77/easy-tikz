@@ -5,9 +5,9 @@
 ## 4.5: charts in plain words, drawn as you type
 
 <p align="center">
-  <a href="media/text.mp4"><img src="media/text.gif" alt="A 28 second film on graph paper: §3 Charts as text. Write the chart in plain words. A note in Obsidian holds a block with three lines: show x from 0 to 5.5 and y from 0 to 3, axes on the edges, size 12 x 6; the cursor sits in the block and its empty chart is right under it. Typed one by one, the lines shade where x + y &lt;= 4 and x + 3y &lt;= 6 and x &gt;= 0 and y &gt;= 0, numbered (the region fades in), slider c from 0 to 15, starting at 6 (a slider appears under the chart), draw 2x + 3y = c in red, dashed (the dashed line draws itself) and mark the maximum of 2x + 3y in the region, large, with coordinates (the optimum (3, 1) pops in). Then the 4 in x + y &lt;= 4 becomes a 5: the region grows and the optimum slides to (4.5, 0.5), and a note says: the optimum slides. A click on the note's first line hands the lines over to the chart." width="100%"></a>
+  <a href="media/text.mp4"><img src="media/text.gif" alt="A 37 second film on graph paper: §3 Charts as text. Write the chart in plain words. A note in Obsidian holds one sentence and no chart. A block is opened with three backticks and easy-tikz; Obsidian closes it, and nothing shows under the empty block. The first line, size 12 x 6, makes the chart fade up under the block on the default range; the next, show x from 0 to 5.5 and y from 0 to 3, makes its axes glide there as the numbers are typed, and axes on the edges moves them to the edges. Then, one line each: shade where x + y &lt;= 4 and x + 3y &lt;= 6 and x &gt;= 0 and y &gt;= 0, numbered (the region fades in), slider c from 0 to 15, starting at 6 (a slider appears under the chart), draw 2x + 3y = c in red, dashed (the dashed line draws itself) and mark the maximum of 2x + 3y in the region, large, with coordinates (the optimum (3, 1) pops in). The 4 in x + y &lt;= 4 becomes a 5: the region grows and the optimum slides to (4.5, 0.5), and a note says: the optimum slides. A click on the note's first line hands the lines over to the chart." width="100%"></a>
 </p>
-<p align="center">One note in Live Preview: each line is typed in words, and the chart under the block follows every key. <a href="media/text.mp4">Watch the MP4</a> (28 s).</p>
+<p align="center">One note in Live Preview, from no chart at all: a block is opened, each line is typed in words, and the chart appears under the block and follows every key. <a href="media/text.mp4">Watch the MP4</a> (37 s).</p>
 
 ```easy-tikz
 show x from 0 to 5.5 and y from 0 to 3
@@ -22,6 +22,8 @@ mark the maximum of 2x + 3y in the region, large, with coordinates
 - **Lines in plain words.** A line starts with what it does: `show`, `plot`, `shade`, `draw`, `mark` or `write`. Options read like words and need no `|`: `in red, thick and dashed`, `with its tangent at a and its extrema`, `from x = 0 to 4`. `the region` is the chart's only region, and `#` starts a comment. The short forms of 4.4 (`view x 0..5`, `f(x) = x^2 | blue`) keep working and mean the same.
 - **The chart under the block.** While you edit a block in Live Preview, its chart sits right under its lines and changes as you type: numbers glide, new objects pop in, and a half-typed line keeps its last working version on screen. Leave the block and Obsidian's own chart takes over in the same frame. Setting **Chart under the block while you edit** (on by default).
 - **The editor writes the new lines.** Insert into note and Save changes write lines in words, and lines you did not touch stay as you wrote them. The guides end with their finished chart in this form, and AI apps learn it from the [AI guide](ai.md#the-text-syntax).
+
+**4.5.1.** A new block shows nothing under it until its first line draws something, then its chart fades up; problems under the chart wait until you pause typing.
 
 ## 4.4: charts as text, charts that move, phones and tablets
 
