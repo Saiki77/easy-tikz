@@ -124,6 +124,40 @@ const SECTIONS: Section[] = [
         ],
     },
     {
+        id: 'text',
+        title: 'Charts as text',
+        about: 'Write a chart in the note, one line per object.',
+        blocks: [
+            'A chart can live in the note as a few lines of text instead of a JSON object: one line per object, written the way the math reads. Charts the editor inserts are written this way (the setting **Write new charts as** can switch to JSON), and a chart you edit keeps the form its block has. Changing a number in the note moves the chart there: values glide, new objects pop in.',
+            {
+                code: [
+                    '```easy-tikz',
+                    ['view x 0..5, y 0..4.5', 'the visible range'],
+                    ['axes edges', 'or middle, box, none'],
+                    ['slider c = 6 in 0..15', 'a slider'],
+                    ['R1: shade x + y <= 4, x + 3y <= 6, x >= 0, y >= 0 | constraint lines, numbered', 'a region'],
+                    ['2x + 3y = c | red, dashed, label "z = {c}"', 'a line'],
+                    ['P1: max 2x + 3y over R1 | large, label "({x:2}, {y:2})"', 'the optimum'],
+                    '```',
+                ],
+            },
+            'Options come after `|`, separated by commas: a colour, `thin` or `thick`, `dashed`, `hidden`, `label "..."`, and words that belong to the object. A line can start with a name and a colon (`R1:`); otherwise shapes are named R1, C1, P1, S1 in order. Lines starting with `%` are comments, and Save keeps them.',
+            { sub: 'Lines' },
+            {
+                terms: [
+                    ['f(x) = x^2 - 2', 'A function. Any name: demand(x) = 20 - x. c(t) = (cos(t), sin(t)) is parametric, r(theta) = ... polar, z = ... a surface.'],
+                    ['shade x + y <= 4, x >= 0', 'A region: all conditions hold. Also shade between f and g for 0 <= x <= 2, and shade under f for ...'],
+                    ['x^2 + y^2 = 9', 'A curve from an equation. levels x^2 + y^2 at 1, 4 draws level curves.'],
+                    ['points (1, 2), (3, a)', 'Points. Also crossings of f and g, corners of R1, max 2x + 3y over R1, integer points in R1.'],
+                    ['arrow (0, 0) -> (3, 2)', 'Also segment A -- B, polygon A, B, C and brace A to B.'],
+                    ['text "optimum" at (3, 1.2)', 'A text label; above, below, left or right as an option.'],
+                    ['view, axes, grid, title, size 12 x 6, equal scale, polar, 3d', 'The chart itself. set field = value sets any other field.'],
+                ],
+            },
+            { note: 'A typo shows under the chart in the note with its line and column, such as "Line 4, column 9: unknown option". The AI guide (AI tab) lists every line and option.' },
+        ],
+    },
+    {
         id: 'drag',
         title: 'Drag to edit',
         about: 'Move, turn and stretch shapes in the preview.',

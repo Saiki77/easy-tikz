@@ -16,12 +16,12 @@ import { GUIDES } from '../guides';
 import { COLOR_MAP, THICKNESS_MAP } from '../colors';
 import type { Pt } from '../geometry';
 import type { Annotation, RendererConfig, Tool, ToolType } from '../types';
+import { Data, LIST_KEYS, canonical, clone, minimize } from '../chartdata';
 
-export type Data = Record<string, unknown>;
+export type { Data };
+export { canonical, clone, minimize };
 
 const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D'];
-/** Chart keys that hold lists, checked element by element. */
-const LIST_KEYS = ['functions', 'tools', 'parameters', 'annotations', 'functions3D'] as const;
 /** Keys a block may carry that the editor's defaults do not list: how the chart sits in the note. */
 const DISPLAY_KEYS = ['displayWidth', 'displayAlign'];
 
@@ -49,8 +49,10 @@ export function blocksOf(text: string): Block[] {
         const fence = open[2];
         const body: string[] = [];
         let j = i + 1;
+        // A blank line of a callout is often just ">" (the prefix without its space).
+        const bare = prefix.replace(/\s+$/, '');
         for (; j < lines.length; j++) {
-            const line = lines[j].startsWith(prefix) ? lines[j].slice(prefix.length) : lines[j];
+            const line = lines[j].startsWith(prefix) ? lines[j].slice(prefix.length) : bare && lines[j].trimEnd() === bare ? '' : lines[j];
             if (line.trim().startsWith(fence[0].repeat(fence.length)) && line.trim().replace(/[`~]/g, '') === '') break;
             body.push(line);
         }
@@ -91,20 +93,6 @@ function load(data: Data): Loaded {
     const settings = SettingsManager.fromJSON(clone(data));
     const math = settings.createMathContext({ memo: false });
     return { settings, math, config: settings.toRendererConfig(math) };
-}
-
-export function clone<T>(v: T): T {
-    return JSON.parse(JSON.stringify(v)) as T;
-}
-
-/** The chart as the editor would store it, with ids left out (they are only UI keys). */
-export function canonical(data: Data): string {
-    const out = SettingsManager.fromJSON(clone(data)).serialize();
-    for (const key of LIST_KEYS) {
-        const list = out[key];
-        if (Array.isArray(list)) for (const item of list) if (item && typeof item === 'object') delete (item as Data).id;
-    }
-    return JSON.stringify(out);
 }
 
 // --------------------------------------------------------------- defaults
@@ -693,59 +681,7 @@ function fixHint(message: string): string {
     return '';
 }
 
-// ------------------------------------------------------------- minimize
-
-/** The block with every field left out that equals what the plugin would fill in. Same chart, much shorter. */
-export function minimize(data: Data): Data {
-    const base = canonical(data);
-    let cur = clone(data);
-    if (cur.v === undefined) cur = { v: 4, ...cur };
-    const tryDelete = (mutate: (d: Data) => void) => {
-        const trial = clone(cur);
-        mutate(trial);
-        if (canonical(trial) === base) cur = trial;
-    };
-    for (const key of Object.keys(cur)) {
-        if (key === 'v' || (LIST_KEYS as readonly string[]).includes(key)) continue;
-        tryDelete((d) => delete d[key]);
-    }
-    for (const key of LIST_KEYS) {
-        const list = cur[key];
-        if (!Array.isArray(list)) continue;
-        if (list.length === 0) {
-            tryDelete((d) => delete d[key]);
-            continue;
-        }
-        if (key === 'parameters') continue;
-        for (let i = 0; i < list.length; i++) {
-            const item = (cur[key] as Data[])[i];
-            for (const k of Object.keys(item)) {
-                if (k === 'type' || k === 'name') continue;
-                tryDelete((d) => delete (d[key] as Data[])[i][k]);
-            }
-        }
-    }
-    return ordered(cur);
-}
-
-/** Chart keys in reading order (v, title, view, sliders, functions, tools, labels), and type and name first in every list item. */
-function ordered(data: Data): Data {
-    const first = ['v', 'dimension', 'title', 'xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'axis_style', 'parameters', 'functions', 'functions3D', 'tools', 'annotations'];
-    const out: Data = {};
-    for (const k of first) if (k in data) out[k] = data[k];
-    for (const k of Object.keys(data)) if (!(k in out)) out[k] = data[k];
-    for (const key of LIST_KEYS) {
-        const list = out[key];
-        if (!Array.isArray(list)) continue;
-        out[key] = list.map((item: Data) => {
-            const o: Data = {};
-            for (const k of ['type', 'name']) if (k in item) o[k] = item[k];
-            for (const k of Object.keys(item)) if (!(k in o)) o[k] = item[k];
-            return o;
-        });
-    }
-    return out;
-}
+// ------------------------------------------------------------ JSON blocks
 
 /** JSON with short objects and lists on one line, as the README's example block. */
 export function compactJson(value: unknown, indent = ''): string {

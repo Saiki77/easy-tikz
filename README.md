@@ -7,16 +7,38 @@
 </p>
 <p align="center">Section 2 of the overview film as a loop: the Tangent explorer example, with the area between the curve and its tangent added (a hidden function f2 for the tangent and a region between the two). Drag the tangent point and tangent, slope and area follow; press play and it moves by itself. <a href="docs/media/overview.mp4">Watch the whole film</a> (40 s, MP4), whose first part is drag to edit on the Linear program example.</p>
 
-**Easy TikZ** is an [Obsidian](https://obsidian.md) plugin for drawing TikZ and pgfplots charts without writing TikZ. You build a chart from formulas and cards, the preview redraws as you type, the chart renders in your note with no TeX install, and the Code tab holds pgfplots code that compiles with pdflatex.
+**Easy TikZ** is an [Obsidian](https://obsidian.md) plugin for drawing TikZ and pgfplots charts without writing TikZ. You build a chart from formulas and cards, or write it in the note as a few lines of text; the preview redraws as you type, the chart renders in your note with no TeX install (on phones and tablets too), and the Code tab holds pgfplots code that compiles with pdflatex.
 
 <p align="center">
   <a href="#install">Install</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="docs/guides/README.md">Guides</a> ·
+  <a href="#charts-as-text">Charts as text</a> ·
   <a href="#make-charts-with-ai">Make charts with AI</a> ·
   <a href="#what-is-new-in-version-4">What is new in 4</a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
+
+## Charts as text
+
+A chart can live in your note as a few lines of text, one line per object, the way the math reads:
+
+```easy-tikz
+view x 0..5, y 0..4.5
+axes edges
+slider c = 6 in 0..15
+R1: shade x + y <= 4, x + 3y <= 6, x >= 0, y >= 0 | constraint lines, numbered
+2x + 3y = c | red, dashed, label "z = {c}"
+corners of R1 | blue, label "({x}, {y})"
+P1: max 2x + 3y over R1 | large, label "x* = ({x:2}, {y:2})"
+```
+
+- **Readable in the note.** Change a number without opening the editor. A typo shows under the chart with its line and column, such as *Line 4, column 9: unknown option "dashd"*.
+- **The editor writes text back.** Click the chart, change it with cards, sliders or by dragging, and **Save changes** rewrites only the lines whose object changed: your other lines and comments stay as you wrote them. Charts the editor inserts are text too (the settings can switch to JSON), and JSON blocks keep working as before.
+- **Charts move.** Change a number and the chart glides to the new value; an object you add pops in.
+- **Everywhere.** Charts draw in your notes on iPhone, iPad and Android, in the colours of your theme, and follow light and dark mode.
+
+The Help tab has the reference (**Charts as text**), and the AI guide lists every line and option: [docs/ai.md](docs/ai.md#the-text-syntax).
 
 ## Make charts with AI
 
@@ -26,7 +48,7 @@ Describe the chart and let an AI build it. Easy TikZ hands the AI everything it 
 - **AI chats** (ChatGPT, Claude, Gemini in the browser). **Copy the guide** into the chat, describe your chart, then **Paste the chart** the AI writes: it opens in the editor, checked. Blocks pasted straight into a note work too, also with the comments and trailing commas AI chats like to write.
 - **AI agents in your vault folder.** **Add the section** puts a short Easy TikZ part into `AGENTS.md` and `CLAUDE.md`, which agents read on their own.
 
-The guide the AI gets is [docs/ai.md](docs/ai.md). Then ask, for example: *"In this note, add a chart of the feasible region x + y <= 4, x + 3y <= 6, x >= 0, y >= 0, with the line 2x + 3y = c on a slider and the point where 2x + 3y is largest."*
+The guide the AI gets is [docs/ai.md](docs/ai.md); AIs write the text form, which reads like the math and is hard to get wrong. Then ask, for example: *"In this note, add a chart of the feasible region x + y <= 4, x + 3y <= 6, x >= 0, y >= 0, with the line 2x + 3y = c on a slider and the point where 2x + 3y is largest."*
 
 ## What is new in version 4
 
@@ -72,7 +94,7 @@ Version 4 adds sliders that move the picture while you drag them, drag to edit (
 
 ## Install
 
-Easy TikZ needs Obsidian 1.13 or newer and runs on desktop only.
+Easy TikZ needs Obsidian 1.13 or newer and runs on desktop, iPhone, iPad and Android. AI apps connect to Obsidian on a computer.
 
 **From inside Obsidian** (recommended)
 
@@ -257,7 +279,7 @@ Four guides build such charts step by step: [Solve a linear program in a picture
 
 ## Inline rendering in notes
 
-The plugin registers an `easy-tikz` markdown code-block processor. **Insert into note** writes a JSON block; the same renderers that power the editor preview draw the chart in your note, and a chart with sliders gets its own slider strip underneath. Click the rendered chart to re-open the editor pre-filled with every setting: change something, **Save changes**, and the block in the source file is replaced in place. Hover the chart for alignment and width controls. If something in the chart cannot be drawn, a muted line under the chart names the problem; the rest of the chart still renders.
+The plugin registers an `easy-tikz` markdown code-block processor. **Insert into note** writes a text block ([Charts as text](#charts-as-text); JSON if you choose it in the settings); the same renderers that power the editor preview draw the chart in your note, and a chart with sliders gets its own slider strip underneath. Click the rendered chart to re-open the editor pre-filled with every setting: change something, **Save changes**, and the block in the source file is updated in place (a text block line by line, keeping your comments). Hover the chart for alignment and width controls. If something in the chart cannot be drawn, a muted line under the chart names the problem, with its line and column in a text block; the rest of the chart still renders. When a block changes, its chart glides from the old picture to the new one and new objects pop in (setting **Animate chart changes**; never with reduced motion).
 
 Guide: [Charts in your notes](docs/guides/charts-in-notes.md).
 
@@ -271,7 +293,7 @@ The preview and the export draw the same scene, so what you see is what pgfplots
 
 - **Functions** are exported as formulas (`\addplot`), with slider values substituted, functions used by name written out, and trigonometry in radians (`trig format plots=rad`). Curves are split where the preview breaks them (poles, jumps), and `restrict ... to domain` with `unbounded coords=jump` keeps steep functions such as `x^3` or `tan(x)` from stopping pdflatex with "Dimension too large".
 - **Regions, curves, points, segments and braces** are computed by the plugin and exported as coordinates. They match the preview exactly, but they do not recompute if you edit the LaTeX. The export is a snapshot at the current slider values.
-- **Colours** are defined with `\definecolor` inside the picture, so the PDF uses the preview's colours rather than xcolor's (whose `green`, `purple` or `teal` look quite different). "Auto" (the theme's text colour) exports as black.
+- **Colours** are defined with `\definecolor` inside the picture, so the PDF uses the plugin's own colours rather than xcolor's (whose `green`, `purple` or `teal` look quite different). In the note, charts use your theme's colours by default; the setting **Chart colours: As in the LaTeX export** shows exactly the PDF's colours there too. "Auto" (the theme's text colour) exports as black.
 - **Layers and legend:** fills sit on the axis background layer, below axes, curves and markers. Every `\addplot` without a legend entry (markers, extra pieces of a broken curve) carries `forget plot`, so legend entries stay with their functions.
 - **Text:** labels are escaped, so `50% cut`, `x_1` or `R&D` print as typed, while `$...$` math and LaTeX commands such as `\textbf{A}` pass through.
 - **Size and aspect:** width and height come from Chart > Export size; **Equal scale** (always on in polar charts) exports as `axis equal image`, which keeps your ranges and shrinks the box.
@@ -284,12 +306,15 @@ Guide: [Export to LaTeX](docs/guides/export-latex.md) (standalone document or sn
 
 Settings → Community plugins → **Easy TikZ**:
 
+- **Write new charts as.** Text (default, one line per object) or JSON. A chart you edit keeps the form its block has.
+- **Chart colours.** From your theme (default: native colours that follow light and dark mode) or As in the LaTeX export (the fixed colours of the PDF). CSS snippets can set `--etz-red`, `--etz-blue`, ... directly.
+- **Animate chart changes.** On by default: when a block changes, values glide and new objects pop in. Charts never move when your system asks for reduced motion.
 - **Invert vertical drag in 3D.** Trackball convention by default (drag down tilts the scene up); flip for direct manipulation (camera follows finger).
 - **Max 3D samples per axis.** Upper bound of the per-surface Samples slider. Default 80, at most 120. The export always uses at most 60 samples per axis, because pdflatex runs out of memory above that.
 - **2D pan sensitivity.** Default 1.0 (direct: 1 mouse pixel = 1 chart pixel), from 0.1 to 2.0.
 - **Also render plain `tikz` blocks.** Off by default; on if you want one tag for everything (conflicts with obsidian-tikzjax).
 - **Show what's new after updates.** On by default. After an update that brings something new, a short popup shows what changed, once. The command **Show what's new in version 4** and the link in the Help tab open it at any time.
-- **AI access.** **Let AI apps make charts** (off by default) starts the local AI server; below it: its status, the **Port** (default 27150), the **Token** with **Copy** and **New token**, **Connect an AI app** with the line each app needs, **Tell AI agents in this vault** and **Copy the guide for AI chats**. The editor's **AI** tab has the same switch.
+- **AI access** (on a computer; phones and tablets show only the guide and the agents' section). **Let AI apps make charts** (off by default) starts the local AI server; below it: its status, the **Port** (default 27150), the **Token** with **Copy** and **New token**, **Connect an AI app** with the line each app needs, **Tell AI agents in this vault** and **Copy the guide for AI chats**. The editor's **AI** tab has the same switch.
 
 ## Live rendering, briefly
 

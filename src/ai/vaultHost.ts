@@ -22,8 +22,14 @@ export class VaultChartHost implements ChartHost {
 
     constructor(
         private readonly app: App,
-        readonly version: string
+        readonly version: string,
+        /** The user's setting for new blocks. */
+        private readonly format: () => 'text' | 'json' = () => 'text'
     ) {}
+
+    blockFormat(): 'text' | 'json' {
+        return this.format();
+    }
 
     activeNote(): NoteInfo | null {
         const file = this.app.workspace.getActiveFile();

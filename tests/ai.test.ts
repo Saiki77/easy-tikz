@@ -8,13 +8,16 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test, assert } from './_lib';
 import { blocksOf, canonical, check, examples, minimize, parseJson } from '../src/ai/charttool';
+import { readBlock } from '../src/blockjson';
 
 const root = process.cwd();
 
+/** The chart of a block body, text or JSON; throws with the first problem. */
 function data(text: string): Record<string, unknown> {
-    const parsed = parseJson(text);
-    if (!parsed.ok) throw new Error(parsed.message);
-    return parsed.data;
+    const block = readBlock(text);
+    if (typeof block === 'string') throw new Error(block);
+    if (block.problems.length) throw new Error(`line ${block.problems[0].line}: ${block.problems[0].message}`);
+    return block.data;
 }
 
 test('ai: every block in the AI guide renders without problems', () => {
@@ -124,6 +127,7 @@ class FakeHost implements ChartHost {
 }
 
 const SINE = { v: 4, xmin: '-1', xmax: '7', ymin: '-1.5', ymax: '1.5', functions: [{ name: 'f1', expression: 'sin(x)', color: 'blue' }] };
+const SINE_TEXT = '% one period\nview x -1..7, y -1.5..1.5\nf1(x) = sin(x) | blue';
 const textOf = (r: { content: Array<{ type: string; text?: string }> }) => r.content.map((c) => c.text || '').join('\n');
 
 test('ai server: initialize names the server, gives instructions and a version the client asked for', async () => {
@@ -157,17 +161,27 @@ test('ai server: guide, sections, examples', async () => {
     const host = new FakeHost();
     assert.match(textOf(await callTool('get_guide', {}, host)), /## Rules that prevent most mistakes/);
     const rules = textOf(await callTool('get_guide', { section: 'rules' }, host));
-    assert.match(rules, /"v": 4/);
+    assert.match(rules, /One object per line/);
     assert.ok(!/## Chart fields/.test(rules), 'a section only');
     const bad = await callTool('get_guide', { section: 'zzz' }, host);
     assert.ok(bad.isError);
     assert.match(textOf(await callTool('list_examples', {}, host)), /^lp: Linear program/m);
-    assert.match(textOf(await callTool('get_example', { id: 'tangent' }, host)), /```easy-tikz\n\{\n {2}"v": 4/);
+    const example = textOf(await callTool('get_example', { id: 'tangent' }, host));
+    assert.match(example, /```easy-tikz\nview x -3\.\.3, y -4\.\.4\n/);
+    const block = blocksOf(example)[0];
+    const builtIn = examples().find((e) => e.id === 'tangent');
+    assert.ok(builtIn && canonical(data(block.text)) === canonical(builtIn.data), 'the text example is the built-in chart');
+    assert.match(textOf(await callTool('get_example', { id: 'tangent', format: 'json' }, host)), /```easy-tikz\n\{\n {2}"v": 4/);
     assert.ok((await callTool('get_example', { id: 'nope' }, host)).isError);
 });
 
-test('ai server: check_chart takes objects, JSON strings, fenced blocks and slider values', async () => {
+test('ai server: check_chart takes text, objects, JSON strings, fenced blocks and slider values', async () => {
     const host = new FakeHost();
+    assert.match(textOf(await callTool('check_chart', { chart: SINE_TEXT }, host)), /^OK/);
+    assert.match(textOf(await callTool('check_chart', { chart: '```easy-tikz\n' + SINE_TEXT + '\n```' }, host)), /^OK/);
+    const typo = await callTool('check_chart', { chart: 'view x 0..5, y 0..5\nf(x) = x^2 | blue, sparkly' }, host);
+    assert.ok(typo.isError);
+    assert.match(textOf(typo), /^1 problem in the text[\s\S]*PROBLEM line 2, column 20: unknown option "sparkly"/);
     assert.match(textOf(await callTool('check_chart', { chart: SINE }, host)), /^OK/);
     assert.match(textOf(await callTool('check_chart', { chart: JSON.stringify(SINE) }, host)), /^OK/);
     assert.match(textOf(await callTool('check_chart', { chart: '```easy-tikz\n' + JSON.stringify(SINE) + '\n```' }, host)), /^OK/);
@@ -186,7 +200,8 @@ test('ai server: add_chart writes into the open note, below a heading, in place 
     assert.ok(!r1.isError, textOf(r1));
     const lp = host.notes.get('LP.md') || '';
     assert.ok(!lp.includes('(chart goes here)'));
-    assert.match(lp, /## Graphical solution\n\n```easy-tikz\n\{\n {2}"v": 4/);
+    // New blocks are text unless the user chose JSON.
+    assert.match(lp, /## Graphical solution\n\n```easy-tikz\nview x -1\.\.7, y -1\.5\.\.1\.5\nf1\(x\) = sin\(x\) \| blue\n```/);
     assert.match(lp, /```\n\n## Next$/);
     assert.equal(host.notices.length, 1);
 
@@ -199,6 +214,15 @@ test('ai server: add_chart writes into the open note, below a heading, in place 
     assert.ok(!r3.isError, textOf(r3));
     assert.match(textOf(r3), /^Made the note Waves\.md/);
     assert.match(host.notes.get('Waves.md') || '', /^```easy-tikz\n/);
+
+    // Text the AI wrote goes in as written, comments included.
+    host.notes.set('Text.md', '# T\n');
+    assert.ok(!(await callTool('add_chart', { chart: SINE_TEXT, note: 'Text' }, host)).isError);
+    assert.match(host.notes.get('Text.md') || '', /```easy-tikz\n% one period\nview x -1\.\.7/);
+    const jsonHost = Object.assign(new FakeHost(), { blockFormat: () => 'json' as const });
+    jsonHost.notes.set('J.md', '');
+    assert.ok(!(await callTool('add_chart', { chart: SINE_TEXT, note: 'J' }, jsonHost)).isError);
+    assert.match(jsonHost.notes.get('J.md') || '', /```easy-tikz\n\{\n {2}"v": 4/, 'the JSON setting writes JSON');
 
     const bad = await callTool('add_chart', { chart: { ...SINE, axisStyle: 'middle' } }, host);
     assert.ok(bad.isError);
@@ -214,7 +238,7 @@ test('ai server: list_charts and update_chart replace the right block, also in a
     host.notes.set('Two.md', `Intro\n\n${block('A')}\n\ntext\n\n> [!note]\n> ${block('B').split('\n').join('\n> ')}\n\nend`);
     const list = textOf(await callTool('list_charts', { note: 'Two' }, host));
     assert.match(list, /2 charts/);
-    assert.match(list, /Chart 2 \(line \d+, ok\)/);
+    assert.match(list, /Chart 2 \(line \d+, JSON, ok\)/);
     const r = await callTool('update_chart', { note: 'Two', index: 2, chart: { ...SINE, title: 'C' } }, host);
     assert.ok(!r.isError, textOf(r));
     const after = host.notes.get('Two.md') || '';
@@ -223,6 +247,22 @@ test('ai server: list_charts and update_chart replace the right block, also in a
     assert.ok(!after.includes('"title":"B"'));
     assert.match(after, /> ```\n\nend$/);
     assert.ok((await callTool('update_chart', { note: 'Two', index: 3, chart: SINE }, host)).isError);
+});
+
+test('ai server: update_chart keeps a text block text, and a JSON chart changes only the lines that differ', async () => {
+    const host = new FakeHost();
+    const body = ['% my sine', 'view x -1..7, y -1.5..1.5', 'f1(x) = sin(x) | blue', 'P1: crossings of f1 and f2', 'f2(x) = 0.5 | gray'];
+    host.notes.set('T.md', 'Intro\n\n```easy-tikz\n' + body.join('\n') + '\n```\n');
+    assert.match(textOf(await callTool('list_charts', { note: 'T' }, host)), /Chart 1 \(line 3, text, ok\)/);
+    const chart = data(body.join('\n'));
+    (chart.functions as Array<Record<string, unknown>>)[1].expression = '0.25';
+    assert.ok(!(await callTool('update_chart', { note: 'T', index: 1, chart }, host)).isError);
+    const lines = /```easy-tikz\n([\s\S]*?)\n```/.exec(host.notes.get('T.md') || '')?.[1].split('\n') ?? [];
+    assert.deepEqual(lines.slice(0, 4), body.slice(0, 4), 'unchanged lines and the comment stay');
+    assert.equal(lines[4], 'f2(x) = 0.25 | gray');
+    const replaced = await callTool('update_chart', { note: 'T', index: 1, chart: 'view x 0..1, y 0..1\ng(x) = x' }, host);
+    assert.ok(!replaced.isError, textOf(replaced));
+    assert.match(host.notes.get('T.md') || '', /```easy-tikz\nview x 0\.\.1, y 0\.\.1\ng\(x\) = x\n```/);
 });
 
 test('ai server: insertBlock puts a block below a heading or whole line, in place of a placeholder line, or at the end', () => {
@@ -402,4 +442,28 @@ test('blocks: a block without "v" is version 4 unless it carries what 3.x saved'
     const r = check({ xmin: 0, xmax: 2, ymin: 0, ymax: 4, functions: [{ name: 'f1', expression: 'x^2' }] });
     assert.match(r.errors.join('\n'), /"v": 4 is missing\. Add it/);
     assert.match(r.lines.join('\n'), /f1: y = x\^2 \| y 0\.\.4/);
+});
+
+test('ai server: no chart can end its code block in the note', async () => {
+    const host = new FakeHost();
+    host.notes.set('N.md', '# N\n');
+    host.open = 'N.md';
+    const evil = 'Revenue\n```\n```dataviewjs\ndv.paragraph("injected")\n```\n```easy-tikz';
+    const r = await callTool('add_chart', { chart: { ...SINE, title: evil } }, host);
+    assert.ok(!r.isError, textOf(r));
+    const note = host.notes.get('N.md') || '';
+    assert.equal((note.match(/^\s*```/gm) || []).length, 2, `one block, two fences:\n${note}`);
+    assert.ok(!/^\s*```dataviewjs/m.test(note), 'a dataviewjs block');
+    // Text with a lone carriage return (an editor ends a line there) or a fence inside is refused.
+    for (const chart of ['f(x) = x^2\n% done\r```\r```dataviewjs\r```', 'f(x) = x^2\n```\nmore']) {
+        const bad = await callTool('add_chart', { chart, note: 'N' }, host);
+        assert.ok(bad.isError && /without fences/.test(textOf(bad)), textOf(bad));
+    }
+});
+
+test('ai server: a callout block with blank ">" lines reads as it is', async () => {
+    const host = new FakeHost();
+    host.notes.set('C.md', '> [!note]\n> ```easy-tikz\n> view x -1..7, y -1.5..1.5\n>\n> f1(x) = sin(x) | blue\n> ```\n');
+    const list = textOf(await callTool('list_charts', { note: 'C' }, host));
+    assert.match(list, /Chart 1 \(line 2, text, ok\)/, list);
 });

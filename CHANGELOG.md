@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [4.4.0] - 2026-10-19
+
+Charts as text. A chart can now live in the note as a few lines of text, one line per object, written the way the math reads, and the editor writes it back line by line. Charts glide to new values and new objects pop in when a block changes, Easy TikZ runs on phones and tablets, and charts take the colours of your theme. JSON blocks keep working as before.
+
+### Added
+
+- **Charts as text** (`src/text/parse.ts`). An `easy-tikz` block that does not start with `{` is text: `view x 0..5, y 0..4.5`, `slider c = 6 in 0..15`, `f(x) = x^3 - 3x | blue, tangent at a`, `shade x + y <= 4, x >= 0 | numbered`, `2x + 3y = c | red, dashed`, `max 2x + 3y over R1`, `crossings of f and g`, `arrow (0, 0) -> (3, 2)`, `text "optimum" at (3, 1.2)`, `plane z = h`, and more. Options follow `|`; any line can start with a name (`R1:`); `%` and `//` start comments. Every field can be written: `set field = value` for the chart, `key=value` options for objects, and `raw tool {...}` lines for what the words cannot say. Problems show under the chart in the note with their line and column ("Line 4, column 9: unknown option").
+- **The editor writes text back** (`src/text/print.ts`). Save changes on a text block rewrites only the lines whose object changed; comments, blank lines and their places stay, also when objects are renamed, moved or deleted. New charts are written as text; the setting **Write new charts as** switches to JSON, and a chart you edit keeps the form its block has. Width and alignment from the note's controls become `set displayWidth` and `set displayAlign` lines. Every printed chart reads back as the same chart (what the words cannot say becomes a `set` or `raw` line), and text with a line break is always quoted, so no chart can end its code block in the note.
+- **Charts that move** (`src/motion.ts`). When a block changes (in reading view, or when the cursor leaves it in Live Preview), the chart glides from its old picture to the new one: curves bend over, the view zooms, points slide and computed labels count along. Objects new to the picture pop in: curves draw themselves, points pop, regions and labels fade up. The editor's preview pops in new objects too. Setting **Animate chart changes** (on by default); nothing moves when the system asks for reduced motion.
+- **Phones and tablets.** The plugin is no longer desktop-only: charts draw in notes on iOS and Android, and the editor fills the screen there. The AI server stays on computers (it needs Node); the AI tab and the settings say so and keep the guide for AI chats.
+- **Theme colours.** Chart colours are CSS variables (`--etz-red`, `--etz-blue`, ...) that use the theme's own colours by default, so charts look native and follow light and dark mode without a redraw (3D charts redraw on a theme change). The setting **Chart colours: As in the LaTeX export** pins the fixed colours of the exported figure. CSS snippets can set the variables.
+- **Help:** a reference section **Charts as text**. **What's new** opens once more after the update, with the four news first and the live chart's own text beside it.
+
+### Changed
+
+- **AI access speaks text.** The AI guide (`docs/ai.md`) teaches the text form first, with a full reference of lines and options; the JSON field tables stay for `set` lines, options and JSON blocks. Every tool takes a chart as text or JSON; problems in text name their line and column, and text with a code fence inside is refused (line breaks are taken as one kind, so a lone carriage return cannot end the block either). `add_chart` writes the form chosen in the settings (text by default, an AI's own text as written); `update_chart` keeps the form of the block in the note and, given JSON for a text block, rewrites only the lines that changed; `get_example` returns text (`"format": "json"` for JSON); `list_charts` says which form each block has. **Paste the chart** in the AI tab takes text blocks too.
+- **Faster to load.** The release build is minified (900 KB instead of 1.5 MB, about 20 % quicker to load at phone speed), and the AI server's code loads only when it starts.
+
+### Fixed
+
+- A function named like a keyword (`line(x) = ...`, `size(x) = ...`) is read as a function.
+- 3D shading works with every theme's colours, whatever form the theme writes them in.
+
 ## [4.3.1] - 2026-10-19
 
 Clears the warnings of Obsidian's automated review of releases. Nothing changes in how the plugin looks or works.

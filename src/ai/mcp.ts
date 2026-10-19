@@ -10,6 +10,8 @@
  */
 import GUIDE from '../../docs/ai.md';
 import { Data, Report, blocksOf, check, examples, fenced, minimize, parseJson, tikzOf, withSliders } from './charttool';
+import { LINE_BREAK, TextProblem, isChartText, parseChartText } from '../text/parse';
+import { printChartText, writeChartText } from '../text/print';
 
 export const SERVER_NAME = 'easy-tikz';
 
@@ -18,8 +20,8 @@ export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 /** What the server tells an AI app when it connects (MCP `instructions`). */
 export const INSTRUCTIONS = [
-    'Easy TikZ draws charts in Obsidian notes from `easy-tikz` code blocks: one JSON object per chart (function plots, tangents, areas between curves, feasible regions and linear programs, level curves, 3D, live sliders).',
-    'Before your first chart, read the guide with get_guide (the sections "Rules that prevent most mistakes" and the field tables at least).',
+    'Easy TikZ draws charts in Obsidian notes from `easy-tikz` code blocks: a few lines of text per chart, one line per object, written the way the math reads (function plots, tangents, areas between curves, feasible regions and linear programs, level curves, 3D, live sliders).',
+    'Before your first chart, read the guide with get_guide (the sections "Rules that prevent most mistakes" and "The text syntax" at least).',
     'Then: start from get_example, run check_chart until it reports no problems and its computed values match the request, look at it with render_chart, and put it into the note with add_chart (it refuses charts with problems).',
     'Never write easy-tikz blocks into notes by hand while these tools are available. The plugin does not differentiate or integrate: slopes and areas in labels are formulas you work out.',
 ].join('\n');
@@ -46,6 +48,8 @@ export interface ChartHost {
     write(path: string, update: (old: string) => string): Promise<void>;
     /** The chart as a PNG (base64), drawn as the note would draw it; null when it cannot be drawn here. */
     renderPng?(chart: Data): Promise<string | null>;
+    /** How new blocks are written (the user's setting); text when left out. */
+    blockFormat?(): 'text' | 'json';
     /** Tell the user what an AI app changed. */
     notify(message: string, path: string): void;
 }
@@ -72,8 +76,8 @@ class ToolError extends Error {}
 const text = (t: string, isError = false): ToolResult => ({ content: [{ type: 'text', text: t }], ...(isError ? { isError } : {}) });
 
 const CHART_SCHEMA = {
-    type: 'object',
-    description: 'The chart: the JSON object of an easy-tikz block, starting with "v": 4 (see get_guide). A JSON string or a fenced block is accepted too.',
+    description: 'The chart: the text of an easy-tikz block, one line per object (see get_guide), or its JSON object. A fenced block is fine too.',
+    anyOf: [{ type: 'string' }, { type: 'object' }],
 };
 const SLIDERS_SCHEMA = {
     type: 'object',
@@ -85,17 +89,47 @@ const NOTE_SCHEMA = {
     description: 'The note: a vault path such as "Courses/Linear Programming.md", or a note name. Left out: the note open in Obsidian.',
 };
 
-/** The chart argument as an object: an object, a JSON string, or a fenced easy-tikz block. */
-function chartArg(value: unknown): Data {
-    if (value && typeof value === 'object' && !Array.isArray(value)) return value as Data;
+/** Problems of a chart's text, one line each with where they are. */
+function problemsText(problems: TextProblem[]): string {
+    const head = problems.length === 1 ? '1 problem in the text: fix it, then check again.' : `${problems.length} problems in the text: fix them, then check again.`;
+    return [head, ...problems.map((p) => `PROBLEM line ${p.line}, column ${p.column}: ${p.message}`)].join('\n');
+}
+
+/** A chart argument: its chart, and its text when it came as text (written into notes as given). */
+interface ChartInput {
+    data: Data;
+    text: string | null;
+}
+
+/** The chart argument: text lines, a JSON object or string, or a fenced easy-tikz block of either. */
+function chartArg(value: unknown): ChartInput {
+    if (value && typeof value === 'object' && !Array.isArray(value)) return { data: value as Data, text: null };
     if (typeof value === 'string') {
         const blocks = blocksOf(value);
         const source = blocks.length ? blocks[0].text : value;
-        const parsed = parseJson(source);
-        if (parsed.ok) return parsed.data;
-        throw new ToolError(`"chart" is not valid JSON: ${parsed.message}`);
+        if (!isChartText(source)) {
+            const parsed = parseJson(source);
+            if (parsed.ok) return { data: parsed.data, text: null };
+            throw new ToolError(`"chart" is not valid JSON: ${parsed.message}`);
+        }
+        if (!source.trim()) throw new ToolError('"chart" is empty: write one line per object, such as f(x) = x^2 (see get_guide).');
+        // Written into the note as given: one kind of line break, and no line that would end the code block.
+        const lines = source.split(LINE_BREAK);
+        const fence = lines.findIndex((l) => /^\s*(`{3,}|~{3,})/.test(l));
+        if (fence >= 0) throw new ToolError(`"chart" line ${fence + 1} starts with ${/~/.test(lines[fence]) ? '~~~' : '```'}: send the lines of one block, without fences inside it.`);
+        const normalized = lines.join('\n');
+        const parsed = parseChartText(normalized);
+        if (parsed.problems.length) throw new ToolError(problemsText(parsed.problems));
+        return { data: parsed.data, text: normalized.replace(/^(\s*\n)+/, '').replace(/\s+$/, '') };
     }
-    throw new ToolError('"chart" is required: the JSON object of an easy-tikz block (see get_guide).');
+    throw new ToolError('"chart" is required: the text of an easy-tikz block, one line per object (see get_guide).');
+}
+
+/** The block a chart gets in a note: text (as the AI wrote it, or printed) or JSON, as the user chose. */
+function blockFor(input: ChartInput, host: ChartHost): string {
+    const format = host.blockFormat ? host.blockFormat() : 'text';
+    if (format === 'json') return fenced(input.data);
+    return '```easy-tikz\n' + (input.text ?? printChartText(input.data)) + '\n```';
 }
 
 function slidersArg(value: unknown): Record<string, number> {
@@ -248,14 +282,23 @@ const TOOLS: ToolDef[] = [
     {
         name: 'get_example',
         title: 'Get an example chart',
-        description: 'One example chart as an easy-tikz block (default fields left out), to adapt.',
-        inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'An id from list_examples, such as "lp" or "tangent".' } }, required: ['id'] },
+        description: 'One example chart as an easy-tikz block in text (what the plugin fills in left out), to adapt. "format": "json" gives it as JSON.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: { type: 'string', description: 'An id from list_examples, such as "lp" or "tangent".' },
+                format: { type: 'string', enum: ['text', 'json'], description: 'Optional: "json" for a JSON block. Default "text".' },
+            },
+            required: ['id'],
+        },
         annotations: { readOnlyHint: true },
         async run(args) {
             const id = stringArg(args, 'id');
             const e = examples().find((x) => x.id === id);
             if (!e) throw new ToolError(`No example "${id ?? ''}". Ids: ${examples().map((x) => x.id).join(', ')}`);
-            return text(`${e.title}: ${e.about}\n\n${fenced(minimize(JSON.parse(JSON.stringify(e.data)) as Data))}`);
+            const data = JSON.parse(JSON.stringify(e.data)) as Data;
+            const block = stringArg(args, 'format') === 'json' ? fenced(minimize(data)) : '```easy-tikz\n' + printChartText(data) + '\n```';
+            return text(`${e.title}: ${e.about}\n\n${block}`);
         },
     },
     {
@@ -265,7 +308,7 @@ const TOOLS: ToolDef[] = [
         inputSchema: { type: 'object', properties: { chart: CHART_SCHEMA, sliders: SLIDERS_SCHEMA }, required: ['chart'] },
         annotations: { readOnlyHint: true },
         async run(args) {
-            return text(reportText(check(chartArg(args.chart), slidersArg(args.sliders))));
+            return text(reportText(check(chartArg(args.chart).data, slidersArg(args.sliders))));
         },
     },
     {
@@ -275,7 +318,7 @@ const TOOLS: ToolDef[] = [
         inputSchema: { type: 'object', properties: { chart: CHART_SCHEMA, sliders: SLIDERS_SCHEMA }, required: ['chart'] },
         annotations: { readOnlyHint: true },
         async run(args, host) {
-            const chart = withSliders(chartArg(args.chart), slidersArg(args.sliders));
+            const chart = withSliders(chartArg(args.chart).data, slidersArg(args.sliders));
             const r = check(chart);
             if (r.errors.some((e) => e.startsWith('too large'))) return text(`Not drawn: the chart is over the limits.\n\n${reportText(r)}`, true);
             if (!host.renderPng) return text(`Pictures are not available here.\n\n${reportText(r)}`, true);
@@ -303,14 +346,14 @@ const TOOLS: ToolDef[] = [
         },
         annotations: { destructiveHint: true, idempotentHint: false },
         async run(args, host) {
-            const chart = chartArg(args.chart);
-            const r = checked(chart);
+            const input = chartArg(args.chart);
+            const r = checked(input.data);
             const { path, exists } = notePath(host, stringArg(args, 'note'));
             writable(path);
             if (!exists && args.create !== true) {
                 throw new ToolError(`There is no note ${path}. Check the name (active_note shows the open note), or pass "create": true to make it.`);
             }
-            const block = fenced(chart);
+            const block = blockFor(input, host);
             let where = '';
             const replace = stringArg(args, 'replace');
             await host.write(path, (old) => {
@@ -325,7 +368,7 @@ const TOOLS: ToolDef[] = [
     {
         name: 'list_charts',
         title: 'List the charts in a note',
-        description: 'The easy-tikz charts in a note, numbered, each with its JSON and whether it has problems. Use it before update_chart.',
+        description: 'The easy-tikz charts in a note, numbered, each as the note writes it (text or JSON) and whether it has problems. Use it before update_chart.',
         inputSchema: { type: 'object', properties: { note: NOTE_SCHEMA } },
         annotations: { readOnlyHint: true },
         async run(args, host) {
@@ -335,8 +378,14 @@ const TOOLS: ToolDef[] = [
             if (!blocks.length) return text(`${path} has no easy-tikz charts.`);
             const out = [`${path}: ${blocks.length} chart${blocks.length > 1 ? 's' : ''}.`];
             blocks.forEach((b, i) => {
-                const parsed = parseJson(b.text);
-                const state = parsed.ok ? (check(parsed.data).errors.length ? 'has problems' : 'ok') : `not valid JSON: ${parsed.message}`;
+                let state: string;
+                if (isChartText(b.text)) {
+                    const parsed = parseChartText(b.text);
+                    state = parsed.problems.length || check(parsed.data).errors.length ? 'text, has problems' : 'text, ok';
+                } else {
+                    const parsed = parseJson(b.text);
+                    state = parsed.ok ? (check(parsed.data).errors.length ? 'JSON, has problems' : 'JSON, ok') : `not valid JSON: ${parsed.message}`;
+                }
                 out.push('', `Chart ${i + 1} (line ${b.line}, ${state}):`, b.text.trim());
             });
             return text(out.join('\n'));
@@ -345,7 +394,8 @@ const TOOLS: ToolDef[] = [
     {
         name: 'update_chart',
         title: 'Replace a chart in a note',
-        description: 'Check the chart and put it in place of chart number "index" (from list_charts) of the note. Refused while the check reports problems.',
+        description:
+            'Check the chart and put it in place of chart number "index" (from list_charts) of the note. Refused while the check reports problems. The block keeps its form: a text block takes text as given, and a JSON chart for a text block rewrites only the lines whose object changed.',
         inputSchema: {
             type: 'object',
             properties: { index: { type: 'integer', minimum: 1, description: 'Which chart of the note, counting from 1.' }, chart: CHART_SCHEMA, note: NOTE_SCHEMA },
@@ -353,7 +403,8 @@ const TOOLS: ToolDef[] = [
         },
         annotations: { destructiveHint: true, idempotentHint: true },
         async run(args, host) {
-            const chart = chartArg(args.chart);
+            const input = chartArg(args.chart);
+            const chart = input.data;
             const index = Number(args.index);
             const r = checked(chart);
             const { path, exists } = notePath(host, stringArg(args, 'note'));
@@ -367,8 +418,10 @@ const TOOLS: ToolDef[] = [
                 const b = blocks[index - 1];
                 if (!b.end) throw new ToolError(`Chart ${index} has no closing fence; fix the note first.`);
                 const lines = old.split('\n');
-                const json = fenced(chart).split('\n').slice(1, -1);
-                lines.splice(b.line, b.end - b.line - 1, ...json.map((l) => b.prefix + l));
+                let body: string[];
+                if (isChartText(b.text) && b.text.trim()) body = (input.text ?? writeChartText(b.text.replace(/\s+$/, ''), chart)).split('\n');
+                else body = fenced(chart).split('\n').slice(1, -1);
+                lines.splice(b.line, b.end - b.line - 1, ...body.map((l) => b.prefix + l));
                 return lines.join('\n');
             });
             host.notify(`An AI app changed chart ${index}`, path);
@@ -382,7 +435,7 @@ const TOOLS: ToolDef[] = [
         inputSchema: { type: 'object', properties: { chart: CHART_SCHEMA, standalone: { type: 'boolean', description: 'Default true: a complete document.' } }, required: ['chart'] },
         annotations: { readOnlyHint: true },
         async run(args) {
-            return text(tikzOf(chartArg(args.chart), args.standalone !== false));
+            return text(tikzOf(chartArg(args.chart).data, args.standalone !== false));
         },
     },
     {

@@ -22,10 +22,11 @@
  */
 import { GUIDES } from './guides';
 import { defaultFunction, defaultTool, EXAMPLES } from './migrate';
+import { printChartText } from './text/print';
 import type { FunctionParameters, Parameter, RegionTool } from './types';
 
 /** Version of the popup's content. Raise it when the popup says something new. */
-export const WHATS_NEW_VERSION = '4.2.0';
+export const WHATS_NEW_VERSION = '4.4.0';
 
 /**
  * Compare two version strings numerically, part by part ('4.10.0' > '4.9.1',
@@ -121,7 +122,31 @@ export interface WhatsNewItem {
 }
 
 export const WHATS_NEW_TITLE = 'Easy TikZ 4';
-export const WHATS_NEW_SUBTITLE = 'Charts now move while you drag a slider, values calculate themselves, and shapes follow the mouse.';
+export const WHATS_NEW_SUBTITLE = 'Charts are now a few lines of text you can read in the note. They move when they change, and they work on your phone.';
+
+/** New in 4.4, at the top. */
+export const WHATS_NEW_44: WhatsNewItem[] = [
+    {
+        icon: 'type',
+        title: 'Charts as text',
+        text: 'One line per object, the way the math reads: `f(x) = x^2 | blue`. Saving from the editor keeps your other lines and comments.',
+    },
+    {
+        icon: 'sparkles',
+        title: 'Charts that move',
+        text: 'Change a number in the note and the chart glides to it; new objects pop in.',
+    },
+    {
+        icon: 'smartphone',
+        title: 'On phones and tablets',
+        text: 'Charts draw in your notes on iOS and Android, and the editor works there too.',
+    },
+    {
+        icon: 'palette',
+        title: "Your theme's colours",
+        text: 'Charts take the colours of your theme and follow light and dark mode. The settings can pin the colours of the LaTeX export.',
+    },
+];
 
 /** Next to the live chart: sliders and the values computed from them. */
 export const WHATS_NEW_LIVE: WhatsNewItem[] = [
@@ -180,28 +205,21 @@ export const WHATS_NEW_MORE: WhatsNewItem[] = [
     },
 ];
 
-/**
- * How the live chart is made, line by line: [what you type, where it goes].
- * Each is a field of the chart returned by whatsNewChart (the test checks).
- */
-export const WHATS_NEW_RECIPE: ReadonlyArray<readonly [string, string]> = [
-    ['x^3 - 3x', 'f1: the curve, with its tangent at a'],
-    ['f1(a) + (3a^2 - 3)(x - a)', 'f2 (hidden): the same tangent'],
-    ['min(f1, f2) <= y <= max(f1, f2)', 'R1: between curve and tangent'],
-    ['min(a, -2a) <= x <= max(a, -2a)', 'R1: up to where they cross'],
-    ['A = {27a^4/4:2}', 'R1 label: the area'],
-    ['slope at x = {a}: {3a^2 - 3:2}', 'title: the slope'],
-];
+/** The live chart as its block writes it: what you type, line by line (src/text). */
+export function whatsNewText(): string {
+    return printChartText(whatsNewChart());
+}
 
-/** New in 4.3, above the rest: AI makes charts. Its button opens the editor's AI tab. */
+/** New in 4.3: AI makes charts. Its button opens the editor's AI tab. */
 export const WHATS_NEW_AI: WhatsNewItem = {
     icon: 'bot',
-    title: 'New: let AI make your charts',
+    title: 'Let AI make your charts',
     text: 'Claude Code, Codex, Cursor and other AI apps check charts and add them to your notes. ChatGPT gets a guide to paste.',
 };
 
 /** Every icon the popup uses (its items, buttons and the Help tab link). */
 export const WHATS_NEW_ICONS: readonly string[] = [
+    ...WHATS_NEW_44.map((i) => i.icon),
     ...WHATS_NEW_LIVE.map((i) => i.icon),
     WHATS_NEW_AI.icon,
     ...WHATS_NEW_MORE.map((i) => i.icon),

@@ -1,8 +1,42 @@
 /*
- * Reading an easy-tikz block the way people and AI assistants write them.
- * The editor always writes plain JSON with "v": 4; blocks typed by hand or
- * pasted from an AI chat often carry comments, trailing commas, or no "v".
+ * Reading an easy-tikz block the way people and AI assistants write them:
+ * as text, one line per object (src/text/parse.ts), or as a JSON object.
+ * JSON typed by hand or pasted from an AI chat often carries comments,
+ * trailing commas, or no "v".
  */
+import { TextProblem, isChartText, parseChartText } from './text/parse';
+
+export type BlockFormat = 'text' | 'json';
+
+/** A block's chart, how the block writes it, and (for text) the problems with their line and column. */
+export interface BlockChart {
+    data: Record<string, unknown>;
+    format: BlockFormat;
+    problems: TextProblem[];
+}
+
+/** The chart of a block body, or a message saying why there is none. */
+export function readBlock(body: string): BlockChart | string {
+    if (isChartText(body)) {
+        const lines = body.split(/\r?\n/).map((l) => l.trim());
+        if (!lines.some((l) => l && !l.startsWith('%') && !l.startsWith('//'))) {
+            return 'the block is empty. Write one line per object, such as f(x) = x^2';
+        }
+        const parsed = parseChartText(body);
+        return { data: parsed.data, format: 'text', problems: parsed.problems };
+    }
+    let parsed: unknown;
+    try {
+        // Comments and trailing commas (blocks typed by hand or pasted from an AI chat) are fine.
+        parsed = parseLenientJson(body);
+    } catch (e) {
+        return e instanceof Error ? e.message : 'invalid JSON';
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return 'the block must contain a JSON object';
+    const data = parsed as Record<string, unknown>;
+    // No "v" and nothing of a 3.x save: a version 4 chart someone wrote by hand.
+    return { data: impliedV4(data) ? { v: 4, ...data } : data, format: 'json', problems: [] };
+}
 
 const V4_TOOL_TYPES = new Set(['region', 'curve', 'points', 'segment', 'plane3D']);
 

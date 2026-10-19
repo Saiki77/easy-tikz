@@ -180,6 +180,42 @@
     display: none;
 }
 
+/* --- Chart colours (src/colors.ts) --- */
+
+/* By default the theme's own colours: charts look native, and light and
+   dark switch without a redraw. The setting "Chart colours" pins the colours
+   of the LaTeX export (body.etz-export-colours). A CSS snippet can set any of
+   these variables. */
+body {
+    --etz-gray: var(--text-muted);
+    --etz-red: var(--color-red);
+    --etz-orange: var(--color-orange);
+    --etz-brown: #a0522d;
+    --etz-green: var(--color-green);
+    --etz-teal: var(--color-cyan);
+    --etz-blue: var(--color-blue);
+    --etz-purple: var(--color-purple);
+    --etz-magenta: var(--color-pink);
+}
+
+body.etz-export-colours {
+    --etz-gray: #7f8c8d;
+    --etz-red: #e74c3c;
+    --etz-orange: #e67e22;
+    --etz-brown: #a0522d;
+    --etz-green: #2ecc71;
+    --etz-teal: #1abc9c;
+    --etz-blue: #3498db;
+    --etz-purple: #9b59b6;
+    --etz-magenta: #d63384;
+}
+
+/* Turns any CSS colour into rgb() for 3D shading (resolveCssColor). */
+.etz-color-probe {
+    display: none;
+    color: var(--etz-probe);
+}
+
 /* --- Utility + support classes (replacing inline-style writes) --- */
 
 /* Generic hide toggle (tab panels, collapsed card bodies, inline messages).

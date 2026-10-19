@@ -16,7 +16,6 @@
  *     anything else and never in files with instructions for AI agents, and
  *     the plugin shows a notice for every write.
  */
-import * as nodeHttp from 'http';
 import GUIDE from '../../docs/ai.md';
 import { ChartHost, SERVER_NAME, callTool, handleMcp, toolList } from './mcp';
 
@@ -37,7 +36,9 @@ export type Gate = { ok: true } | { ok: false; status: number; message: string }
 
 /*
  * The parts of Node's http module this file uses, typed here so the file
- * reads the same with or without Node's type package installed.
+ * reads the same with or without Node's type package installed. The plugin
+ * loads the module on a computer only (phones and tablets have no Node) and
+ * hands it to AiServer.
  */
 interface HttpRequest {
     method?: string;
@@ -73,11 +74,9 @@ interface HttpServer {
     closeAllConnections?: () => void;
 }
 
-interface Http {
+export interface Http {
     createServer(options: { connectionsCheckingInterval: number }, handler: (req: HttpRequest, res: HttpResponse) => void): HttpServer;
 }
-
-const http = nodeHttp as unknown as Http;
 
 function header(head: RequestHead, name: string): string {
     const v = head.headers[name];
@@ -115,7 +114,8 @@ export class AiServer {
 
     constructor(
         private readonly host: ChartHost,
-        private readonly opts: { port: number; token: string }
+        private readonly opts: { port: number; token: string },
+        private readonly http: Http
     ) {}
 
     get port(): number {
@@ -125,7 +125,7 @@ export class AiServer {
     /** Start listening; rejects with a readable message when the port is taken. */
     start(): Promise<void> {
         // connectionsCheckingInterval (Node 18.4+) enforces the timeouts below every second.
-        const server = http.createServer({ connectionsCheckingInterval: 1000 }, (req, res) => void this.serve(req, res));
+        const server = this.http.createServer({ connectionsCheckingInterval: 1000 }, (req, res) => void this.serve(req, res));
         server.requestTimeout = 10000;
         server.headersTimeout = 5000;
         server.maxConnections = MAX_CONNECTIONS;

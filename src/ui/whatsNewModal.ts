@@ -22,7 +22,7 @@ import { SceneCache } from '../scene';
 import { SettingsManager } from '../settings';
 import { Parameter } from '../types';
 import { cloneData, errorText, fitPixelScale } from '../util';
-import { WHATS_NEW_AI, WHATS_NEW_CHART_GUIDE, WHATS_NEW_LIVE, WHATS_NEW_MORE, WHATS_NEW_RECIPE, WHATS_NEW_SUBTITLE, WHATS_NEW_TITLE, whatsNewChart, WhatsNewItem } from '../whatsnew';
+import { WHATS_NEW_44, WHATS_NEW_AI, WHATS_NEW_CHART_GUIDE, WHATS_NEW_LIVE, WHATS_NEW_MORE, WHATS_NEW_SUBTITLE, WHATS_NEW_TITLE, whatsNewChart, whatsNewText, WhatsNewItem } from '../whatsnew';
 import { IconButtonHandle, LiveSliderHandle, formatDecimals, iconButton, liveSlider, textButton, uniqueId, visuallyHidden } from './kit';
 
 /** What the buttons of the popup do; the caller decides (a new editor, or the editor the popup was opened from). */
@@ -73,6 +73,14 @@ export class WhatsNewModal extends Modal {
         titleEl.createSpan({ cls: 'etz-whatsnew-version', text: version });
         contentEl.createEl('p', { cls: 'etz-whatsnew-subtitle', text: WHATS_NEW_SUBTITLE });
 
+        // --- new in 4.4
+        const fresh = contentEl.createEl('section', { cls: 'etz-whatsnew-new' });
+        const freshHeading = fresh.createEl('h3', { cls: 'etz-whatsnew-h', text: 'New in 4.4' });
+        freshHeading.id = uniqueId('whatsnew-new');
+        fresh.setAttr('aria-labelledby', freshHeading.id);
+        const freshGrid = fresh.createDiv({ cls: ['etz-whatsnew-list', 'mod-grid'] });
+        for (const item of WHATS_NEW_44) this.item(freshGrid, item);
+
         // --- hero: the live chart, and what makes it move
         const hero = contentEl.createDiv({ cls: 'etz-whatsnew-hero' });
         const figure = hero.createEl('figure', { cls: 'etz-whatsnew-figure' });
@@ -99,15 +107,11 @@ export class WhatsNewModal extends Modal {
         const liveList = side.createDiv({ cls: ['etz-whatsnew-list', 'mod-live'] });
         for (const item of WHATS_NEW_LIVE) this.item(liveList, item);
 
-        // How the chart beside is made: six lines, all of them live.
+        // The chart beside, as its block writes it: these lines are the whole chart.
         const recipe = side.createDiv({ cls: 'etz-whatsnew-recipe' });
-        const recipeTitle = recipe.createDiv({ cls: 'etz-whatsnew-recipe-title', text: 'What the chart is made of' });
+        const recipeTitle = recipe.createDiv({ cls: 'etz-whatsnew-recipe-title', text: 'The chart, as you write it' });
         recipeTitle.id = uniqueId('whatsnew-recipe');
-        const rows = recipe.createEl('dl', { cls: 'etz-whatsnew-recipe-rows', attr: { 'aria-labelledby': recipeTitle.id } });
-        for (const [code, where] of WHATS_NEW_RECIPE) {
-            rows.createEl('dt').createEl('code', { text: code });
-            rows.createEl('dd', { text: where });
-        }
+        recipe.createEl('pre', { cls: 'etz-whatsnew-text', text: whatsNewText(), attr: { 'aria-labelledby': recipeTitle.id } });
 
         // --- new in 4.3: AI makes charts
         const ai = contentEl.createEl('section', { cls: 'etz-whatsnew-ai' });

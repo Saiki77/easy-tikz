@@ -1,4 +1,4 @@
-import { App, MarkdownPostProcessorContext, Notice, Plugin, PluginSettingTab, SettingDefinitionItem, TFile, normalizePath, setIcon } from 'obsidian';
+import { App, MarkdownPostProcessorContext, MarkdownRenderChild, Notice, Platform, Plugin, PluginSettingTab, SettingDefinitionItem, SettingGroupItem, TFile, normalizePath, setIcon } from 'obsidian';
 import { TikzModal } from './src/modal';
 import { SettingsManager } from './src/settings';
 import { SVGRenderer } from './src/renderer';
@@ -15,11 +15,14 @@ import { cloneData, errorText, fitPixelScale } from './src/util';
 import { IconButtonHandle, LiveSliderHandle, iconButton, liveSlider, textButton, uniqueId, visuallyHidden } from './src/ui/kit';
 import { WhatsNewActions, WhatsNewModal } from './src/ui/whatsNewModal';
 import { WHATS_NEW_VERSION, chartScanRank, hasEasyTikzBlock, needsVaultCheck, shouldShowWhatsNew, whatsNewSeen } from './src/whatsnew';
-import { AiServer } from './src/ai/server';
+import { AiServer, Http } from './src/ai/server';
 import { VaultChartHost } from './src/ai/vaultHost';
 import { AI_APPS, agentsSection, mcpUrl, mergeAgentsSection, newToken, shownSnippet } from './src/ai/connect';
 import AI_GUIDE from './docs/ai.md';
-import { impliedV4, parseLenientJson } from './src/blockjson';
+import { BlockFormat, readBlock } from './src/blockjson';
+import { TextProblem } from './src/text/parse';
+import { printChartText, writeChartText } from './src/text/print';
+import { GLIDE_MS, PopIn, drawnNames, ease, glides, mixCharts, reducedMotion } from './src/motion';
 
 type FenceTag = 'easy-tikz' | 'tikz';
 type Align = 'left' | 'center' | 'right';
@@ -68,6 +71,81 @@ function sessionSet(key: string, state: SessionState | null) {
     }
 }
 
+// ---------------------------------------------------------------- motion
+
+/**
+ * How long a chart's last picture waits for its block to come back: Live
+ * Preview shows the source while the cursor is in the block and draws the
+ * chart again when it leaves.
+ */
+const MOTION_MEMORY_MS = 10 * 60 * 1000;
+
+/**
+ * A chart's last picture, so the block's next drawing can move from it
+ * (src/motion.ts). It holds data only: the chart itself is let go when its
+ * block leaves the page.
+ */
+interface ChartMemory {
+    /** The chart while it is on the page; null once its block was removed. */
+    chart: InlineChart | null;
+    /** The chart as text lines (JSON blocks printed as text), to find the same block again. */
+    lines: string;
+    state: Record<string, unknown>;
+    names: Set<string>;
+    at: number;
+}
+
+/** Most pictures kept per note. */
+const MEMORY_PER_NOTE = 40;
+
+/** Per note: the charts drawn lately. */
+const chartMemory = new Map<string, ChartMemory[]>();
+
+/** Charts in notes, so a theme change can redraw them (3D shading and mixed label inks use concrete colours). */
+const liveCharts = new Set<InlineChart>();
+
+/** Lines two block bodies share, as a share of the longer one (1: the same block). */
+function sharedLines(a: string, b: string): number {
+    const la = a.split('\n').map((l) => l.trim()).filter((l) => l);
+    const lb = new Set(b.split('\n').map((l) => l.trim()).filter((l) => l));
+    const n = Math.max(la.length, lb.size);
+    return n ? la.filter((l) => lb.has(l)).length / n : 0;
+}
+
+/** A picture whose block has left the page. */
+const gone = (m: ChartMemory) => !m.chart || !m.chart.onPage();
+
+/** Drop the pictures that are too old, and the oldest beyond MEMORY_PER_NOTE. */
+function pruneMemory(sourcePath: string) {
+    const now = Date.now();
+    const kept = (chartMemory.get(sourcePath) ?? []).filter((m) => !gone(m) || now - m.at < MOTION_MEMORY_MS);
+    const away = kept.filter(gone).sort((a, b) => b.at - a.at).slice(MEMORY_PER_NOTE);
+    const list = kept.filter((m) => !away.includes(m));
+    if (list.length) chartMemory.set(sourcePath, list);
+    else chartMemory.delete(sourcePath);
+}
+
+/**
+ * The picture a chart that just appeared comes from: a chart of the same
+ * note that has left the page, most like it. It is used up.
+ */
+function takePredecessor(sourcePath: string, chart: InlineChart, lines: string): ChartMemory | null {
+    pruneMemory(sourcePath);
+    const list = chartMemory.get(sourcePath) ?? [];
+    let best: ChartMemory | null = null;
+    let score = 0.34;
+    for (const m of list) {
+        if (m.chart === chart || !gone(m)) continue;
+        const s = sharedLines(m.lines, lines);
+        if (s >= score) {
+            best = m;
+            score = s;
+        }
+    }
+    if (best) chartMemory.set(sourcePath, list.filter((m) => m !== best));
+    return best;
+}
+
 /** FNV-1a over the UTF-16 code units, plus the length: a cheap, stable fingerprint. */
 function hashText(text: string): string {
     let h = 0x811c9dc5;
@@ -90,21 +168,6 @@ function sourceKey(sourcePath: string, data: Record<string, unknown>): string {
     return sourcePath + '\n' + hashText(JSON.stringify(chart));
 }
 
-/** The block's JSON object, or a message saying why it is not one. */
-function parseBlock(text: string): Record<string, unknown> | string {
-    let parsed: unknown;
-    try {
-        // Comments and trailing commas (blocks typed by hand or pasted from an AI chat) are fine.
-        parsed = parseLenientJson(text);
-    } catch (e) {
-        return e instanceof Error ? e.message : 'invalid JSON';
-    }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return 'the block must contain a JSON object';
-    const data = parsed as Record<string, unknown>;
-    // No "v" and nothing of a 3.x save: a version 4 chart someone wrote by hand.
-    return impliedV4(data) ? { v: 4, ...data } : data;
-}
-
 /** The fenced block exactly as the note stores it (trailing whitespace of the body dropped). */
 function blockText(fenceTag: FenceTag, body: string): string {
     return '```' + fenceTag + '\n' + body.replace(/\s+$/, '') + '\n```';
@@ -114,6 +177,13 @@ function isDraft(value: unknown): value is ChartDraft {
     if (!value || typeof value !== 'object') return false;
     const draft = value as Partial<ChartDraft>;
     return typeof draft.savedAt === 'number' && Number.isFinite(draft.savedAt) && !!draft.data && typeof draft.data === 'object';
+}
+
+/** Node's http module for the AI server, on a computer only: phones and tablets have no Node. */
+async function loadHttp(): Promise<Http | null> {
+    if (!Platform.isDesktop) return null;
+    const http: unknown = await import('http');
+    return http as Http;
 }
 
 function showBlockError(el: HTMLElement, message: string) {
@@ -179,6 +249,22 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         });
 
         this.addSettingTab(new EasyTikzSettingTab(this.app, this));
+
+        // Chart colours: the theme's or the export's (styles.css), in the main window and every popout.
+        this.applyChartColours(activeDocument);
+        this.registerEvent(this.app.workspace.on('window-open', (_w, win) => this.applyChartColours(win.document)));
+        this.register(() => {
+            for (const doc of this.colourDocs) doc.body.removeClass('etz-export-colours');
+        });
+        // A theme change: 2D charts follow by themselves; redraw for what holds concrete colours.
+        this.registerEvent(
+            this.app.workspace.on('css-change', () => {
+                for (const chart of liveCharts) {
+                    if (chart.onPage()) chart.redraw();
+                    else liveCharts.delete(chart);
+                }
+            })
+        );
 
         this.register(() => {
             this.unloaded = true;
@@ -306,6 +392,14 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         }
     }
 
+    /** Documents (main window, popouts) that carry the chart colour class. */
+    private colourDocs = new Set<Document>();
+
+    applyChartColours(doc?: Document) {
+        if (doc) this.colourDocs.add(doc);
+        for (const d of this.colourDocs) d.body.toggleClass('etz-export-colours', this.data.chartColours === 'export');
+    }
+
     /** The running AI server, or null. */
     aiServer: AiServer | null = null;
     /** Why the AI server is not running although it is switched on (shown in the settings), or ''. */
@@ -335,7 +429,12 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
                 changed = true;
             }
             if (changed) await this.saveSettings();
-            const server = new AiServer(new VaultChartHost(this.app, this.manifest.version), { port: this.data.aiPort, token: this.data.aiToken });
+            const http = await loadHttp();
+            if (!http) {
+                this.aiStatus = 'AI apps connect to Obsidian on a computer; phones and tablets have no AI server.';
+                return;
+            }
+            const server = new AiServer(new VaultChartHost(this.app, this.manifest.version, () => this.data.blockFormat), { port: this.data.aiPort, token: this.data.aiToken }, http);
             try {
                 await server.start();
             } catch (e) {
@@ -435,12 +534,18 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             );
             return;
         }
-        const data = parseBlock(trimmed);
-        if (typeof data === 'string') {
-            showBlockError(el, 'Easy TikZ render error: ' + data);
+        // Untrimmed: problems of a text block name the lines as the note shows them.
+        const block = readBlock(fromTikzTag ? trimmed : source);
+        if (typeof block === 'string') {
+            showBlockError(el, 'Easy TikZ render error: ' + block);
             return;
         }
-        new InlineChart(this, el, ctx.sourcePath, source, data, fromTikzTag ? 'tikz' : 'easy-tikz').mount();
+        const chart = new InlineChart(this, el, ctx.sourcePath, source, block.data, fromTikzTag ? 'tikz' : 'easy-tikz', block.format, block.problems);
+        chart.mount();
+        // When Obsidian removes the block (re-render, Live Preview, closing the note), the chart lets go of its picture.
+        const child = new MarkdownRenderChild(el);
+        child.register(() => chart.unload());
+        ctx.addChild(child);
     }
 
     /**
@@ -449,7 +554,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
      * (more robust than line numbers when other parts of the file were
      * edited meanwhile).
      */
-    openBlockEditor(sourcePath: string, source: string, data: Record<string, unknown>, fenceTag: FenceTag) {
+    openBlockEditor(sourcePath: string, source: string, data: Record<string, unknown>, fenceTag: FenceTag, format: BlockFormat) {
         const file = this.app.vault.getAbstractFileByPath(sourcePath);
         new TikzModal(this.app, this, {
             // A copy: the editor must never change the object the note's display patches start from.
@@ -457,6 +562,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             sourceFile: file instanceof TFile ? file : null,
             originalBlockText: blockText(fenceTag, source),
             fenceTag,
+            blockFormat: format,
         }).open();
     }
 
@@ -483,9 +589,13 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         const file = this.app.vault.getAbstractFileByPath(sourcePath);
         if (!(file instanceof TFile)) return notFound();
         // Re-parse the source so the patch starts from exactly what the note holds.
-        const data = parseBlock(source.trim());
-        if (typeof data === 'string') return notFound();
-        const body = JSON.stringify({ ...data, ...patch }, null, 2);
+        const block = readBlock(source);
+        if (typeof block === 'string') return notFound();
+        // A text block keeps its lines: only the display line changes or is added.
+        const body =
+            block.format === 'text'
+                ? writeChartText(source.replace(/\s+$/, ''), { ...block.data, ...patch })
+                : JSON.stringify({ ...block.data, ...patch }, null, 2);
         const original = blockText(fenceTag, source);
         const updated = blockText(fenceTag, body);
         let found = false;
@@ -528,6 +638,9 @@ class InlineChart {
     private source: string;
     private readonly data: Record<string, unknown>;
     private readonly fenceTag: FenceTag;
+    private readonly format: BlockFormat;
+    /** Problems of a text block, with their line and column; shown before the chart's own. */
+    private readonly textProblems: SceneIssue[];
     private readonly key: string;
 
     private manager!: SettingsManager;
@@ -559,13 +672,30 @@ class InlineChart {
     /** Redraws in a row that a new `$...$` label asked for (see render2D). */
     private mathRedraws = 0;
 
-    constructor(plugin: EasyTikzPlugin, el: HTMLElement, sourcePath: string, source: string, data: Record<string, unknown>, fenceTag: FenceTag) {
+    /** Objects new to the picture pop in; null until the first drawing. */
+    private popIn: PopIn | null = null;
+    private glideRaf: number | null = null;
+    /** This chart's entry in chartMemory. */
+    private memory: ChartMemory | null = null;
+
+    constructor(
+        plugin: EasyTikzPlugin,
+        el: HTMLElement,
+        sourcePath: string,
+        source: string,
+        data: Record<string, unknown>,
+        fenceTag: FenceTag,
+        format: BlockFormat,
+        problems: TextProblem[]
+    ) {
         this.plugin = plugin;
         this.el = el;
         this.sourcePath = sourcePath;
         this.source = source;
         this.data = data;
         this.fenceTag = fenceTag;
+        this.format = format;
+        this.textProblems = problems.map((p) => ({ source: `Line ${p.line}, column ${p.column}`, message: p.message, severity: 'error' }));
         this.key = sourceKey(sourcePath, data);
     }
 
@@ -611,6 +741,14 @@ class InlineChart {
         this.buildHoverControls();
         this.buildStrip();
 
+        liveCharts.add(this);
+        // What is there at first sight never pops in; a block that comes back moves from its last picture.
+        this.popIn = new PopIn(drawnNames(this.chartEl));
+        if (this.plugin.data.animateCharts !== false) {
+            this.remember();
+            window.requestAnimationFrame(() => this.moveFromBefore());
+        }
+
         this.box.addEventListener('click', () => this.openEditor());
         this.box.addEventListener('keydown', (e: KeyboardEvent) => {
             // Only the focused box itself opens the editor, never keys meant for a control.
@@ -623,7 +761,7 @@ class InlineChart {
     }
 
     private openEditor() {
-        this.plugin.openBlockEditor(this.sourcePath, this.source, this.data, this.fenceTag);
+        this.plugin.openBlockEditor(this.sourcePath, this.source, this.data, this.fenceTag, this.format);
     }
 
     // ------------------------------------------------------------ rendering
@@ -653,16 +791,129 @@ class InlineChart {
             if (!this.chartEl) throw e;
             issues = [{ source: 'chart', message: `Preview failed: ${errorText(e)}`, severity: 'error' }];
         }
-        if (quality === 'full') this.showIssues(issues);
+        this.popIn?.apply(this.chartEl, this.animated());
+        if (quality === 'full') {
+            this.showIssues(issues);
+            if (this.memory) this.remember();
+        }
     }
 
-    private render2D(config: RendererConfig, math: MathContext, quality: 'draft' | 'full'): SceneIssue[] {
+    // --------------------------------------------------------------- motion
+
+    onPage(): boolean {
+        return !!this.wrapper && this.wrapper.isConnected;
+    }
+
+    /** Draw again as it is (the theme changed). */
+    redraw() {
+        this.stopGlide();
+        this.render('full');
+    }
+
+    private animated(): boolean {
+        return this.plugin.data.animateCharts !== false && !reducedMotion();
+    }
+
+    /** The chart as drawn now: the block's chart with the slider values shown. */
+    private state(): Record<string, unknown> {
+        return { ...this.manager.serialize(), parameters: this.params.map((p) => ({ ...p })) };
+    }
+
+    /** The block as text lines: a text block as written, a JSON block printed (its boilerplate would make any two look alike). */
+    private lines(): string {
+        if (this.format === 'text') return this.source;
+        try {
+            return printChartText(this.data);
+        } catch {
+            return this.source;
+        }
+    }
+
+    /** Keep this chart's last picture for the block's next drawing. */
+    private remember() {
+        const entry: ChartMemory = { chart: this, lines: this.memory ? this.memory.lines : this.lines(), state: this.state(), names: drawnNames(this.chartEl), at: Date.now() };
+        if (this.memory) Object.assign(this.memory, entry);
+        else {
+            this.memory = entry;
+            const list = chartMemory.get(this.sourcePath) ?? [];
+            list.push(entry);
+            chartMemory.set(this.sourcePath, list);
+        }
+    }
+
+    /** The block left the page: stop drawing, and keep only the picture's data for the block's next drawing. */
+    unload() {
+        this.stopGlide();
+        this.cancelFrames();
+        liveCharts.delete(this);
+        if (this.memory) {
+            this.memory.chart = null;
+            this.memory.at = Date.now();
+        }
+        this.renderer3d = null;
+        this.chartEl = null;
+    }
+
+    /** The block was drawn before and has come back: glide from that picture; what is new pops in. */
+    private moveFromBefore() {
+        if (!this.onPage() || !this.animated()) return;
+        const before = takePredecessor(this.sourcePath, this, this.memory ? this.memory.lines : this.lines());
+        if (!before) return;
+        this.popIn = new PopIn(before.names);
+        const to = this.state();
+        if (glides(before.state, to)) this.glide(before.state, to);
+        else this.popIn.apply(this.chartEl);
+    }
+
+    private glide(from: Record<string, unknown>, to: Record<string, unknown>) {
+        this.stopGlide();
+        const start = performance.now();
+        // Glide frames have their own cache, so the chart's stays as the block draws it.
+        const cache = new SceneCache();
+        const frame = () => {
+            this.glideRaf = null;
+            if (!this.onPage()) return;
+            const k = (performance.now() - start) / GLIDE_MS;
+            if (k >= 1) {
+                this.render('full');
+                return;
+            }
+            this.drawState(mixCharts(from, to, ease(k)), cache);
+            this.glideRaf = window.requestAnimationFrame(frame);
+        };
+        frame();
+    }
+
+    private stopGlide() {
+        if (this.glideRaf !== null) window.cancelAnimationFrame(this.glideRaf);
+        this.glideRaf = null;
+    }
+
+    /** One frame of a glide: the chart `state` stands for, in draft quality. */
+    private drawState(state: Record<string, unknown>, cache: SceneCache) {
+        try {
+            const manager = SettingsManager.fromJSON(cloneData(state));
+            const math = manager.createMathContext({ memo: false });
+            const params = normalizeParameters(manager.getValue('parameters'));
+            math.setParams(params);
+            const config = manager.toRendererConfig(math);
+            config.parameters = params;
+            this.applySize(config);
+            if (config.is3D) this.render3D(config, math, 'draft');
+            else this.render2D(config, math, 'draft', cache);
+        } catch {
+            // A frame that cannot be drawn is skipped; the last one stays.
+        }
+        this.popIn?.apply(this.chartEl, this.animated());
+    }
+
+    private render2D(config: RendererConfig, math: MathContext, quality: 'draft' | 'full', cache: SceneCache = this.cache): SceneIssue[] {
         // Grid cells in on-screen px: measured on full renders only, never per drag frame.
         if ((quality === 'full' || !this.boxSize.w) && this.box.isConnected) {
             this.boxSize = { w: this.box.clientWidth, h: this.box.clientHeight };
         }
         const pixelScale = fitPixelScale(this.boxSize.w, this.boxSize.h, config.width, config.height);
-        const renderer = new SVGRenderer(config, { math, cache: this.cache, quality, pixelScale });
+        const renderer = new SVGRenderer(config, { math, cache, quality, pixelScale });
         const svg = renderer.render();
         svg.addClass('etz-inline-svg');
         this.placeChart(svg);
@@ -735,7 +986,8 @@ class InlineChart {
      * full list in the tooltip). Info notes (unbounded optimum, empty
      * region) show without a count when there is no error.
      */
-    private showIssues(issues: SceneIssue[]) {
+    private showIssues(chartIssues: SceneIssue[]) {
+        const issues = this.textProblems.concat(chartIssues);
         const errors = issues.filter((i) => i.severity === 'error');
         const ordered = errors.concat(issues.filter((i) => i.severity !== 'error'));
         this.issuesEl.toggleClass('tikz-hidden', ordered.length === 0);
@@ -837,6 +1089,7 @@ class InlineChart {
     }
 
     private setParam(index: number, value: number) {
+        this.stopGlide();
         this.params[index] = { ...this.params[index], value };
         this.storeSession();
         this.updateReset();
@@ -964,6 +1217,27 @@ class EasyTikzSettingTab extends PluginSettingTab {
     getSettingDefinitions(): SettingDefinitionItem[] {
         return [
             {
+                name: 'Write new charts as',
+                desc:
+                    'Text (default): one line per object, the way the math reads, such as f(x) = x^2 | blue. ' +
+                    'JSON: one object with every setting. A chart you edit keeps the format its block has.',
+                control: { type: 'dropdown', key: 'blockFormat', options: { text: 'Text', json: 'JSON' }, defaultValue: 'text' },
+            },
+            {
+                name: 'Chart colours',
+                desc:
+                    'From your theme (default): charts use the colours of your Obsidian theme and follow light and dark mode. ' +
+                    'As in the LaTeX export: the fixed colours of the exported figure, so the note and the PDF look the same.',
+                control: { type: 'dropdown', key: 'chartColours', options: { theme: 'From your theme', export: 'As in the LaTeX export' }, defaultValue: 'theme' },
+            },
+            {
+                name: 'Animate chart changes',
+                desc:
+                    'On by default. When a block in a note changes, numbers glide to their new values and new objects pop in. ' +
+                    'Charts never move when your system asks for reduced motion.',
+                control: { type: 'toggle', key: 'animateCharts', defaultValue: true },
+            },
+            {
                 name: 'Invert vertical drag in 3D',
                 desc:
                     'Off (default): drag down tilts the scene up (camera elevation rises), drag up tilts the scene down - the trackball convention. ' +
@@ -1005,6 +1279,9 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 type: 'group',
                 heading: 'AI access',
                 items: [
+                    // Phones and tablets have no AI server (no Node): only the guide and the agents' section.
+                    ...(Platform.isDesktop
+                        ? ([
                     {
                         name: 'Let AI apps make charts',
                         desc:
@@ -1083,6 +1360,8 @@ class EasyTikzSettingTab extends PluginSettingTab {
                             refresh();
                         },
                     },
+                          ] as SettingGroupItem[])
+                        : []),
                     {
                         name: 'Tell AI agents in this vault',
                         desc: 'Adds a short Easy TikZ section to AGENTS.md and CLAUDE.md at the top of the vault (creating them if needed). Agents such as Claude Code, Codex, Cursor or Copilot read these files and then know how to make charts here, with or without the server.',
@@ -1117,6 +1396,16 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 break;
             case 'showWhatsNew':
                 this.plugin.data.showWhatsNew = Boolean(value);
+                break;
+            case 'blockFormat':
+                this.plugin.data.blockFormat = value === 'json' ? 'json' : 'text';
+                break;
+            case 'animateCharts':
+                this.plugin.data.animateCharts = Boolean(value);
+                break;
+            case 'chartColours':
+                this.plugin.data.chartColours = value === 'export' ? 'export' : 'theme';
+                this.plugin.applyChartColours();
                 break;
             case 'maxSamples3D':
                 this.plugin.data.maxSamples3D = Number(value);

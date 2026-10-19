@@ -12,6 +12,10 @@ import { SceneCache, SceneIssue } from './scene';
 import { View } from './geometry';
 import { EXAMPLES, defaultParameter } from './migrate';
 import type { ChartDraft } from './templates';
+import type { BlockFormat } from './blockjson';
+import { isChartText } from './text/parse';
+import { printChartText, writeChartText } from './text/print';
+import { PopIn, drawnNames, reducedMotion } from './motion';
 import { FieldHandle, PanelHost, PluginHost } from './ui/host';
 import type {
     Chip,
@@ -88,6 +92,15 @@ export interface TikzModalInitialState {
     originalBlockText?: string;
     /** Either 'easy-tikz' (default emit) or 'tikz' (when re-rendering an existing tikz-tagged block). */
     fenceTag?: 'easy-tikz' | 'tikz';
+    /** How the block writes the chart; Save keeps it. */
+    blockFormat?: BlockFormat;
+}
+
+/** The body of a fenced block as originalBlockText holds it. */
+function blockBody(block: string): string {
+    const start = block.indexOf('\n') + 1;
+    const end = block.lastIndexOf('\n```');
+    return end >= start ? block.slice(start, end) : '';
 }
 
 type TabId = 'build' | 'chart' | 'code' | 'help' | 'ai';
@@ -373,6 +386,10 @@ export class TikzModal extends Modal implements PanelHost {
     private sourceFile: TFile | null = null;
     private originalBlockText: string | null = null;
     private fenceTag: 'easy-tikz' | 'tikz' = 'easy-tikz';
+    /** Format of the block being edited; null for a new chart (the setting decides). */
+    private blockFormat: BlockFormat | null = null;
+    /** New objects in the preview pop in (+ Add, an example); what the editor opened with does not. */
+    private popIn: PopIn | null = null;
     private readonly openedFromBlock: boolean;
 
     /** Shared by validation, renderers and export; null = rebuild on next use (memoized by structure). */
@@ -536,6 +553,8 @@ export class TikzModal extends Modal implements PanelHost {
             this.sourceFile = initialState.sourceFile ?? null;
             this.originalBlockText = initialState.originalBlockText ?? null;
             this.fenceTag = initialState.fenceTag ?? 'easy-tikz';
+            const original = this.originalBlockText;
+            this.blockFormat = initialState.blockFormat ?? (original ? (isChartText(blockBody(original)) ? 'text' : 'json') : null);
         } else {
             // fromJSON runs the v4 migration, so new charts get the v4 defaults too.
             this.settings = SettingsManager.fromJSON({});
@@ -1347,6 +1366,8 @@ export class TikzModal extends Modal implements PanelHost {
         else chart.appendChild(svg);
         this.chartSvg = svg;
         this.layout = renderer.layout;
+        if (!this.popIn) this.popIn = new PopIn(drawnNames(svg));
+        this.popIn.apply(svg, this.plugin?.data.animateCharts !== false && !reducedMotion());
         // A new `$...$` label is measured before MathJax has styled it: draw once more when it has.
         void renderer.mathSettled?.then((redraw) => {
             if (!redraw) this.mathRedraws = 0;
@@ -3447,16 +3468,25 @@ export class TikzModal extends Modal implements PanelHost {
     }
 
     /**
-     * Emit the current settings as an `easy-tikz` JSON code block. If the
-     * modal was opened by clicking an existing rendered chart, replace
-     * that block in its source file; otherwise insert a new block at the
-     * active editor's cursor.
+     * Emit the current settings as an `easy-tikz` code block: text (one
+     * line per object) or JSON, as the block being edited is written, and
+     * for a new chart as the setting says. A text block keeps the lines of
+     * every object that did not change. If the modal was opened by
+     * clicking an existing rendered chart, replace that block in its
+     * source file; otherwise insert a new block at the active editor's
+     * cursor.
      */
     private async emitBlock() {
-        const json = JSON.stringify(this.settings.serialize(), null, 2);
-        const block = '```' + this.fenceTag + '\n' + json + '\n```';
-        const file = this.sourceFile;
+        const data = this.settings.serialize();
         const original = this.originalBlockText;
+        const oldBody = original ? blockBody(original) : null;
+        // Plain `tikz` blocks render JSON only.
+        const format = this.fenceTag === 'tikz' ? 'json' : (this.blockFormat ?? this.plugin?.data.blockFormat ?? 'text');
+        let body: string;
+        if (format === 'json') body = JSON.stringify(data, null, 2);
+        else body = oldBody !== null && oldBody.trim() && isChartText(oldBody) ? writeChartText(oldBody, data) : printChartText(data);
+        const block = '```' + this.fenceTag + '\n' + body + '\n```';
+        const file = this.sourceFile;
         if (file && original) {
             let found = false;
             try {
@@ -3588,6 +3618,7 @@ export class TikzModal extends Modal implements PanelHost {
                     this.sourceFile = file;
                     this.originalBlockText = draft.originalBlockText;
                     this.fenceTag = draft.originalBlockText.startsWith('```tikz\n') ? 'tikz' : 'easy-tikz';
+                    this.blockFormat = isChartText(blockBody(draft.originalBlockText)) ? 'text' : 'json';
                     this.syncCta();
                 }
             }

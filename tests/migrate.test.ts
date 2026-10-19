@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { test, assert, near } from './_lib';
 import {
     EXAMPLES,
@@ -1439,8 +1441,14 @@ test('palette: preview colours, labels and TikZ definitions agree', () => {
     assert.equal(COLOR_OPTIONS.black, 'Auto (text colour, exports black)');
     assert.deepEqual(TIKZ_COLOR_DEFS.black, { name: 'black', hex: '000000' });
     assert.deepEqual(TIKZ_COLOR_DEFS.red, { name: 'etRed', hex: 'E74C3C' });
+    // Preview colours are variables (the theme's colours by default) whose fallback is the export colour,
+    // and the setting "As in the LaTeX export" (body.etz-export-colours in styles.css) sets exactly those.
+    const css = fs.readFileSync(path.join(process.cwd(), 'src', 'styles.css'), 'utf8');
+    const exportBlock = /body\.etz-export-colours\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
     for (const key of keys.slice(1)) {
-        assert.equal(`#${TIKZ_COLOR_DEFS[key].hex.toLowerCase()}`, COLOR_MAP[key], key);
+        const hex = `#${TIKZ_COLOR_DEFS[key].hex.toLowerCase()}`;
+        assert.equal(COLOR_MAP[key], `var(--etz-${key}, ${hex})`, key);
+        assert.match(exportBlock, new RegExp(`--etz-${key}:\\s*${hex};`), `export colour of ${key}`);
         assert.match(TIKZ_COLOR_DEFS[key].name, /^et[A-Z][a-z]+$/);
     }
     assert.equal(mixHex('#000000', '#ffffff', 0.5), '#808080');

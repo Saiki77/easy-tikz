@@ -6,6 +6,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test, assert, near } from './_lib';
+import { parseChartText } from '../src/text/parse';
+import { canonical } from '../src/chartdata';
 import { GUIDES, guideById } from '../src/guides';
 import { issueText } from '../src/issues';
 import { LABEL_LOCALS } from '../src/mathcontext';
@@ -17,11 +19,11 @@ import { marchingGrid } from '../src/util';
 import {
     AREA_FORMULA,
     WHATS_NEW_CHART_GUIDE,
+    WHATS_NEW_44,
     WHATS_NEW_AI,
     WHATS_NEW_ICONS,
     WHATS_NEW_LIVE,
     WHATS_NEW_MORE,
-    WHATS_NEW_RECIPE,
     WHATS_NEW_SLIDER,
     WHATS_NEW_SUBTITLE,
     WHATS_NEW_TITLE,
@@ -34,6 +36,7 @@ import {
     shouldShowWhatsNew,
     whatsNewChart,
     whatsNewSeen,
+    whatsNewText,
 } from '../src/whatsnew';
 
 const EM_DASH = String.fromCharCode(0x2014);
@@ -147,7 +150,7 @@ test('whats new: compareVersions', () => {
 
 // ---------------------------------------------------------------- content
 
-const ITEMS = [...WHATS_NEW_LIVE, WHATS_NEW_AI, ...WHATS_NEW_MORE];
+const ITEMS = [...WHATS_NEW_44, ...WHATS_NEW_LIVE, WHATS_NEW_AI, ...WHATS_NEW_MORE];
 
 test('whats new: every line is short, plain and free of em dashes', () => {
     const texts = [WHATS_NEW_TITLE, WHATS_NEW_SUBTITLE, ...ITEMS.flatMap((i) => [i.title, i.text])];
@@ -203,18 +206,22 @@ test('whats new: the number of guides it names is the number in the Help tab, on
     }
 });
 
-test('whats new: the recipe beside the chart is what the chart holds', () => {
-    const chart = whatsNewChart();
-    const fields = [
-        ...(chart.functions as Array<{ expression: string }>).map((f) => f.expression),
-        ...(chart.tools as Array<{ conditions: string[]; label: string }>).flatMap((t) => [...t.conditions, t.label]),
-        String(chart.title),
-    ];
-    assert.equal(WHATS_NEW_RECIPE.length, 6);
-    for (const [code, where] of WHATS_NEW_RECIPE) {
-        assert.ok(fields.includes(code), `"${code}" (${where}) is not a field of the chart`);
-        assert.ok(!where.includes(EM_DASH) && where.length <= 40, where);
-    }
+test('whats new: the text beside the chart is the whole chart, in a few lines', () => {
+    const text = whatsNewText();
+    const back = parseChartText(text);
+    assert.deepEqual(back.problems, []);
+    assert.equal(canonical(back.data), canonical(whatsNewChart()));
+    const lines = text.split('\n');
+    assert.ok(lines.length <= 10, `${lines.length} lines`);
+    assert.ok(!lines.some((l) => l.startsWith('raw ') || l.startsWith('set ')), text);
+});
+
+test('whats new: 4.4 comes first and names text, motion, phones and colours', () => {
+    assert.deepEqual(
+        WHATS_NEW_44.map((i) => i.title),
+        ['Charts as text', 'Charts that move', 'On phones and tablets', "Your theme's colours"]
+    );
+    assert.equal(WHATS_NEW_VERSION, '4.4.0');
 });
 
 test('whats new: the popup loads nothing from the network', () => {

@@ -32,7 +32,7 @@ Any chart works. This guide uses the example Tangent explorer, because it has a 
 
 Click Insert into note at the bottom right, or press Cmd+Enter (Ctrl+Enter on Windows and Linux). The editor closes and the chart appears in the note, with its slider underneath.
 
-In the file, the chart is a code block with the language `easy-tikz` that holds the chart settings as JSON. Switch the note to source mode to see it.
+In the file, the chart is a code block with the language `easy-tikz`: a few lines of text, one line per object, such as `f1(x) = x^3 - 3x | blue, thick, tangent at a`. Switch the note to source mode to see it. Change a number there, and the chart glides to it.
 
 ![Screenshot of the note for step 2: Insert it into the note](img/charts-in-notes-2.png)
 
@@ -60,7 +60,7 @@ Move the pointer over the chart. Three buttons appear at its left edge (Align le
 
 *The chart at 420 px, aligned left. The controls show while the pointer is over the chart.*
 
-> **Tip:** Width and alignment are the only things these controls write into the note (as `displayWidth` and `displayAlign` in the block). In a callout or a `~~~` fence the block cannot be found, and a notice says the change was not saved.
+> **Tip:** Width and alignment are the only things these controls write into the note (as the lines `set displayWidth = 420` and `set displayAlign = "left"` of the block). In a callout or a `~~~` fence the block cannot be found, and a notice says the change was not saved.
 
 ## 5. Click the chart to edit it
 
@@ -90,7 +90,7 @@ Preview size in the same group sets how large the chart is drawn, as its longest
 
 A chart is its code block and nothing else. In source mode, select the whole block, from the line that opens the `easy-tikz` block to the three backticks that close it, copy it and paste it into any note. Each copy is a chart of its own.
 
-> **Tip:** Avoid editing the JSON by hand. If it is no longer valid, the note shows "Easy TikZ render error" in place of the chart.
+> **Tip:** You can edit the lines by hand. A mistake shows under the chart with its line and column, such as Line 4, column 9: unknown option, and the rest of the chart still draws.
 
 ## The finished chart
 

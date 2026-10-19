@@ -154,6 +154,7 @@ function newestAsar() {
 export async function buildPlugin(outDir) {
     const { default: esbuild } = await import('esbuild');
     const { builtinModules } = await import('node:module');
+    const { lazyNodeModules } = await import('../../lazy-node-modules.mjs');
     fs.mkdirSync(outDir, { recursive: true });
     await esbuild.build({
         entryPoints: [path.join(REPO, 'main.ts')],
@@ -165,6 +166,7 @@ export async function buildPlugin(outDir) {
         treeShaking: true,
         // docs/ai.md is bundled as text (the AI server's guide), as esbuild.config.mjs does.
         loader: { '.md': 'text' },
+        plugins: [lazyNodeModules],
         outfile: path.join(outDir, 'main.js'),
     });
     const uiDir = path.join(REPO, 'src', 'ui');

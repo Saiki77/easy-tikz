@@ -701,6 +701,15 @@ export class SVGRenderer {
         if (g.childNodes.length) svg.appendChild(g);
     }
 
+    /**
+     * Name the chart object (f, R1, P2, ...) behind the elements drawn into g
+     * since child `from`, so a view can animate one object. Never exported.
+     */
+    private tag(g: SVGElement, from: number, name: string): void {
+        const kids = g.children;
+        for (let i = from; i < kids.length; i++) kids[i].setAttribute('data-etz-item', name);
+    }
+
     /** Stroke width in px for a thickness key; thinner on thumbnails. */
     private strokeWidth(thickness: string | undefined): number {
         const w = (thickness && THICKNESS_MAP[thickness]) || 1.5;
@@ -954,7 +963,11 @@ export class SVGRenderer {
     /** Layer 2: function fills and region fills in item order; patterns over the tint like the export. */
     private drawFills(svg: SVGElement, items: SceneItem2D[]): void {
         const g = this.layer('etz-fills', true);
-        for (const item of items) for (const fill of item.fills || []) this.drawFill(g, fill);
+        for (const item of items) {
+            const from = g.children.length;
+            for (const fill of item.fills || []) this.drawFill(g, fill);
+            this.tag(g, from, item.source);
+        }
         this.attach(svg, g);
     }
 
@@ -1115,6 +1128,7 @@ export class SVGRenderer {
                     'stroke-linecap': 'round',
                 };
                 if (f.dashed) attrs['stroke-dasharray'] = '6 4';
+                attrs['data-etz-item'] = info.name;
                 g.appendChild(this.el('path', attrs));
             }
             if (f.showLegend) legend.push({ color, width, dashed: !!f.dashed, label: this.legendLabel(info, f) });
@@ -1168,7 +1182,11 @@ export class SVGRenderer {
     /** Layer 5: curves, segments, outlines, constraint lines, tangents. */
     private drawStrokes(svg: SVGElement, items: SceneItem2D[]): void {
         const g = this.layer('etz-strokes', true);
-        for (const item of items) for (const s of item.strokes || []) this.drawStroke(g, s, false);
+        for (const item of items) {
+            const from = g.children.length;
+            for (const s of item.strokes || []) this.drawStroke(g, s, false);
+            this.tag(g, from, item.source);
+        }
         this.attach(svg, g);
     }
 
@@ -1214,10 +1232,18 @@ export class SVGRenderer {
      */
     private drawMarks(svg: SVGElement, items: SceneItem2D[]): void {
         const guides = this.layer('etz-guides', true);
-        for (const item of items) for (const s of item.guides || []) this.drawStroke(guides, s, true);
+        for (const item of items) {
+            const from = guides.children.length;
+            for (const s of item.guides || []) this.drawStroke(guides, s, true);
+            this.tag(guides, from, item.source);
+        }
         this.attach(svg, guides);
         const markers = this.layer('etz-markers', false);
-        for (const item of items) for (const m of item.markers || []) this.drawMarker(markers, m);
+        for (const item of items) {
+            const from = markers.children.length;
+            for (const m of item.markers || []) this.drawMarker(markers, m);
+            this.tag(markers, from, item.source);
+        }
         this.attach(svg, markers);
     }
 
@@ -1239,7 +1265,11 @@ export class SVGRenderer {
     /** Layer 7. */
     private drawBraces(svg: SVGElement, items: SceneItem2D[]): void {
         const g = this.layer('etz-braces', false);
-        for (const item of items) for (const b of item.braces || []) this.drawBrace(g, b);
+        for (const item of items) {
+            const from = g.children.length;
+            for (const b of item.braces || []) this.drawBrace(g, b);
+            this.tag(g, from, item.source);
+        }
         this.attach(svg, g);
     }
 
@@ -1312,6 +1342,7 @@ export class SVGRenderer {
         if (this.compact) return;
         const g = this.layer('etz-texts', false);
         for (const item of items) {
+            const from = g.children.length;
             for (const t of item.texts || []) {
                 if (!finitePt(t) || !this.inView(t.x, t.y, TEXT_SLACK)) continue;
                 const bold = t.weight === 'bold';
@@ -1322,6 +1353,7 @@ export class SVGRenderer {
                     offset: finitePt(t.offset) ? t.offset : undefined,
                 });
             }
+            this.tag(g, from, item.source);
         }
         this.attach(svg, g);
     }
@@ -1359,7 +1391,7 @@ export class SVGRenderer {
             const x = this.labelCoordinate(a.x, source, 'x');
             const y = this.labelCoordinate(a.y, source, 'y');
             if (this.compact || !Number.isFinite(x) || !Number.isFinite(y) || !this.inView(x, y, TEXT_SLACK)) return;
-            const attrs: Record<string, string> = { 'data-annotation-idx': String(idx), 'pointer-events': 'bounding-box' };
+            const attrs: Record<string, string> = { 'data-annotation-idx': String(idx), 'data-etz-item': source, 'pointer-events': 'bounding-box' };
             this.drawPlaced(g, this.math.formatTemplate(text), x, y, a.anchor, a.size, {
                 color: this.css(a.color),
                 halo: fillRings.some((rings) => pointInRings({ x, y }, rings)),

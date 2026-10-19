@@ -13,11 +13,12 @@
  *
  * The switch and the token are the same settings as Settings > AI access.
  */
-import { setIcon } from 'obsidian';
+import { Platform, setIcon } from 'obsidian';
 import { PanelHost, PluginHost } from './host';
 import { TextButtonHandle, chip, dropdown, textButton, uniqueId } from './kit';
 import { AI_APPS, mcpUrl, shownSnippet } from '../ai/connect';
 import { blocksOf } from '../ai/charttool';
+import { parseChartText } from '../text/parse';
 import { impliedV4, parseLenientJson } from '../blockjson';
 
 export interface AiPanelHandle {
@@ -30,22 +31,39 @@ export interface AiPanelHandle {
 const EXAMPLE_REQUEST =
     'In this note, add a chart of the feasible region x + y <= 4, x + 3y <= 6, x >= 0, y >= 0, with the line 2x + 3y = c on a slider and the point where 2x + 3y is largest.';
 
-/** The JSON object of the first easy-tikz block in `text` (or `text` itself as JSON), as a note would read it. */
+/** The chart of the first easy-tikz block in `text` (or of `text` itself), text or JSON, as a note would read it. */
 export function chartFromText(text: string): Record<string, unknown> | string {
     const trimmed = text.trim();
     if (!trimmed) return 'The clipboard is empty.';
     const blocks = blocksOf(trimmed);
     const body = blocks.length ? blocks[0].text : trimmed;
-    if (!body.trim().startsWith('{')) return 'The clipboard holds no Easy TikZ chart. Copy the whole block the AI wrote, from ```easy-tikz to the closing ```.';
-    let data: unknown;
-    try {
-        data = parseLenientJson(body);
-    } catch (e) {
-        return `The chart on the clipboard is not valid JSON: ${e instanceof Error ? e.message : String(e)}`;
+    if (body.trim().startsWith('{')) {
+        let data: unknown;
+        try {
+            data = parseLenientJson(body);
+        } catch (e) {
+            return `The chart on the clipboard is not valid JSON: ${e instanceof Error ? e.message : String(e)}`;
+        }
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return 'The chart on the clipboard is not a JSON object.';
+        const chart = data as Record<string, unknown>;
+        return impliedV4(chart) ? { v: 4, ...chart } : chart;
     }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return 'The chart on the clipboard is not a JSON object.';
-    const chart = data as Record<string, unknown>;
-    return impliedV4(chart) ? { v: 4, ...chart } : chart;
+    // Text: one line per object. Outside a fence only text that reads as a chart counts.
+    const parsed = parseChartText(body);
+    const objects = ['parameters', 'functions', 'functions3D', 'tools', 'annotations'].some((k) => {
+        const items = parsed.data[k];
+        return Array.isArray(items) && items.length > 0;
+    });
+    if (!blocks.length && (parsed.problems.length || !objects)) {
+        return 'The clipboard holds no Easy TikZ chart. Copy the whole block the AI wrote, from ```easy-tikz to the closing ```.';
+    }
+    if (parsed.problems.length) {
+        const p = parsed.problems[0];
+        const count = parsed.problems.length === 1 ? 'a problem' : `${parsed.problems.length} problems`;
+        return `The chart on the clipboard has ${count}. Line ${p.line}, column ${p.column}: ${p.message}`;
+    }
+    if (!objects) return 'The chart on the clipboard is empty.';
+    return parsed.data;
 }
 
 export function createAiPanel(parent: HTMLElement, host: PanelHost): AiPanelHandle {
@@ -92,17 +110,22 @@ export function createAiPanel(parent: HTMLElement, host: PanelHost): AiPanelHand
     };
 
     // ------------------------------------------------ 1. AI apps on this computer
+    // Phones and tablets have no AI server: the card says where it is.
+    const desktop = Platform.isDesktop;
     const apps = card(
         'bot',
-        'AI apps on this computer',
-        'Claude Code, Codex, Cursor, VS Code, Gemini CLI, Claude Desktop, LM Studio. Switch this on and connect your app once; it then reads the chart guide, checks charts, looks at them and adds them to your notes by itself.'
+        desktop ? 'AI apps on this computer' : 'AI apps on a computer',
+        desktop
+            ? 'Claude Code, Codex, Cursor, VS Code, Gemini CLI, Claude Desktop, LM Studio. Switch this on and connect your app once; it then reads the chart guide, checks charts, looks at them and adds them to your notes by itself.'
+            : 'Claude Code, Codex, Cursor and other AI apps connect to Obsidian on your computer: switch AI access on there. On this device, use an AI chat below.'
     );
     const serverRow = apps.createDiv({ cls: 'etz-ai-row' });
     const statusEl = apps.createDiv({ cls: 'etz-ai-status', attr: { role: 'status' } });
     const connect = apps.createDiv({ cls: 'etz-ai-connect' });
     let appIndex = 0;
 
-    const toggle = plugin?.setAiServer
+    const toggle =
+        desktop && plugin?.setAiServer
         ? chip(serverRow, {
               label: 'Let AI apps make charts',
               value: plugin.aiInfo?.().enabled ?? false,
@@ -111,11 +134,11 @@ export function createAiPanel(parent: HTMLElement, host: PanelHost): AiPanelHand
               },
           })
         : null;
-    if (!toggle) serverRow.createDiv({ cls: 'etz-ai-note', text: 'Not available here: open the editor from Obsidian.' });
+    if (!toggle && desktop) serverRow.createDiv({ cls: 'etz-ai-note', text: 'Not available here: open the editor from Obsidian.' });
 
     function render() {
         const info = plugin?.aiInfo?.();
-        if (!info) return;
+        if (!info || !desktop) return;
         toggle?.setValue(info.enabled);
         statusEl.empty();
         statusEl.toggleClass('is-error', info.enabled && !info.running);

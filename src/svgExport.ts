@@ -47,6 +47,7 @@ export function exportableSvg(svg: SVGElement, doc: Document): SVGElement {
         });
     const nodes: Element[] = [clone, ...Array.from(clone.querySelectorAll('*'))];
     for (const el of nodes) {
+        el.removeAttribute('data-etz-item');
         for (const attrName of ['fill', 'stroke', 'font-family', 'stop-color']) {
             const v = el.getAttribute(attrName);
             if (v && v.includes('var(')) el.setAttribute(attrName, resolveVars(v));

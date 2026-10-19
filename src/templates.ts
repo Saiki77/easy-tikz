@@ -115,6 +115,12 @@ export interface PluginData {
     aiPort: number;
     /** Secret every request to the AI server must carry; made when the server is first switched on. */
     aiToken: string;
+    /** How the editor writes charts it inserts: text (one line per object) or JSON. Edited blocks keep their own. */
+    blockFormat: 'text' | 'json';
+    /** Charts in notes glide to new values and new objects pop in when the block changes. */
+    animateCharts: boolean;
+    /** Chart colours: the theme's own (default) or the fixed colours of the LaTeX export. */
+    chartColours: 'theme' | 'export';
 }
 
 export const DEFAULT_PLUGIN_DATA: PluginData = {
@@ -127,4 +133,7 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     aiServer: false,
     aiPort: 27150,
     aiToken: '',
+    blockFormat: 'text',
+    animateCharts: true,
+    chartColours: 'theme',
 };

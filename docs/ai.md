@@ -1,6 +1,6 @@
 # Easy TikZ: guide for AI assistants
 
-[Easy TikZ](https://github.com/Saiki77/easy-tikz) is an Obsidian plugin that draws charts from `easy-tikz` code blocks in Markdown notes: function plots, tangents, areas between curves, feasible regions and linear programs, optimum and intersection points, level curves, arrows, parametric and polar curves and 3D surfaces, all with live sliders, plus LaTeX (pgfplots) export. A chart is one JSON object. You write it, Obsidian renders it in the note, and the user can click the chart to change it with sliders or by dragging. Users do not need to learn the editor when you write the block for them.
+[Easy TikZ](https://github.com/Saiki77/easy-tikz) is an Obsidian plugin that draws charts from `easy-tikz` code blocks in Markdown notes: function plots, tangents, areas between curves, feasible regions and linear programs, optimum and intersection points, level curves, arrows, parametric and polar curves and 3D surfaces, all with live sliders, plus LaTeX (pgfplots) export. A chart is a few lines of text, one line per object, written the way the math reads. You write it, Obsidian renders it in the note, and the user can click the chart to change it with sliders or by dragging. Users do not need to learn the editor when you write the block for them.
 
 This guide is everything you need. It is served by the plugin's local AI server (see the end), published at `https://github.com/Saiki77/easy-tikz/blob/main/docs/ai.md`, and can be pasted into any chat.
 
@@ -8,78 +8,142 @@ This guide is everything you need. It is served by the plugin's local AI server 
 
 1. **Understand the chart.** Which functions, regions, lines and points; which numbers should be sliders; which part of the plane must be visible. Ask only when the request is ambiguous in a way that changes the picture.
 2. **Start from an example.** With the AI server, `list_examples` and `get_example` give ready-made charts (linear program, areas between curves, tangent, level curves, market surplus, 3D, and one finished chart per guide). Otherwise adapt one of the blocks in this guide.
-3. **Write the block.** `"v": 4` first, then only the fields that differ from the defaults. Set the view (`xmin` ... `ymax`) so everything that matters is inside with a margin.
-4. **Check it.** With the AI server, `check_chart` runs the plugin's own code. Fix every problem it reports (they include fields the plugin would silently ignore). Then read what it computed: where each region is shaded or that it is empty, where curves are drawn, the coordinates of computed points, the final text and position of every label, and how much of each function lies inside the view. Check the ends of each slider's range too (`sliders` argument). `render_chart` shows you a picture of the result.
+3. **Write the block.** One line per object: a `view` line first, so everything that matters is inside with a margin, then sliders, functions, shapes and labels. Leave out what the plugin fills in by itself.
+4. **Check it.** With the AI server, `check_chart` runs the plugin's own code. Fix every problem it reports (a problem in the text names its line and column). Then read what it computed: where each region is shaded or that it is empty, where curves are drawn, the coordinates of computed points, the final text and position of every label, and how much of each function lies inside the view. Check the ends of each slider's range too (`sliders` argument). `render_chart` shows you a picture of the result.
 5. **Put it in the note.** With the AI server, `add_chart` writes the block into the note (the open note, a named note, or a new one) and Obsidian shows it at once. Without it, write the block into the note yourself, or give it to the user as a fenced code block to paste into a note.
 6. **Tell the user** what the chart shows, the key numbers, which sliders it has, and that clicking the chart opens the editor.
 
 ## Rules that prevent most mistakes
 
-- `"v": 4` is always the first field. Without it the block is read as an old 3.x chart (functions without a domain are then hidden, and text is read as TeX).
+- One object per line. Options come after `|`, separated by commas: `f(x) = x^2 | blue, thick, dashed`.
 - Formulas: `2x`, `a x` and `(x + 1)(x - 1)` multiply, but `ax` is one name, so write `a x` or `a*x`. Functions need brackets: `sin(x)`. `1/2x` is `(1/2)*x`, so write `1/(2x)` when x belongs below. Trigonometry is in radians.
-- Every letter that is not `x`, `y`, a function name, a tool name or a built-in (`pi`, `e`, `sin`, ...) must be a slider in `"parameters"`.
-- Names: functions `f1`, `f2`, ...; tools `R1` (region), `C1` (curve), `P1` (points), `S1` (segment). Other formulas use them: `f2 <= y <= f1`, `P1_x`, `P1_val`. Keep functions in the order of their numbers.
-- Shading is a `region` with `<=` and `>=` conditions. A line or circle is a `curve` with an equation such as `2x + 3y = 12`. A region condition never uses a single `=`.
+- Every letter that is not `x`, `y`, a function name, a shape name or a built-in (`pi`, `e`, `sin`, ...) must be a slider: `slider a = 1 in 0..5`.
+- Names: a function is named in its line, `f(x) = ...` or `demand(x) = ...`. Shapes are named `R1` (regions), `C1` (curves), `P1` (points), `S1` (segments) in order, or by a prefix: `eq: crossings of demand and supply`. Other lines use the names: `f2 <= y <= f1`, `P1_x`, `eq_y`. Built-in names such as `E`, `e`, `x` or `pi` cannot be taken.
+- Shading is `shade` with `<=` and `>=` conditions. A line or circle is an equation such as `2x + 3y = 12`. A region condition never uses a single `=`.
 - Colours: `black`, `gray`, `red`, `orange`, `brown`, `green`, `teal`, `blue`, `purple`, `magenta`. Nothing else exports.
-- Labels are templates: `{c}` or `{P1_val:2}` print a live value, `$x^2$` is math.
-- Never invent fields. The checker reports every field the plugin does not know.
+- Labels are templates in quotes: `label "z = {c}"`; `{c}` or `{P1_val:2}` print a live value, `$x^2$` is math.
+- Never invent options. The checker reports every word it does not know, with the options that object takes.
 - The plugin does not differentiate or integrate. A slope or an area in a label is a formula you work out (for example `3a^2 - 3` or an antiderivative as a hidden function); tell the user it is yours.
-- The LaTeX export is a snapshot: sliders are written with their current `value`.
+- The LaTeX export is a snapshot: sliders are written with their current value.
 
 ## A first block
 
 ````markdown
 ```easy-tikz
-{
-  "v": 4,
-  "title": "slope at x = {a}: {3a^2 - 3:2}",
-  "xmin": "-3", "xmax": "3", "ymin": "-4", "ymax": "4",
-  "axis_style": "middle",
-  "parameters": [{ "name": "a", "value": 0.5, "min": -2, "max": 2, "step": 0.05 }],
-  "functions": [
-    { "name": "f1", "expression": "x^3 - 3x", "color": "blue", "thickness": "thick", "tangent": true, "tangentPoint": "a", "extrema": true }
-  ]
-}
+view x -3..3, y -4..4
+axes middle
+title slope at x = {a}: {3a^2 - 3:2}
+slider a = 0.5 in -2..2 step 0.05
+f(x) = x^3 - 3x | blue, thick, tangent at a, extrema
 ```
 ````
 
 A linear program: the feasible region with numbered constraint lines, the objective line on a slider, the corners and the optimum.
 
 ```easy-tikz
-{
-  "v": 4,
-  "xmin": "0", "xmax": "5", "ymin": "0", "ymax": "4.5",
-  "axis_style": "axes",
-  "parameters": [{ "name": "c", "value": 6, "min": 0, "max": 15, "step": 0.1 }],
-  "tools": [
-    { "type": "region", "name": "R1", "conditions": ["x + y <= 4", "x + 3y <= 6", "x >= 0", "y >= 0"], "conditionLabels": ["(1)", "(2)", "", ""], "constraintLines": true },
-    { "type": "curve", "name": "C1", "equation": "2x + 3y = c", "color": "red", "dashed": true, "label": "z = {c}" },
-    { "type": "points", "name": "P2", "source": "region", "regionName": "R1", "color": "blue", "label": "({x}, {y})" },
-    { "type": "points", "name": "P1", "source": "region", "regionName": "R1", "objective": "2x + 3y", "sense": "max", "size": "large", "label": "x* = ({x:2}, {y:2})" }
-  ]
-}
+view x 0..5, y 0..4.5
+axes edges
+slider c = 6 in 0..15 step 0.1
+R1: shade x + y <= 4, x + 3y <= 6, x >= 0, y >= 0 | constraint lines, numbered
+2x + 3y = c | red, dashed, label "z = {c}"
+corners of R1 | blue, label "({x}, {y})"
+P1: max 2x + 3y over R1 | large, label "x* = ({x:2}, {y:2})"
 ```
 
-The area between a curve and its tangent at a slider point: the tangent is a hidden function `f2`, and the region lies between the curve and the tangent from the touching point `a` to the second crossing `-2a`.
+The area between a curve and its tangent at a slider point: the tangent is a hidden function `g`, and the region lies between the curve and the tangent from the touching point `a` to the second crossing `-2a`.
 
 ```easy-tikz
-{
-  "v": 4,
-  "title": "slope at x = {a}: {3a^2 - 3:2}",
-  "xmin": "-3", "xmax": "3", "ymin": "-4", "ymax": "4",
-  "axis_style": "middle",
-  "parameters": [{ "name": "a", "value": 0.8, "min": -1.1, "max": 1.1, "step": 0.05 }],
-  "functions": [
-    { "name": "f1", "expression": "x^3 - 3x", "color": "blue", "thickness": "thick", "tangent": true, "tangentPoint": "a" },
-    { "name": "f2", "expression": "f1(a) + (3a^2 - 3)(x - a)", "hidden": true }
-  ],
-  "tools": [
-    { "type": "region", "name": "R1", "color": "orange", "conditions": ["min(f1, f2) <= y <= max(f1, f2)", "min(a, -2a) <= x <= max(a, -2a)"] }
-  ]
-}
+view x -3..3, y -4..4
+axes middle
+title slope at x = {a}: {3a^2 - 3:2}
+slider a = 0.8 in -1.1..1.1 step 0.05
+f(x) = x^3 - 3x | blue, thick, tangent at a
+g(x) = f(a) + (3a^2 - 3)(x - a) | hidden
+shade between f and g for min(a, -2a) <= x <= max(a, -2a) | orange
 ```
 
-## Chart fields
+## The text syntax
+
+A block holds one statement per line. Empty lines and lines that start with `%` or `//` are skipped. Options follow the first `|` that is not part of `||` (or), separated by commas. Any line can start with a name and a colon: `R1: shade ...`, `eq: crossings of f and g`.
+
+**The chart**
+
+| Line | Means |
+| --- | --- |
+| `view x -3..3, y -4..4` (3D: `, z 0..8`) | The visible range. Formulas allowed: `x -a..a`, `x 0..2pi`. Always write it. |
+| `axes middle`, `axes box`, `axes edges`, `axes none` | Axes through the origin (school style), a frame with ticks (the default), axes along the left and bottom edges (optimisation charts), or none. |
+| `grid`, `grid minor`, `grid fine` | Major grid, minor grid, both. |
+| `title ...`, `xlabel ...`, `ylabel ...`, `zlabel ...` | Title (a template) and axis names (plain text). Quote them when they hold a `|`. |
+| `size 12 x 6` | Size of the exported figure in cm; it also gives the chart its shape in the note. |
+| `equal scale` | Same unit on both axes, so circles stay round. |
+| `polar` | Every function is r(θ), written with `theta`. A line `r(theta) = ...` makes the chart polar too. |
+| `3d` | A 3D chart. A surface or plane line makes the chart 3D too. |
+| `variables q, p` | Other axis letters. `x` and `y` keep working. |
+| `snippet` | The LaTeX export is only the tikzpicture, not a document. |
+| `set field = value` | Any chart field from the tables below, the value as JSON: `set showSlidersInNote = false`, `set displayWidth = 480`. |
+
+**Sliders:** `slider a = 0.8 in -1.1..1.1 step 0.05`. The range and step are optional (default `0..10`, a step of about a hundredth of the range).
+
+**Functions**
+
+| Line | Means |
+| --- | --- |
+| `f(x) = x^2 - 2` | A function. Any name: `demand(x) = 20 - x`. `y = ...` alone gets the name `f1`, `f2`, ... |
+| `c(t) = (cos(t), sin(t))` | A parametric curve (x(t), y(t)). |
+| `r(theta) = 2cos(k theta)` | A polar curve (makes the chart polar). |
+| `s(x, y) = x^2 + y^2` or `z = ...` | A surface (makes the chart 3D). |
+
+Function options: a colour, `thin` `thick` `very thin` `very thick`, `dashed`, `hidden` (not drawn, still usable by name), `legend` or `legend "text"`, `domain 0..2pi` (parametric and polar: the t or θ range), `tangent at a` (a number, a formula, a slider, or `min`, `max`, `min2`, ...), `extrema`, `fill` (to the x-axis), `opacity 0.3`, `pattern dots`.
+
+Surface options: a colour, `x -2..2`, `y -2..2`, `opacity 0.7`, `samples 40`, `wireframe`, `hidden`.
+
+**Regions**
+
+| Line | Means |
+| --- | --- |
+| `shade x + y <= 4, x >= 0, y >= 0` | Shaded where all conditions hold. A line with only conditions shades too: `x + y <= 4, x >= 0`. |
+| `shade between f and g for 0 <= x <= 2` | Between two functions, for an x range. |
+| `shade under f for 0 <= x <= b` | Between a function and the x-axis. |
+| `shade x + y <= 4 "(1)", x + 3y <= 6 "labour"` | A label in quotes after a condition is drawn on its constraint line. |
+
+Region options: a colour, `opacity 0.3`, `pattern dots` (`solid`, `horizontal`, `vertical`, `crosshatch`, `dots`, `north-east`, `north-west`), `outline`, `dashed outline`, `no fill`, `constraint lines` (each condition's boundary across the view), `numbered` (labels (1), (2), ... on the constraint lines, plain sign conditions such as `x >= 0` left out), `label "A"` (at the centre, large and bold), `hidden`.
+
+**Curves:** an equation on its own line: `2x + 3y = 12`, `x = 2`, `(x - 3)^2 + (y - 2)^2 = 4`, `circle: x^2 + y^2 = 9`. Level curves: `levels x^2 + y^2 at 1, 3.2, 6` (the values may be formulas such as `P1_val`). Options: a colour, a thickness, `dashed`, `label "text"` (`{level}` is the level), `hidden`. Write `curve <equation>` when an equation starts with a keyword or looks like a function (`curve y = x + 1` is a curve; `y = x + 1` is a function).
+
+**Points**
+
+| Line | Means |
+| --- | --- |
+| `points (1, 2), (3, a), (P1_x, 0)` or `point (1, 2)` | Listed points. In 3D: `(x, y, z)`. |
+| `crossings of f and g` | Where two functions or curves cross, sorted from left to right. |
+| `corners of R1` | The corners of a region. |
+| `max 2x + 3y over R1`, `min x^2 + y^2 over R1` | The best point of a region (nonlinear objectives too). |
+| `integer points in R1`, `integer max 3x + 4y in R1` | Integer points of a region, or the best of them. |
+
+Point options: a colour, `small` `normal` `large`, `drop lines` (dashed guides to the axes), `coordinates` (labels each point with its coordinates), `label "({x:2}, {y:2})"` (a template per point with `{x}` `{y}` `{val}` `{i}`), `labels "A; B; C"` (one label each), `hidden`.
+
+**Lines, arrows and labels**
+
+| Line | Means |
+| --- | --- |
+| `segment (0, 0) -- (3, 2) -- (4, 0)` | A path. A points tool's name inserts its points: `segment (0, 0) -- P1`. |
+| `arrow (0, 0) -> (3, 2)` | An arrow (`<-` backwards, `<->` both ends). |
+| `polygon (0, 0), (4, 0), (4, 3)` | A closed path. |
+| `brace (0, -0.5) to (4, -0.5)` | A curly brace, bulging to the left of the direction from the first point to the second. |
+| `text "optimum" at (P1_x, P1_y + 0.4)` | A text label at a point (3D: `(x, y, z)`). |
+| `plane z = h` | A plane in a 3D chart (`x = ...`, `y = ...` too). |
+
+Options: a colour, a thickness, `dashed`, `label "text"`, `hidden`. Text labels: a colour, `small` `normal` `large`, `above` `below` `left` `right` `center` (which side of the point the text sits on), `hidden`. Planes: a colour, `opacity 0.25`.
+
+**Anything else:** every object takes `key=value` options for its fields in the tables below, the value as JSON: `f(x) = x^2 | fill, fillOpacity=0.4`, `points (1, 2) | dim=2`. And `raw tool {...}`, `raw function {...}`, `raw surface {...}`, `raw label {...}` hold one object as JSON. The editor writes these lines for what the words cannot say; you rarely need them.
+
+A block can also be one JSON object (`"v": 4` first, then the fields below); the plugin reads both, and the editor keeps the form a block has. Write text.
+
+## Fields
+
+The options above set these fields. A `set` line or a `key=value` option can set any of them, and a JSON block uses them directly.
+
+### The chart
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -100,7 +164,7 @@ The area between a curve and its tangent at a slider point: the tangent is a hid
 | `displayWidth` `displayAlign` | (unset) | Width in px and `"left"`, `"center"` or `"right"` of the chart in the note. Usually leave them out. |
 | `parameters` `functions` `tools` `annotations` `functions3D` | `[]` | Sliders, functions, shapes, text labels and surfaces. Below. |
 
-## Sliders: `parameters`
+### Sliders: `parameters`
 
 ```json
 "parameters": [{ "name": "c", "value": 9, "min": 0, "max": 15, "step": 0.1 }]
@@ -108,7 +172,7 @@ The area between a curve and its tangent at a slider point: the tangent is a hid
 
 Give all five fields. The name is a letter or a word (`a`, `k`, `price`) that is not a built-in (`x`, `y`, `t`, `e`, `pi`, `sin`, ...). Every formula, condition, coordinate, range and label can use it. The note shows a slider for it; the editor also has a play button that sweeps it from `min` to `max` and back. Choose the range so the picture stays meaningful over all of it (a crossing that leaves the view, or two parallel lines, makes points and areas disappear).
 
-## Functions: `functions`
+### Functions: `functions`
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -123,11 +187,11 @@ Give all five fields. The name is a letter or a word (`a`, `k`, `price`) that is
 | `parametric` `expressionY` | `false` `""` | Parametric curve: `expression` is x(t), `expressionY` is y(t), `domain` is the t range (default `0:2*pi`). |
 | `hidden` | `false` | Not drawn, but other formulas can still use it (a tangent or an antiderivative used in a region or label). |
 
-## Shapes: `tools`
+### Shapes: `tools`
 
 Every tool has `type`, `name` (`R1`, `C1`, `P1`, `S1`, `PL1`, ...), `color` and optionally `hidden`. Fills are always drawn below lines and points; otherwise tools are drawn in list order.
 
-### `region`: shade where conditions hold
+#### `region`: shade where conditions hold
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -139,7 +203,7 @@ Every tool has `type`, `name` (`R1`, `C1`, `P1`, `S1`, `PL1`, ...), `color` and 
 | `label` | `""` | Text at the centre of the region, a template, drawn large and bold: keep it short (`A`, `CS = {...}`); use a text label for longer text. |
 | `color` | `"blue"` | |
 
-### `curve`: an equation in x and y
+#### `curve`: an equation in x and y
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -150,7 +214,7 @@ Every tool has `type`, `name` (`R1`, `C1`, `P1`, `S1`, `PL1`, ...), `color` and 
 
 A line such as `y = x + 1` can be a function (then regions can use it by name, `y >= f1`) or a curve (needed for vertical lines and `ax + by = c` forms with sliders).
 
-### `points`: marked points
+#### `points`: marked points
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -164,7 +228,7 @@ A line such as `y = x + 1` can be a function (then regions can use it by name, `
 | `size` | `"normal"` | `"small"`, `"normal"`, `"large"`. |
 | `color` | `"red"` | |
 
-### `segment`: lines, arrows, polygons and braces
+#### `segment`: lines, arrows, polygons and braces
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -174,7 +238,7 @@ A line such as `y = x + 1` can be a function (then regions can use it by name, `
 | `label` | `""` | Template beside the middle of the path. |
 | `color` `thickness` `dashed` | `"black"` `"thin"` `false` | |
 
-### `plane3D` (3D only)
+#### `plane3D` (3D only)
 
 `{"type": "plane3D", "name": "PL1", "axis": "z", "value": "h", "fillOpacity": 0.25, "color": "orange"}` is the plane z = h (or x = ..., y = ...).
 
@@ -182,7 +246,7 @@ A line such as `y = x + 1` can be a function (then regions can use it by name, `
 
 The labels of points, curves, regions and constraint lines are placed by the plugin: it tries the spots around each point and picks one that does not cover lines, points or other labels. There is no field to choose the side. When a label must sit somewhere exact, use a text label instead.
 
-## Text labels: `annotations`
+### Text labels: `annotations`
 
 ```json
 "annotations": [{ "x": "P1_x", "y": "P1_y + 0.4", "text": "optimum, z = {P1_val}", "color": "red", "anchor": "above" }]
@@ -218,14 +282,22 @@ Crossings (intersections) come sorted from left to right, so `P1_x < P1_x2 < ...
 
 ## 3D
 
-Set `"dimension": true`. Surfaces go in `functions3D`: `{"expression": "x^2 + y^2", "xDomain": "-2:2", "yDomain": "-2:2", "color": "blue", "opacity": 0.7, "samples": 40, "wireframe": false}`. Points and segments take `"dim": 3` with `(x, y, z)` tuples; planes are `plane3D` tools; text labels take `z`.
+Write `3d` and a `view` with a z range. Surfaces are `s(x, y) = x^2 + y^2 | blue, x -2..2, y -2..2, opacity 0.7` (or `z = ...`); planes are `plane z = h`; points, segments and text labels take `(x, y, z)`. In JSON: `"dimension": true`, surfaces in `functions3D`, points and segments with `"dim": 3`.
+
+```easy-tikz
+3d
+view x -2..2, y -2..2, z 0..8
+slider h = 3 in 0..8
+z = x^2 + y^2 | blue, x -2..2, y -2..2, opacity 0.7
+plane z = h | orange
+```
 
 ## Recipes
 
 | You want | Example id | How it is built |
 | --- | --- | --- |
-| A function with a slider, its tangent and its extrema | `tangent` | slider `a`; `f1` with `tangent: true`, `tangentPoint: "a"`, `extrema: true`; the slope in the title. |
-| The area between a curve and its tangent | `tangent-area` | the tangent as a hidden function `f2`; a region `min(f1, f2) <= y <= max(f1, f2)` between the touching point and the second crossing. |
+| A function with a slider, its tangent and its extrema | `tangent` | slider `a`; `f1(x) = ... \| tangent at a, extrema`; the slope in the title. |
+| The area between a curve and its tangent | `tangent-area` | the tangent as a hidden function `f2`; `shade between f1 and f2 for ...` from the touching point to the second crossing. |
 | Areas between two curves | `areas` | one region where `f2 <= y <= f1` and one where `f1 <= y <= f2`, both with `0 <= x <= 2pi`, plus the crossings as points. For one colour per area, split at the crossings instead: points `P1` (intersections of `f1` and `f2`), then regions with `0 <= x <= P1_x`, `P1_x <= x <= P1_x2`, `P1_x2 <= x <= 2pi`. |
 | A linear program | `lp` (axes along the edges) or `linear-program` (boxed) | region with the constraints and `constraintLines`; curve `2x + 3y = c` on a slider; points over the region with the objective (the optimum) and without (the corners). |
 | An integer program | `integer-program` | the same with source `lattice` and the objective. |
@@ -235,9 +307,9 @@ Set `"dimension": true`. Surfaces go in `functions3D`: `{"expression": "x^2 + y^
 | An area that grows with a slider | `area-accumulation` | region `min(0, f1) <= y <= max(0, f1)` with `0 <= x <= b`; the area in its label comes from an antiderivative typed as a function. |
 | Values computed from points | `computed-values` | `P1_n`, `P1_x2`, and a midpoint built from them. |
 | A point that moves when you press play | `animate-play` | slider `a`; points `(cos(a) - 1.5, sin(a)); (a, sin(a))`; `f1` with domain `0:a`. |
-| Parametric and polar curves | `parametric-polar` | a parametric function (`parametric: true`, x(t) in `expression`, y(t) in `expressionY`), or `coordinateSystem: "polar"` with r(θ) such as `2cos(k theta)`. |
-| Arrows and braces | `arrows-braces` | segments with `style` `forward` or `brace`. |
-| A surface and a plane | `plane3d` | `dimension: true`, a surface and a `plane3D` on a slider. |
+| Parametric and polar curves | `parametric-polar` | `c(t) = (x(t), y(t))`, or `r(theta) = 2cos(k theta)` (a polar chart). |
+| Arrows and braces | `arrows-braces` | `arrow (0, 0) -> (3, 2)` and `brace (0, 0) to (4, 0)`. |
+| A surface and a plane | `plane3d` | `3d`, a surface and `plane z = h` on a slider. |
 
 ## The local AI server
 
@@ -249,7 +321,7 @@ When the user switches on **AI access** (in the editor's AI tab or the Easy TikZ
 ```bash
 curl -s -X POST "http://127.0.0.1:PORT/tools/check_chart?token=TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"chart": {"v": 4, "functions": [{"name": "f1", "expression": "sin(x)"}]}}'
+  -d '{"chart": "view x 0..7, y -1.5..1.5\nf(x) = sin(x) | blue"}'
 ```
 
 Every tool answers with HTTP 200 and JSON: `{"ok": true, "text": "..."}`, or `{"ok": false, "text": "..."}` when the call did not do what was asked (`render_chart` adds `"image": {"mimeType": "image/png", "base64": "..."}`). A missing or wrong token gets HTTP 401, a body that is not JSON 415. The text is meant to be read. A check answers like this:
@@ -264,17 +336,19 @@ P1 points (best point of region R1, max 2x + 3y): (3, 1) | label "x* = (3, 1)" a
 Computed values: P1_n = 1, P1_val = 9, P1_x = 3, P1_y = 1
 ```
 
-With problems, the first line is `2 problems: fix them, then check again.`, followed by one `PROBLEM` line each. `add_chart` and `update_chart` refuse such a chart with `"ok": false` and the same lines, and write nothing.
+With problems, the first line is `2 problems: fix them, then check again.`, followed by one `PROBLEM` line each (problems in the text name their line and column). `add_chart` and `update_chart` refuse such a chart with `"ok": false` and the same lines, and write nothing.
+
+Every `chart` argument is the text of a block (a string; a fenced block is fine too) or a JSON object. `add_chart` writes the block in the form the user chose in the settings (text by default); `update_chart` keeps the form the chart has in the note, and for text it rewrites only the lines whose object changed.
 
 | Tool | Arguments | Does |
 | --- | --- | --- |
 | `get_guide` | `section` (optional) | This guide, or one section of it. |
 | `list_examples` | | Ready-made charts: id, title, one line each. |
-| `get_example` | `id` | One of them as a block, with default fields left out. |
+| `get_example` | `id`, `format` (optional: `"json"` for a JSON block) | One of them as a text block, with what the plugin fills in left out. |
 | `check_chart` | `chart`, `sliders` (optional, such as `{"a": 2}`) | Problems, ignored fields, and what the chart computes. |
 | `render_chart` | `chart`, `sliders` (optional) | A PNG picture of the chart. |
 | `add_chart` | `chart`, `note` (optional: path or name; the open note when left out), `after` (optional: a heading or whole line of the note, such as `## Results` or just `Results`; the chart goes right below it), `replace` (optional: a placeholder line such as `(chart goes here)`: the whole line, once in the note, at most 200 characters), `create` (optional: `true` to make the note when it does not exist) | Checks the chart and writes it into the note. Lines in code blocks and frontmatter never match. Refused while the check reports problems, when `after` or `replace` match no line, for a note that does not exist unless `create` is true, and for instruction files of AI agents. The answer names line numbers, not the note's text. |
-| `list_charts` | `note` (optional) | The charts in a note, numbered, with their JSON. |
+| `list_charts` | `note` (optional) | The charts in a note, numbered, each as the note writes it. |
 | `update_chart` | `index`, `chart`, `note` (optional) | Replaces chart number `index` of the note. |
 | `export_latex` | `chart`, `standalone` (optional, default true) | The pgfplots code the plugin exports. |
 | `active_note` | | The open note: path and headings. |

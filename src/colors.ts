@@ -4,24 +4,26 @@ import type { FillPattern } from './types';
  * Shared color palette for the plugin.
  *
  * The "black" entry resolves to Obsidian's `--text-normal` so that it adapts
- * to light and dark themes (and exports as plain black). The other entries
- * are deliberately fixed hex values so they look consistent regardless of
- * theme. Use `resolveCssColor` before passing a value into any function that
- * needs to do RGB math (e.g. surface shading).
+ * to light and dark themes (and exports as plain black). The others are CSS
+ * variables (--etz-red, ...): by default the theme's own colours, so charts
+ * look native and follow light and dark without redrawing; the setting
+ * "Chart colours" pins the colours of the LaTeX export instead (styles.css).
+ * The fallback is that export colour. Use `resolveCssColor` before passing a
+ * value into any function that needs to do RGB math (e.g. surface shading).
  *
  * Key order is the swatch order (a 5 x 2 grid in the editor).
  */
 export const COLOR_MAP: Record<string, string> = {
     black: 'var(--text-normal)',
-    gray: '#7f8c8d',
-    red: '#e74c3c',
-    orange: '#e67e22',
-    brown: '#a0522d',
-    green: '#2ecc71',
-    teal: '#1abc9c',
-    blue: '#3498db',
-    purple: '#9b59b6',
-    magenta: '#d63384',
+    gray: 'var(--etz-gray, #7f8c8d)',
+    red: 'var(--etz-red, #e74c3c)',
+    orange: 'var(--etz-orange, #e67e22)',
+    brown: 'var(--etz-brown, #a0522d)',
+    green: 'var(--etz-green, #2ecc71)',
+    teal: 'var(--etz-teal, #1abc9c)',
+    blue: 'var(--etz-blue, #3498db)',
+    purple: 'var(--etz-purple, #9b59b6)',
+    magenta: 'var(--etz-magenta, #d63384)',
 };
 
 export const COLOR_OPTIONS: Record<string, string> = {
@@ -82,17 +84,24 @@ export const THICKNESS_MAP: Record<string, number> = {
     'very thick': 3.5,
 };
 
+/** A hidden element of the active window whose computed colour turns any CSS colour into rgb(). */
+let probe: HTMLElement | null = null;
+
 /**
- * Resolve a CSS color value to a concrete `rgb(...)` or hex string.
- * If the input is `var(--name)`, looks up the computed value on `<body>`.
- * Falls back to the input string when nothing matches.
+ * Resolve a CSS color value to a concrete `rgb(...)` or hex string: a
+ * variable (also nested, with its fallback), hsl(), a name, whatever the
+ * theme uses. Falls back to the input string outside a document.
  */
 export function resolveCssColor(cssValue: string): string {
     if (!cssValue) return cssValue;
     if (cssValue.startsWith('#') || cssValue.startsWith('rgb')) return cssValue;
-    const match = cssValue.match(/var\((--[^,)]+)/);
-    if (!match) return cssValue;
-    const resolved = getComputedStyle(activeDocument.body).getPropertyValue(match[1]).trim();
+    if (typeof activeDocument === 'undefined' || !activeDocument.body) return cssValue;
+    if (!probe || !probe.isConnected || probe.ownerDocument !== activeDocument) {
+        probe?.remove();
+        probe = activeDocument.body.createDiv({ cls: 'etz-color-probe', attr: { 'aria-hidden': 'true' } });
+    }
+    probe.setCssProps({ '--etz-probe': cssValue });
+    const resolved = getComputedStyle(probe).color.trim();
     return resolved || cssValue;
 }
 

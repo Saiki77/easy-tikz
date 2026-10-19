@@ -3,6 +3,7 @@ import process from "process";
 import { builtinModules as builtins } from "node:module";
 import fs from "node:fs";
 import { buildCss } from "./scripts/build-css.mjs";
+import { lazyNodeModules } from "./scripts/lazy-node-modules.mjs";
 
 
 const banner =
@@ -69,7 +70,10 @@ esbuild.build({
 	target: 'es2016',
 	logLevel: "info",
 	sourcemap: prod ? false : 'inline',
+	// Smaller and quicker to load, phones most of all; the review rebuilds it from these sources.
+	minify: prod,
 	treeShaking: true,
 	loader: { '.md': 'text' },
+	plugins: [lazyNodeModules],
 	outfile: 'main.js',
 }).catch(() => process.exit(1));

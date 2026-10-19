@@ -123,6 +123,16 @@ await check('guides bundle from src/guides/index.ts', async () => {
     return `${GUIDES.length} guides`;
 });
 const lp = EXAMPLES.find((e) => e.id === 'lp');
+let TEXT = null;
+await check('the text syntax bundles from src/text/parse.ts and src/chartdata.ts', async () => {
+    const { parseChartText } = await importTs('src/text/parse.ts');
+    const { canonical } = await importTs('src/chartdata.ts');
+    TEXT = { parseChartText, canonical };
+});
+/** The chart a block body holds, written as text or as JSON. */
+const blockChart = (body) => (body.trim().startsWith('{') ? JSON.parse(body) : TEXT.parseChartText(body).data);
+/** The same chart, whatever form either side is in. */
+const sameChart = (a, b) => TEXT.canonical(a) === TEXT.canonical(b);
 let WHATS_NEW = null;
 await check('the "What\'s new" popup is defined in src/whatsnew.ts', async () => {
     WHATS_NEW = await importTs('src/whatsnew.ts');
@@ -463,7 +473,9 @@ if (started) {
             const text = await obs.readNote(note);
             const m = /```easy-tikz\n([\s\S]*?)\n```/.exec(text);
             assert(m, 'the note has no easy-tikz block');
-            assert(sameJson(JSON.parse(m[1]), inserted), 'the block differs from the chart in the editor');
+            assert(!m[1].trim().startsWith('{'), 'a new chart is not written as text');
+            assert(sameChart(blockChart(m[1]), inserted), `the block differs from the chart in the editor:\n${m[1]}`);
+            return `${m[1].split('\n').length} lines of text`;
         });
         await check('the chart renders in the note with its slider strip', async () => {
             await obs.openNote(note, { mode: 'reading' });
@@ -480,16 +492,63 @@ if (started) {
             await obs.editChartInNote(0);
             const state = await obs.editorState();
             assert(state.cta === 'Save changes', `the primary button says "${state.cta}"`);
-            assert(sameJson(await obs.chart(), inserted), 'the reopened chart differs from the inserted one');
+            assert(sameChart(await obs.chart(), inserted), 'the reopened chart differs from the inserted one');
             assert((await obs.issues()).length === 0 && (await obs.statusChip()) === null, 'the reopened chart has issues');
             await obs.setSlider('c', 7.5);
             await obs.insertIntoNote();
             const text = await obs.readNote(note);
             const m = /```easy-tikz\n([\s\S]*?)\n```/.exec(text);
-            assert(m && JSON.parse(m[1]).parameters[0].value === 7.5, 'the saved block does not hold c = 7.5');
+            assert(m && blockChart(m[1]).parameters[0].value === 7.5, 'the saved block does not hold c = 7.5');
             assert((text.match(/```easy-tikz/g) || []).length === 1, 'the note now has more than one block');
             const charts = await obs.noteCharts();
             assert(charts.length === 1 && charts[0].drawn && charts[0].issues === null, `after saving: ${JSON.stringify(charts)}`);
+        });
+
+        // Charts written as text: drawn, problems named by line, saved back line by line, and moving when they change.
+        const textNote = 'Text chart';
+        const textBlock = (lines) => 'Written by hand:\n\n```easy-tikz\n' + lines.join('\n') + '\n```\n';
+        const handWritten = ['% a parabola', 'view x -3..3, y -4..4', 'slider a = 1 in 0..2', 'f(x) = a x^2 - 2 | blue, sparkly'];
+        await check('text: a text block draws, and its problem names the line and column', async () => {
+            await obs.writeNote(textNote, textBlock(handWritten));
+            await obs.openNote(textNote, { mode: 'reading' });
+            const charts = await obs.noteCharts();
+            assert(charts.length === 1 && charts[0].drawn, `rendered charts: ${JSON.stringify(charts)}`);
+            assert(sameJson(charts[0].sliders, ['a']), `slider strip: ${JSON.stringify(charts[0].sliders)}`);
+            assert(/Line 4, column \d+: unknown option "sparkly"/.test(charts[0].issues || ''), `problem line: "${charts[0].issues}"`);
+            return charts[0].issues;
+        });
+        await check('text: Save changes writes text back, keeping the comment and every unchanged line', async () => {
+            await obs.editChartInNote(0);
+            await obs.setSlider('a', 1.5);
+            await obs.insertIntoNote();
+            const m = /```easy-tikz\n([\s\S]*?)\n```/.exec(await obs.readNote(textNote));
+            assert(m, 'the note lost its block');
+            const lines = m[1].split('\n');
+            assert(lines[0] === handWritten[0] && lines[1] === handWritten[1] && lines[3] === handWritten[3], `block:\n${m[1]}`);
+            assert(/^slider a = 1\.5 in 0\.\.2\b/.test(lines[2]), `slider line: ${lines[2]}`);
+        });
+        await check('motion: a block that changes glides, and its new object pops in', async () => {
+            await obs.openNote(textNote, { mode: 'reading' });
+            await obs.sleep(400);
+            const changed = (await obs.readNote(textNote)).replace('view x -3..3,', 'view x -3..4,').replace('sparkly\n```', 'sparkly\ng(x) = x | red\n```');
+            await obs.writeNote(textNote, changed);
+            await obs.waitFor(() => obs.call(() => !!document.querySelector('.workspace-leaf.mod-active [data-etz-item="g"]')), {
+                timeout: 8000,
+                message: 'the new function to be drawn',
+            });
+            // The first drawing comes first; the next frame finds the old picture and starts the pop-in.
+            const state = () =>
+                obs.call(() => {
+                    const leaf = document.querySelector('.workspace-leaf.mod-active');
+                    const cls = (sel) => Array.from(leaf.querySelectorAll(sel)).map((e) => e.getAttribute('class') || '');
+                    return { g: cls('[data-etz-item="g"]'), f: cls('.etz-curves [data-etz-item="f"]'), reduced: matchMedia('(prefers-reduced-motion: reduce)').matches };
+                });
+            const popped = await obs
+                .waitFor(async () => (await state()).g.some((c) => /\betz-pop\b/.test(c)), { timeout: 3000, message: 'the pop-in' })
+                .then(() => true, () => false);
+            const now = await state();
+            assert(popped, `the new function did not pop in: ${JSON.stringify(now.g)}${now.reduced ? ' (the system asks for reduced motion)' : ''}`);
+            assert(!now.f.some((c) => /\betz-pop\b/.test(c)), 'the function that was there popped in again');
         });
 
         await check('dark theme: the editor opens and draws', async () => {
@@ -514,7 +573,8 @@ if (started) {
             const state = await whatsNewState();
             assert(state.count === 1, `${state.count} popups are open`);
             assert(state.title === 'Easy TikZ 4', `the title is "${state.title}"`);
-            assert(state.items === 10, `${state.items} highlights`);
+            const expected = WHATS_NEW.WHATS_NEW_44.length + WHATS_NEW.WHATS_NEW_LIVE.length + 1 + WHATS_NEW.WHATS_NEW_MORE.length;
+            assert(state.items === expected, `${state.items} highlights, expected ${expected}`);
             assert(state.blankIcons === 0, `${state.blankIcons} icons are blank (an icon id Obsidian does not know)`);
             assert(state.slope === 'slope at x = 0.8: -1.08' && state.area === 'A = 2.76', `the live example shows "${state.slope}" and "${state.area}"`);
             // Seen as soon as it opened, and nothing else of the user's data changed.
@@ -766,6 +826,39 @@ if (started) {
             }, PLUGIN_ID);
             const reached = await ai('/').then(() => true, () => false);
             assert(!reached, 'the server still answers after it was switched off');
+        });
+
+        // Last: Obsidian's mobile mode reloads the app, which the helpers above do not survive.
+        await check('phone: in mobile mode a text chart draws, the editor fills the screen, and the AI tab says AI apps need a computer', async () => {
+            await obs.writeNote('Phone', 'On the phone:\n\n```easy-tikz\nview x -3..3, y -4..4\nslider a = 0.8 in -1.1..1.1 step 0.05\nf(x) = x^3 - 3x | blue, tangent at a\n```\n');
+            await obs.setWindowSize(390, 844);
+            await obs.call(() => app.emulateMobile(true));
+            await obs.sleep(3000);
+            const until = async (fn, what) => {
+                const t = Date.now();
+                while (Date.now() - t < 20000) {
+                    if (await obs.call(fn).catch(() => false)) return;
+                    await obs.sleep(150);
+                }
+                throw new Error(`timed out waiting for ${what}`);
+            };
+            await until(() => !!(window.app && app.workspace && app.workspace.layoutReady && app.plugins.plugins['easy-tikz']), 'the plugin in mobile mode');
+            assert(await obs.call(() => app.isMobile && document.body.classList.contains('is-phone')), 'Obsidian is not in phone mode');
+            await obs.call(async () => app.workspace.openLinkText('Phone', '', false));
+            await until(() => !!document.querySelector('.workspace-leaf.mod-active .etz-inline svg'), 'the chart in the note');
+            await obs.call(() => document.querySelector('.workspace-leaf.mod-active .etz-inline-box').click());
+            await until(() => !!document.querySelector('.modal.tikz-modal .etz-chart svg'), 'the editor');
+            const editor = await obs.call(() => {
+                const r = document.querySelector('.modal.tikz-modal').getBoundingClientRect();
+                return { w: Math.round(r.width), h: Math.round(r.height), narrow: !!document.querySelector('.etz-shell.is-narrow'), wide: document.documentElement.scrollWidth > innerWidth };
+            });
+            assert(editor.w === 390 && editor.h === 844 && editor.narrow && !editor.wide, `editor: ${JSON.stringify(editor)}`);
+            const ai = await obs.call(() => {
+                Array.from(document.querySelectorAll('.modal.tikz-modal [role="tab"]')).find((t) => /AI/.test(t.textContent || ''))?.click();
+                return { titles: Array.from(document.querySelectorAll('.etz-ai-card-title')).map((e) => e.textContent), toggle: !!document.querySelector('.etz-ai-card .etz-chip') };
+            });
+            assert(ai.titles[0] === 'AI apps on a computer' && !ai.toggle, `AI tab: ${JSON.stringify(ai)}`);
+            return `${editor.w} x ${editor.h}, stacked`;
         });
 
         await check('no console errors in the whole run', async () => {

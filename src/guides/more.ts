@@ -586,7 +586,7 @@ const CHARTS_IN_NOTES: Guide = {
             title: 'Insert it into the note',
             body: paragraphs(
                 'Click Insert into note at the bottom right, or press Cmd+Enter (Ctrl+Enter on Windows and Linux). The editor closes and the chart appears in the note, with its slider underneath.',
-                'In the file, the chart is a code block with the language `easy-tikz` that holds the chart settings as JSON. Switch the note to source mode to see it.'
+                'In the file, the chart is a code block with the language `easy-tikz`: a few lines of text, one line per object, such as `f1(x) = x^3 - 3x | blue, thick, tangent at a`. Switch the note to source mode to see it. Change a number there, and the chart glides to it.'
             ),
             shot: { frame: 'note', caption: 'The chart in the note, drawn by the plugin, with the slider strip under it.' },
             tip: 'The picture is drawn by the plugin itself. You need no LaTeX installation to see charts in your notes.',
@@ -605,7 +605,7 @@ const CHARTS_IN_NOTES: Guide = {
             body: 'Move the pointer over the chart. Three buttons appear at its left edge (Align left, Center, Align right) and a width slider at the bottom. Drag the width slider to the left to make the chart narrower, then click Align left.',
             chart: noteChart(4),
             shot: { frame: 'note', actions: [{ hover: [0, 0] }], caption: 'The chart at 420 px, aligned left. The controls show while the pointer is over the chart.' },
-            tip: 'Width and alignment are the only things these controls write into the note (as `displayWidth` and `displayAlign` in the block). In a callout or a `~~~` fence the block cannot be found, and a notice says the change was not saved.',
+            tip: 'Width and alignment are the only things these controls write into the note (as the lines `set displayWidth = 420` and `set displayAlign = "left"` of the block). In a callout or a `~~~` fence the block cannot be found, and a notice says the change was not saved.',
         },
         {
             title: 'Click the chart to edit it',
@@ -631,7 +631,7 @@ const CHARTS_IN_NOTES: Guide = {
             title: 'Copy a chart to another note',
             body: 'A chart is its code block and nothing else. In source mode, select the whole block, from the line that opens the `easy-tikz` block to the three backticks that close it, copy it and paste it into any note. Each copy is a chart of its own.',
             shot: { frame: 'none' },
-            tip: 'Avoid editing the JSON by hand. If it is no longer valid, the note shows "Easy TikZ render error" in place of the chart.',
+            tip: 'You can edit the lines by hand. A mistake shows under the chart with its line and column, such as Line 4, column 9: unknown option, and the rest of the chart still draws.',
         },
     ],
     next: ['export-latex', 'sliders', 'shortcuts'],

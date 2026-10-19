@@ -25,6 +25,10 @@ export interface PluginHost {
         dragEdit?: boolean;
         /** The first-hover drag tip was shown once (SPEC3 1.12). */
         dragTipSeen?: boolean;
+        /** How the editor writes charts it inserts (edited blocks keep their own). Undefined = text. */
+        blockFormat?: 'text' | 'json';
+        /** New objects pop in and values glide (src/motion.ts). Undefined = on. */
+        animateCharts?: boolean;
     };
     saveUserTemplates(templates: UserTemplate[]): Promise<void>;
     /** Persist `data` (drafts). */

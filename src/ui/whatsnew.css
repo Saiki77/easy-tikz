@@ -139,32 +139,20 @@ figcaption.etz-whatsnew-caption {
     letter-spacing: 0.05em;
 }
 
-dl.etz-whatsnew-recipe-rows {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    gap: 4px 14px;
-    align-items: baseline;
+/* The chart's block, one line per object; long lines scroll instead of being cut off. */
+pre.etz-whatsnew-text {
     margin: 0;
-}
-
-.etz-whatsnew-recipe-rows dt,
-.etz-whatsnew-recipe-rows dd {
-    margin: 0;
-    min-width: 0;
-}
-
-.etz-whatsnew-recipe-rows dt code {
+    overflow-x: auto;
     color: var(--text-normal);
     font-family: var(--font-monospace);
     font-size: 11.5px;
-    white-space: nowrap;
+    line-height: 1.55;
+    white-space: pre;
 }
 
-/* Wraps in a narrow window instead of being cut off. */
-.etz-whatsnew-recipe-rows dd {
-    color: var(--text-muted);
-    font-size: var(--etz-font-meta);
-    line-height: 1.35;
+/* New in 4.4: above the live chart. */
+.etz-whatsnew-new {
+    margin-bottom: 20px;
 }
 
 .etz-whatsnew-item {
