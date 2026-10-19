@@ -208,6 +208,8 @@ function fieldNotes(data: Data, loaded: Loaded, defaults: Record<string, Data>):
             }
             const obj = item as Data;
             const part = partOf(obj);
+            // The object's name for messages ("" when it has none or it is not text).
+            const name = typeof obj.name === 'string' || typeof obj.name === 'number' ? String(obj.name) : '';
             if (key === 'tools' && !TOOL_TYPES.includes(part as ToolType)) {
                 notes.push(`${where}: "type" must be one of ${TOOL_TYPES.map((t) => `"${t}"`).join(', ')}; got ${JSON.stringify(obj.type)}`);
                 return;
@@ -216,23 +218,23 @@ function fieldNotes(data: Data, loaded: Loaded, defaults: Record<string, Data>):
             for (const k of Object.keys(obj)) {
                 if (keys.has(k)) continue;
                 const hint = nearest(k, keys);
-                notes.push(`${where} (${part}${obj.name ? ` ${String(obj.name)}` : ''}): "${k}" is not a field and is ignored${hint ? ` (did you mean "${hint}"?)` : ''}`);
+                notes.push(`${where} (${part}${name ? ` ${name}` : ''}): "${k}" is not a field and is ignored${hint ? ` (did you mean "${hint}"?)` : ''}`);
             }
             if (typeof obj.color === 'string' && !(obj.color in COLOR_MAP)) {
-                notes.push(`${where}${obj.name ? ` (${String(obj.name)})` : ''}: colour "${obj.color}" is not one of the plugin's colours, so the LaTeX export can fail${allowed('color')}`);
+                notes.push(`${where}${name ? ` (${name})` : ''}: colour "${obj.color}" is not one of the plugin's colours, so the LaTeX export can fail${allowed('color')}`);
             }
             const out = after[i];
             if (!out || typeof out !== 'object') return;
             for (const k of Object.keys(obj)) {
                 if (!keys.has(k) || k === 'id') continue;
                 const was = obj[k];
-                const now = (out as Data)[k];
+                const now = out[k];
                 if (sameValue(was, now)) continue;
                 if (k === 'name' && typeof now === 'string') {
                     notes.push(`${where}: name ${JSON.stringify(was)} became "${now}" (names are letters, digits and _, unique, and not a reserved word)`);
                     continue;
                 }
-                notes.push(`${where}${obj.name ? ` (${String(obj.name)})` : ''}: "${k}": ${JSON.stringify(was)} is not valid here; the chart uses ${JSON.stringify(now)}${allowed(k)}`);
+                notes.push(`${where}${name ? ` (${name})` : ''}: "${k}": ${JSON.stringify(was)} is not valid here; the chart uses ${JSON.stringify(now)}${allowed(k)}`);
             }
         });
     };
@@ -719,7 +721,7 @@ export function minimize(data: Data): Data {
             const item = (cur[key] as Data[])[i];
             for (const k of Object.keys(item)) {
                 if (k === 'type' || k === 'name') continue;
-                tryDelete((d) => delete ((d[key] as Data[])[i] as Data)[k]);
+                tryDelete((d) => delete (d[key] as Data[])[i][k]);
             }
         }
     }
@@ -780,7 +782,7 @@ interface Example {
 
 export function examples(): Example[] {
     const out: Example[] = EXAMPLES.map((e) => ({ id: e.id, title: e.title, about: e.description, data: e.data }));
-    for (const g of GUIDES) out.push({ id: g.id, title: g.title, about: g.summary, data: g.chart as unknown as Data });
+    for (const g of GUIDES) out.push({ id: g.id, title: g.title, about: g.summary, data: g.chart });
     return out;
 }
 

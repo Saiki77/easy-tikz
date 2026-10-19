@@ -399,8 +399,8 @@ export class SVG3DRenderer {
 
     /**
      * Compute the largest box that fits in the parent's content area with
-     * the configured `aspectW / aspectH` ratio, and write it to the root's
-     * inline width/height. Memoized: skips the DOM write when parent /
+     * the configured `aspectW / aspectH` ratio, and pass it to the root's
+     * CSS (--etz-3d-width / --etz-3d-height). Memoized: skips the DOM write when parent /
      * config dimensions are unchanged, so a 60fps drag does not write
      * inline styles each frame. If the parent measures 0 (modal hasn't
      * finished laying out yet), falls back to the configured size.
@@ -461,9 +461,8 @@ export class SVG3DRenderer {
             return;
         }
         this.lastFit = { parentW, parentH, configW: aspectW, configH: aspectH, w, h };
-        // The aspect-ratio reset clears any inline style left over from
-        // previous plugin versions.
-        this.root.setCssStyles({ width: w + 'px', height: h + 'px', aspectRatio: '' });
+        // As variables, so a note's box (inline.css) can let the root fill it instead.
+        this.root.setCssProps({ '--etz-3d-width': `${w}px`, '--etz-3d-height': `${h}px` });
     }
 
     /**

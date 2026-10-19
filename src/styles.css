@@ -131,10 +131,12 @@
 }
 
 /* 3D renderer root: holds the visible canvas plus an off-screen SVG that
-   is rendered on demand for Copy SVG / Copy PNG. Explicit width/height
-   are written by the renderer per frame for fit-contain sizing; the
-   max-* rules are a safety net for the brief pre-layout window. */
+   is rendered on demand for Copy SVG / Copy PNG. The renderer measures
+   the fit-contain size and passes it in --etz-3d-width / --etz-3d-height;
+   the max-* rules are a safety net for the brief pre-layout window. */
 .tikz-3d-root {
+    width: var(--etz-3d-width, auto);
+    height: var(--etz-3d-height, auto);
     position: relative;
     border-radius: 6px;
     box-shadow: 0 1px 4px color-mix(in srgb, var(--background-modifier-border) 60%, transparent);
@@ -181,9 +183,10 @@
 /* --- Utility + support classes (replacing inline-style writes) --- */
 
 /* Generic hide toggle (tab panels, collapsed card bodies, inline messages).
-   `!important` wins over component rules such as `display: flex`. */
-.tikz-hidden {
-    display: none !important;
+   `:not(#etz-none)` gives the rule an id's weight, so it wins over
+   component rules such as `display: flex` (no element has that id). */
+.tikz-hidden:not(#etz-none) {
+    display: none;
 }
 
 /* Offscreen host used to measure MathJax label size before insertion

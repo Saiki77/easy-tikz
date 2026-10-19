@@ -143,19 +143,25 @@ export class VaultChartHost implements ChartHost {
             if (!svg) return null;
             const background = getComputedStyle(doc.body).getPropertyValue('--background-primary').trim() || '#ffffff';
             const png = await svgToPng(exportableSvg(svg, doc), 2, background);
-            return arrayBufferToBase64(await png.arrayBuffer());
+            return await pngData(png);
         } finally {
             stage.remove();
         }
     }
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    const CHUNK = 0x8000;
-    for (let i = 0; i < bytes.length; i += CHUNK) binary += String.fromCharCode(...Array.from(bytes.subarray(i, i + CHUNK)));
-    return btoa(binary);
+/** The PNG as MCP image data: the payload of its data: URL. */
+function pngData(png: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const url = reader.result;
+            if (typeof url === 'string' && url.includes(',')) resolve(url.slice(url.indexOf(',') + 1));
+            else reject(new Error('Could not read the PNG.'));
+        };
+        reader.onerror = () => reject(new Error('Could not read the PNG.'));
+        reader.readAsDataURL(png);
+    });
 }
 
 /** Control characters, direction marks (which can make a path read differently) and ":" (a drive or URL scheme). */

@@ -17,7 +17,7 @@ export interface ShapeModel {
     /** Rows without the family: 1 for push / slide, else 0 (cursor rows of families are added by the solver). */
     readonly cursorRows: number;
     /** Shape rows for the current numbers (call ev.apply() before) and family member z (px). */
-    eval(z: readonly [number, number], out: Float64Array, offset: number): void;
+    evaluate(z: readonly [number, number], out: Float64Array, offset: number): void;
     /** Push / slide row(s) for a cursor in MATH coordinates (no-op for other shapes). */
     evalCursor(cursor: Pt, out: Float64Array, offset: number): void;
     /**
@@ -295,7 +295,7 @@ abstract class SampledShape implements ShapeModel {
         this.family = f;
     }
 
-    abstract eval(z: readonly [number, number], out: Float64Array, offset: number): void;
+    abstract evaluate(z: readonly [number, number], out: Float64Array, offset: number): void;
 
     evalCursor(_cursor: Pt, _out: Float64Array, _offset: number): void {
         // Families add their own cursor rows in the solver.
@@ -333,7 +333,7 @@ class GraphShape extends SampledShape {
         this.refreshWeights();
     }
 
-    eval(z: readonly [number, number], out: Float64Array, offset: number): void {
+    evaluate(z: readonly [number, number], out: Float64Array, offset: number): void {
         const m = this.affine(z);
         const kx = this.map.kx;
         const ky = this.map.ky;
@@ -396,7 +396,7 @@ class ImplicitShape extends SampledShape {
         if (guard) this.buildProbes();
     }
 
-    eval(z: readonly [number, number], out: Float64Array, offset: number): void {
+    evaluate(z: readonly [number, number], out: Float64Array, offset: number): void {
         const m = this.affine(z);
         const kx = this.map.kx;
         const ky = this.map.ky;
@@ -502,7 +502,7 @@ class PointShape extends SampledShape {
         }
     }
 
-    eval(z: readonly [number, number], out: Float64Array, offset: number): void {
+    evaluate(z: readonly [number, number], out: Float64Array, offset: number): void {
         const m = this.affine(z);
         const kx = this.map.kx;
         const ky = this.map.ky;
@@ -558,7 +558,7 @@ class PushShape extends SampledShape {
         this.L = L;
     }
 
-    eval(_z: readonly [number, number], _out: Float64Array, _offset: number): void {
+    evaluate(_z: readonly [number, number], _out: Float64Array, _offset: number): void {
         // No shape rows.
     }
 
@@ -607,7 +607,7 @@ class SlideShape extends SampledShape {
         this.f = input.f || null;
     }
 
-    eval(_z: readonly [number, number], _out: Float64Array, _offset: number): void {
+    evaluate(_z: readonly [number, number], _out: Float64Array, _offset: number): void {
         // No shape rows.
     }
 

@@ -16,8 +16,7 @@
  *     anything else and never in files with instructions for AI agents, and
  *     the plugin shows a notice for every write.
  */
-import * as http from 'http';
-import type { IncomingMessage, Server, ServerResponse } from 'http';
+import * as nodeHttp from 'http';
 import GUIDE from '../../docs/ai.md';
 import { ChartHost, SERVER_NAME, callTool, handleMcp, toolList } from './mcp';
 
@@ -35,6 +34,50 @@ export interface RequestHead {
 }
 
 export type Gate = { ok: true } | { ok: false; status: number; message: string };
+
+/*
+ * The parts of Node's http module this file uses, typed here so the file
+ * reads the same with or without Node's type package installed.
+ */
+interface HttpRequest {
+    method?: string;
+    url?: string;
+    headers: Record<string, string | string[] | undefined>;
+    setEncoding(encoding: 'utf8'): void;
+    on(event: 'data', listener: (chunk: string) => void): void;
+    on(event: 'end', listener: () => void): void;
+    on(event: 'error', listener: (e: Error) => void): void;
+    destroy(): void;
+}
+
+interface HttpResponse {
+    setHeader(name: string, value: string): void;
+    writeHead(status: number, headers?: Record<string, string>): void;
+    end(body?: string): void;
+}
+
+interface HttpError extends Error {
+    code?: string;
+}
+
+interface HttpServer {
+    requestTimeout: number;
+    headersTimeout: number;
+    maxConnections: number;
+    once(event: 'error', listener: (e: HttpError) => void): void;
+    on(event: 'error', listener: (e: HttpError) => void): void;
+    off(event: 'error', listener: (e: HttpError) => void): void;
+    listen(port: number, host: string, listening: () => void): void;
+    close(closed: () => void): void;
+    /** Node 18.2+. */
+    closeAllConnections?: () => void;
+}
+
+interface Http {
+    createServer(options: { connectionsCheckingInterval: number }, handler: (req: HttpRequest, res: HttpResponse) => void): HttpServer;
+}
+
+const http = nodeHttp as unknown as Http;
 
 function header(head: RequestHead, name: string): string {
     const v = head.headers[name];
@@ -68,7 +111,7 @@ export function gate(head: RequestHead, token: string, port: number): Gate {
 }
 
 export class AiServer {
-    private server: Server | null = null;
+    private server: HttpServer | null = null;
 
     constructor(
         private readonly host: ChartHost,
@@ -82,14 +125,13 @@ export class AiServer {
     /** Start listening; rejects with a readable message when the port is taken. */
     start(): Promise<void> {
         // connectionsCheckingInterval (Node 18.4+) enforces the timeouts below every second.
-        const options = { connectionsCheckingInterval: 1000 } as unknown as http.ServerOptions;
-        const server = http.createServer(options, (req, res) => void this.serve(req, res));
+        const server = http.createServer({ connectionsCheckingInterval: 1000 }, (req, res) => void this.serve(req, res));
         server.requestTimeout = 10000;
         server.headersTimeout = 5000;
         server.maxConnections = MAX_CONNECTIONS;
         this.server = server;
         return new Promise((resolve, reject) => {
-            const fail = (e: NodeJS.ErrnoException) => {
+            const fail = (e: HttpError) => {
                 this.server = null;
                 reject(new Error(e.code === 'EADDRINUSE' ? `Port ${this.opts.port} is already in use. Choose another one in the settings.` : e.message));
             };
@@ -119,11 +161,11 @@ export class AiServer {
         return new Promise((resolve) => {
             server.close(() => resolve());
             // Keep-alive connections of AI apps would hold close() open (Node 18.2+).
-            (server as Server & { closeAllConnections?: () => void }).closeAllConnections?.();
+            server.closeAllConnections?.();
         });
     }
 
-    private async serve(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    private async serve(req: HttpRequest, res: HttpResponse): Promise<void> {
         const head: RequestHead = { method: req.method || 'GET', url: req.url || '/', headers: req.headers };
         const g = gate(head, this.opts.token, this.opts.port);
         if (!g.ok) return send(res, g.status, { error: g.message });
@@ -166,16 +208,16 @@ export class AiServer {
     }
 }
 
-function send(res: ServerResponse, status: number, body: unknown): void {
+function send(res: HttpResponse, status: number, body: unknown): void {
     sendText(res, status, JSON.stringify(body), 'application/json; charset=utf-8');
 }
 
-function sendText(res: ServerResponse, status: number, body: string, type: string): void {
+function sendText(res: HttpResponse, status: number, body: string, type: string): void {
     res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
     res.end(body);
 }
 
-function readJson(req: IncomingMessage, emptyIsObject = false): Promise<unknown> {
+function readJson(req: HttpRequest, emptyIsObject = false): Promise<unknown> {
     return new Promise((resolve, reject) => {
         let raw = '';
         req.setEncoding('utf8');

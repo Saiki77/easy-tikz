@@ -27,7 +27,7 @@ export function extractMathSource(text: string): string | null {
 let measureHost: HTMLDivElement | null = null;
 function getMeasureHost(): HTMLDivElement {
     if (!measureHost || !measureHost.isConnected) {
-        measureHost = activeDocument.body.createEl('div', { cls: 'easy-tikz-measure-host' });
+        measureHost = activeDocument.body.createDiv({ cls: 'easy-tikz-measure-host' });
     }
     return measureHost;
 }
@@ -143,10 +143,10 @@ function renderAndMeasure(mathSource: string, color: string, fontSizePx: number)
 
 /** Resolves when the fonts the document asked for so far have loaded (MathJax's glyph fonts load on first use). */
 function fontsLoaded(): Promise<void> {
-    const fonts = activeDocument.fonts;
-    if (!fonts || !fonts.ready) return Promise.resolve();
+    // Test documents have no FontFaceSet: nothing to wait for there.
+    if (!('fonts' in activeDocument)) return Promise.resolve();
     const done = (): void => undefined;
-    return fonts.ready.then(done, done);
+    return activeDocument.fonts.ready.then(done, done);
 }
 
 /**

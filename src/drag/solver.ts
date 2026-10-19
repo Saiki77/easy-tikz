@@ -273,13 +273,13 @@ export function planDrag(p: DragProblem): DragPlan {
     const nR = fam ? nS : shape.cursorRows;
     const grabMath = fromPx(p.grab, map);
     const evalRows = (out: Float64Array) => {
-        if (fam) shape.eval(Z0, out, 0);
+        if (fam) shape.evaluate(Z0, out, 0);
         else shape.evalCursor(grabMath, out, 0);
     };
 
     // Rows at the start; non-finite ones are dropped (NaN in base).
     const base = new Float64Array(nS);
-    shape.eval(Z0, base, 0);
+    shape.evaluate(Z0, base, 0);
     const start = new Float64Array(nR);
     evalRows(start);
     const ok = new Uint8Array(nR);
@@ -354,8 +354,8 @@ export function planDrag(p: DragProblem): DragPlan {
             const zm: [number, number] = [0, 0];
             zp[k] = 1e-3;
             zm[k] = -1e-3;
-            shape.eval(zp, rp, 0);
-            shape.eval(zm, rm, 0);
+            shape.evaluate(zp, rp, 0);
+            shape.evaluate(zm, rm, 0);
             const b = new Float64Array(nS);
             for (let j = 0; j < nS; j++) {
                 const v = (rp[j] - rm[j]) / 2e-3;
@@ -722,7 +722,7 @@ class Run {
         this.setTheta(w);
         this.zOf(w, this.z);
         const nS = this.nS;
-        this.p.shape.eval(this.z, out, 0);
+        this.p.shape.evaluate(this.z, out, 0);
         const base = this.plan.base;
         let bad = 0;
         for (let j = 0; j < nS; j++) {

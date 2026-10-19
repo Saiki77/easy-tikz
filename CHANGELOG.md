@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [4.3.1] - 2026-10-19
+
+Clears the warnings of Obsidian's automated review of releases. Nothing changes in how the plugin looks or works.
+
+### Fixed
+
+- **Review warnings.** The local AI server describes the parts of Node's `http` module it uses with its own types, so the review reads it as typed code (52 warnings). Four type casts that changed nothing are gone, the box that measures labels is made with `createDiv`, and waiting for fonts no longer tests a Promise in a condition.
+- **No `!important` in the styles.** The hide class wins over component rules by its weight alone, the 3D view takes its measured size through CSS variables (so a 3D chart in a note still fills its box), and the screen-reader-only class uses `clip` instead of `clip-path`.
+- **"Dynamic code execution" in the review.** The plugin never runs generated code: the review read the drag solver's method `eval` as JavaScript's `eval`. The method is now called `evaluate`.
+- **No base64 call.** The AI server's `render_chart` takes the PNG's data from the browser's file reader instead of `btoa`.
+
 ## [4.3.0] - 2026-10-15
 
 Make charts with AI. A new **AI** tab in the editor (next to Help) offers three ways: AI apps on this computer connect to a local AI server and build, check and add charts by themselves; AI chats such as ChatGPT get a guide to paste, and the chart they write comes back with **Paste the chart**; agents working in the vault learn the format from `AGENTS.md` and `CLAUDE.md`. Blocks written by hand or by an AI now render even with comments, trailing commas or a missing `"v": 4`. The block format is unchanged.
