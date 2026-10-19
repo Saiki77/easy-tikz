@@ -167,7 +167,7 @@ test('ai server: guide, sections, examples', async () => {
     assert.ok(bad.isError);
     assert.match(textOf(await callTool('list_examples', {}, host)), /^lp: Linear program/m);
     const example = textOf(await callTool('get_example', { id: 'tangent' }, host));
-    assert.match(example, /```easy-tikz\nview x -3\.\.3, y -4\.\.4\n/);
+    assert.match(example, /```easy-tikz\nshow x from -3 to 3 and y from -4 to 4\n/);
     const block = blocksOf(example)[0];
     const builtIn = examples().find((e) => e.id === 'tangent');
     assert.ok(builtIn && canonical(data(block.text)) === canonical(builtIn.data), 'the text example is the built-in chart');
@@ -201,7 +201,7 @@ test('ai server: add_chart writes into the open note, below a heading, in place 
     const lp = host.notes.get('LP.md') || '';
     assert.ok(!lp.includes('(chart goes here)'));
     // New blocks are text unless the user chose JSON.
-    assert.match(lp, /## Graphical solution\n\n```easy-tikz\nview x -1\.\.7, y -1\.5\.\.1\.5\nf1\(x\) = sin\(x\) \| blue\n```/);
+    assert.match(lp, /## Graphical solution\n\n```easy-tikz\nshow x from -1 to 7 and y from -1\.5 to 1\.5\nplot f1\(x\) = sin\(x\) in blue\n```/);
     assert.match(lp, /```\n\n## Next$/);
     assert.equal(host.notices.length, 1);
 
@@ -259,7 +259,7 @@ test('ai server: update_chart keeps a text block text, and a JSON chart changes 
     assert.ok(!(await callTool('update_chart', { note: 'T', index: 1, chart }, host)).isError);
     const lines = /```easy-tikz\n([\s\S]*?)\n```/.exec(host.notes.get('T.md') || '')?.[1].split('\n') ?? [];
     assert.deepEqual(lines.slice(0, 4), body.slice(0, 4), 'unchanged lines and the comment stay');
-    assert.equal(lines[4], 'f2(x) = 0.25 | gray');
+    assert.equal(lines[4], 'plot f2(x) = 0.25 in gray');
     const replaced = await callTool('update_chart', { note: 'T', index: 1, chart: 'view x 0..1, y 0..1\ng(x) = x' }, host);
     assert.ok(!replaced.isError, textOf(replaced));
     assert.match(host.notes.get('T.md') || '', /```easy-tikz\nview x 0\.\.1, y 0\.\.1\ng\(x\) = x\n```/);

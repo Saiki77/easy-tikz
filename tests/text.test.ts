@@ -190,8 +190,8 @@ test('text: new objects join their kind, deleted ones leave, new chart fields go
     assert.ok(lines.includes('P2: corners of R1 | blue, label "({x}, {y})"'), out);
     assert.ok(lines.includes('title Production plan'), out);
     assert.ok(lines.indexOf('title Production plan') < lines.findIndex((l) => l.startsWith('slider')), out);
-    assert.equal(lines.indexOf('slider k = 2 in 0..5 step 0.5'), lines.indexOf('slider c = 6 in 0..15') + 1, out);
-    assert.ok(lines.includes('h(x) = 4 - x | blue'), out);
+    assert.equal(lines.indexOf('slider k from 0 to 5, starting at 2, in steps of 0.5'), lines.indexOf('slider c = 6 in 0..15') + 1, out);
+    assert.ok(lines.includes('plot h(x) = 4 - x in blue'), out);
     assert.ok(!lines.some((l) => l.startsWith('P1:')), out);
     assert.equal(canonical(parseChartText(out).data), canonical(data));
 });
@@ -200,7 +200,7 @@ test('text: a changed view rewrites the view line only', () => {
     const data = parseChartText(TANGENT).data;
     data.xmax = '4';
     const out = writeChartText(TANGENT, data).split('\n');
-    assert.equal(out[0], 'view x -3..4, y -4..4');
+    assert.equal(out[0], 'show x from -3 to 4 and y from -4 to 4');
     assert.deepEqual(out.slice(1), TANGENT.split('\n').slice(1));
 });
 
@@ -301,8 +301,8 @@ test('text: a setting split over two lines is written once', () => {
     data.ymax = '25';
     data.showSmallGrid = false;
     const out = writeChartText(text, data).split('\n');
-    assert.equal(out.filter((l) => l.startsWith('view')).length, 1, out.join('\n'));
-    assert.equal(out.filter((l) => l.startsWith('grid')).length, 1, out.join('\n'));
+    assert.equal(out.filter((l) => /^(view|show)\b/.test(l)).length, 1, out.join('\n'));
+    assert.equal(out.filter((l) => /\bgrid\b/.test(l)).length, 1, out.join('\n'));
 });
 
 test('text: fields the words do not cover still come back', () => {
@@ -372,4 +372,133 @@ test('text: random editor edits on every built-in chart keep every comment and g
         if (notes(out) < notes(text)) failures.push(`${kind}: comments lost\n${out}`);
     }
     assert.deepEqual(failures.slice(0, 3), []);
+});
+
+// ------------------------------------------------- lines in words (4.5)
+
+const WORDS: Record<string, string> = {
+    lp: [
+        '# A linear program',
+        'show x from 0 to 5.5 and y from 0 to 4.5',
+        'axes on the edges',
+        'slider c from 0 to 15, starting at 6',
+        'shade where x + y <= 4 and x + 3y <= 6 and x >= 0 and y >= 0, numbered',
+        'draw 2x + 3y = c in red, dashed',
+        'mark the maximum of 2x + 3y in the region, large, with coordinates',
+    ].join('\n'),
+    tangent: [
+        'show x from -3 to 3 and y from -4 to 4',
+        'axes in the middle',
+        'slider a from -1.1 to 1.1, starting at 0.8, in steps of 0.05',
+        'plot f(x) = x^3 - 3x in blue, thick, with its tangent at a and its extrema',
+        'plot g(x) = f(a) + (3a^2 - 3)(x - a), hidden',
+        'shade between f and g from x = min(a, -2a) to max(a, -2a) in orange',
+    ].join('\n'),
+    market: [
+        'show x from 0 to 25 and y from 0 to 25',
+        'xlabel quantity',
+        'ylabel price',
+        'slider s from -6 to 6, starting at 0',
+        'plot demand(x) = 20 + s - x in blue, thick',
+        'plot supply(x) = 2 + 0.5x in orange, thick',
+        'eq: mark where demand and supply cross in black, with lines to the axes, labelled "({x:1}, {y:1})"',
+        'shade where eq_y <= y <= demand and 0 <= x <= eq_x in blue, labelled "CS"',
+    ].join('\n'),
+    shapes: [
+        'show x from -1 to 6 and y from -1 to 5',
+        'with a grid',
+        'draw an arrow from (0, 0) to (3, 2) in red',
+        'draw a line from (0, 4) to (2, 4) to (2, 3), dashed',
+        'draw a polygon through (4, 0), (5, 0) and (5, 1) in teal',
+        'draw a brace from (0, -0.5) to (3, -0.5), labelled "3"',
+        'write "start" at (0, 0), below, small',
+        'draw the level curves of x^2 + y^2 at 1 and 4 in gray',
+        'mark (1, 1) and (2, 2), small',
+        'mark the integer points in the region',
+        'shade where x + y <= 3 and x >= 0 and y >= 0, not filled, outlined',
+    ].join('\n'),
+    surface: ['3d', 'show x from -2 to 2, y from -2 to 2 and z from 0 to 8', 'slider h from 0 to 8, starting at 3', 'plot z = x^2 + y^2 for x from -2 to 2 and y from -2 to 2 in blue, opacity 0.7', 'draw the plane z = h in orange'].join('\n'),
+};
+
+test('text: lines in words parse without problems, read back after printing and are kept as written', () => {
+    for (const [id, text] of Object.entries(WORDS)) {
+        const parsed = parseChartText(text);
+        assert.deepEqual(parsed.problems, [], id);
+        const printed = printChartText(parsed.data);
+        assert.equal(canonical(parseChartText(printed).data), canonical(parsed.data), `${id} printed\n${printed}`);
+        assert.equal(writeChartText(text, parsed.data), text, id);
+    }
+});
+
+test('text: the words and the short forms of 4.4.0 make the same chart', () => {
+    const same: Array<[string, string]> = [
+        [WORDS.tangent, TANGENT.replace('title slope at x = {a}: {3a^2 - 3:2}\n', '').replace('step 0.05', 'step 0.05')],
+        [WORDS.surface, TEXTS.surface.replace('z = x^2 + y^2 | blue, x -2..2, y -2..2, opacity 0.7', 'z = x^2 + y^2 | blue, x -2..2, y -2..2, opacity 0.7')],
+        ['plot f(x) = sqrt(x) from x = 0 to 4 in green, filled, with the legend "root"', 'f(x) = sqrt(x) | green, fill, legend "root", domain 0..4'],
+        ['draw a double arrow from (0, 0) to (1, 1)', 'arrow (0, 0) <-> (1, 1)'],
+        ['draw an arrow from (0, 0) to (1, 1), backwards', 'arrow (0, 0) <- (1, 1)'],
+        ['mark the corners of R1\nR1: shade where x <= 2 and y <= 2', 'corners of R1\nR1: shade x <= 2, y <= 2'],
+        ['mark the integer maximum of 3x + 4y in R1\nR1: shade x <= 2, y <= 2', 'integer max 3x + 4y in R1\nR1: shade x <= 2, y <= 2'],
+        ['mark the crossings of f and g\nplot f(x) = x\nplot g(x) = 2 - x', 'crossings of f and g\nf(x) = x\ng(x) = 2 - x'],
+        ['no axes\nwith a fine grid', 'axes none\ngrid fine'],
+        ['plot sin(x) in red, thick and dashed', 'y = sin(x) | red, thick, dashed'],
+    ];
+    for (const [words, short] of same) {
+        const a = parseChartText(words);
+        const b = parseChartText(short);
+        assert.deepEqual(a.problems, [], words);
+        assert.deepEqual(b.problems, [], short);
+        assert.equal(canonical(a.data), canonical(b.data), words);
+    }
+});
+
+test('text: "the region" is the one region of the chart, wherever its line is', () => {
+    const r = parseChartText('mark the maximum of x + y in the region\nF: shade where x + 2y <= 4 and x >= 0 and y >= 0');
+    assert.deepEqual(r.problems, []);
+    assert.equal((r.data.tools as Data[])[0].regionName, 'F');
+    const two = parseChartText('shade where x <= 1\nshade where y <= 1\nmark the corners of the region');
+    assert.equal(two.problems.length, 1);
+    assert.deepEqual([two.problems[0].line, two.problems[0].column], [3, 21]);
+    assert.match(two.problems[0].message, /unclear.*2 regions/);
+    assert.match(parseChartText('mark the corners of the region').problems[0].message, /needs a shaded region/);
+});
+
+test('text: a line about the region gets its name once the chart has a second region', () => {
+    const text = ['shade where x + y <= 4 and x >= 0 and y >= 0', '% the optimum', 'mark the maximum of 2x + 3y in the region, large'].join('\n');
+    const data = parseChartText(text).data;
+    (data.tools as Data[]).push({ type: 'region', name: 'R2', conditions: ['x >= 3'] });
+    const out = writeChartText(text, data);
+    assert.ok(out.includes('% the optimum'), out);
+    assert.ok(out.includes('mark the maximum of 2x + 3y in R1, large'), out);
+    assert.equal(canonical(parseChartText(out).data), canonical(data));
+});
+
+test('text: options in words are found without a bar, and an unknown one is named', () => {
+    const r = parseChartText('plot f(x) = x^2 in blue, sparkly');
+    assert.equal(r.problems.length, 1);
+    assert.deepEqual([r.problems[0].line, r.problems[0].column], [1, 26]);
+    assert.match(r.problems[0].message, /unknown option "sparkly"; a function takes: in a colour/);
+    assert.equal((r.data.functions as Data[])[0].expression, 'x^2');
+    assert.equal((r.data.functions as Data[])[0].color, 'blue');
+    // A bar still says where the options start: what is before it is all statement.
+    const bar = parseChartText('R1: shade x <= 1 | in red, with a dashed outline');
+    assert.deepEqual(bar.problems, []);
+    assert.deepEqual((bar.data.tools as Data[])[0].conditions, ['x <= 1']);
+    assert.equal((bar.data.tools as Data[])[0].outline, 'dashed');
+});
+
+test('text: names spelled like a word of the syntax still work', () => {
+    const r = parseChartText('slider mark from 0 to 5\nmark + x = 3\nplot(x) = x^2\nshow(x) = 2x');
+    assert.deepEqual(r.problems, []);
+    assert.equal((r.data.tools as Data[])[0].equation, 'mark + x = 3');
+    assert.deepEqual(
+        (r.data.functions as Data[]).map((f) => f.name),
+        ['plot', 'show']
+    );
+});
+
+test('text: # starts a comment, like % and //', () => {
+    const r = parseChartText('# the parabola\nplot f(x) = x^2');
+    assert.deepEqual(r.problems, []);
+    assert.equal((r.data.functions as Data[]).length, 1);
 });

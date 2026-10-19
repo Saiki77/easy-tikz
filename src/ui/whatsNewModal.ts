@@ -22,7 +22,7 @@ import { SceneCache } from '../scene';
 import { SettingsManager } from '../settings';
 import { Parameter } from '../types';
 import { cloneData, errorText, fitPixelScale } from '../util';
-import { WHATS_NEW_44, WHATS_NEW_AI, WHATS_NEW_CHART_GUIDE, WHATS_NEW_LIVE, WHATS_NEW_MORE, WHATS_NEW_SUBTITLE, WHATS_NEW_TITLE, whatsNewChart, whatsNewText, WhatsNewItem } from '../whatsnew';
+import { WHATS_NEW_RECENT, WHATS_NEW_RECENT_TITLE, WHATS_NEW_AI, WHATS_NEW_CHART_GUIDE, WHATS_NEW_LIVE, WHATS_NEW_MORE, WHATS_NEW_SUBTITLE, WHATS_NEW_TITLE, whatsNewChart, whatsNewText, WhatsNewItem } from '../whatsnew';
 import { IconButtonHandle, LiveSliderHandle, formatDecimals, iconButton, liveSlider, textButton, uniqueId, visuallyHidden } from './kit';
 
 /** What the buttons of the popup do; the caller decides (a new editor, or the editor the popup was opened from). */
@@ -73,13 +73,13 @@ export class WhatsNewModal extends Modal {
         titleEl.createSpan({ cls: 'etz-whatsnew-version', text: version });
         contentEl.createEl('p', { cls: 'etz-whatsnew-subtitle', text: WHATS_NEW_SUBTITLE });
 
-        // --- new in 4.4
+        // --- the newest items
         const fresh = contentEl.createEl('section', { cls: 'etz-whatsnew-new' });
-        const freshHeading = fresh.createEl('h3', { cls: 'etz-whatsnew-h', text: 'New in 4.4' });
+        const freshHeading = fresh.createEl('h3', { cls: 'etz-whatsnew-h', text: WHATS_NEW_RECENT_TITLE });
         freshHeading.id = uniqueId('whatsnew-new');
         fresh.setAttr('aria-labelledby', freshHeading.id);
         const freshGrid = fresh.createDiv({ cls: ['etz-whatsnew-list', 'mod-grid'] });
-        for (const item of WHATS_NEW_44) this.item(freshGrid, item);
+        for (const item of WHATS_NEW_RECENT) this.item(freshGrid, item);
 
         // --- hero: the live chart, and what makes it move
         const hero = contentEl.createDiv({ cls: 'etz-whatsnew-hero' });

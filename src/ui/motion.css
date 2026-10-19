@@ -1,67 +1,22 @@
 /* Objects new to a chart pop in (src/motion.ts): curves draw themselves,
-   points pop, regions, guides and labels fade up. --etz-pop-delay is
-   negative while a pop-in continues across redraws, positive while an
-   object waits for the one before it. */
-.etz-pop {
-    animation-duration: 460ms;
-    animation-timing-function: cubic-bezier(0.2, 0.75, 0.25, 1);
-    animation-fill-mode: both;
-    animation-delay: var(--etz-pop-delay, 0ms);
-}
-
+   points pop, regions, guides and labels fade up. The script sets the
+   variables for every animation frame, from the time of the frame. */
 .etz-pop.etz-pop-draw {
     stroke-dasharray: 1 1;
-    animation-name: etz-draw;
-    animation-duration: 650ms;
-    animation-timing-function: cubic-bezier(0.5, 0, 0.2, 1);
+    stroke-dashoffset: var(--etz-pop-d, 0);
 }
 
 .etz-pop.etz-pop-fade {
-    animation-name: etz-fade;
+    opacity: var(--etz-pop-o, 1);
 }
 
 .etz-pop.etz-pop-dot {
     transform-box: fill-box;
     transform-origin: center;
-    animation-name: etz-dot;
-    animation-duration: 420ms;
-    animation-timing-function: cubic-bezier(0.3, 1.7, 0.5, 1);
+    scale: var(--etz-pop-s, 1);
 }
 
 .etz-pop.etz-pop-rise {
-    animation-name: etz-rise;
-}
-
-@keyframes etz-draw {
-    from {
-        stroke-dashoffset: 1;
-    }
-    to {
-        stroke-dashoffset: 0;
-    }
-}
-
-@keyframes etz-fade {
-    from {
-        opacity: 0;
-    }
-}
-
-@keyframes etz-dot {
-    from {
-        scale: 0;
-    }
-}
-
-@keyframes etz-rise {
-    from {
-        opacity: 0;
-        translate: 0 6px;
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .etz-pop.etz-pop {
-        animation-name: none;
-    }
+    opacity: var(--etz-pop-o, 1);
+    translate: 0 var(--etz-pop-y, 0px);
 }

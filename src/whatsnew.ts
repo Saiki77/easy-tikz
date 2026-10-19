@@ -26,7 +26,7 @@ import { printChartText } from './text/print';
 import type { FunctionParameters, Parameter, RegionTool } from './types';
 
 /** Version of the popup's content. Raise it when the popup says something new. */
-export const WHATS_NEW_VERSION = '4.4.0';
+export const WHATS_NEW_VERSION = '4.5.0';
 
 /**
  * Compare two version strings numerically, part by part ('4.10.0' > '4.9.1',
@@ -122,14 +122,22 @@ export interface WhatsNewItem {
 }
 
 export const WHATS_NEW_TITLE = 'Easy TikZ 4';
-export const WHATS_NEW_SUBTITLE = 'Charts are now a few lines of text you can read in the note. They move when they change, and they work on your phone.';
+export const WHATS_NEW_SUBTITLE = 'Write a chart in plain words, and watch it draw under the block as you type. On your phone too.';
 
-/** New in 4.4, at the top. */
-export const WHATS_NEW_44: WhatsNewItem[] = [
+/** The heading of the newest items, at the top. */
+export const WHATS_NEW_RECENT_TITLE = 'New in 4.4 and 4.5';
+
+/** New in 4.4 and 4.5, at the top. */
+export const WHATS_NEW_RECENT: WhatsNewItem[] = [
     {
         icon: 'type',
-        title: 'Charts as text',
-        text: 'One line per object, the way the math reads: `f(x) = x^2 | blue`. Saving from the editor keeps your other lines and comments.',
+        title: 'Charts in plain words',
+        text: 'One line per object: `plot f(x) = x^2 in blue`. The editor writes these lines too, and keeps your other lines and comments.',
+    },
+    {
+        icon: 'eye',
+        title: 'The chart under the block',
+        text: 'While you edit a block in Live Preview, its chart sits right under it and changes as you type.',
     },
     {
         icon: 'sparkles',
@@ -139,12 +147,7 @@ export const WHATS_NEW_44: WhatsNewItem[] = [
     {
         icon: 'smartphone',
         title: 'On phones and tablets',
-        text: 'Charts draw in your notes on iOS and Android, and the editor works there too.',
-    },
-    {
-        icon: 'palette',
-        title: "Your theme's colours",
-        text: 'Charts take the colours of your theme and follow light and dark mode. The settings can pin the colours of the LaTeX export.',
+        text: "Charts draw in your notes on iOS and Android, and take your theme's colours in light and dark mode.",
     },
 ];
 
@@ -219,7 +222,7 @@ export const WHATS_NEW_AI: WhatsNewItem = {
 
 /** Every icon the popup uses (its items, buttons and the Help tab link). */
 export const WHATS_NEW_ICONS: readonly string[] = [
-    ...WHATS_NEW_44.map((i) => i.icon),
+    ...WHATS_NEW_RECENT.map((i) => i.icon),
     ...WHATS_NEW_LIVE.map((i) => i.icon),
     WHATS_NEW_AI.icon,
     ...WHATS_NEW_MORE.map((i) => i.icon),

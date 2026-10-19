@@ -126,81 +126,9 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": false,
-  "documentSetup": true,
-  "title": "",
-  "size_x_cm": 10,
-  "size_y_cm": 10,
-  "show_axis_label": true,
-  "axis_label_x": "x",
-  "axis_label_y": "y",
-  "showAxis": true,
-  "showLargeGrid": false,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "-0.5",
-  "xmax": "10",
-  "ymin": "-0.5",
-  "ymax": "5",
-  "zmin": "-5",
-  "zmax": "5",
-  "axis_style": "box",
-  "coordinateSystem": "cartesian",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 30,
-  "rotationZ": 45,
-  "zoom3D": 1,
-  "boxAspect": "true",
-  "previewSize": 760,
-  "functions": [
-    {
-      "expression": "0.4x + sin(x)",
-      "domain": "",
-      "showLegend": false,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": true,
-      "color": "blue",
-      "dashed": false,
-      "tangentPoint": "a",
-      "extrema": true,
-      "thickness": "thin",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f1"
-    }
-  ],
-  "functions3D": [],
-  "tools": [],
-  "annotations": [
-    {
-      "x": "a - 1",
-      "y": "f1(a) + 0.6",
-      "text": "slope {0.4 + cos(a):2}",
-      "color": "black",
-      "size": "normal",
-      "anchor": "center"
-    }
-  ],
-  "parameters": [
-    {
-      "name": "a",
-      "value": 6,
-      "min": 0,
-      "max": 10,
-      "step": 0.1
-    }
-  ],
-  "variables": "x, y",
-  "equalScale": false,
-  "showSlidersInNote": true
-}
+slider a from 0 to 10, starting at 6
+plot f1(x) = 0.4x + sin(x) in blue, with its tangent at a and its extrema
+write "slope {0.4 + cos(a):2}" at (a - 1, f1(a) + 0.6), center
 ```
 
 </details>

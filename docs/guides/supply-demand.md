@@ -142,149 +142,15 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": false,
-  "documentSetup": true,
-  "title": "",
-  "size_x_cm": 10,
-  "size_y_cm": 10,
-  "show_axis_label": true,
-  "axis_label_x": "Quantity",
-  "axis_label_y": "Price",
-  "showAxis": true,
-  "showLargeGrid": false,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "0",
-  "xmax": "12",
-  "ymin": "0",
-  "ymax": "11",
-  "zmin": "-5",
-  "zmax": "5",
-  "axis_style": "box",
-  "coordinateSystem": "cartesian",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 30,
-  "rotationZ": 45,
-  "zoom3D": 1,
-  "boxAspect": "true",
-  "previewSize": 760,
-  "functions": [
-    {
-      "expression": "10 - a*x",
-      "domain": "",
-      "showLegend": false,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": false,
-      "color": "black",
-      "dashed": false,
-      "tangentPoint": "",
-      "extrema": false,
-      "thickness": "thin",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f1"
-    },
-    {
-      "expression": "2 + x",
-      "domain": "",
-      "showLegend": false,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": false,
-      "color": "blue",
-      "dashed": false,
-      "tangentPoint": "",
-      "extrema": false,
-      "thickness": "thin",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f2"
-    }
-  ],
-  "functions3D": [],
-  "tools": [
-    {
-      "type": "points",
-      "color": "red",
-      "dim": 2,
-      "source": "intersections",
-      "points": "",
-      "ref1": "f1",
-      "ref2": "f2",
-      "regionName": "",
-      "objective": "",
-      "sense": "max",
-      "label": "({x:2}, {y:2})",
-      "dropLines": true,
-      "size": "normal",
-      "id": "t0",
-      "name": "P1"
-    },
-    {
-      "type": "region",
-      "color": "blue",
-      "conditions": [
-        "f2 <= y <= f1",
-        "y >= P1_y"
-      ],
-      "conditionLabels": [
-        "",
-        ""
-      ],
-      "fill": true,
-      "fillOpacity": 0.25,
-      "fillPattern": "solid",
-      "outline": "none",
-      "thickness": "thin",
-      "constraintLines": false,
-      "label": "CS",
-      "id": "t1",
-      "name": "R1"
-    },
-    {
-      "type": "region",
-      "color": "orange",
-      "conditions": [
-        "f2 <= y <= f1",
-        "y <= P1_y"
-      ],
-      "conditionLabels": [
-        "",
-        ""
-      ],
-      "fill": true,
-      "fillOpacity": 0.25,
-      "fillPattern": "solid",
-      "outline": "none",
-      "thickness": "thin",
-      "constraintLines": false,
-      "label": "PS",
-      "id": "t2",
-      "name": "R2"
-    }
-  ],
-  "annotations": [],
-  "parameters": [
-    {
-      "name": "a",
-      "value": 0.6,
-      "min": -10,
-      "max": 10,
-      "step": 0.1
-    }
-  ],
-  "variables": "x, y",
-  "equalScale": false,
-  "showSlidersInNote": true
-}
+show x from 0 to 12 and y from 0 to 11
+xlabel Quantity
+ylabel Price
+slider a from -10 to 10, starting at 0.6, in steps of 0.1
+plot f1(x) = 10 - a*x
+plot f2(x) = 2 + x in blue
+P1: mark where f1 and f2 cross, with lines to the axes and coordinates
+shade where f2 <= y <= f1 and y >= P1_y, labelled "CS"
+shade where f2 <= y <= f1 and y <= P1_y in orange, labelled "PS"
 ```
 
 </details>

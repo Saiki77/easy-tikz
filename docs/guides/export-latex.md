@@ -109,149 +109,15 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": false,
-  "documentSetup": true,
-  "title": "",
-  "size_x_cm": 8,
-  "size_y_cm": 6,
-  "show_axis_label": true,
-  "axis_label_x": "x",
-  "axis_label_y": "y",
-  "showAxis": true,
-  "showLargeGrid": false,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "-0.5",
-  "xmax": "7",
-  "ymin": "-1.5",
-  "ymax": "2",
-  "zmin": "-5",
-  "zmax": "5",
-  "axis_style": "middle",
-  "coordinateSystem": "cartesian",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 30,
-  "rotationZ": 45,
-  "zoom3D": 1,
-  "boxAspect": "true",
-  "previewSize": 760,
-  "functions": [
-    {
-      "expression": "a sin(x)",
-      "domain": "0:2*pi",
-      "showLegend": true,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": false,
-      "color": "black",
-      "dashed": false,
-      "tangentPoint": "",
-      "extrema": false,
-      "thickness": "thick",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f1"
-    },
-    {
-      "expression": "cos(x)",
-      "domain": "0:2*pi",
-      "showLegend": true,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": false,
-      "color": "gray",
-      "dashed": false,
-      "tangentPoint": "",
-      "extrema": false,
-      "thickness": "thick",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f2"
-    }
-  ],
-  "functions3D": [],
-  "tools": [
-    {
-      "type": "region",
-      "color": "blue",
-      "conditions": [
-        "f2 <= y <= f1",
-        "0 <= x <= 2pi"
-      ],
-      "conditionLabels": [
-        "",
-        ""
-      ],
-      "fill": true,
-      "fillOpacity": 0.25,
-      "fillPattern": "solid",
-      "outline": "none",
-      "thickness": "thin",
-      "constraintLines": false,
-      "label": "$A_1$",
-      "id": "t0",
-      "name": "R1"
-    },
-    {
-      "type": "region",
-      "color": "orange",
-      "conditions": [
-        "f1 <= y <= f2",
-        "0 <= x <= 2pi"
-      ],
-      "conditionLabels": [
-        "",
-        ""
-      ],
-      "fill": true,
-      "fillOpacity": 0.25,
-      "fillPattern": "solid",
-      "outline": "none",
-      "thickness": "thin",
-      "constraintLines": false,
-      "label": "$A_2$",
-      "id": "t1",
-      "name": "R2"
-    },
-    {
-      "type": "points",
-      "color": "black",
-      "dim": 2,
-      "source": "intersections",
-      "points": "",
-      "ref1": "f1",
-      "ref2": "f2",
-      "regionName": "",
-      "objective": "",
-      "sense": "max",
-      "label": "",
-      "dropLines": false,
-      "size": "normal",
-      "id": "t2",
-      "name": "P1"
-    }
-  ],
-  "annotations": [],
-  "parameters": [
-    {
-      "name": "a",
-      "value": 1.5,
-      "min": -10,
-      "max": 10,
-      "step": 0.1
-    }
-  ],
-  "variables": "x, y",
-  "equalScale": false,
-  "showSlidersInNote": true
-}
+show x from -0.5 to 7 and y from -1.5 to 2
+size 8 x 6
+axes in the middle
+slider a from -10 to 10, starting at 1.5, in steps of 0.1
+plot f1(x) = a sin(x) from x = 0 to 2*pi, thick, with a legend
+plot f2(x) = cos(x) from x = 0 to 2*pi in gray, thick, with a legend
+shade where f2 <= y <= f1 and 0 <= x <= 2pi, labelled "$A_1$"
+shade where f1 <= y <= f2 and 0 <= x <= 2pi in orange, labelled "$A_2$"
+mark where f1 and f2 cross in black
 ```
 
 </details>

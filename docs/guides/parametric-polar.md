@@ -134,72 +134,10 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": false,
-  "documentSetup": true,
-  "title": "",
-  "size_x_cm": 10,
-  "size_y_cm": 10,
-  "show_axis_label": true,
-  "axis_label_x": "x",
-  "axis_label_y": "y",
-  "showAxis": true,
-  "showLargeGrid": false,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "-2.2",
-  "xmax": "2.2",
-  "ymin": "-2.195",
-  "ymax": "2.195",
-  "zmin": "-5",
-  "zmax": "5",
-  "axis_style": "box",
-  "coordinateSystem": "polar",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 30,
-  "rotationZ": 45,
-  "zoom3D": 1,
-  "boxAspect": "true",
-  "previewSize": 760,
-  "functions": [
-    {
-      "expression": "2cos(k theta)",
-      "domain": "",
-      "showLegend": false,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": false,
-      "color": "black",
-      "dashed": false,
-      "tangentPoint": "",
-      "extrema": false,
-      "thickness": "thin",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f1"
-    }
-  ],
-  "functions3D": [],
-  "tools": [],
-  "annotations": [],
-  "parameters": [
-    {
-      "name": "k",
-      "value": 5,
-      "min": 1,
-      "max": 8,
-      "step": 1
-    }
-  ],
-  "variables": "x, y",
-  "equalScale": false,
-  "showSlidersInNote": true
-}
+polar
+show x from -2.2 to 2.2 and y from -2.195 to 2.195
+slider k from 1 to 8, starting at 5, in steps of 1
+plot f1(theta) = 2cos(k theta)
 ```
 
 </details>

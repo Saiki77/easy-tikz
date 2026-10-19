@@ -19,8 +19,8 @@ export interface BlockChart {
 export function readBlock(body: string): BlockChart | string {
     if (isChartText(body)) {
         const lines = body.split(/\r?\n/).map((l) => l.trim());
-        if (!lines.some((l) => l && !l.startsWith('%') && !l.startsWith('//'))) {
-            return 'the block is empty. Write one line per object, such as f(x) = x^2';
+        if (!lines.some((l) => l && !l.startsWith('%') && !l.startsWith('//') && !l.startsWith('#'))) {
+            return 'the block is empty. Write one line per object, such as plot f(x) = x^2';
         }
         const parsed = parseChartText(body);
         return { data: parsed.data, format: 'text', problems: parsed.problems };

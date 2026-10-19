@@ -166,3 +166,39 @@
 button.etz-icon-btn.etz-inline-reset {
     margin-top: 1px;
 }
+
+/* The chart under a block being edited in Live Preview (src/live.ts): it
+   sits right under the block's lines, a little apart from them. */
+.etz-live {
+    padding-block: 4px 8px;
+    cursor: default;
+}
+
+.etz-live > .etz-inline {
+    margin-block: 6px 0;
+}
+
+.etz-live-error {
+    margin-block: 6px 0;
+}
+
+/* While you type, a problem comes and goes with the keys: its line keeps
+   its room, so the sliders under it stay where they are. */
+.etz-inline-live .etz-inline-issues {
+    min-height: 16px;
+}
+
+.etz-inline-live .etz-inline-issues.tikz-hidden:not(#etz-none) {
+    display: block;
+    visibility: hidden;
+}
+
+/* Nothing to click there: the cursor is in the block already. */
+.etz-inline-live .tikz-rendered-chart.etz-inline-box {
+    cursor: default;
+}
+
+.etz-inline-live .tikz-rendered-chart.etz-inline-box:hover {
+    outline-color: transparent;
+    box-shadow: none;
+}

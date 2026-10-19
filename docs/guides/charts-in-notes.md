@@ -32,7 +32,7 @@ Any chart works. This guide uses the example Tangent explorer, because it has a 
 
 Click Insert into note at the bottom right, or press Cmd+Enter (Ctrl+Enter on Windows and Linux). The editor closes and the chart appears in the note, with its slider underneath.
 
-In the file, the chart is a code block with the language `easy-tikz`: a few lines of text, one line per object, such as `f1(x) = x^3 - 3x | blue, thick, tangent at a`. Switch the note to source mode to see it. Change a number there, and the chart glides to it.
+In the file, the chart is a code block with the language `easy-tikz`: a few lines of text, one line per object, in words, such as `plot f1(x) = x^3 - 3x in blue, thick, with its tangent at a`. Put the cursor in the block to see them: the chart then sits right under the lines. Change a number there, and the chart glides to it.
 
 ![Screenshot of the note for step 2: Insert it into the note](img/charts-in-notes-2.png)
 
@@ -100,74 +100,14 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": false,
-  "documentSetup": true,
-  "title": "slope at x = {a}: {3a^2 - 3:2}",
-  "size_x_cm": 10,
-  "size_y_cm": 8,
-  "show_axis_label": true,
-  "axis_label_x": "x",
-  "axis_label_y": "y",
-  "showAxis": true,
-  "showLargeGrid": false,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "-3",
-  "xmax": "3",
-  "ymin": "-4",
-  "ymax": "4",
-  "zmin": "-5",
-  "zmax": "5",
-  "axis_style": "middle",
-  "coordinateSystem": "cartesian",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 30,
-  "rotationZ": 45,
-  "zoom3D": 1,
-  "boxAspect": "true",
-  "previewSize": 760,
-  "functions": [
-    {
-      "expression": "x^3 - 3x",
-      "domain": "",
-      "showLegend": false,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": true,
-      "color": "blue",
-      "dashed": false,
-      "tangentPoint": "a",
-      "extrema": true,
-      "thickness": "thick",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f1"
-    }
-  ],
-  "functions3D": [],
-  "tools": [],
-  "annotations": [],
-  "parameters": [
-    {
-      "name": "a",
-      "value": 1.5,
-      "min": -2,
-      "max": 2,
-      "step": 0.05
-    }
-  ],
-  "variables": "x, y",
-  "equalScale": false,
-  "showSlidersInNote": true,
-  "displayWidth": 420,
-  "displayAlign": "left"
-}
+show x from -3 to 3 and y from -4 to 4
+size 10 x 8
+axes in the middle
+title slope at x = {a}: {3a^2 - 3:2}
+set displayWidth = 420
+set displayAlign = "left"
+slider a from -2 to 2, starting at 1.5
+plot f1(x) = x^3 - 3x in blue, thick, with its tangent at a and its extrema
 ```
 
 </details>

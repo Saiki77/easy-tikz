@@ -142,114 +142,16 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": false,
-  "documentSetup": true,
-  "title": "a = {a:2}, sin(a) = {sin(a):2}",
-  "size_x_cm": 15,
-  "size_y_cm": 5,
-  "show_axis_label": true,
-  "axis_label_x": "x",
-  "axis_label_y": "y",
-  "showAxis": true,
-  "showLargeGrid": false,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "-3",
-  "xmax": "7",
-  "ymin": "-1.5",
-  "ymax": "1.5",
-  "zmin": "-5",
-  "zmax": "5",
-  "axis_style": "middle",
-  "coordinateSystem": "cartesian",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 30,
-  "rotationZ": 45,
-  "zoom3D": 1,
-  "boxAspect": "true",
-  "previewSize": 760,
-  "functions": [
-    {
-      "expression": "sin(x)",
-      "domain": "0:a",
-      "showLegend": false,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": false,
-      "color": "blue",
-      "dashed": false,
-      "tangentPoint": "",
-      "extrema": false,
-      "thickness": "thin",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f1"
-    }
-  ],
-  "functions3D": [],
-  "tools": [
-    {
-      "type": "curve",
-      "color": "black",
-      "equation": "(x + 1.5)^2 + y^2 = 1",
-      "levels": "",
-      "thickness": "thin",
-      "dashed": false,
-      "label": "",
-      "id": "t0",
-      "name": "C1"
-    },
-    {
-      "type": "points",
-      "color": "red",
-      "dim": 2,
-      "source": "list",
-      "points": "(cos(a) - 1.5, sin(a)); (a, sin(a))",
-      "ref1": "",
-      "ref2": "",
-      "regionName": "",
-      "objective": "",
-      "sense": "max",
-      "label": "",
-      "dropLines": false,
-      "size": "normal",
-      "id": "t1",
-      "name": "P1"
-    },
-    {
-      "type": "segment",
-      "color": "black",
-      "dim": 2,
-      "path": "(-1.5, 0); P1",
-      "closed": false,
-      "style": "line",
-      "thickness": "thin",
-      "dashed": true,
-      "label": "",
-      "id": "t2",
-      "name": "S1"
-    }
-  ],
-  "annotations": [],
-  "parameters": [
-    {
-      "name": "a",
-      "value": 4,
-      "min": 0.01,
-      "max": 6.28,
-      "step": 0.01
-    }
-  ],
-  "variables": "x, y",
-  "equalScale": true,
-  "showSlidersInNote": true
-}
+show x from -3 to 7 and y from -1.5 to 1.5
+size 15 x 5
+equal scale
+axes in the middle
+title a = {a:2}, sin(a) = {sin(a):2}
+slider a from 0.01 to 6.28, starting at 4, in steps of 0.01
+plot f1(x) = sin(x) from x = 0 to a in blue
+draw (x + 1.5)^2 + y^2 = 1
+P1: mark (cos(a) - 1.5, sin(a)) and (a, sin(a))
+draw a line from (-1.5, 0) to P1, dashed
 ```
 
 </details>

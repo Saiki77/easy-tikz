@@ -120,125 +120,15 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": false,
-  "documentSetup": true,
-  "title": "",
-  "size_x_cm": 10,
-  "size_y_cm": 9,
-  "show_axis_label": true,
-  "axis_label_x": "x",
-  "axis_label_y": "y",
-  "showAxis": true,
-  "showLargeGrid": true,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "0",
-  "xmax": "5",
-  "ymin": "0",
-  "ymax": "4.5",
-  "zmin": "-5",
-  "zmax": "5",
-  "axis_style": "axes",
-  "coordinateSystem": "cartesian",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 30,
-  "rotationZ": 45,
-  "zoom3D": 1,
-  "boxAspect": "true",
-  "previewSize": 760,
-  "functions": [],
-  "functions3D": [],
-  "tools": [
-    {
-      "type": "region",
-      "color": "blue",
-      "conditions": [
-        "x + y <= 4",
-        "x + 3y <= 6",
-        "x >= 0",
-        "y >= 0"
-      ],
-      "conditionLabels": [
-        "(1)",
-        "(2)",
-        "",
-        ""
-      ],
-      "fill": true,
-      "fillOpacity": 0.25,
-      "fillPattern": "solid",
-      "outline": "none",
-      "thickness": "thin",
-      "constraintLines": true,
-      "label": "",
-      "id": "t0",
-      "name": "R1"
-    },
-    {
-      "type": "curve",
-      "color": "red",
-      "equation": "2x + 3y = c",
-      "levels": "",
-      "thickness": "thick",
-      "dashed": true,
-      "label": "z = {c}",
-      "id": "t1",
-      "name": "C1"
-    },
-    {
-      "type": "points",
-      "color": "blue",
-      "dim": 2,
-      "source": "region",
-      "points": "",
-      "ref1": "",
-      "ref2": "",
-      "regionName": "R1",
-      "objective": "",
-      "sense": "max",
-      "label": "({x}, {y})",
-      "dropLines": false,
-      "size": "normal",
-      "id": "t2",
-      "name": "P2"
-    },
-    {
-      "type": "points",
-      "color": "red",
-      "dim": 2,
-      "source": "region",
-      "points": "",
-      "ref1": "",
-      "ref2": "",
-      "regionName": "R1",
-      "objective": "2x + 3y",
-      "sense": "max",
-      "label": "x* = ({x:2}, {y:2})",
-      "dropLines": false,
-      "size": "large",
-      "id": "t3",
-      "name": "P1"
-    }
-  ],
-  "annotations": [],
-  "parameters": [
-    {
-      "name": "c",
-      "value": 9,
-      "min": 0,
-      "max": 15,
-      "step": 0.1
-    }
-  ],
-  "variables": "x, y",
-  "equalScale": false,
-  "showSlidersInNote": true
-}
+show x from 0 to 5 and y from 0 to 4.5
+size 10 x 9
+axes on the edges
+with a grid
+slider c from 0 to 15, starting at 9, in steps of 0.1
+shade where x + y <= 4 and x + 3y <= 6 and x >= 0 and y >= 0, numbered, with constraint lines
+draw 2x + 3y = c in red, thick, dashed, labelled "z = {c}"
+P2: mark the corners of the region in blue, labelled "({x}, {y})"
+mark the maximum of 2x + 3y in the region, large, labelled "x* = ({x:2}, {y:2})"
 ```
 
 </details>

@@ -19,7 +19,8 @@ import { marchingGrid } from '../src/util';
 import {
     AREA_FORMULA,
     WHATS_NEW_CHART_GUIDE,
-    WHATS_NEW_44,
+    WHATS_NEW_RECENT,
+    WHATS_NEW_RECENT_TITLE,
     WHATS_NEW_AI,
     WHATS_NEW_ICONS,
     WHATS_NEW_LIVE,
@@ -150,7 +151,7 @@ test('whats new: compareVersions', () => {
 
 // ---------------------------------------------------------------- content
 
-const ITEMS = [...WHATS_NEW_44, ...WHATS_NEW_LIVE, WHATS_NEW_AI, ...WHATS_NEW_MORE];
+const ITEMS = [...WHATS_NEW_RECENT, ...WHATS_NEW_LIVE, WHATS_NEW_AI, ...WHATS_NEW_MORE];
 
 test('whats new: every line is short, plain and free of em dashes', () => {
     const texts = [WHATS_NEW_TITLE, WHATS_NEW_SUBTITLE, ...ITEMS.flatMap((i) => [i.title, i.text])];
@@ -216,12 +217,16 @@ test('whats new: the text beside the chart is the whole chart, in a few lines', 
     assert.ok(!lines.some((l) => l.startsWith('raw ') || l.startsWith('set ')), text);
 });
 
-test('whats new: 4.4 comes first and names text, motion, phones and colours', () => {
+test('whats new: 4.4 and 4.5 come first and name the words, the chart under the block, motion and phones', () => {
     assert.deepEqual(
-        WHATS_NEW_44.map((i) => i.title),
-        ['Charts as text', 'Charts that move', 'On phones and tablets', "Your theme's colours"]
+        WHATS_NEW_RECENT.map((i) => i.title),
+        ['Charts in plain words', 'The chart under the block', 'Charts that move', 'On phones and tablets']
     );
-    assert.equal(WHATS_NEW_VERSION, '4.4.0');
+    assert.equal(WHATS_NEW_RECENT_TITLE, 'New in 4.4 and 4.5');
+    assert.equal(WHATS_NEW_VERSION, '4.5.0');
+    // The example in the first item is a line the plugin reads.
+    const example = /`([^`]+)`/.exec(WHATS_NEW_RECENT[0].text);
+    assert.ok(example && parseChartText(example[1]).problems.length === 0, WHATS_NEW_RECENT[0].text);
 });
 
 test('whats new: the popup loads nothing from the network', () => {

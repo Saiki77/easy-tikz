@@ -130,81 +130,10 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": false,
-  "documentSetup": true,
-  "title": "",
-  "size_x_cm": 10,
-  "size_y_cm": 10,
-  "show_axis_label": true,
-  "axis_label_x": "x",
-  "axis_label_y": "y",
-  "showAxis": true,
-  "showLargeGrid": true,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "0",
-  "xmax": "2pi",
-  "ymin": "0",
-  "ymax": "4",
-  "zmin": "-5",
-  "zmax": "5",
-  "axis_style": "box",
-  "coordinateSystem": "cartesian",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 30,
-  "rotationZ": 45,
-  "zoom3D": 1,
-  "boxAspect": "true",
-  "previewSize": 760,
-  "functions": [
-    {
-      "expression": "2 + sin(x)",
-      "domain": "",
-      "showLegend": true,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": false,
-      "color": "blue",
-      "dashed": false,
-      "tangentPoint": "",
-      "extrema": false,
-      "thickness": "thick",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f1"
-    },
-    {
-      "expression": "2 + cos(x)",
-      "domain": "",
-      "showLegend": true,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": false,
-      "color": "black",
-      "dashed": false,
-      "tangentPoint": "",
-      "extrema": false,
-      "thickness": "thin",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f2"
-    }
-  ],
-  "functions3D": [],
-  "tools": [],
-  "annotations": [],
-  "parameters": [],
-  "variables": "x, y",
-  "equalScale": false,
-  "showSlidersInNote": true
-}
+show x from 0 to 2pi and y from 0 to 4
+with a grid
+plot f1(x) = 2 + sin(x) in blue, thick, with a legend
+plot f2(x) = 2 + cos(x), with a legend
 ```
 
 </details>

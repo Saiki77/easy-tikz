@@ -122,102 +122,16 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": true,
-  "documentSetup": true,
-  "title": "",
-  "size_x_cm": 10,
-  "size_y_cm": 10,
-  "show_axis_label": true,
-  "axis_label_x": "x",
-  "axis_label_y": "y",
-  "showAxis": true,
-  "showLargeGrid": false,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "-5.5",
-  "xmax": "5.5",
-  "ymin": "-5.5",
-  "ymax": "5.5",
-  "zmin": "-27.011",
-  "zmax": "27.011",
-  "axis_style": "box",
-  "coordinateSystem": "cartesian",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 20,
-  "rotationZ": 60,
-  "zoom3D": 1,
-  "boxAspect": "equal",
-  "previewSize": 760,
-  "functions": [],
-  "functions3D": [
-    {
-      "expression": "x^2 - y^2",
-      "xDomain": "-5:5",
-      "yDomain": "-5:5",
-      "color": "blue",
-      "wireframe": false,
-      "opacity": 0.5,
-      "samples": 24,
-      "name": "f1"
-    }
-  ],
-  "tools": [
-    {
-      "type": "plane3D",
-      "color": "orange",
-      "axis": "z",
-      "value": "h",
-      "fillOpacity": 0.25,
-      "id": "t0",
-      "name": "PL1"
-    },
-    {
-      "type": "points",
-      "color": "red",
-      "dim": 3,
-      "source": "list",
-      "points": "(0, 0, 0)",
-      "ref1": "",
-      "ref2": "",
-      "regionName": "",
-      "objective": "",
-      "sense": "max",
-      "label": "saddle point",
-      "dropLines": false,
-      "size": "normal",
-      "id": "t1",
-      "name": "P1"
-    }
-  ],
-  "annotations": [
-    {
-      "x": "5.5",
-      "y": "-5.5",
-      "text": "z = {h}",
-      "color": "black",
-      "size": "normal",
-      "anchor": "center",
-      "z": "h"
-    }
-  ],
-  "parameters": [
-    {
-      "name": "h",
-      "value": 1,
-      "min": -10,
-      "max": 10,
-      "step": 0.1
-    }
-  ],
-  "variables": "x, y",
-  "equalScale": false,
-  "showSlidersInNote": true
-}
+3d
+show x from -5.5 to 5.5, y from -5.5 to 5.5 and z from -27.011 to 27.011
+set rotationX = 20
+set rotationZ = 60
+set boxAspect = "equal"
+slider h from -10 to 10, starting at 1, in steps of 0.1
+plot f1(x, y) = x^2 - y^2, opacity 0.5, with 24 samples
+draw the plane z = h
+mark (0, 0, 0), labelled "saddle point"
+write "z = {h}" at (5.5, -5.5, h), center
 ```
 
 </details>

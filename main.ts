@@ -22,7 +22,9 @@ import AI_GUIDE from './docs/ai.md';
 import { BlockFormat, readBlock } from './src/blockjson';
 import { TextProblem } from './src/text/parse';
 import { printChartText, writeChartText } from './src/text/print';
-import { GLIDE_MS, PopIn, drawnNames, ease, glides, mixCharts, reducedMotion } from './src/motion';
+import { GLIDE_MS, PopIn, PopInState, drawnNames, ease, glides, mixCharts, reducedMotion } from './src/motion';
+import { LiveHost, editingCharts } from './src/live';
+import type { Extension } from '@codemirror/state';
 
 type FenceTag = 'easy-tikz' | 'tikz';
 type Align = 'left' | 'center' | 'right';
@@ -90,8 +92,11 @@ interface ChartMemory {
     chart: InlineChart | null;
     /** The chart as text lines (JSON blocks printed as text), to find the same block again. */
     lines: string;
+    /** The chart as it was on screen (in the middle of a glide, where the glide was). */
     state: Record<string, unknown>;
     names: Set<string>;
+    /** Pop-ins that were under way, to carry on. */
+    pop?: PopInState;
     at: number;
 }
 
@@ -195,6 +200,10 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
     /** The open "What's new" popup, closed when the plugin unloads. */
     private whatsNew: WhatsNewModal | null = null;
     private unloaded = false;
+    /** The editor extensions: the chart under a block being edited, while that setting is on (see syncLiveCharts). */
+    private readonly editorExtensions: Extension[] = [];
+    /** Charts under blocks being edited (src/live.ts), by the element they draw in. */
+    private readonly liveDrawn = new Map<HTMLElement, InlineChart>();
 
     async onload() {
         const stored = (await this.loadData()) as Partial<PluginData> | null;
@@ -235,6 +244,14 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
                 this.renderEasyTikzBlock(source, el, ctx, /* fromTikzTag */ true);
             });
         }
+
+        // While a block is edited in Live Preview, its chart sits under its lines and moves as you type.
+        this.syncLiveCharts(false);
+        this.registerEditorExtension(this.editorExtensions);
+        this.register(() => {
+            for (const chart of this.liveDrawn.values()) chart.unload();
+            this.liveDrawn.clear();
+        });
 
         this.addCommand({
             id: 'show-whats-new',
@@ -548,6 +565,50 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         ctx.addChild(child);
     }
 
+    /** The chart under a block being edited: on or off as the setting says (every open editor follows). */
+    syncLiveCharts(update = true) {
+        this.editorExtensions.length = 0;
+        if (this.data.liveChart !== false) this.editorExtensions.push(editingCharts(this.liveHost()));
+        if (update) this.app.workspace.updateOptions();
+    }
+
+    private liveHost(): LiveHost {
+        const tags: ReadonlySet<string> = new Set(this.data.renderTikzBlocks ? ['easy-tikz', 'tikz'] : ['easy-tikz']);
+        return {
+            enabled: () => this.data.liveChart !== false,
+            tags: () => tags,
+            draw: (el, sourcePath, tag, body) => this.drawLive(el, sourcePath, tag, body),
+            release: (el) => {
+                this.liveDrawn.get(el)?.unload();
+                this.liveDrawn.delete(el);
+            },
+        };
+    }
+
+    /**
+     * Draw the chart under a block being edited, in place of the one drawn
+     * there before: the new chart moves from that one's picture. While the
+     * block cannot be read (JSON half typed), the last chart stays, with the
+     * reason under it.
+     */
+    private drawLive(el: HTMLElement, sourcePath: string, tag: string, body: string) {
+        const fromTikzTag = tag === 'tikz';
+        // A plain tikz block that is not JSON is real TikZ: nothing to draw.
+        const block = fromTikzTag && !body.trim().startsWith('{') ? null : readBlock(fromTikzTag ? body.trim() : body);
+        const before = this.liveDrawn.get(el);
+        el.querySelector(':scope > .etz-live-error')?.remove();
+        if (block === null || typeof block === 'string') {
+            if (!before) el.empty();
+            if (block) el.createDiv({ cls: 'tikz-block-error etz-live-error', text: 'Easy TikZ: ' + block });
+            return;
+        }
+        before?.unload();
+        el.empty();
+        const chart = new InlineChart(this, el, sourcePath, body, block.data, fromTikzTag ? 'tikz' : 'easy-tikz', block.format, block.problems, true);
+        chart.mount();
+        this.liveDrawn.set(el, chart);
+    }
+
     /**
      * Open the editor pre-filled with a block's settings. The raw block
      * text lets the modal locate and replace the block by content match
@@ -675,8 +736,14 @@ class InlineChart {
     /** Objects new to the picture pop in; null until the first drawing. */
     private popIn: PopIn | null = null;
     private glideRaf: number | null = null;
+    /** The chart as it is on screen: during a glide, where the glide is. */
+    private shown: Record<string, unknown> | null = null;
+    /** The problems of the last full drawing (sources are object names). */
+    private chartIssues: SceneIssue[] = [];
     /** This chart's entry in chartMemory. */
     private memory: ChartMemory | null = null;
+    /** Drawn under a block being edited (src/live.ts): no editor to open, no width and alignment to save. */
+    private readonly live: boolean;
 
     constructor(
         plugin: EasyTikzPlugin,
@@ -686,8 +753,10 @@ class InlineChart {
         data: Record<string, unknown>,
         fenceTag: FenceTag,
         format: BlockFormat,
-        problems: TextProblem[]
+        problems: TextProblem[],
+        live = false
     ) {
+        this.live = live;
         this.plugin = plugin;
         this.el = el;
         this.sourcePath = sourcePath;
@@ -717,16 +786,18 @@ class InlineChart {
         });
 
         const align = this.data.displayAlign;
-        this.wrapper = this.el.createDiv({ cls: 'etz-inline' });
+        this.wrapper = this.el.createDiv({ cls: this.live ? 'etz-inline etz-inline-live' : 'etz-inline' });
         this.applyAlign(align === 'left' || align === 'right' ? align : 'center');
         this.stage = this.wrapper.createDiv({ cls: 'etz-inline-stage' });
         this.box = this.stage.createDiv({ cls: 'tikz-rendered-chart etz-inline-box' });
-        this.box.setAttr('role', 'button');
-        this.box.setAttr('tabindex', '0');
-        // aria-labelledby, not aria-label: Obsidian shows a tooltip for every [aria-label] element.
-        const name = visuallyHidden(this.box, 'Easy TikZ chart. Click to edit.');
-        name.id = uniqueId('inline-chart');
-        this.box.setAttr('aria-labelledby', name.id);
+        if (!this.live) {
+            this.box.setAttr('role', 'button');
+            this.box.setAttr('tabindex', '0');
+            // aria-labelledby, not aria-label: Obsidian shows a tooltip for every [aria-label] element.
+            const name = visuallyHidden(this.box, 'Easy TikZ chart. Click to edit.');
+            name.id = uniqueId('inline-chart');
+            this.box.setAttr('aria-labelledby', name.id);
+        }
         this.issuesEl = this.wrapper.createDiv({ cls: 'etz-inline-issues tikz-hidden' });
 
         try {
@@ -738,7 +809,7 @@ class InlineChart {
             return;
         }
 
-        this.buildHoverControls();
+        if (!this.live) this.buildHoverControls();
         this.buildStrip();
 
         liveCharts.add(this);
@@ -746,9 +817,10 @@ class InlineChart {
         this.popIn = new PopIn(drawnNames(this.chartEl));
         if (this.plugin.data.animateCharts !== false) {
             this.remember();
-            window.requestAnimationFrame(() => this.moveFromBefore());
+            window.requestAnimationFrame((t) => this.moveFromBefore(t));
         }
 
+        if (this.live) return;
         this.box.addEventListener('click', () => this.openEditor());
         this.box.addEventListener('keydown', (e: KeyboardEvent) => {
             // Only the focused box itself opens the editor, never keys meant for a control.
@@ -793,6 +865,8 @@ class InlineChart {
         }
         this.popIn?.apply(this.chartEl, this.animated());
         if (quality === 'full') {
+            this.chartIssues = issues;
+            this.shown = null;
             this.showIssues(issues);
             if (this.memory) this.remember();
         }
@@ -831,7 +905,7 @@ class InlineChart {
 
     /** Keep this chart's last picture for the block's next drawing. */
     private remember() {
-        const entry: ChartMemory = { chart: this, lines: this.memory ? this.memory.lines : this.lines(), state: this.state(), names: drawnNames(this.chartEl), at: Date.now() };
+        const entry: ChartMemory = { chart: this, lines: this.memory ? this.memory.lines : this.lines(), state: this.shown ?? this.state(), names: drawnNames(this.chartEl), at: Date.now() };
         if (this.memory) Object.assign(this.memory, entry);
         else {
             this.memory = entry;
@@ -843,37 +917,93 @@ class InlineChart {
 
     /** The block left the page: stop drawing, and keep only the picture's data for the block's next drawing. */
     unload() {
-        this.stopGlide();
-        this.cancelFrames();
-        liveCharts.delete(this);
         if (this.memory) {
+            // Where the picture is now: mid-glide, the next drawing starts there; pop-ins under way carry on.
+            if (this.shown) this.memory.state = this.shown;
+            this.memory.names = drawnNames(this.chartEl);
+            if (this.popIn) this.memory.pop = this.popIn.snapshot();
             this.memory.chart = null;
             this.memory.at = Date.now();
         }
+        this.stopGlide();
+        this.cancelFrames();
+        this.popIn?.stop();
+        liveCharts.delete(this);
         this.renderer3d = null;
         this.chartEl = null;
     }
 
-    /** The block was drawn before and has come back: glide from that picture; what is new pops in. */
-    private moveFromBefore() {
+    /** The block was drawn before and has come back: glide from that picture; what is new pops in. `t`: this frame's time. */
+    private moveFromBefore(t: number) {
         if (!this.onPage() || !this.animated()) return;
         const before = takePredecessor(this.sourcePath, this, this.memory ? this.memory.lines : this.lines());
         if (!before) return;
-        this.popIn = new PopIn(before.names);
+        this.popIn = new PopIn(before.names, before.pop);
+        const sliders = this.params.map((p) => p.name).join('\n');
+        const kept = this.keepLastGood(before.state);
+        // A slider kept from before (its line is half typed) keeps its row under the chart.
+        if (kept && this.params.map((p) => p.name).join('\n') !== sliders) this.rebuildStrip();
         const to = this.state();
-        if (glides(before.state, to)) this.glide(before.state, to);
+        if (glides(before.state, to)) this.glide(before.state, to, t);
+        else if (kept) this.render('full');
         else this.popIn.apply(this.chartEl);
     }
 
-    private glide(from: Record<string, unknown>, to: Record<string, unknown>) {
+    /**
+     * While a line is being typed, an object that does not work yet keeps its
+     * last working version on screen, and one the text has lost while a line
+     * has a problem stays. The problem line still names what is wrong; the
+     * block and the editor always get the text as it is. Returns whether the
+     * chart on screen changed.
+     */
+    private keepLastGood(before: Record<string, unknown>): boolean {
+        const broken = new Set(this.chartIssues.filter((i) => i.severity === 'error').map((i) => i.source));
+        const unread = this.textProblems.length > 0;
+        if (!broken.size && !unread) return false;
+        const now = this.manager.serialize();
+        let changed = false;
+        for (const key of ['parameters', 'functions', 'functions3D', 'tools'] as const) {
+            const mine = Array.isArray(now[key]) ? (now[key] as Record<string, unknown>[]) : [];
+            const theirs = Array.isArray(before[key]) ? (before[key] as Record<string, unknown>[]) : [];
+            const named = (o: Record<string, unknown>) => (typeof o.name === 'string' ? o.name : '');
+            const last = new Map(theirs.map((o) => [named(o), o]));
+            mine.forEach((o, i) => {
+                const good = last.get(named(o));
+                if (broken.has(named(o)) && good) {
+                    mine[i] = cloneData(good);
+                    changed = true;
+                }
+            });
+            if (unread) {
+                const have = new Set(mine.map(named));
+                for (const o of theirs) {
+                    if (have.has(named(o))) continue;
+                    mine.push(cloneData(o));
+                    changed = true;
+                }
+            }
+            now[key] = mine;
+        }
+        if (!changed) return false;
+        this.manager = SettingsManager.fromJSON(now);
+        this.math = this.manager.createMathContext();
+        // A slider kept from before draws at the value it had; the others keep theirs.
+        const values = new Map(this.params.map((p) => [p.name, p]));
+        this.params = normalizeParameters(this.manager.getValue('parameters')).map((p) => values.get(p.name) ?? p);
+        const saved = new Map(this.saved.map((p) => [p.name, p]));
+        this.saved = this.params.map((p) => saved.get(p.name) ?? { ...p });
+        return true;
+    }
+
+    /** Glide from `from` to `to`, starting with the frame at `start`; it follows the time of the animation frames. */
+    private glide(from: Record<string, unknown>, to: Record<string, unknown>, start: number) {
         this.stopGlide();
-        const start = performance.now();
         // Glide frames have their own cache, so the chart's stays as the block draws it.
         const cache = new SceneCache();
-        const frame = () => {
+        const frame = (t: number) => {
             this.glideRaf = null;
             if (!this.onPage()) return;
-            const k = (performance.now() - start) / GLIDE_MS;
+            const k = (t - start) / GLIDE_MS;
             if (k >= 1) {
                 this.render('full');
                 return;
@@ -881,7 +1011,8 @@ class InlineChart {
             this.drawState(mixCharts(from, to, ease(k)), cache);
             this.glideRaf = window.requestAnimationFrame(frame);
         };
-        frame();
+        // The first frame now, before the browser paints: the old picture, then on towards the new one.
+        frame(start);
     }
 
     private stopGlide() {
@@ -901,6 +1032,7 @@ class InlineChart {
             this.applySize(config);
             if (config.is3D) this.render3D(config, math, 'draft');
             else this.render2D(config, math, 'draft', cache);
+            this.shown = state;
         } catch {
             // A frame that cannot be drawn is skipped; the last one stays.
         }
@@ -1088,6 +1220,14 @@ class InlineChart {
         this.updateReset();
     }
 
+    /** The slider rows again, for the sliders the chart has now. */
+    private rebuildStrip() {
+        this.wrapper.querySelector(':scope > .etz-inline-strip')?.remove();
+        this.sliders = [];
+        this.resetButton = null;
+        this.buildStrip();
+    }
+
     private setParam(index: number, value: number) {
         this.stopGlide();
         this.params[index] = { ...this.params[index], value };
@@ -1219,7 +1359,7 @@ class EasyTikzSettingTab extends PluginSettingTab {
             {
                 name: 'Write new charts as',
                 desc:
-                    'Text (default): one line per object, the way the math reads, such as f(x) = x^2 | blue. ' +
+                    'Text (default): one line per object, in words, such as plot f(x) = x^2 in blue. ' +
                     'JSON: one object with every setting. A chart you edit keeps the format its block has.',
                 control: { type: 'dropdown', key: 'blockFormat', options: { text: 'Text', json: 'JSON' }, defaultValue: 'text' },
             },
@@ -1229,6 +1369,13 @@ class EasyTikzSettingTab extends PluginSettingTab {
                     'From your theme (default): charts use the colours of your Obsidian theme and follow light and dark mode. ' +
                     'As in the LaTeX export: the fixed colours of the exported figure, so the note and the PDF look the same.',
                 control: { type: 'dropdown', key: 'chartColours', options: { theme: 'From your theme', export: 'As in the LaTeX export' }, defaultValue: 'theme' },
+            },
+            {
+                name: 'Chart under the block while you edit',
+                desc:
+                    'On by default. In Live Preview, a block you are editing shows its chart right under its lines, and the chart changes as you type. ' +
+                    'Off: the chart shows once the cursor leaves the block.',
+                control: { type: 'toggle', key: 'liveChart', defaultValue: true },
             },
             {
                 name: 'Animate chart changes',
@@ -1402,6 +1549,10 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 break;
             case 'animateCharts':
                 this.plugin.data.animateCharts = Boolean(value);
+                break;
+            case 'liveChart':
+                this.plugin.data.liveChart = Boolean(value);
+                this.plugin.syncLiveCharts();
                 break;
             case 'chartColours':
                 this.plugin.data.chartColours = value === 'export' ? 'export' : 'theme';

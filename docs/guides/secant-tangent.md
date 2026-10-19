@@ -150,114 +150,12 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": false,
-  "documentSetup": true,
-  "title": "secant slope {(f1(a + h) - f1(a))/h:3}, tangent slope {a/5:3}",
-  "size_x_cm": 10,
-  "size_y_cm": 10,
-  "show_axis_label": true,
-  "axis_label_x": "x",
-  "axis_label_y": "y",
-  "showAxis": true,
-  "showLargeGrid": false,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "-0.5",
-  "xmax": "10",
-  "ymin": "-0.5",
-  "ymax": "5",
-  "zmin": "-5",
-  "zmax": "5",
-  "axis_style": "box",
-  "coordinateSystem": "cartesian",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 30,
-  "rotationZ": 45,
-  "zoom3D": 1,
-  "boxAspect": "true",
-  "previewSize": 760,
-  "functions": [
-    {
-      "expression": "x^2/10",
-      "domain": "",
-      "showLegend": false,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": true,
-      "color": "black",
-      "dashed": false,
-      "tangentPoint": "a",
-      "extrema": false,
-      "thickness": "thin",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f1"
-    },
-    {
-      "expression": "f1(a) + (f1(a + h) - f1(a))/h * (x - a)",
-      "domain": "",
-      "showLegend": false,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": false,
-      "color": "blue",
-      "dashed": false,
-      "tangentPoint": "",
-      "extrema": false,
-      "thickness": "thin",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f2"
-    }
-  ],
-  "functions3D": [],
-  "tools": [
-    {
-      "type": "points",
-      "color": "red",
-      "dim": 2,
-      "source": "list",
-      "points": "(a, f1(a)); (a + h, f1(a + h))",
-      "ref1": "",
-      "ref2": "",
-      "regionName": "",
-      "objective": "",
-      "sense": "max",
-      "label": "A; B",
-      "dropLines": false,
-      "size": "normal",
-      "id": "t0",
-      "name": "P1"
-    }
-  ],
-  "annotations": [],
-  "parameters": [
-    {
-      "name": "a",
-      "value": 5,
-      "min": 0,
-      "max": 6,
-      "step": 0.1
-    },
-    {
-      "name": "h",
-      "value": 1,
-      "min": 0.01,
-      "max": 3,
-      "step": 0.01
-    }
-  ],
-  "variables": "x, y",
-  "equalScale": false,
-  "showSlidersInNote": true
-}
+title secant slope {(f1(a + h) - f1(a))/h:3}, tangent slope {a/5:3}
+slider a from 0 to 6, starting at 5
+slider h from 0.01 to 3, starting at 1, in steps of 0.01
+plot f1(x) = x^2/10, with its tangent at a
+plot f2(x) = f1(a) + (f1(a + h) - f1(a))/h * (x - a) in blue
+mark (a, f1(a)) and (a + h, f1(a + h)), labelled "A; B"
 ```
 
 </details>

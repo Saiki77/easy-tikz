@@ -1,10 +1,11 @@
 /*
  * Charts as text, the other way round (src/text/parse.ts reads it).
  *
- * printChartText writes a whole chart, one line per object, leaving out what
- * the plugin fills in by itself. Whatever the words cannot say goes into
- * `key=value` options and `set` lines, and an object no line form fits
- * becomes a `raw` line, so every chart reads back as the same chart.
+ * printChartText writes a whole chart, one line per object, in words
+ * (`plot f(x) = x^2 in blue, thick`, `shade where x + y <= 4 and x >= 0`),
+ * leaving out what the plugin fills in by itself. Whatever the words cannot
+ * say goes into `key=value` options and `set` lines, and an object no line
+ * form fits becomes a `raw` line, so every chart reads back as the same chart.
  *
  * writeChartText updates a block someone wrote: lines whose object did not
  * change stay exactly as they were (comments, order and spacing included),
@@ -13,7 +14,7 @@
  * chart is printed instead.
  */
 import { Data, canonicalData, minimize, stableJson } from '../chartdata';
-import { ANCHORS, COLORS, KEYWORDS, NAME_RE, ObjectList, PATTERNS, THICKNESSES, TOOL_PREFIX, isSignCondition, parseChartText, splitTop } from './parse';
+import { ANCHORS, COLORS, NAME_RE, ObjectList, PATTERNS, THICKNESSES, TOOL_PREFIX, isSignCondition, niceStep, parseChartText, splitStatement, splitTop } from './parse';
 
 // ---------------------------------------------------------------- values
 
@@ -40,11 +41,6 @@ function text(s: string): string {
     return s && s === s.trim() && !s.startsWith('"') && !s.startsWith(':') && !s.includes('|') && !hasControl(s) ? s : JSON.stringify(s);
 }
 
-/** `a..b`, with spaces where a number would run into the dots. */
-function range(a: string, b: string): string {
-    return a.endsWith('.') || b.startsWith('.') ? `${a} .. ${b}` : `${a}..${b}`;
-}
-
 /** Text a line cannot hold bare: a `|` that would end the statement (`||` is "or"), or a line break. */
 function hasBar(s: string): boolean {
     return /(^|[^|])\|(?!\|)/.test(s) || hasControl(s);
@@ -60,10 +56,18 @@ function cleanPiece(p: string, separators: string[]): boolean {
     return !!p && !hasBar(p) && separators.every((sep) => parts(p, sep).length === 1);
 }
 
-/** `a:b` of a domain as a range, or null. */
-function domainRange(d: string): string | null {
-    const ab = parts(d, ':');
-    return ab.length === 2 && ab[0] && ab[1] ? range(ab[0], ab[1]) : null;
+/** A bound a line can hold in `from a to b`: no separator of the words at its top level. */
+const bound = (p: string) => !!p.trim() && cleanPiece(p, [',', '..', ' to ', ' and ']);
+
+/** `a:b` of a domain as its two bounds, or null. */
+function domainBounds(d: unknown): [string, string] | null {
+    const ab = typeof d === 'string' ? parts(d, ':') : [];
+    return ab.length === 2 && bound(ab[0]) && bound(ab[1]) ? [ab[0], ab[1]] : null;
+}
+
+/** A list in words: `A`, `A and B`, `A, B and C`. */
+function andList(items: string[]): string {
+    return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
 const generic = (key: string, value: unknown) => `${key}=${JSON.stringify(value)}`;
@@ -101,14 +105,18 @@ class Options {
         for (const k of keys) this.done.add(k);
     }
 
+    colour() {
+        this.take('color', (v) => (typeof v === 'string' && COLORS.has(v) ? `in ${v}` : null));
+    }
+
     common() {
-        this.take('color', (v) => (typeof v === 'string' && COLORS.has(v) ? v : null));
+        this.colour();
         this.take('thickness', (v) => (typeof v === 'string' && THICKNESSES.includes(v) ? v : null));
         this.take('dashed', (v) => (v === true ? 'dashed' : null));
     }
 
     label() {
-        this.take('label', (v) => (typeof v === 'string' ? `label ${JSON.stringify(v)}` : null));
+        this.take('label', (v) => (typeof v === 'string' ? `labelled ${JSON.stringify(v)}` : null));
     }
 
     fillLook() {
@@ -124,7 +132,40 @@ class Options {
     }
 }
 
-const withOptions = (head: string, options: string[]) => (options.length ? `${head} | ${options.join(', ')}` : head);
+/** Where an option goes: a range right after the statement, then the colour, then the rest after commas. */
+const rank = (o: string) => (/^(from|for)\s/.test(o) ? 0 : /^in\s/.test(o) ? 1 : 2);
+
+/** The options in words: `head from x = 0 to 4 in blue, thick, with its tangent at a and its extrema`. */
+function inWords(head: string, options: string[]): string {
+    let out = head;
+    // After "... in the region" a colour reads better behind a comma: "..., in red".
+    let comma = /\s(in|over|on)\s+(the\s+region|\S+)$/.test(head);
+    let lastWith = false;
+    for (const o of options) {
+        if (!comma && rank(o) < 2) out += ` ${o}`;
+        else if (lastWith && /^with\s/.test(o)) out += ` and ${o.slice(5)}`;
+        else {
+            out += `, ${o}`;
+            comma = true;
+            lastWith = /^with\s/.test(o);
+        }
+    }
+    return out;
+}
+
+/**
+ * A statement with its options, in words when they read back as written;
+ * else after a bar, which says where the options start (`head | ...`).
+ */
+function withOptions(head: string, options: string[]): string {
+    const sorted = options.map((o, i) => ({ o, i })).sort((a, b) => rank(a.o) - rank(b.o) || a.i - b.i).map((x) => x.o);
+    const barred = `${head} | ${sorted.join(', ')}`;
+    const want = splitStatement(barred).options.join('\n');
+    const words = inWords(head, sorted);
+    const back = splitStatement(words);
+    if (back.body === head && back.options.join('\n') === want) return words;
+    return sorted.length ? barred : `${head} |`;
+}
 
 // --------------------------------------------------------------- objects
 
@@ -134,10 +175,17 @@ interface Ctx {
     polar: boolean;
     /** Tool names a line spells out (the rest are the names the parser gives by itself). */
     shown: Set<string>;
+    /** The name of the chart's only region, which lines call "the region"; null when there are none or several. */
+    region: string | null;
 }
 
+/** `slider c from 0 to 15, starting at 6`: the start left out when it is the low end, the step when it is the usual one. */
 function sliderLine(p: Data): string {
-    return `slider ${str(p.name)} = ${str(p.value)} in ${range(str(p.min), str(p.max))} step ${str(p.step)}`;
+    const parts = [`slider ${str(p.name)} from ${str(p.min)} to ${str(p.max)}`];
+    const [value, min, max, step] = [p.value, p.min, p.max, p.step].map(Number);
+    if (value !== min) parts.push(`starting at ${str(p.value)}`);
+    if (step !== niceStep((max - min) / 100)) parts.push(`in steps of ${str(p.step)}`);
+    return parts.join(', ');
 }
 
 function functionLine(min: Data, full: Data, ctx: Ctx): string {
@@ -146,28 +194,30 @@ function functionLine(min: Data, full: Data, ctx: Ctx): string {
     const exprY = str(full.expressionY);
     const parametric = full.parametric === true;
     if (!NAME_RE.test(name) || !expr.trim() || hasBar(expr) || (parametric && (!exprY.trim() || hasBar(exprY)))) return raw('function', min);
-    const head = parametric ? `${name}(t) = (${expr}, ${exprY})` : `${name}(${ctx.polar ? 'theta' : 'x'}) = ${expr}`;
+    const variable = parametric ? 't' : ctx.polar ? 'theta' : 'x';
+    const head = parametric ? `plot ${name}(t) = (${expr}, ${exprY})` : `plot ${name}(${variable}) = ${expr}`;
     // A y(t) kept from a parametric past stays as an option.
     const o = new Options(min, parametric ? ['expression', 'expressionY', 'parametric'] : ['expression', 'parametric']);
+    o.take('domain', (v) => {
+        const r = domainBounds(v);
+        if (!r) return null;
+        return variable === 'x' ? `from x = ${r[0]} to ${r[1]}` : `for ${variable} from ${r[0]} to ${r[1]}`;
+    });
     o.common();
-    o.take('fill', (v) => (v === true ? 'fill' : null));
+    o.take('fill', (v) => (v === true ? 'filled' : null));
     o.fillLook();
     if (o.has('showLegend') && min.showLegend === true) {
         const label = str(full.legendLabel);
         o.mark('showLegend');
         if (label) o.mark('legendLabel');
-        o.out.push(label ? `legend ${JSON.stringify(label)}` : 'legend');
+        o.out.push(label ? `with the legend ${JSON.stringify(label)}` : 'with a legend');
     }
-    o.take('domain', (v) => {
-        const r = typeof v === 'string' ? domainRange(v) : null;
-        return r && !hasBar(r) ? `domain ${r}` : null;
-    });
     const point = str(full.tangentPoint).trim();
-    if (o.has('tangent') && min.tangent === true && point && cleanPiece(point, [','])) {
+    if (o.has('tangent') && min.tangent === true && point && cleanPiece(point, [',', ' and '])) {
         o.mark('tangent', 'tangentPoint');
-        o.out.push(`tangent at ${point}`);
+        o.out.push(`with its tangent at ${point}`);
     }
-    o.take('extrema', (v) => (v === true ? 'extrema' : null));
+    o.take('extrema', (v) => (v === true ? 'with its extrema' : null));
     return withOptions(head, o.finish());
 }
 
@@ -177,17 +227,19 @@ function surfaceLine(min: Data, full: Data, ctx: Ctx): string {
     // In a 2D chart a surface line would make it 3D.
     if (!ctx.is3D || !NAME_RE.test(name) || !expr.trim() || hasBar(expr)) return raw('surface', min);
     const o = new Options(min, ['expression']);
-    o.take('color', (v) => (typeof v === 'string' && COLORS.has(v) ? v : null));
-    for (const [key, axis] of [['xDomain', 'x'], ['yDomain', 'y']] as const) {
-        o.take(key, (v) => {
-            const r = typeof v === 'string' ? domainRange(v) : null;
-            return r && !hasBar(r) ? `${axis} ${r}` : null;
-        });
+    // for x from -2 to 2 and y from -2 to 2
+    const ranges = (['x', 'y'] as const)
+        .map((axis) => ({ axis, key: `${axis}Domain`, r: o.has(`${axis}Domain`) ? domainBounds(min[`${axis}Domain`]) : null }))
+        .filter((d) => d.r);
+    if (ranges.length) {
+        o.mark(...ranges.map((d) => d.key));
+        o.out.push(`for ${ranges.map((d) => `${d.axis} from ${d.r?.[0] ?? ''} to ${d.r?.[1] ?? ''}`).join(' and ')}`);
     }
+    o.colour();
     o.take('opacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
-    o.take('samples', (v) => (typeof v === 'number' && Number.isFinite(v) ? `samples ${v}` : null));
+    o.take('samples', (v) => (typeof v === 'number' && Number.isFinite(v) ? `with ${v} samples` : null));
     o.take('wireframe', (v) => (v === true ? 'wireframe' : null));
-    return withOptions(`${name}(x, y) = ${expr}`, o.finish());
+    return withOptions(`plot ${name}(x, y) = ${expr}`, o.finish());
 }
 
 /** Labels that `numbered` writes: (1), (2), ... for every condition but the plain sign ones. */
@@ -196,32 +248,55 @@ function numberedLabels(conditions: string[]): string[] {
     return conditions.map((c) => (isSignCondition(c) ? '' : `(${++k})`));
 }
 
+/** The words of the conditions: `shade between f and g from x = a to b`, `shade where A and B`, or (4.4.0) `shade A, B`. */
 function regionHead(full: Data, o: Options): string | null {
     const conditions = Array.isArray(full.conditions) ? full.conditions.map(str) : [];
     const labels = Array.isArray(full.conditionLabels) ? full.conditionLabels.map(str) : [];
     // An empty condition (a row still to be filled in) is an empty entry: `shade x >= 0, y >= 0,`.
     const printable = (c: string) =>
-        c === '' || (!!c.trim() && cleanPiece(c, [',']) && !/\sfor\s/i.test(c) && !/^(between|under)\s/i.test(c) && !/"\s*$/.test(c));
+        c === '' || (!!c.trim() && cleanPiece(c, [',']) && !/\sfor\s/i.test(c) && !/^(between|under|where|the)\s/i.test(c) && !/"\s*$/.test(c));
     if (!conditions.some((c) => c.trim()) || !conditions.every(printable)) return null;
     const expected = numberedLabels(conditions);
     const numbered = labels.some((l) => l) && conditions.every((_, i) => (labels[i] ?? '') === expected[i]);
     // A label on an empty condition has nothing to stand behind: the labels go in as an option.
     const labelsApart = !numbered && conditions.some((c, i) => c === '' && !!labels[i]);
+    const own = (i: number) => (!numbered && !labelsApart ? labels[i] ?? '' : '');
+    const entry = (c: string, i: number) => (own(i) ? `${c} ${JSON.stringify(own(i))}` : c);
     o.mark('conditions');
     if (!labelsApart) o.mark('conditionLabels');
     if (numbered) o.out.push('numbered');
-    const entries = conditions.map((c, i) => (!numbered && !labelsApart && labels[i] ? `${c} ${JSON.stringify(labels[i])}`.trim() : c));
-    return `shade ${entries.join(', ')}`.replace(/\s+$/, '');
+    // between f and g, under f: the shapes the parser writes out, and an x range closing them.
+    const token = (v: string) => /^[A-Za-z][A-Za-z0-9_]*$/.test(v);
+    const shape = (c: string): string | null => {
+        const between = /^min\((\S+), (\S+)\) <= y <= max\((\S+), (\S+)\)$/.exec(c);
+        if (between && between[1] === between[3] && between[2] === between[4] && token(between[1]) && token(between[2]) && between[1] !== '0') {
+            return `between ${between[1]} and ${between[2]}`;
+        }
+        const under = /^min\(0, (\S+)\) <= y <= max\(0, (\S+)\)$/.exec(c);
+        return under && under[1] === under[2] && token(under[1]) ? `under ${under[1]}` : null;
+    };
+    const first = shape(conditions[0]);
+    if (first && conditions.length <= 2) {
+        const range = conditions.length === 2 ? /^(.+?) <= x <= (.+)$/.exec(conditions[1]) : null;
+        if (conditions.length === 1) return `shade ${entry(first, 0)}`;
+        if (range && bound(range[1]) && bound(range[2]) && !/[<>]/.test(range[1] + range[2]) && !own(1)) {
+            o.out.push(`from x = ${range[1]} to ${range[2]}`);
+            return `shade ${entry(first, 0)}`;
+        }
+    }
+    // where A and B: every condition one clause (no and, or or comma of its own), none empty.
+    const simple = conditions.every((c) => c.trim() && parts(c, ' and ').length === 1 && parts(c, ' or ').length === 1 && parts(c, '||').length === 1);
+    if (simple) return `shade where ${conditions.map(entry).join(' and ')}`;
+    return `shade ${conditions.map(entry).join(', ')}`.replace(/\s+$/, '');
 }
 
-function bareCurve(eq: string): boolean {
-    const first = /^([A-Za-z0-9]+)/.exec(eq);
+/** An equation `draw` reads as the equation itself: not a definition, a shape word or an inequality. */
+function drawable(eq: string): boolean {
     return (
         !/[<>]/.test(eq) &&
         /=/.test(eq.replace(/<=|>=|==|!=/g, '')) &&
-        !(first && KEYWORDS.has(first[1].toLowerCase())) &&
-        !/^[yzr]\s*=(?!=)/.test(eq) &&
-        !/^[A-Za-z][A-Za-z0-9_]*\s*:/.test(eq) &&
+        !/^(?:(?:a|an|the)\s+)?(?:double\s+arrow|arrow|line|segment|polygon|brace|plane|curve|level\s+curves?|levels|contours?)(?![A-Za-z0-9_(])/i.test(eq) &&
+        !/^(?:[*/^=<>!]|[-+]\s)/.test(eq) &&
         !/^[A-Za-z][A-Za-z0-9_]*\s*\(\s*[A-Za-zθ]+\s*(?:,\s*[A-Za-z]+\s*)?\)\s*=(?!=)/.test(eq)
     );
 }
@@ -236,53 +311,57 @@ function pointsHead(full: Data, o: Options, ctx: Ctx): string | null {
     const source = str(full.source);
     if (source === 'list') {
         const pieces = parts(str(full.points), ';');
-        if (!pieces.length || !pieces.every((p) => cleanPiece(p, [',']))) return null;
+        if (!pieces.length || !pieces.every((p) => cleanPiece(p, [',', ' and ']) && (p.startsWith('(') || NAME_RE.test(p)))) return null;
         o.mark('points', 'source');
         if (Number(full.dim) === inferredDim(pieces, ctx)) o.mark('dim');
         else o.out.push(generic('dim', full.dim));
-        return `${pieces.length === 1 ? 'point' : 'points'} ${pieces.join(', ')}`;
+        return `mark ${andList(pieces)}`;
     }
-    const token = (v: unknown) => /^\S+$/.test(str(v)) && !hasBar(str(v));
+    const token = (v: unknown) => NAME_RE.test(str(v));
+    /** The region by name, or "the region" when it is the chart's only one. */
+    const region = (v: unknown) => (str(v) === ctx.region ? 'the region' : str(v));
     if (source === 'intersections') {
         if (!token(full.ref1) || !token(full.ref2)) return null;
         o.mark('source', 'ref1', 'ref2');
-        return `crossings of ${str(full.ref1)} and ${str(full.ref2)}`;
+        return `mark where ${str(full.ref1)} and ${str(full.ref2)} cross`;
     }
     const objective = str(full.objective).trim();
-    const sense = str(full.sense) === 'min' ? 'min' : 'max';
+    const sense = str(full.sense) === 'min' ? 'minimum' : 'maximum';
     if (objective && (hasBar(objective) || /\s(over|on|in)\s/i.test(objective))) return null;
     if (source === 'region') {
         if (!token(full.regionName)) return null;
         o.mark('source', 'regionName', 'objective');
         if (objective) o.mark('sense');
-        return objective ? `${sense} ${objective} over ${str(full.regionName)}` : `corners of ${str(full.regionName)}`;
+        return objective ? `mark the ${sense} of ${objective} in ${region(full.regionName)}` : `mark the corners of ${region(full.regionName)}`;
     }
     if (source === 'lattice') {
-        const region = str(full.regionName);
-        if (region && !token(region)) return null;
-        if (objective && !region) return null;
+        const name = str(full.regionName);
+        if (name && !token(name)) return null;
+        if (objective && !name) return null;
         o.mark('source', 'regionName', 'objective');
         if (objective) o.mark('sense');
-        if (objective) return `integer ${sense} ${objective} in ${region}`;
-        return region ? `integer points in ${region}` : 'integer points';
+        if (objective) return `mark the integer ${sense} of ${objective} in ${region(name)}`;
+        return name ? `mark the integer points in ${region(name)}` : 'mark the integer points';
     }
     return null;
 }
 
 function segmentHead(full: Data, o: Options, ctx: Ctx): string | null {
     const pieces = parts(str(full.path), ';');
-    const separators = [',', '--', '->', '<-', ' to '];
+    const separators = [',', '--', '->', '<-', ' to ', ' and '];
     if (pieces.length < 2 || !pieces.every((p) => cleanPiece(p, separators))) return null;
     const style = str(full.style) || 'line';
     const closed = full.closed === true;
+    const path = pieces.join(' to ');
     let head: string;
-    if (style === 'line' && closed) head = `polygon ${pieces.join(', ')}`;
-    else if (style === 'line') head = `segment ${pieces.join(' -- ')}`;
-    else if (style === 'brace' && pieces.length === 2) head = `brace ${pieces[0]} to ${pieces[1]}`;
-    else if (style === 'forward' || style === 'backward' || style === 'both') {
-        head = `arrow ${pieces.join(style === 'forward' ? ' -> ' : style === 'backward' ? ' <- ' : ' <-> ')}`;
-    } else return null;
+    if (style === 'line' && closed) head = `draw a polygon through ${andList(pieces)}`;
+    else if (style === 'line') head = `draw a line from ${path}`;
+    else if (style === 'brace' && pieces.length === 2) head = `draw a brace from ${path}`;
+    else if (style === 'forward' || style === 'backward') head = `draw an arrow from ${path}`;
+    else if (style === 'both') head = `draw a double arrow from ${path}`;
+    else return null;
     o.mark('path', 'style');
+    if (style === 'backward') o.out.push('backwards');
     if (style === 'line' && closed) o.mark('closed');
     if (Number(full.dim) === inferredDim(pieces, ctx)) o.mark('dim');
     else o.out.push(generic('dim', full.dim));
@@ -299,8 +378,11 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
         const eq = str(full.equation).trim();
         const levels = str(full.levels).trim();
         if (eq && !hasBar(eq) && !hasBar(levels)) {
-            if (levels && !/\sat\s/i.test(eq)) head = `levels ${eq} at ${levels}`;
-            else if (!levels) head = bareCurve(eq) ? eq : `curve ${eq}`;
+            if (levels && !/\sat\s/i.test(eq)) {
+                const items = parts(levels, ',');
+                const list = items.length > 1 && items.join(', ') === levels && items.every((v) => cleanPiece(v, [' and '])) ? andList(items) : levels;
+                head = `draw the level curves of ${eq} at ${list}`;
+            } else if (!levels && drawable(eq)) head = `draw ${eq}`;
             if (head) o.mark('equation', 'levels');
         }
     } else if (type === 'points') head = pointsHead(full, o, ctx);
@@ -309,7 +391,7 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
         const axis = str(full.axis);
         const value = str(full.value).trim();
         if (/^[xyz]$/.test(axis) && value && !hasBar(value)) {
-            head = `plane ${axis} = ${value}`;
+            head = `draw the plane ${axis} = ${value}`;
             o.mark('axis', 'value');
         }
     }
@@ -318,17 +400,17 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
     if (type === 'region') {
         o.common();
         o.fillLook();
-        o.take('outline', (v) => (v === 'solid' ? 'outline' : v === 'dashed' ? 'dashed outline' : null));
-        o.take('fill', (v) => (v === false ? 'no fill' : null));
-        o.take('constraintLines', (v) => (v === true ? 'constraint lines' : null));
+        o.take('outline', (v) => (v === 'solid' ? 'outlined' : v === 'dashed' ? 'with a dashed outline' : null));
+        o.take('fill', (v) => (v === false ? 'not filled' : null));
+        o.take('constraintLines', (v) => (v === true ? 'with constraint lines' : null));
         o.label();
     } else if (type === 'points') {
-        o.take('color', (v) => (typeof v === 'string' && COLORS.has(v) ? v : null));
+        o.colour();
         o.take('size', (v) => (v === 'small' || v === 'large' || v === 'normal' ? v : null));
-        o.take('dropLines', (v) => (v === true ? 'drop lines' : null));
-        o.take('label', (v) => (v === '({x:2}, {y:2})' ? 'coordinates' : typeof v === 'string' ? `label ${JSON.stringify(v)}` : null));
+        o.take('dropLines', (v) => (v === true ? 'with lines to the axes' : null));
+        o.take('label', (v) => (v === '({x:2}, {y:2})' ? 'with coordinates' : typeof v === 'string' ? `labelled ${JSON.stringify(v)}` : null));
     } else if (type === 'plane3D') {
-        o.take('color', (v) => (typeof v === 'string' && COLORS.has(v) ? v : null));
+        o.colour();
         o.take('fillOpacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
     } else {
         o.common();
@@ -345,10 +427,10 @@ function labelLine(min: Data, full: Data): string {
     const coords = z ? [x, y, z] : [x, y];
     if (!coords.every((c) => cleanPiece(c, [',']))) return raw('label', min);
     const o = new Options(min, z ? ['text', 'x', 'y', 'z'] : ['text', 'x', 'y']);
+    o.colour();
     o.take('anchor', (v) => (typeof v === 'string' && ANCHORS.has(v) ? v : null));
     o.take('size', (v) => (v === 'small' || v === 'large' || v === 'normal' ? v : null));
-    o.take('color', (v) => (typeof v === 'string' && COLORS.has(v) ? v : null));
-    return withOptions(`text ${JSON.stringify(str(full.text))} at (${coords.join(', ')})`, o.finish());
+    return withOptions(`write ${JSON.stringify(str(full.text))} at (${coords.join(', ')})`, o.finish());
 }
 
 // ----------------------------------------------------------------- chart
@@ -368,10 +450,10 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
             const axes = ['x', 'y'];
             if (f.dimension === true || 'zmin' in m || 'zmax' in m) axes.push('z');
             const pieces = axes.map((a) => [str(f[`${a}min`]), str(f[`${a}max`])]);
-            if (pieces.flat().some((p) => !p.trim() || !cleanPiece(p, [',', '..']))) {
+            if (pieces.flat().some((p) => !bound(p))) {
                 return ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'].filter((k) => k in m).map((k) => `set ${k} = ${JSON.stringify(m[k])}`);
             }
-            return [`view ${axes.map((a, i) => `${a} ${range(pieces[i][0], pieces[i][1])}`).join(', ')}`];
+            return [`show ${andList(axes.map((a, i) => `${a} from ${pieces[i][0]} to ${pieces[i][1]}`))}`];
         },
     },
     {
@@ -391,10 +473,11 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
         print: (m) => {
             const out: string[] = [];
             if ('axis_style' in m) {
-                const word = m.axis_style === 'axes' ? 'edges' : m.axis_style === 'middle' || m.axis_style === 'box' ? m.axis_style : null;
-                out.push(word ? `axes ${word}` : `set axis_style = ${JSON.stringify(m.axis_style)}`);
+                const words: Record<string, string> = { axes: 'axes on the edges', middle: 'axes in the middle', box: 'axes in a box' };
+                const word = typeof m.axis_style === 'string' ? words[m.axis_style] : undefined;
+                out.push(word ?? `set axis_style = ${JSON.stringify(m.axis_style)}`);
             }
-            if ('showAxis' in m) out.push(m.showAxis === false ? 'axes none' : `set showAxis = ${JSON.stringify(m.showAxis)}`);
+            if ('showAxis' in m) out.push(m.showAxis === false ? 'no axes' : `set showAxis = ${JSON.stringify(m.showAxis)}`);
             return out;
         },
     },
@@ -403,11 +486,11 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
         print: (m) => {
             const large = m.showLargeGrid;
             const small = m.showSmallGrid;
-            if (large === true && small === true) return ['grid fine'];
+            if (large === true && small === true) return ['with a fine grid'];
             const out: string[] = [];
-            if (large === true) out.push('grid');
+            if (large === true) out.push('with a grid');
             else if ('showLargeGrid' in m) out.push(`set showLargeGrid = ${JSON.stringify(large)}`);
-            if (small === true) out.push('grid minor');
+            if (small === true) out.push('with a minor grid');
             else if ('showSmallGrid' in m) out.push(`set showSmallGrid = ${JSON.stringify(small)}`);
             return out;
         },
@@ -463,15 +546,17 @@ function referenced(name: string, others: string): boolean {
  * when the parser gives it that name by itself (R1, P2, ...) and no other
  * line uses the name; everything else is written `R1: ...`.
  */
-function shownNames(full: Data, rawTools: Set<number>): Set<string> {
+function shownNames(full: Data, rawTools: Set<number>, region: string | null): Set<string> {
     const tools = list(full.tools);
     const base = new Set<string>();
     for (const key of ['parameters', 'functions', 'functions3D'] as const) for (const item of list(full[key])) base.add(str(item.name));
     const show = new Set<number>(rawTools);
+    // A line that points at the only region calls it "the region": that needs no name.
+    const pointing = tools.map((t, j) => (region !== null && t.regionName === region && !rawTools.has(j) ? { ...t, regionName: '' } : t));
     tools.forEach((t, i) => {
         const name = str(t.name);
         if (!TOOL_PREFIX[str(t.type)] || !NAME_RE.test(name)) show.add(i);
-        const others = stableJson({ ...full, tools: tools.filter((_, j) => j !== i) });
+        const others = stableJson({ ...full, tools: pointing.filter((_, j) => j !== i) });
         if (referenced(name, others)) show.add(i);
     });
     for (;;) {
@@ -520,13 +605,15 @@ function printParts(data: Data): Printed {
     const is3D = full.dimension === true;
     const polar = full.coordinateSystem === 'polar';
     const tools = pairs(min, full, 'tools');
+    const regions = list(full.tools).filter((t) => t.type === 'region');
+    const region = regions.length === 1 && NAME_RE.test(str(regions[0].name)) ? str(regions[0].name) : null;
     // Tools no line form fits are written raw; their names count as explicit.
-    const probe: Ctx = { is3D, polar, shown: new Set() };
+    const probe: Ctx = { is3D, polar, shown: new Set(), region };
     const rawTools = new Set<number>();
     tools.forEach((t, i) => {
         if (toolLine(t.min, t.full, probe).startsWith('raw ')) rawTools.add(i);
     });
-    const ctx: Ctx = { is3D, polar, shown: shownNames(full, rawTools) };
+    const ctx: Ctx = { is3D, polar, shown: shownNames(full, rawTools, region), region };
     return {
         chart: chartLines(min, full, null),
         objects: {
@@ -773,23 +860,29 @@ function rewrite(oldText: string, data: Data): string {
 }
 
 /**
- * A kept line without a name (`corners of R1`, `y = 2x + 1`) gets its name
- * from the lines around it; when those changed (an object above was
- * deleted, a name became explicit), the line spells out the name its object
- * has: a tool gets `R2: ` in front, a function or surface its printed line.
+ * A kept line can lean on the lines around it: a line without a name
+ * (`mark the corners of R1`, `y = 2x + 1`) gets its name from them, and
+ * "the region" is the chart's only region. When those changed (an object
+ * above was deleted, a name became explicit, a second region came), the
+ * line says what it means: a tool only renamed gets `R2: ` in front, any
+ * other line its printed form.
  */
 function keepNames(out: OutLine[], fresh: Map<string, Fresh>) {
     for (let round = 0; round < 3; round++) {
         const parsed = parseChartText(out.map((l) => l.text).join('\n'), { trace: true });
+        const read = canonicalData(parsed.data);
         let fixed = false;
         (parsed.lines ?? []).forEach((trace, i) => {
             const entry = out[i];
             const f = entry?.key ? fresh.get(entry.key) : undefined;
             if (!f || !trace.object || trace.object.list !== f.list || f.list === 'annotations' || f.list === 'parameters') return;
-            const item = list(parsed.data[f.list])[trace.object.index];
-            if (!item || str(item.name) === str(f.item.name)) return;
+            const item = list(read[f.list])[trace.object.index];
+            if (!item || withoutId(item) === withoutId(f.item)) return;
             const indent = /^\s*/.exec(entry.text)?.[0] ?? '';
-            entry.text = f.list === 'tools' ? `${indent}${str(f.item.name)}: ${entry.text.trimStart()}` : indent + f.line;
+            const renamed = f.list === 'tools' && withoutId({ ...item, name: f.item.name }) === withoutId(f.item);
+            const line = renamed ? `${indent}${str(f.item.name)}: ${entry.text.trimStart()}` : indent + f.line;
+            if (line === entry.text) return;
+            entry.text = line;
             fixed = true;
         });
         if (!fixed) return;

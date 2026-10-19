@@ -1,12 +1,15 @@
 /*
  * Easy TikZ charts as text: one line per object, written the way the math
- * reads, instead of one JSON object.
+ * reads, instead of one JSON object. Lines read like English:
  *
- *   view x -3..3, y -4..4
- *   slider a = 0.8 in -1.1..1.1
- *   f(x) = x^3 - 3x | blue, thick, tangent at a, extrema
- *   g(x) = f(a) + (3a^2 - 3)(x - a) | hidden
- *   shade between f and g for min(a, -2a) <= x <= max(a, -2a) | orange
+ *   show x from -3 to 3 and y from -4 to 4
+ *   slider a from -1.1 to 1.1, starting at 0.8
+ *   plot f(x) = x^3 - 3x in blue, thick, with its tangent at a and its extrema
+ *   plot g(x) = f(a) + (3a^2 - 3)(x - a), hidden
+ *   shade between f and g from x = min(a, -2a) to max(a, -2a) in orange
+ *
+ * and the short forms of 4.4.0 keep working (view x -3..3, y -4..4;
+ * f(x) = x^3 - 3x | blue, tangent at a; shade ... | orange).
  *
  * parseChartText turns such a block into the same v4 chart object a JSON
  * block holds, so everything downstream (migration, scene, renderers,
@@ -52,6 +55,8 @@ export const KEYWORDS = new Set([
     'view', 'title', 'xlabel', 'ylabel', 'zlabel', 'axes', 'grid', 'size', 'equal', 'polar', '3d', 'snippet', 'variables', 'set',
     'slider', 'shade', 'line', 'curve', 'levels', 'point', 'points', 'crossings', 'intersections', 'corners', 'max', 'min',
     'integer', 'arrow', 'segment', 'polygon', 'brace', 'text', 'plane', 'raw',
+    // the English verbs and openings
+    'show', 'plot', 'draw', 'mark', 'write', 'with', 'no', 'double',
 ]);
 
 export const COLORS = new Set(['black', 'gray', 'red', 'orange', 'brown', 'green', 'teal', 'blue', 'purple', 'magenta']);
@@ -59,7 +64,7 @@ const COLOR_ALIASES: Record<string, string> = { grey: 'gray', violet: 'purple', 
 export const THICKNESSES = ['very thin', 'very thick', 'thin', 'thick'];
 export const PATTERNS = new Set(['solid', 'horizontal', 'vertical', 'crosshatch', 'dots', 'north-east', 'north-west']);
 export const ANCHORS = new Set(['center', 'above', 'below', 'left', 'right']);
-const AXIS_STYLES: Record<string, string> = { middle: 'middle', box: 'box', edges: 'axes', axes: 'axes' };
+const AXIS_STYLES: Record<string, string> = { middle: 'middle', centre: 'middle', center: 'middle', box: 'box', edges: 'axes', edge: 'axes', axes: 'axes' };
 export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL' };
 const NAME = '[A-Za-z][A-Za-z0-9_]*';
 /** A name the block can spell: letters, digits and _. */
@@ -122,8 +127,28 @@ function trimPiece(text: string, at: number): Piece {
     return { text: text.trim(), at: at + lead };
 }
 
-/** The statement and its options: everything after the first `|` that is not part of `||`, outside brackets and quotes. */
-function splitOptions(s: string): { body: Piece; options: Piece | null } {
+/** The statement and its option phrases. */
+interface Split {
+    body: Piece;
+    /** One piece per option phrase (a phrase may still join several with "and": `thick and dashed`). */
+    options: Piece[];
+    /** Where the `|` is (0-based), or -1 when the options are written in words. */
+    bar: number;
+}
+
+/** Words that start an option phrase right after the statement, without a comma: `in red`, `from x = 0 to 4`, `with its extrema`. */
+const PHRASE_START = /^(?:in|from|for|with|labelled|labeled)\s/i;
+
+/**
+ * The statement and its options: everything after the first `|` that is
+ * not part of `||` (outside brackets and quotes), or, in words, the option
+ * phrases the line ends with (`..., numbered`, `... in red, thick and
+ * dashed`, `... with its tangent at a and its extrema`).
+ */
+function splitOptions(s: string, english: boolean): Split {
+    let head = s;
+    let options: Piece[] = [];
+    let bar = -1;
     let depth = 0;
     let quote = false;
     for (let i = 0; i < s.length; i++) {
@@ -137,10 +162,139 @@ function splitOptions(s: string): { body: Piece; options: Piece | null } {
         else if (c === '(' || c === '[' || c === '{') depth++;
         else if (c === ')' || c === ']' || c === '}') depth = Math.max(0, depth - 1);
         else if (c === '|' && depth === 0 && s[i - 1] !== '|' && s[i + 1] !== '|') {
-            return { body: trimPiece(s.slice(0, i), 0), options: trimPiece(s.slice(i + 1), i + 1) };
+            head = s.slice(0, i);
+            options = splitTop(s.slice(i + 1), ',', i + 1).filter((p) => p.text);
+            bar = i;
+            break;
         }
     }
-    return { body: trimPiece(s, 0), options: null };
+    if (!english) return { body: trimPiece(head, 0), options, bar };
+    // In words: the pieces after commas, from the right, as long as each is an option phrase ...
+    if (bar < 0) {
+        const pieces = splitTop(head, ',');
+        let first = pieces.length;
+        while (first > 1 && isOptionList(pieces[first - 1].text)) first--;
+        if (first < pieces.length) {
+            options = pieces.slice(first);
+            head = head.slice(0, pieces[first].at).replace(/\s*,\s*$/, '');
+        }
+    }
+    // ... and the phrases right after the statement (`... from x = 0 to 4 in red`). After a bar the statement is all before it.
+    for (;;) {
+        const cut = bar < 0 ? lastPhrase(head) : -1;
+        if (cut < 0) break;
+        options.unshift(trimPiece(head.slice(cut), cut));
+        head = head.slice(0, cut);
+    }
+    return { body: trimPiece(head, 0), options, bar };
+}
+
+/** Where the option phrase that ends `s` starts (after its last top-level comma), or -1. */
+function lastPhrase(s: string): number {
+    const starts: number[] = [];
+    let depth = 0;
+    let quote = false;
+    for (let i = 0; i < s.length; i++) {
+        const c = s[i];
+        if (quote) {
+            if (c === '\\') i++;
+            else if (c === '"') quote = false;
+            continue;
+        }
+        if (c === '"') quote = true;
+        else if (c === '(' || c === '[' || c === '{') depth++;
+        else if (c === ')' || c === ']' || c === '}') depth = Math.max(0, depth - 1);
+        else if (depth === 0 && c === ',') starts.length = 0;
+        else if (depth === 0 && /\s/.test(c) && PHRASE_START.test(s.slice(i + 1))) starts.push(i + 1);
+    }
+    for (let k = starts.length - 1; k >= 0; k--) if (isOptionList(s.slice(starts[k]))) return starts[k];
+    return -1;
+}
+
+/** One line in words or with a bar, as parseChartText reads it: the statement and its option phrases. */
+export function splitStatement(line: string): { body: string; options: string[] } {
+    const split = splitOptions(line, isEnglish(line));
+    return { body: split.body.text, options: split.options.flatMap(optionWords).map((p) => p.text) };
+}
+
+/** The options of a piece, one each: `thick and dashed` is two, `label "A and B"` one. */
+function optionWords(p: Piece): Piece[] {
+    const words = isOptionList(p.text) ? splitTop(p.text, ' and ', p.at) : [p];
+    return words.map((w) => ({ text: plainOption(w.text), at: w.at }));
+}
+
+const isColour = (w: string) => COLORS.has(COLOR_ALIASES[w.toLowerCase()] ?? w.toLowerCase());
+
+/** An option in its short form: the words that only fill it out dropped (`with its tangent at a` is `tangent at a`, `in red` is `red`). */
+function plainOption(o: string): string {
+    let t = o.trim();
+    for (;;) {
+        const next = t.replace(/^(?:and|with|its|the|a|an)\s+(?=[A-Za-z0-9"])/i, '');
+        if (next === t) break;
+        t = next;
+    }
+    const colour = /^in\s+([A-Za-z]+)$/i.exec(t);
+    if (colour && isColour(colour[1])) return colour[1];
+    const words: Record<string, string> = {
+        filled: 'fill',
+        'not filled': 'no fill',
+        outlined: 'outline',
+        'lines to the axes': 'drop lines',
+        backward: 'backwards',
+        'pointing back': 'backwards',
+    };
+    const word = words[t.toLowerCase()];
+    if (word) return word;
+    let m = /^(?:labelled|labeled)\s+(.+)$/i.exec(t);
+    if (m) return `label ${m[1]}`;
+    m = /^([\d.]+)\s+samples$/i.exec(t);
+    if (m) return `samples ${m[1]}`;
+    return t;
+}
+
+const OPTION_WORDS = new Set([
+    'hidden', 'dashed', 'numbered', 'extrema', 'legend', 'fill', 'outline', 'dashed outline', 'no fill', 'constraint lines',
+    'coordinates', 'drop lines', 'small', 'large', 'normal', 'wireframe', 'backwards', 'above', 'below', 'left', 'right', 'center',
+]);
+
+/** Is this piece an option, in either form (`red`, `in red`, `with its tangent at a`, `numbered`, `key=value`)? */
+function isOption(raw: string): boolean {
+    const o = plainOption(raw);
+    const lower = o.toLowerCase();
+    if (!o || splitTop(o, ',').length > 1) return false;
+    if (isColour(lower) || THICKNESSES.includes(lower) || OPTION_WORDS.has(lower)) return true;
+    if (/^(label|labels|legend)\s+"/i.test(o)) return true;
+    if (/^tangent(\s+at)?\s+\S/i.test(o)) return true;
+    if (/^(opacity\s+[-+\d.e]+|pattern\s+[a-z-]+|samples\s+[\d.]+)$/i.test(o)) return true;
+    if (/^(domain|t|theta|θ)\s+\S.*\.\..*\S$/i.test(o)) return true;
+    if (/^(from\s+(x|t|theta|θ)\s*=|for\s+(x|y|t|theta|θ)\s+from\s).+\sto\s.+$/i.test(o)) return true;
+    if (/^[xy]\s+(from\s.+\sto\s.+|\S.*\.\..*\S)$/i.test(o)) return true;
+    // key=value with a field name (not an equation such as x = 3 or c = 6) and a JSON value.
+    const kv = /^([A-Za-z][A-Za-z0-9_]{2,})\s*=\s*(.+)$/.exec(o);
+    if (kv && !/[<>!]/.test(kv[2])) {
+        try {
+            JSON.parse(kv[2]);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+    return false;
+}
+
+/** One option phrase, or several joined by "and" (`thick and dashed`, `its tangent at a and its extrema`). */
+function isOptionList(text: string): boolean {
+    const t = text.trim();
+    return !!t && splitTop(t, ' and ').every((p) => isOption(p.text));
+}
+
+/** A line in words: anything but the chart lines (view, axes, slider, ...), whose words are their own. */
+function isEnglish(line: string): boolean {
+    const named = new RegExp(`^\\s*(${NAME})\\s*:(?!=)`).exec(line);
+    const body = (named ? line.slice(named[0].length) : line).trim();
+    if (DEFINITION.test(body)) return true;
+    const lead = /^([A-Za-z0-9]+)/.exec(body);
+    return !lead || !CHART_WORDS.has(lead[1].toLowerCase());
 }
 
 /** A "quoted" string at the start of `s` (JSON escapes), and what follows it. */
@@ -208,6 +362,8 @@ class Builder {
     readonly explicit = new Set<string>();
     line = 0;
     is3D = false;
+    /** Tools that point at "the region": the one region of the chart, known once every line is read. */
+    readonly theRegion: Array<{ tool: Data; line: number; at: number }> = [];
 
     problem(at: number, message: string) {
         this.problems.push({ line: this.line, column: at + 1, message });
@@ -274,25 +430,25 @@ class Builder {
     }
 }
 
-/** Lines about the chart itself, and sliders: they take no options after `|`. */
-const CHART_WORDS = new Set(['view', 'axes', 'grid', 'size', 'equal', 'polar', '3d', 'snippet', 'variables', 'set', 'slider']);
+/** Lines about the chart itself, and sliders: their words are their own, and they take no options. */
+const CHART_WORDS = new Set(['view', 'show', 'axes', 'no', 'grid', 'with', 'size', 'equal', 'polar', '3d', 'snippet', 'variables', 'set', 'slider']);
 
-/** What each kind of object accepts after `|`, for messages. */
+/** What each kind of object accepts as options, for messages. */
 const OPTION_HELP: Record<string, string> = {
-    function: 'a colour, thin, thick, dashed, hidden, legend "text", domain a..b, tangent at a, extrema, fill, opacity 0.3, pattern dots',
-    region: 'a colour, opacity 0.3, pattern dots, outline, dashed outline, no fill, constraint lines, numbered, label "text", hidden',
-    curve: 'a colour, thin, thick, dashed, label "text", hidden',
-    points: 'a colour, small, large, drop lines, coordinates, label "text", labels "A; B", hidden',
-    segment: 'a colour, thin, thick, dashed, label "text", hidden',
-    text: 'a colour, small, large, above, below, left, right, center, hidden',
-    surface: 'a colour, x a..b, y a..b, opacity 0.7, samples 40, wireframe, hidden',
-    plane: 'a colour, opacity 0.25, hidden',
+    function:
+        'in a colour, thin, thick, dashed, hidden, with a legend, with the legend "text", from x = a to b, with its tangent at a, with its extrema, filled, opacity 0.3, pattern dots',
+    region: 'in a colour, opacity 0.3, pattern dots, outlined, with a dashed outline, not filled, with constraint lines, numbered, labelled "text", hidden',
+    curve: 'in a colour, thin, thick, dashed, labelled "text", hidden',
+    points: 'in a colour, small, large, with lines to the axes, with coordinates, labelled "text", hidden',
+    segment: 'in a colour, thin, thick, dashed, backwards, labelled "text", hidden',
+    text: 'in a colour, small, large, above, below, left, right, center, hidden',
+    surface: 'in a colour, for x from a to b and y from c to d, opacity 0.7, 40 samples, wireframe, hidden',
+    plane: 'in a colour, opacity 0.25, hidden',
 };
 
-/** Apply the options after `|` to `target`. Returns false for nothing; problems are recorded. */
-function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, options: Piece | null) {
-    if (!options || !options.text) return;
-    for (const opt of splitTop(options.text, ',', options.at)) {
+/** Apply the options to `target`; problems are recorded. */
+function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, options: Piece[]) {
+    for (const opt of options.flatMap(optionWords)) {
         const o = opt.text;
         if (!o) continue;
         const lower = o.toLowerCase();
@@ -339,7 +495,7 @@ function applyKindOption(b: Builder, kind: string, target: Data, opt: Piece): bo
             target.legendLabel = textValue(m[1]);
             return true;
         }
-        m = word(/^(?:domain|t|theta|θ)\s+(.+)$/i);
+        m = word(/^(?:domain|t|theta|θ)\s+(.+)$/i) ?? word(/^(?:from\s+[xt]\s*=|for\s+(?:x|t|theta|θ)\s+from)\s*(.+)$/i);
         if (m) {
             const r = parseRange(m[1]);
             if (!r) return badRange(b, opt);
@@ -368,10 +524,20 @@ function applyKindOption(b: Builder, kind: string, target: Data, opt: Piece): bo
         if (lower === 'no fill') return set(target, 'fill', false);
         if (lower === 'constraint lines') return set(target, 'constraintLines', true);
         if (lower === 'numbered') return set(target, 'numbered', true);
+        if (lower === 'fill') return true;
+        m = word(/^(?:from|for)\s+([xy])\s*(?:=|from)\s*(.+)$/i);
+        if (m) {
+            const r = parseRange(m[2]);
+            if (!r) return badRange(b, opt);
+            (target.conditions as string[]).push(`${r[0]} <= ${m[1].toLowerCase()} <= ${r[1]}`);
+            if (Array.isArray(target.conditionLabels)) (target.conditionLabels as string[]).push('');
+            return true;
+        }
         return false;
     }
     if (kind === 'curve' || kind === 'segment') {
         if (lower === 'dashed') return set(target, 'dashed', true);
+        if (kind === 'segment' && lower === 'backwards' && target.style === 'forward') return set(target, 'style', 'backward');
         return false;
     }
     if (kind === 'points') {
@@ -388,7 +554,7 @@ function applyKindOption(b: Builder, kind: string, target: Data, opt: Piece): bo
         return false;
     }
     if (kind === 'surface') {
-        let m = word(/^([xy])\s+(.+)$/i);
+        let m = word(/^(?:for\s+)?([xy])\s+(?:from\s+)?(.+)$/i);
         if (m) {
             const r = parseRange(m[2]);
             if (!r) return badRange(b, opt);
@@ -439,7 +605,20 @@ function pathOf(parts: Piece[]): string {
     return parts.map((p) => p.text).join('; ');
 }
 
-/** Region condition entries from `between f and g`, `under f`, `a, b, c` and `... for ...`, each with an optional "label". */
+/** `p` without the start `re` matches (its column moved along), or null when it does not start so. */
+function after(p: Piece, re: RegExp): Piece | null {
+    const m = re.exec(p.text);
+    if (!m || m.index !== 0) return null;
+    return trimPiece(p.text.slice(m[0].length), p.at + m[0].length);
+}
+
+/** `p` without the start `re` matches, when it does. */
+const drop = (p: Piece, re: RegExp): Piece => after(p, re) ?? p;
+
+/**
+ * Region condition entries from `where a and b`, `between f and g`,
+ * `under f`, `a, b, c` and `... for ...`, each with an optional "label".
+ */
 function conditionsOf(b: Builder, body: Piece): { conditions: string[]; labels: string[] } {
     const conditions: string[] = [];
     const labels: string[] = [];
@@ -463,10 +642,18 @@ function conditionsOf(b: Builder, body: Piece): { conditions: string[]; labels: 
         conditions.push(t);
         labels.push(label);
     };
-    const [main, ...rest] = splitTop(body.text, ' for ', body.at);
-    const mainPieces = /^(between|under)\s/i.test(main.text) ? [main] : splitTop(main.text, ',', main.at);
+    // After "where", "and" joins conditions too (unless an "or" groups them: and binds tighter).
+    const where = after(body, /^(?:the\s+(?:region|area)\s+)?where\s+/i);
+    const lead = where ?? drop(body, /^the\s+(?:region|area)\s+(?=(?:between|under)\s)/i);
+    const entries = (p: Piece) => {
+        const parts = splitTop(p.text, ',', p.at);
+        if (!where || splitTop(p.text, ' or ').length > 1 || splitTop(p.text, '||').length > 1) return parts;
+        return parts.flatMap((q) => splitTop(q.text, ' and ', q.at));
+    };
+    const [main, ...rest] = splitTop(lead.text, ' for ', lead.at);
+    const mainPieces = /^(between|under)\s/i.test(main.text) ? [main] : entries(main);
     for (const p of mainPieces) add(p);
-    for (const r of rest) for (const p of splitTop(r.text, ',', r.at)) add(p);
+    for (const r of rest) for (const p of entries(r)) add(p);
     return { conditions, labels };
 }
 
@@ -475,7 +662,7 @@ export function isSignCondition(c: string): boolean {
     return /^\s*[A-Za-z][A-Za-z0-9_]*\s*>=\s*0\s*$/.test(c) || /^\s*0\s*<=\s*[A-Za-z][A-Za-z0-9_]*\s*$/.test(c);
 }
 
-function addTool(b: Builder, type: string, name: string | null, fields: Data, options: Piece | null, kind: keyof typeof OPTION_HELP) {
+function addTool(b: Builder, type: string, name: string | null, fields: Data, options: Piece[], kind: keyof typeof OPTION_HELP): Data {
     const tool: Data = { type, name: name ?? b.nextName(TOOL_PREFIX[type]), ...fields };
     applyOptions(b, kind, tool, options);
     if (type === 'region') {
@@ -489,6 +676,7 @@ function addTool(b: Builder, type: string, name: string | null, fields: Data, op
         else delete tool.conditionLabels;
     }
     b.tools.push(tool);
+    return tool;
 }
 
 /** Parse a text block into a v4 chart; with { trace: true } also what each line made. */
@@ -498,13 +686,16 @@ export function parseChartText(text: string, opts: { trace?: boolean } = {}): Te
     // Names first, so a line may use a name defined further down; and 3D charts read their tuples as (x, y, z).
     lines.forEach((raw) => {
         const t = raw.trim();
-        const body = t.replace(new RegExp(`^${NAME}\\s*:(?!=)\\s*`), '');
+        const named = new RegExp(`^(${NAME})\\s*:(?!=)\\s*`).exec(t);
+        // plot and draw only say what the line does: `plot z = ...` is a surface as `z = ...` is.
+        const body = (named ? t.slice(named[0].length) : t).replace(/^(?:plot|draw)\s+(?:the\s+)?/i, '');
         const surface = new RegExp(`^(${NAME})\\s*\\(\\s*[A-Za-z]+\\s*,\\s*[A-Za-z]+\\s*\\)\\s*=(?!=)`).exec(body);
-        if (/^3d$/i.test(t) || /^plane\s+[xyz]\s*=/i.test(body) || /^z\s*=(?!=)/.test(body) || (surface && !RESERVED_NAMES.has(surface[1]))) {
+        if (/^3d$/i.test(t) || /^plane\s+(?:at\s+)?[xyz]\s*=/i.test(body) || /^z\s*=(?!=)/.test(body) || (surface && !RESERVED_NAMES.has(surface[1]))) {
             b.is3D = true;
         }
-        const m = new RegExp(`^(?:(${NAME})\\s*:(?!=)|(${NAME})\\s*\\(\\s*[A-Za-zθ]+\\s*(?:,\\s*[A-Za-z]+\\s*)?\\)\\s*=(?!=)|slider\\s+(${NAME})\\b)`).exec(t);
-        const explicit = m ? m[1] ?? m[2] ?? m[3] : rawName(t);
+        const def = new RegExp(`^(${NAME})\\s*\\(\\s*[A-Za-zθ]+\\s*(?:,\\s*[A-Za-z]+\\s*)?\\)\\s*=(?!=)`).exec(body);
+        const slider = new RegExp(`^slider\\s+(${NAME})\\b`).exec(t);
+        const explicit = named?.[1] ?? def?.[1] ?? slider?.[1] ?? rawName(t);
         if (explicit) b.explicit.add(explicit);
     });
     const traces: LineTrace[] = [];
@@ -513,9 +704,21 @@ export function parseChartText(text: string, opts: { trace?: boolean } = {}): Te
         const line = raw.replace(/\s+$/, '');
         const t = line.trim();
         const before = opts.trace ? b.snapshot() : null;
-        if (t && !t.startsWith('%') && !t.startsWith('//')) statement(b, line);
+        if (t && !t.startsWith('%') && !t.startsWith('//') && !t.startsWith('#')) statement(b, line);
         if (before) traces.push(b.traceSince(before, i + 1));
     });
+    // "the region" is the chart's one region.
+    const regions = b.tools.filter((tool) => tool.type === 'region');
+    for (const ref of b.theRegion) {
+        if (regions.length === 1) ref.tool.regionName = regions[0].name;
+        else {
+            const message = regions.length
+                ? `"the region" is unclear: this chart shades ${regions.length} regions. Name one (R1: shade ...) and write R1 instead`
+                : '"the region" needs a shaded region: shade where x + y <= 4 and x >= 0 and y >= 0';
+            b.problems.push({ line: ref.line, column: ref.at + 1, message });
+        }
+    }
+    b.problems.sort((p, q) => p.line - q.line || p.column - q.column);
     if (b.is3D) b.chart.dimension = true;
     const out: TextChart = { data: b.data(), problems: b.problems };
     if (opts.trace) out.lines = traces;
@@ -545,9 +748,10 @@ function statement(b: Builder, line: string) {
         else b.chart[`axis_label_${key[0]}`] = value;
         return;
     }
-    const { body: whole, options } = splitOptions(line);
-    let body = whole;
-    // An optional name: `R1: shade ...`, `P1: max 2x + 3y over R1`.
+    const split = splitOptions(line, isEnglish(line));
+    const options = split.options;
+    let body = split.body;
+    // An optional name: `R1: shade ...`, `P1: mark the maximum of 2x + 3y in R1`.
     let name: string | null = null;
     const named = new RegExp(`^(${NAME})\\s*:\\s*(?!=)`).exec(body.text);
     if (named && !/^(title|xlabel|ylabel|zlabel)$/i.test(named[1])) {
@@ -562,20 +766,24 @@ function statement(b: Builder, line: string) {
     if (DEFINITION.test(t)) return formulaLine(b, name, body, options);
     const kw = /^([A-Za-z0-9]+)\b\s*(.*)$/.exec(t);
     const word = kw ? kw[1].toLowerCase() : '';
-    if (options && CHART_WORDS.has(word)) b.problem(options.at - 1, `${word} takes no options after |`);
+    if (split.bar >= 0 && CHART_WORDS.has(word)) b.problem(split.bar, `${word} takes no options after |`);
     const restAt = kw ? body.at + t.length - kw[2].length : body.at;
     const rest: Piece = { text: kw ? kw[2] : '', at: restAt };
+    // A formula that starts with a name like a word of the syntax (`mark + x = 3`, a slider called mark) is a formula.
+    if (/^(show|no|with|plot|draw|mark|write|double)$/.test(word) && /^(?:[*/^=<>!]|[-+]\s)/.test(rest.text)) return formulaLine(b, name, body, options);
 
     switch (word) {
         case 'view':
-            return view(b, rest);
-        case 'axes': {
-            const style = rest.text.trim().toLowerCase();
-            if (style === 'none') b.chart.showAxis = false;
-            else if (AXIS_STYLES[style]) b.chart.axis_style = AXIS_STYLES[style];
-            else b.problem(rest.at, 'axes takes middle, box, edges or none');
+        case 'show':
+            return view(b, word, rest);
+        case 'axes':
+            return axes(b, rest);
+        case 'no':
+            if (/^axes$/i.test(rest.text.trim())) b.chart.showAxis = false;
+            else b.problem(body.at, 'did you mean "no axes"?');
             return;
-        }
+        case 'with':
+            return withLine(b, rest);
         case 'grid': {
             const g = rest.text.trim().toLowerCase();
             if (!g || g === 'major') b.chart.showLargeGrid = true;
@@ -616,76 +824,92 @@ function statement(b: Builder, line: string) {
             return setLine(b, rest);
         case 'slider':
             return slider(b, rest);
+        case 'plot':
+            return plot(b, name, rest, options);
+        case 'draw':
+            return draw(b, name, rest, options);
+        case 'mark':
+            return mark(b, name, rest, options);
+        case 'write':
+        case 'text':
+            return textLine(b, word, rest, options);
         case 'shade':
-            return addTool(b, 'region', name, conditionFields(b, rest), options, 'region');
+            addTool(b, 'region', name, conditionFields(b, rest), options, 'region');
+            return;
         case 'line':
+            if (after(rest, /^from\s/i)) return segment(b, 'segment', name, rest, options);
+            return curve(b, name, rest, options);
         case 'curve':
-            return addTool(b, 'curve', name, { equation: rest.text.trim() }, options, 'curve');
-        case 'levels': {
-            const m = /^(.+?)\s+at\s+(.+)$/i.exec(rest.text);
-            if (!m) return b.problem(rest.at, 'levels takes a formula and its values: levels x^2 + y^2 at 1, 4, 9');
-            return addTool(b, 'curve', name, { equation: m[1].trim(), levels: m[2].trim() }, options, 'curve');
-        }
+            return curve(b, name, rest, options);
+        case 'levels':
+            return levels(b, name, rest, options);
         case 'point':
-        case 'points': {
-            const parts = splitTop(rest.text, ',', rest.at).filter((p) => p.text);
-            return addTool(b, 'points', name, { dim: dims(b, parts), source: 'list', points: pathOf(parts) }, options, 'points');
-        }
+        case 'points':
+            return pointList(b, name, rest, options);
         case 'crossings':
-        case 'intersections': {
-            const m = /^of\s+(\S+)\s+and\s+(\S+)$/i.exec(rest.text.trim());
-            if (!m) return b.problem(rest.at, `${word} takes "of f and g" (functions or curves)`);
-            return addTool(b, 'points', name, { source: 'intersections', ref1: m[1], ref2: m[2] }, options, 'points');
-        }
-        case 'corners': {
-            const m = /^of\s+(\S+)$/i.exec(rest.text.trim());
-            if (!m) return b.problem(rest.at, 'corners takes "of R1" (a region)');
-            return addTool(b, 'points', name, { source: 'region', regionName: m[1] }, options, 'points');
-        }
+        case 'intersections':
+            return mark(b, name, { text: `${word} ${rest.text}`, at: body.at }, options);
+        case 'corners':
+            return mark(b, name, { text: `corners ${rest.text}`, at: body.at }, options);
         case 'max':
         case 'min': {
-            const m = /^(.+?)\s+(?:over|on|in)\s+(\S+)$/i.exec(rest.text.trim());
+            const m = /^(?:of\s+)?(.+?)\s+(?:over|on|in)\s+(the\s+region|\S+)$/i.exec(rest.text.trim());
             if (!m) return b.problem(rest.at, `${word} takes an objective and a region: ${word} 2x + 3y over R1`);
-            return addTool(b, 'points', name, { source: 'region', regionName: m[2], objective: m[1].trim(), sense: word }, options, 'points');
+            return regionPoints(b, name, 'region', m[2], rest, { objective: m[1].trim(), sense: word }, options);
         }
-        case 'integer': {
-            const t2 = rest.text.trim();
-            let m = /^points(?:\s+(?:in|of)\s+(\S+))?$/i.exec(t2);
-            if (m) return addTool(b, 'points', name, { source: 'lattice', regionName: m[1] ?? '' }, options, 'points');
-            m = /^(max|min)\s+(.+?)\s+(?:over|on|in)\s+(\S+)$/i.exec(t2);
-            if (m) return addTool(b, 'points', name, { source: 'lattice', regionName: m[3], objective: m[2].trim(), sense: m[1].toLowerCase() }, options, 'points');
-            return b.problem(rest.at, 'integer takes "points in R1" or "max 3x + 4y in R1"');
-        }
+        case 'integer':
+            return mark(b, name, { text: `integer ${rest.text}`, at: body.at }, options);
+        case 'double':
+            if (/^arrows?\b/i.test(rest.text)) return segment(b, 'double', name, drop(rest, /^arrows?\s*/i), options);
+            return b.problem(body.at, 'did you mean "double arrow from A to B"?');
         case 'arrow':
         case 'segment':
         case 'polygon':
         case 'brace':
             return segment(b, word, name, rest, options);
-        case 'text':
-            return textLine(b, rest, options);
-        case 'plane': {
-            const m = /^([xyz])\s*=\s*(.+)$/i.exec(rest.text.trim());
-            if (!m) return b.problem(rest.at, 'plane takes x = ..., y = ... or z = ...');
-            b.is3D = true;
-            return addTool(b, 'plane3D', name, { axis: m[1].toLowerCase(), value: m[2].trim() }, options, 'plane');
-        }
+        case 'plane':
+            return plane(b, name, rest, options);
         default:
             return formulaLine(b, name, body, options);
     }
 }
 
-function view(b: Builder, rest: Piece) {
-    for (const part of splitTop(rest.text, ',', rest.at)) {
-        const m = /^([xyz])\s+(.+)$/i.exec(part.text);
-        const r = m ? parseRange(m[2]) : null;
-        if (!m || !r) {
-            b.problem(part.at, 'view takes ranges such as x -3..3, y -4..4');
-            continue;
+function view(b: Builder, word: string, rest: Piece) {
+    for (const piece of splitTop(rest.text, ',', rest.at)) {
+        for (const part of splitTop(piece.text, ' and ', piece.at)) {
+            const m = /^([xyz])\s+(?:from\s+)?(.+)$/i.exec(part.text);
+            const r = m ? parseRange(m[2]) : null;
+            if (!m || !r) {
+                b.problem(part.at, word === 'view' ? 'view takes ranges such as x -3..3, y -4..4' : 'show takes ranges such as x from -3 to 3 and y from -4 to 4');
+                continue;
+            }
+            const axis = m[1].toLowerCase();
+            b.chart[`${axis}min`] = r[0];
+            b.chart[`${axis}max`] = r[1];
         }
-        const axis = m[1].toLowerCase();
-        b.chart[`${axis}min`] = r[0];
-        b.chart[`${axis}max`] = r[1];
     }
+}
+
+function axes(b: Builder, rest: Piece) {
+    const style = rest.text
+        .trim()
+        .toLowerCase()
+        .replace(/^(?:on|in|at)\s+(?:the\s+|a\s+)?/, '');
+    if (style === 'none') b.chart.showAxis = false;
+    else if (AXIS_STYLES[style]) b.chart.axis_style = AXIS_STYLES[style];
+    else b.problem(rest.at, 'axes takes on the edges, in the middle or in a box (or write no axes)');
+}
+
+function withLine(b: Builder, rest: Piece) {
+    const g = rest.text
+        .trim()
+        .toLowerCase()
+        .replace(/^(?:a|an|the)\s+/, '');
+    if (g === 'grid' || g === 'major grid') b.chart.showLargeGrid = true;
+    else if (g === 'fine grid') b.chart.showLargeGrid = b.chart.showSmallGrid = true;
+    else if (g === 'minor grid') b.chart.showSmallGrid = true;
+    else if (g === 'equal scale') b.chart.equalScale = true;
+    else b.problem(rest.at, 'with takes a grid, a fine grid or a minor grid');
 }
 
 function setLine(b: Builder, rest: Piece) {
@@ -694,25 +918,49 @@ function setLine(b: Builder, rest: Piece) {
     b.chart[m[1]] = rawValue(m[2]);
 }
 
+/** The parts of a slider line after its name, in any order: `= 6`, `from 0 to 15`, `in 0..15`, `starting at 6`, `in steps of 0.5`, `step 0.5`. */
+const SLIDER_PARTS: Array<{ re: RegExp; part: 'value' | 'range' | 'step' }> = [
+    { re: /^=\s*([^\s,]+)/, part: 'value' },
+    { re: /^(?:in\s+)?steps?\s+(?:of\s+)?([^\s,]+)/i, part: 'step' },
+    { re: /^(?:from|in|between)\s+([^\s,]+?)\s*(?:\.\.|\bto\b|\band\b)\s*([^\s,]+)/i, part: 'range' },
+    { re: /^(?:start(?:ing|s)?\s+)?at\s+([^\s,]+)/i, part: 'value' },
+];
+
 function slider(b: Builder, rest: Piece) {
-    const m = new RegExp(`^(${NAME})\\s*=\\s*([^\\s]+)(?:\\s+in\\s+(.+?))?(?:\\s+step\\s+([^\\s]+))?$`).exec(rest.text.trim());
-    if (!m) return b.problem(rest.at, 'slider takes a name and a value: slider a = 1 in 0..5 step 0.1');
-    const name = b.claim(m[1], rest.at);
-    const value = numberOf(m[2]);
-    if (value === null) return b.problem(rest.at, `the value of slider ${m[1]} must be a number`);
-    let min = Math.min(0, value);
-    let max = Math.max(10, value);
-    if (m[3]) {
-        const r = parseRange(m[3]);
-        const lo = r ? numberOf(r[0]) : null;
-        const hi = r ? numberOf(r[1]) : null;
-        if (lo === null || hi === null || !(lo < hi)) return b.problem(rest.at, `the range of slider ${m[1]} must be numbers, low..high`);
+    const text = rest.text.trim();
+    const head = new RegExp(`^(${NAME})(?![A-Za-z0-9_])\\s*(.*)$`).exec(text);
+    if (!head) return b.problem(rest.at, 'slider takes a name and a range: slider a from 0 to 5, starting at 1');
+    const got: { value?: string; lo?: string; hi?: string; step?: string } = {};
+    let tail = head[2];
+    for (;;) {
+        tail = tail.replace(/^[\s,]+/, '');
+        if (!tail) break;
+        const hit = SLIDER_PARTS.map((p) => ({ p, m: p.re.exec(tail) })).find((h) => h.m);
+        if (!hit || !hit.m) return b.problem(rest.at + text.length - tail.length, `slider ${head[1]}: "${tail}" is not a range, start or step. Write: slider ${head[1]} from 0 to 5, starting at 1`);
+        if (hit.p.part === 'range') [got.lo, got.hi] = [hit.m[1], hit.m[2]];
+        else got[hit.p.part] = hit.m[1];
+        tail = tail.slice(hit.m[0].length);
+    }
+    const name = b.claim(head[1], rest.at);
+    if (got.value === undefined && got.lo === undefined) return b.problem(rest.at, `slider ${head[1]} needs a range: slider ${head[1]} from 0 to 10`);
+    let min = 0;
+    let max = 10;
+    if (got.lo !== undefined && got.hi !== undefined) {
+        const lo = numberOf(got.lo);
+        const hi = numberOf(got.hi);
+        if (lo === null || hi === null || !(lo < hi)) return b.problem(rest.at, `the range of slider ${head[1]} must be numbers, low to high`);
         min = lo;
         max = hi;
     }
-    let step = m[4] ? numberOf(m[4]) : niceStep((max - min) / 100);
+    const value = got.value === undefined ? min : numberOf(got.value);
+    if (value === null) return b.problem(rest.at, `the value of slider ${head[1]} must be a number`);
+    if (got.lo === undefined) {
+        min = Math.min(0, value);
+        max = Math.max(10, value);
+    }
+    let step = got.step === undefined ? niceStep((max - min) / 100) : numberOf(got.step);
     if (step === null || !(step > 0)) {
-        b.problem(rest.at, `the step of slider ${m[1]} must be a positive number`);
+        b.problem(rest.at, `the step of slider ${head[1]} must be a positive number`);
         step = 0.1;
     }
     if (name) b.parameters.push({ name, value, min, max, step });
@@ -720,7 +968,7 @@ function slider(b: Builder, rest: Piece) {
 
 function conditionFields(b: Builder, rest: Piece): Data {
     const { conditions, labels } = conditionsOf(b, rest);
-    if (!conditions.some((c) => c.trim())) b.problem(rest.at, 'shade needs conditions: shade x + y <= 4, x >= 0');
+    if (!conditions.some((c) => c.trim())) b.problem(rest.at, 'shade needs conditions: shade where x + y <= 4 and x >= 0');
     return { conditions, conditionLabels: labels };
 }
 
@@ -729,42 +977,162 @@ function dims(b: Builder, parts: Piece[]): number {
     return b.is3D || three ? 3 : 2;
 }
 
-function segment(b: Builder, word: string, name: string | null, rest: Piece, options: Piece | null) {
-    const t = rest.text;
+/** A region the line points at: a name, or "the region" (the chart's one region, filled in when every line is read). */
+function regionPoints(b: Builder, name: string | null, source: string, region: string, rest: Piece, fields: Data, options: Piece[]) {
+    const the = /^the\s+region$/i.test(region);
+    const tool = addTool(b, 'points', name, { source, regionName: the ? '' : region, ...fields }, options, 'points');
+    if (the) b.theRegion.push({ tool, line: b.line, at: rest.at + Math.max(0, rest.text.toLowerCase().lastIndexOf('the region')) });
+}
+
+/** Points: `(1, 2), (3, 4) and P1`. */
+function pointList(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
+    const parts = splitTop(rest.text, ',', rest.at)
+        .flatMap((p) => splitTop(p.text, ' and ', p.at))
+        .filter((p) => p.text);
+    addTool(b, 'points', name, { dim: dims(b, parts), source: 'list', points: pathOf(parts) }, options, 'points');
+}
+
+/** `mark ...`: points, crossings, corners, optima and integer points. */
+function mark(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
+    const p = drop(rest, /^the\s+/i);
+    const t = p.text;
+    let m = /^where\s+(\S+)\s+and\s+(\S+)\s+(?:cross|meet|intersect)$/i.exec(t) ?? /^(?:crossings|intersections|crossing\s+points|intersection\s+points)\s+of\s+(\S+)\s+and\s+(\S+)$/i.exec(t);
+    if (m) {
+        addTool(b, 'points', name, { source: 'intersections', ref1: m[1], ref2: m[2] }, options, 'points');
+        return;
+    }
+    m = /^corners\s+of\s+(the\s+region|\S+)$/i.exec(t);
+    if (m) return regionPoints(b, name, 'region', m[1], p, {}, options);
+    m = /^(maximum|minimum|max|min)\s+of\s+(.+?)\s+(?:in|over|on)\s+(the\s+region|\S+)$/i.exec(t);
+    if (m) return regionPoints(b, name, 'region', m[3], p, { objective: m[2].trim(), sense: m[1].slice(0, 3).toLowerCase() }, options);
+    m = /^integer\s+points(?:\s+(?:in|of)\s+(the\s+region|\S+))?$/i.exec(t);
+    if (m) return regionPoints(b, name, 'lattice', m[1] ?? '', p, {}, options);
+    m = /^integer\s+(maximum|minimum|max|min)\s+(?:of\s+)?(.+?)\s+(?:in|over|on)\s+(the\s+region|\S+)$/i.exec(t);
+    if (m) return regionPoints(b, name, 'lattice', m[3], p, { objective: m[2].trim(), sense: m[1].slice(0, 3).toLowerCase() }, options);
+    const hints: Array<[RegExp, string]> = [
+        [/^(maximum|minimum|max|min)\b/i, 'mark the maximum of 2x + 3y in R1 (or in the region)'],
+        [/^corners\b/i, 'mark the corners of R1 (or of the region)'],
+        [/^(crossings|intersections|crossing|intersection)\b/i, 'mark the crossings of f and g (or: mark where f and g cross)'],
+        [/^where\b/i, 'mark where f and g cross'],
+        [/^integer\b/i, 'mark the integer points in R1, or mark the integer maximum of 3x + 4y in R1'],
+    ];
+    const hint = hints.find(([re]) => re.test(t));
+    if (hint) return b.problem(p.at, `write: ${hint[1]}`);
+    pointList(b, name, drop(p, /^points?\s+/i), options);
+}
+
+/** `plot ...`: a function (plot f(x) = ..., plot y = ..., plot sin(x)), a surface (plot z = ...) or what the formula is. */
+function plot(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
+    const t = rest.text.trim();
+    if (!t) return b.problem(rest.at, 'plot takes a function: plot f(x) = x^2');
+    if (/[=<>]/.test(t)) return formulaLine(b, name, rest, options);
+    fn(b, name ?? b.nextName('f'), 'x', t, rest, options);
+}
+
+/** What `draw` may draw by name: `draw an arrow from ...`, `draw the plane z = 2`. */
+const DRAW_NOUN = /^(?:(?:a|an|the)\s+)?(double\s+arrow|arrow|line|segment|polygon|brace|plane|curve|level\s+curves?|levels|contours?)(?![A-Za-z0-9_(])\s*/i;
+
+/** `draw ...`: an equation's curve (draw 2x + 3y = c), level curves, arrows, lines, polygons, braces and planes. */
+function draw(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
+    const t = rest.text.trim();
+    if (!t) return b.problem(rest.at, 'draw takes an equation or a shape: draw 2x + 3y = 12, draw an arrow from (0, 0) to (3, 2)');
+    if (DEFINITION.test(t)) return formulaLine(b, name, rest, options);
+    const m = DRAW_NOUN.exec(t);
+    if (m) {
+        const noun = m[1].toLowerCase().replace(/\s+/g, ' ');
+        const inner = drop(rest, DRAW_NOUN);
+        if (noun === 'double arrow') return segment(b, 'double', name, inner, options);
+        if (noun === 'arrow' || noun === 'polygon' || noun === 'brace' || noun === 'segment') return segment(b, noun, name, inner, options);
+        if (noun === 'line') return after(inner, /^from\s/i) ? segment(b, 'segment', name, inner, options) : curve(b, name, inner, options);
+        if (noun === 'plane') return plane(b, name, inner, options);
+        if (noun === 'curve') return curve(b, name, inner, options);
+        return levels(b, name, inner, options);
+    }
+    if (/[<>]/.test(t)) return formulaLine(b, name, rest, options);
+    curve(b, name, rest, options);
+}
+
+function curve(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
+    const f = formulaOptions(rest, options);
+    addTool(b, 'curve', name, { equation: f.formula.text }, f.options, 'curve');
+}
+
+/** `levels F at 1, 4`, `the level curves of F at 1, 4 and 9`. */
+function levels(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
+    const m = /^(?:of\s+)?(.+?)\s+at\s+(.+)$/i.exec(rest.text.trim());
+    if (!m) return b.problem(rest.at, 'level curves take a formula and its values: draw the level curves of x^2 + y^2 at 1, 4 and 9');
+    const values = m[2].trim();
+    const list = splitTop(values, ' and ').length > 1 ? splitTop(values, ',').flatMap((p) => splitTop(p.text, ' and ')).map((p) => p.text).join(', ') : values;
+    addTool(b, 'curve', name, { equation: m[1].trim(), levels: list }, options, 'curve');
+}
+
+function plane(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
+    const m = /^(?:at\s+)?([xyz])\s*=\s*(.+)$/i.exec(rest.text.trim());
+    if (!m) return b.problem(rest.at, 'a plane takes x = ..., y = ... or z = ...: draw the plane z = 2');
+    b.is3D = true;
+    addTool(b, 'plane3D', name, { axis: m[1].toLowerCase(), value: m[2].trim() }, options, 'plane');
+}
+
+/** Arrows, lines, polygons and braces: `arrow from A to B`, `line from A to B to C`, `polygon through A, B and C`, `brace from A to B`, and `arrow A -> B`. */
+function segment(b: Builder, word: string, name: string | null, rest: Piece, options: Piece[]) {
     let parts: Piece[];
     let style = 'line';
     let closed = false;
     if (word === 'polygon') {
-        parts = splitTop(t, ',', rest.at);
+        const p = drop(rest, /^(?:through|with\s+corners|with\s+vertices)\s+/i);
+        parts = splitTop(p.text, ',', p.at).flatMap((q) => splitTop(q.text, ' and ', q.at));
         closed = true;
     } else if (word === 'brace') {
-        parts = splitTop(t, ' to ', rest.at);
+        const p = drop(rest, /^from\s+/i);
+        parts = splitTop(p.text, ' to ', p.at);
         style = 'brace';
-        if (parts.length !== 2) return b.problem(rest.at, 'brace takes two points: brace (0, 0) to (4, 0)');
+        if (parts.length !== 2) return b.problem(rest.at, 'a brace takes two points: brace from (0, 0) to (4, 0)');
     } else {
-        const arrow = ['<->', '->', '<-'].find((a) => splitTop(t, a).length > 1);
-        if (word === 'arrow' && !arrow) return b.problem(rest.at, 'arrow takes points joined by ->, <- or <->: arrow (0, 0) -> (2, 1)');
-        parts = splitTop(t, arrow ?? '--', rest.at);
-        style = arrow === '->' ? 'forward' : arrow === '<-' ? 'backward' : arrow === '<->' ? 'both' : 'line';
+        const from = after(rest, /^from\s+/i);
+        const arrow = from ? null : ['<->', '->', '<-'].find((a) => splitTop(rest.text, a).length > 1);
+        if (from) parts = splitTop(from.text, ' to ', from.at);
+        else if ((word === 'arrow' || word === 'double') && !arrow) return b.problem(rest.at, 'an arrow takes points: arrow from (0, 0) to (2, 1)');
+        else parts = splitTop(rest.text, arrow ?? '--', rest.at);
+        if (from) style = word === 'arrow' ? 'forward' : word === 'double' ? 'both' : 'line';
+        else style = arrow === '->' ? 'forward' : arrow === '<-' ? 'backward' : arrow === '<->' ? 'both' : 'line';
     }
     parts = parts.filter((p) => p.text);
-    if (parts.length < 2) return b.problem(rest.at, `${word} needs at least two points`);
+    if (parts.length < 2) return b.problem(rest.at, `${word === 'double' ? 'a double arrow' : word === 'arrow' ? 'an arrow' : `a ${word === 'segment' ? 'line' : word}`} needs at least two points`);
     const fields: Data = { dim: dims(b, parts), path: pathOf(parts) };
     if (style !== 'line') fields.style = style;
     if (closed) fields.closed = true;
     addTool(b, 'segment', name, fields, options, 'segment');
 }
 
-function textLine(b: Builder, rest: Piece, options: Piece | null) {
+function textLine(b: Builder, word: string, rest: Piece, options: Piece[]) {
     const q = takeQuoted(rest.text);
     const m = q ? /^at\s+(\(.+\))$/i.exec(q.rest) : null;
-    if (!q || !m) return b.problem(rest.at, 'text takes "words" at (x, y): text "optimum" at (3, 1.2)');
+    if (!q || !m) return b.problem(rest.at, `${word} takes "words" at (x, y): ${word} "optimum" at (3, 1.2)`);
     const coords = splitTop(m[1].slice(1, -1), ',');
-    if (coords.length < 2 || coords.length > 3) return b.problem(rest.at, 'text needs a position (x, y) or (x, y, z)');
+    if (coords.length < 2 || coords.length > 3) return b.problem(rest.at, `${word} needs a position (x, y) or (x, y, z)`);
     const a: Data = { text: q.text, x: coords[0].text, y: coords[1].text };
     if (coords.length === 3) a.z = coords[2].text;
     applyOptions(b, 'text', a, options);
     b.annotations.push(a);
+}
+
+/**
+ * A formula that ran into options the words did not catch (`x^2 in blue,
+ * sparkly`): the formula, and the rest as options, so the unknown one is
+ * named. A formula never holds a comma outside brackets.
+ */
+function formulaOptions(body: Piece, options: Piece[]): { formula: Piece; options: Piece[] } {
+    const pieces = splitTop(body.text, ',', body.at);
+    if (pieces.length < 2) return { formula: body, options };
+    let head = pieces[0].text;
+    const extra: Piece[] = [];
+    for (;;) {
+        const cut = lastPhrase(head);
+        if (cut < 0) break;
+        extra.unshift(trimPiece(head.slice(cut), pieces[0].at + cut));
+        head = head.slice(0, cut);
+    }
+    return { formula: trimPiece(head, pieces[0].at), options: [...extra, ...pieces.slice(1), ...options] };
 }
 
 /** `raw tool {...}`, `raw function {...}`, `raw surface {...}`, `raw label {...}`: an object as JSON, for what the words cannot say. */
@@ -803,8 +1171,10 @@ function rawLine(b: Builder, rest: Piece) {
 }
 
 /** A line without a keyword: a function, a surface, a curve (an equation) or a region (inequalities). */
-function formulaLine(b: Builder, name: string | null, body: Piece, options: Piece | null) {
+function formulaLine(b: Builder, name: string | null, body: Piece, options: Piece[]) {
     const t = body.text;
+    /** The formula from `text` on (the end of the line), with any options it ran into. */
+    const formula = (text: string) => formulaOptions({ text, at: body.at + t.length - text.length }, options);
     // f(x) = ..., c(t) = (x(t), y(t)), r(theta) = ..., s(x, y) = ...
     // A built-in name (max(x, y) = 1) is a call in an equation, not a definition.
     const found = DEFINITION.exec(t);
@@ -813,28 +1183,31 @@ function formulaLine(b: Builder, name: string | null, body: Piece, options: Piec
     if (def) {
         const fname = b.claim(def[1], body.at) ?? def[1];
         const v = def[2];
-        if (def[3]) return surface(b, fname, def[4], options);
-        return fn(b, fname, v, def[4], body, options);
+        const f = formula(def[4]);
+        if (def[3]) return surface(b, fname, f.formula.text, f.options);
+        return fn(b, fname, v, f.formula.text, body, f.options);
     }
     // y = ..., z = ..., r = ...
     const auto = /^([yzr])\s*=(?!=)\s*(.+)$/.exec(t);
     if (auto && !/[<>]/.test(auto[2].replace(/<=|>=/g, ''))) {
-        if (auto[1] === 'z') return surface(b, name ?? b.nextName('s'), auto[2], options);
+        const f = formula(auto[2]);
+        if (auto[1] === 'z') return surface(b, name ?? b.nextName('s'), f.formula.text, f.options);
         const v = auto[1] === 'r' ? 'theta' : 'x';
-        return fn(b, name ?? b.nextName('f'), v, auto[2], body, options);
+        return fn(b, name ?? b.nextName('f'), v, f.formula.text, body, f.options);
     }
     const relations = t.replace(/<=|>=|==|!=/g, '');
     if (/[<>]|<=|>=/.test(t) && !/\b(and|or)\s*$/.test(t)) {
-        return addTool(b, 'region', name, conditionFields(b, body), options, 'region');
+        addTool(b, 'region', name, conditionFields(b, body), options, 'region');
+        return;
     }
-    if (/=/.test(relations)) return addTool(b, 'curve', name, { equation: t }, options, 'curve');
+    if (/=/.test(relations)) return curve(b, name, body, options);
     b.problem(
         body.at,
-        `this line is not a chart object. Lines are formulas (f(x) = x^2, 2x + 3y = 12, x + y <= 4) or start with: view, title, axes, grid, size, slider, shade, line, levels, points, crossings, corners, max, min, integer, arrow, segment, polygon, brace, text, plane, set`
+        'this line is not a chart object. Lines start with show, plot, draw, shade, mark, write, slider, title, xlabel, ylabel, axes, size or set, or are formulas (f(x) = x^2, 2x + 3y = 12, x + y <= 4)'
     );
 }
 
-function fn(b: Builder, name: string, v: string, rhs: string, body: Piece, options: Piece | null) {
+function fn(b: Builder, name: string, v: string, rhs: string, body: Piece, options: Piece[]) {
     const f: Data = { name, expression: rhs.trim() };
     if (v === 't') {
         const tuple = /^\((.*)\)$/.exec(rhs.trim());
@@ -852,7 +1225,7 @@ function fn(b: Builder, name: string, v: string, rhs: string, body: Piece, optio
     b.functions.push(f);
 }
 
-function surface(b: Builder, name: string, rhs: string, options: Piece | null) {
+function surface(b: Builder, name: string, rhs: string, options: Piece[]) {
     b.is3D = true;
     const s: Data = { name, expression: rhs.trim() };
     applyOptions(b, 'surface', s, options);
@@ -860,7 +1233,7 @@ function surface(b: Builder, name: string, rhs: string, options: Piece | null) {
 }
 
 /** The smallest of 1, 2, 5 times a power of ten that is at least `raw`: a slider step people expect. */
-function niceStep(raw: number): number {
+export function niceStep(raw: number): number {
     if (!(raw > 0)) return 0.1;
     const p = Math.pow(10, Math.floor(Math.log10(raw)));
     for (const k of [1, 2, 5, 10]) if (k * p >= raw - 1e-12) return Number((k * p).toPrecision(12));

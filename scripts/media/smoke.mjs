@@ -525,7 +525,8 @@ if (started) {
             assert(m, 'the note lost its block');
             const lines = m[1].split('\n');
             assert(lines[0] === handWritten[0] && lines[1] === handWritten[1] && lines[3] === handWritten[3], `block:\n${m[1]}`);
-            assert(/^slider a = 1\.5 in 0\.\.2\b/.test(lines[2]), `slider line: ${lines[2]}`);
+            // The changed line is written in words.
+            assert(/^slider a from 0 to 2, starting at 1\.5\b/.test(lines[2]), `slider line: ${lines[2]}`);
         });
         await check('motion: a block that changes glides, and its new object pops in', async () => {
             await obs.openNote(textNote, { mode: 'reading' });
@@ -550,6 +551,40 @@ if (started) {
             assert(popped, `the new function did not pop in: ${JSON.stringify(now.g)}${now.reduced ? ' (the system asks for reduced motion)' : ''}`);
             assert(!now.f.some((c) => /\betz-pop\b/.test(c)), 'the function that was there popped in again');
         });
+        await check('live: the chart sits under a block while you edit it, changes as you type, and hands over when you leave', async () => {
+            const liveNote = 'Live chart';
+            // Lines 0-8; line 5 is the empty line in the block.
+            await obs.writeNote(liveNote, 'Typed in Live Preview:\n\n```easy-tikz\nshow x from 0 to 5 and y from 0 to 4.5\nshade where x + y <= 4 and x >= 0 and y >= 0\n\n```\n\nAfter.\n');
+            await obs.openNote(liveNote, { mode: 'live', cursor: 'end' });
+            const count = () =>
+                obs.call(() => {
+                    const ed = document.querySelector('.workspace-leaf.mod-active .cm-editor');
+                    return { live: ed.querySelectorAll('.etz-live .etz-inline svg').length, all: ed.querySelectorAll('.etz-inline').length, optimum: !!ed.querySelector('.etz-live [data-etz-item="P1"]') };
+                });
+            let c = await count();
+            assert(c.live === 0 && c.all === 1, `cursor outside the block: ${JSON.stringify(c)}`);
+            await obs.call(() => {
+                const ed = app.workspace.activeEditor.editor;
+                ed.setCursor({ line: 5, ch: 0 });
+                ed.focus();
+            });
+            await obs.waitFor(async () => (await count()).live === 1, { timeout: 4000, message: 'the chart under the block' });
+            c = await count();
+            assert(c.all === 1, `more than one chart while editing: ${JSON.stringify(c)}`);
+            await obs.type('mark the maximum of 2x + 3y in the region', { instant: true });
+            await obs.waitFor(async () => (await count()).optimum, { timeout: 4000, message: 'the typed optimum in the chart under the block' });
+            await obs.call(() => {
+                const ed = app.workspace.activeEditor.editor;
+                ed.setCursor({ line: ed.lastLine(), ch: 0 });
+            });
+            await obs.waitFor(
+                async () => {
+                    const n = await count();
+                    return n.live === 0 && n.all === 1;
+                },
+                { timeout: 4000, message: 'the chart Obsidian draws, alone again' }
+            );
+        });
 
         await check('dark theme: the editor opens and draws', async () => {
             await obs.setTheme('dark');
@@ -573,7 +608,7 @@ if (started) {
             const state = await whatsNewState();
             assert(state.count === 1, `${state.count} popups are open`);
             assert(state.title === 'Easy TikZ 4', `the title is "${state.title}"`);
-            const expected = WHATS_NEW.WHATS_NEW_44.length + WHATS_NEW.WHATS_NEW_LIVE.length + 1 + WHATS_NEW.WHATS_NEW_MORE.length;
+            const expected = WHATS_NEW.WHATS_NEW_RECENT.length + WHATS_NEW.WHATS_NEW_LIVE.length + 1 + WHATS_NEW.WHATS_NEW_MORE.length;
             assert(state.items === expected, `${state.items} highlights, expected ${expected}`);
             assert(state.blankIcons === 0, `${state.blankIcons} icons are blank (an icon id Obsidian does not know)`);
             assert(state.slope === 'slope at x = 0.8: -1.08' && state.area === 'A = 2.76', `the live example shows "${state.slope}" and "${state.area}"`);

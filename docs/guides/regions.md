@@ -132,72 +132,7 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": false,
-  "documentSetup": true,
-  "title": "",
-  "size_x_cm": 10,
-  "size_y_cm": 10,
-  "show_axis_label": true,
-  "axis_label_x": "x",
-  "axis_label_y": "y",
-  "showAxis": true,
-  "showLargeGrid": false,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "-0.5",
-  "xmax": "10",
-  "ymin": "-0.5",
-  "ymax": "5",
-  "zmin": "-5",
-  "zmax": "5",
-  "axis_style": "box",
-  "coordinateSystem": "cartesian",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 30,
-  "rotationZ": 45,
-  "zoom3D": 1,
-  "boxAspect": "true",
-  "previewSize": 760,
-  "functions": [],
-  "functions3D": [],
-  "tools": [
-    {
-      "type": "region",
-      "color": "blue",
-      "conditions": [
-        "1 <= x <= 6",
-        "y >= 0",
-        "x + 2y <= 8",
-        "x <= 3 or y <= 1"
-      ],
-      "conditionLabels": [
-        "(1)",
-        "(2)",
-        "(3)",
-        "(4)"
-      ],
-      "fill": true,
-      "fillOpacity": 0.25,
-      "fillPattern": "solid",
-      "outline": "solid",
-      "thickness": "thin",
-      "constraintLines": false,
-      "label": "S",
-      "id": "t0",
-      "name": "R1"
-    }
-  ],
-  "annotations": [],
-  "parameters": [],
-  "variables": "x, y",
-  "equalScale": false,
-  "showSlidersInNote": true
-}
+shade 1 <= x <= 6 "(1)", y >= 0 "(2)", x + 2y <= 8 "(3)", x <= 3 or y <= 1 "(4)", outlined, labelled "S"
 ```
 
 </details>

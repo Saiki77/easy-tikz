@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [4.5.0] - 2026-10-19
+
+Charts in plain words, drawn under the block as you type. A line says what it does (`show`, `plot`, `shade`, `draw`, `mark`, `write`), its options read like words, and while you edit a block in Live Preview its chart sits right under it and moves with every key. The editor, the AI tools and the guides write the new lines; every 4.4 line keeps working. The README is now an overview; the reference and the notes for developers have their own pages.
+
+### Added
+
+- **Lines in plain words** (`src/text/parse.ts`). `show x from 0 to 5 and y from 0 to 4.5`, `axes on the edges` (`in the middle`, `in a box`, `no axes`), `with a grid` (`a minor grid`, `a fine grid`), `slider c from 0 to 15, starting at 6, in steps of 0.5`, `plot f(x) = ...` (also `plot y = ...` and `plot sin(x)`), `shade where A and B`, `shade between f and g from x = a to b`, `shade under f from x = 0 to b`, `draw 2x + 3y = c`, `draw the level curves of F at 1, 4 and 9`, `draw an arrow from A to B`, `draw a double arrow from A to B`, `draw a line from A to B to C`, `draw a polygon through A, B and C`, `draw a brace from A to B`, `draw the plane z = h`, `mark (1, 2) and (3, a)`, `mark where f and g cross`, `mark the corners of R1`, `mark the maximum of 2x + 3y in R1`, `mark the integer points in R1`, `mark the integer maximum of 3x + 4y in R1`, `write "text" at (x, y)`. Options follow after commas, and a colour, a range or a `with` phrase also right after the statement: `in red`, `thick and dashed`, `with its tangent at a and its extrema`, `with a legend`, `with the legend "..."`, `from x = 0 to 4`, `for t from 0 to 2pi`, `filled`, `not filled`, `outlined`, `with a dashed outline`, `with constraint lines`, `with coordinates`, `with lines to the axes`, `labelled "..."`, `backwards`, `with 40 samples`. `the region` is the chart's only shaded region (none or several: a problem says what to write instead), and `#` starts a comment. Every form of 4.4 keeps working and means the same, and a `|` still says where the options start.
+- **The chart under the block** (`src/live.ts`, `src/text/fences.ts`). While the cursor is in an `easy-tikz` block in Live Preview (Obsidian shows its lines then), the chart sits right under the lines and is drawn again on every change: numbers glide, new objects pop in, and a half-typed line keeps its object's last working version, with the problem line saying what is missing. Half-typed JSON keeps the last chart with the reason under it. Blocks in callouts count. Leaving the block hands the picture to the chart Obsidian draws in the same frame, also with the mouse (the chart stays until the button is up, as Obsidian's lines do). Setting **Chart under the block while you edit** (on by default).
+- **Pages:** What's new (`docs/whats-new.md`, every 4.x release), the Reference (`docs/reference.md`, everything the plugin does, by topic) and Developing Easy TikZ (`docs/development.md`). The film §3 Charts as text (`docs/media/text.mp4`, `text.gif`) shows a note in Live Preview with the lines typed in words.
+
+### Changed
+
+- **The editor writes lines in words** (`src/text/print.ts`): Insert into note, Save changes (for the lines whose object changed; the others stay as written), and the AI tools `add_chart`, `update_chart` and `get_example`. A line whose words could be read another way gets its options after a `|`. A line that leans on the lines around it (a name it gets from its place, `the region`) and now reads differently is written out.
+- **The README** is an overview, What's new in 4.5 and the guides; install steps are gone (the plugin is in Obsidian's community list), the reference and the development notes moved to their pages.
+- **The guides on GitHub** end with their finished chart as lines in words instead of the whole JSON object (2,600 lines shorter), checked to read back as the guide's chart. The AI guide, the Help tab's **Charts as text**, the settings and the guide **Charts in your notes** teach the new lines.
+- **What's new** opens once more after the update: "New in 4.4 and 4.5" names the lines in words and the chart under the block first.
+- **Charts that move follow the frames.** Glides and pop-ins run on the time of the animation frames, and a glide's first frame is drawn at once, before the browser paints. A chart drawn again in the middle of a glide or a pop-in carries on from where it was.
+- `@codemirror/state` and `@codemirror/view` are listed as development dependencies (Obsidian provides them at run time).
+
+### Fixed
+
+- While a line is typed, an object that does not work yet keeps its last working version on screen, and one the text has lost while a line has a problem stays: nothing blinks out between two keys. A slider whose line is half typed keeps its row under the chart.
+
 ## [4.4.0] - 2026-10-19
 
 Charts as text. A chart can now live in the note as a few lines of text, one line per object, written the way the math reads, and the editor writes it back line by line. Charts glide to new values and new objects pop in when a block changes, Easy TikZ runs on phones and tablets, and charts take the colours of your theme. JSON blocks keep working as before.

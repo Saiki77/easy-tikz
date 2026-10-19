@@ -128,6 +128,12 @@ try {
     say(`src/settings.ts did not bundle (${e.message}): chart blocks are written as the guides define them`);
 }
 
+/** The finished chart on a page, as the editor writes a chart into a note: lines of text (src/text). */
+const { printChartText } = await importTs('src/text/print.ts');
+const { parseChartText } = await importTs('src/text/parse.ts');
+const { canonical } = await importTs('src/chartdata.ts');
+const textBlock = (chart) => '```easy-tikz\n' + printChartText(chart) + '\n```';
+
 if (onlyIds) {
     const unknown = onlyIds.filter((id) => !byId.has(id));
     if (unknown.length) {
@@ -874,7 +880,7 @@ function guidePage(guide) {
 
     out.push('## The finished chart', '');
     out.push('Paste this block into a note to get the finished chart of this guide. Click the chart in the note to open it in the editor.', '');
-    out.push('<details>', '<summary>The chart as an easy-tikz block</summary>', '', chartBlock(serializeChart(guide.chart || {})), '', '</details>', '');
+    out.push('<details>', '<summary>The chart as an easy-tikz block</summary>', '', textBlock(guide.chart || {}), '', '</details>', '');
 
     const next = (Array.isArray(guide.next) ? guide.next : []).map((id) => byId.get(id)).filter(Boolean);
     if (next.length) {
@@ -992,15 +998,13 @@ function checkPages() {
         if (name === 'README.md') continue;
         const block = /<details>\n<summary>[^\n]*<\/summary>\n\n```easy-tikz\n([\s\S]*?)\n```\n\n<\/details>/.exec(text);
         if (!block) bad('no collapsible easy-tikz block');
-        else {
-            try {
-                const data = JSON.parse(block[1]);
-                if (!data || typeof data !== 'object' || Array.isArray(data)) bad('the easy-tikz block is not a JSON object');
-            } catch (e) {
-                bad(`the easy-tikz block is not JSON: ${e.message}`);
-            }
-        }
         const guide = byId.get(name.replace(/\.md$/, ''));
+        if (block) {
+            // The block reads back as the guide's finished chart, with no problem.
+            const read = parseChartText(block[1]);
+            if (read.problems.length) bad(`the easy-tikz block has problems: ${read.problems.map((p) => `line ${p.line}: ${p.message}`).join('; ')}`);
+            else if (guide && canonical(read.data) !== canonical(guide.chart || {})) bad('the easy-tikz block is not the finished chart of the guide');
+        }
         if (guide) {
             const headings = (text.match(/^## \d+\. /gm) || []).length;
             if (headings !== stepsOf(guide).length) bad(`${headings} step headings for ${stepsOf(guide).length} steps`);

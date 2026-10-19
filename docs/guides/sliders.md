@@ -120,79 +120,10 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-{
-  "v": 4,
-  "dimension": false,
-  "documentSetup": true,
-  "title": "Amplitude a = {a}",
-  "size_x_cm": 10,
-  "size_y_cm": 10,
-  "show_axis_label": true,
-  "axis_label_x": "x",
-  "axis_label_y": "y",
-  "showAxis": true,
-  "showLargeGrid": false,
-  "showSmallGrid": false,
-  "gridSize": 5,
-  "majorTickNum": 8,
-  "xmin": "-0.5",
-  "xmax": "10",
-  "ymin": "-0.5",
-  "ymax": "5",
-  "zmin": "-5",
-  "zmax": "5",
-  "axis_style": "box",
-  "coordinateSystem": "cartesian",
-  "axis_label_x_polar": "",
-  "axis_label_y_polar": "",
-  "axis_label_z": "z",
-  "rotationX": 30,
-  "rotationZ": 45,
-  "zoom3D": 1,
-  "boxAspect": "true",
-  "previewSize": 760,
-  "functions": [
-    {
-      "expression": "2 + a sin(b x)",
-      "domain": "",
-      "showLegend": false,
-      "fill": false,
-      "fillOpacity": 0.2,
-      "fillPattern": "solid",
-      "tangent": false,
-      "color": "black",
-      "dashed": false,
-      "tangentPoint": "",
-      "extrema": false,
-      "thickness": "thin",
-      "parametric": false,
-      "expressionY": "",
-      "name": "f1"
-    }
-  ],
-  "functions3D": [],
-  "tools": [],
-  "annotations": [],
-  "parameters": [
-    {
-      "name": "a",
-      "value": -1.2,
-      "min": -2,
-      "max": 2,
-      "step": 0.1
-    },
-    {
-      "name": "b",
-      "value": 2,
-      "min": -10,
-      "max": 10,
-      "step": 0.1
-    }
-  ],
-  "variables": "x, y",
-  "equalScale": false,
-  "showSlidersInNote": true
-}
+title Amplitude a = {a}
+slider a from -2 to 2, starting at -1.2, in steps of 0.1
+slider b from -10 to 10, starting at 2, in steps of 0.1
+plot f1(x) = 2 + a sin(b x)
 ```
 
 </details>

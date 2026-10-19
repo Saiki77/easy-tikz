@@ -150,7 +150,7 @@ pre.etz-whatsnew-text {
     white-space: pre;
 }
 
-/* New in 4.4: above the live chart. */
+/* The newest items (4.4 and 4.5): above the live chart. */
 .etz-whatsnew-new {
     margin-bottom: 20px;
 }

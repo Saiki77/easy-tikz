@@ -119,6 +119,8 @@ export interface PluginData {
     blockFormat: 'text' | 'json';
     /** Charts in notes glide to new values and new objects pop in when the block changes. */
     animateCharts: boolean;
+    /** In Live Preview, a block being edited shows its chart under its lines (src/live.ts). */
+    liveChart: boolean;
     /** Chart colours: the theme's own (default) or the fixed colours of the LaTeX export. */
     chartColours: 'theme' | 'export';
 }
@@ -135,5 +137,6 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     aiToken: '',
     blockFormat: 'text',
     animateCharts: true,
+    liveChart: true,
     chartColours: 'theme',
 };

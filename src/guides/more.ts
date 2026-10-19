@@ -586,7 +586,7 @@ const CHARTS_IN_NOTES: Guide = {
             title: 'Insert it into the note',
             body: paragraphs(
                 'Click Insert into note at the bottom right, or press Cmd+Enter (Ctrl+Enter on Windows and Linux). The editor closes and the chart appears in the note, with its slider underneath.',
-                'In the file, the chart is a code block with the language `easy-tikz`: a few lines of text, one line per object, such as `f1(x) = x^3 - 3x | blue, thick, tangent at a`. Switch the note to source mode to see it. Change a number there, and the chart glides to it.'
+                'In the file, the chart is a code block with the language `easy-tikz`: a few lines of text, one line per object, in words, such as `plot f1(x) = x^3 - 3x in blue, thick, with its tangent at a`. Put the cursor in the block to see them: the chart then sits right under the lines. Change a number there, and the chart glides to it.'
             ),
             shot: { frame: 'note', caption: 'The chart in the note, drawn by the plugin, with the slider strip under it.' },
             tip: 'The picture is drawn by the plugin itself. You need no LaTeX installation to see charts in your notes.',
