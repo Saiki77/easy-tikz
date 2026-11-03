@@ -11,6 +11,7 @@
  */
 import { THICKNESS_MAP } from './colors';
 import { isColormap } from './colormaps';
+import { GRID_OPACITY } from './opacity';
 import { dollarMath, splitDomain } from './expr';
 import { t } from './i18n';
 import {
@@ -823,6 +824,8 @@ function normalizeSurfaces(raw: unknown): Function3DParameters[] {
         };
         // A colour map the plugin does not know is dropped: the surface keeps its own colour.
         if (isColormap(src.colormap)) surface.colormap = src.colormap;
+        // Mesh lines: a number is clamped to 0..1, anything else dropped (absent draws them at 40 %).
+        if (typeof src.meshOpacity === 'number' && Number.isFinite(src.meshOpacity)) surface.meshOpacity = clamp(src.meshOpacity, 0, 1);
         if (typeof src.name === 'string') surface.name = src.name;
         if (src.hidden === true) surface.hidden = true;
         out.push(surface);
@@ -1861,6 +1864,7 @@ function exampleChart(overrides: Record<string, unknown>): Record<string, unknow
         showAxis: true,
         showLargeGrid: false,
         showSmallGrid: false,
+        gridOpacity: GRID_OPACITY,
         gridSize: 5,
         majorTickNum: 8,
         xmin: '-0.5',

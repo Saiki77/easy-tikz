@@ -4,7 +4,8 @@
  * legacy tool type, and stress cases (steep functions, awkward label text,
  * a patterned region with a hole, parametric, polar, 3D surfaces at the
  * memory budget, surfaces cut at planes, every colour map by height,
- * turned cameras, extreme 3D ranges, CSS colour names, snippet mode).
+ * mesh lines off and at full strength, a faint grid in 2D and 3D, turned
+ * cameras, extreme 3D ranges, CSS colour names, snippet mode).
  * Skipped with a message when pdflatex is not on PATH.
  *
  * ETZ_LATEX_KEEP=<dir> keeps the .tex / .pdf / .log files in <dir>.
@@ -353,6 +354,58 @@ const STRESS: Record<string, Record<string, unknown>> = {
                 })
             ),
             surface3('f7', '2 - x*y/4', 'red', { colormap: 'rainbow', wireframe: true, samples: 12 }),
+        ],
+        tools: [{ id: 'a', name: 'PL1', type: 'plane3D', color: 'orange', axis: 'z', value: '1', fillOpacity: 0.3 }],
+    }),
+    // A faint grid with minor lines (4.9): grid style and minor grid style, in 2D over fills and on the back planes in 3D.
+    gridOpacity2d: chart({
+        xmin: '0',
+        xmax: '5',
+        ymin: '0',
+        ymax: '4',
+        showLargeGrid: true,
+        showSmallGrid: true,
+        gridSize: 4,
+        gridOpacity: 0.2,
+        functions: [fn('f1', '3 - x/2', { fill: true, fillOpacity: 0.3 })],
+        tools: [
+            {
+                id: 'a', name: 'R1', type: 'region', color: 'orange', conditions: ['x + y <= 4', 'x >= 0', 'y >= 0'],
+                conditionLabels: ['', '', ''], fill: true, fillOpacity: 0.4, fillPattern: 'solid', outline: 'none',
+                thickness: 'thin', constraintLines: false, label: '',
+            },
+        ],
+    }),
+    gridOpacity3d: chart({
+        dimension: true,
+        showLargeGrid: true,
+        showSmallGrid: true,
+        gridOpacity: 0.2,
+        xmin: '-2',
+        xmax: '2',
+        ymin: '-2',
+        ymax: '2',
+        zmin: '0',
+        zmax: '4',
+        functions3D: [surface3('f1', 'x^2/2 + y^2/2', 'blue', { samples: 20 })],
+    }),
+    // Mesh lines off (pgfplots' smooth shading) and at full strength (4.9), in a colour and in colour maps,
+    // solid and translucent, cut into pieces at a z plane, and with holes where a surface is not defined.
+    mesh: chart({
+        dimension: true,
+        boxAspect: 'equal',
+        xmin: '-3',
+        xmax: '3',
+        ymin: '-3',
+        ymax: '3',
+        zmin: '-1',
+        zmax: '3',
+        functions3D: [
+            surface3('f1', '1 + sin(2x)*cos(y)', 'blue', { meshOpacity: 0, opacity: 1, samples: 16, xDomain: '-3:-1', yDomain: '-3:0' }),
+            surface3('f2', '1 + sin(2x + 1)*cos(y)', 'red', { meshOpacity: 0, opacity: 0.6, colormap: 'viridis', samples: 16, xDomain: '-1:1', yDomain: '-3:0' }),
+            surface3('f3', '1 + sin(2x + 2)*cos(y)', 'green', { meshOpacity: 1, opacity: 1, samples: 16, xDomain: '1:3', yDomain: '-3:0' }),
+            surface3('f4', '1 + sin(2x + 3)*cos(y)', 'teal', { meshOpacity: 1, opacity: 0.6, colormap: 'diverging', samples: 16, xDomain: '-3:-1', yDomain: '0:3' }),
+            surface3('f5', 'sqrt(4 - x^2 - y^2)', 'purple', { meshOpacity: 0, opacity: 0.7, samples: 20 }),
         ],
         tools: [{ id: 'a', name: 'PL1', type: 'plane3D', color: 'orange', axis: 'z', value: '1', fillOpacity: 0.3 }],
     }),

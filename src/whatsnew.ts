@@ -27,7 +27,7 @@ import type { FunctionParameters, Parameter, RegionTool } from './types';
 import { MessageKey, MessageValues, t, tIn } from './i18n';
 
 /** Version of the popup's content. Raise it when the popup says something new. */
-export const WHATS_NEW_VERSION = '4.8.0';
+export const WHATS_NEW_VERSION = '4.9.0';
 
 /**
  * Compare two version strings numerically, part by part ('4.10.0' > '4.9.1',
@@ -153,23 +153,31 @@ export const whatsNewRecentTitle = (): string => t('panels.whatsNew.recentTitle'
 /** The same heading in English, as the tests read it. */
 export const WHATS_NEW_RECENT_TITLE = tIn('en', 'panels.whatsNew.recentTitle');
 
-/** New in 4.7 and 4.8, at the top. */
+/** New in 4.9, at the top: the only items the popup shows open. */
 export const WHATS_NEW_RECENT: WhatsNewItem[] = [
-    item('palette', 'panels.whatsNew.colormaps.title', 'panels.whatsNew.colormaps.text'),
-    item('maximize-2', 'panels.whatsNew.fit.title', 'panels.whatsNew.fit.text'),
-    item('box', 'panels.whatsNew.cube.title', 'panels.whatsNew.cube.text'),
-    item('globe', 'panels.whatsNew.language.title', 'panels.whatsNew.language.text'),
+    item('layers', 'panels.whatsNew.solid.title', 'panels.whatsNew.solid.text'),
+    item('grid', 'panels.whatsNew.gridOpacity.title', 'panels.whatsNew.gridOpacity.text'),
+    item('blend', 'panels.whatsNew.mesh.title', 'panels.whatsNew.mesh.text'),
 ];
 
-/** Next to the live chart: sliders and the values computed from them. */
+/** What makes the live chart move: sliders and the values computed from them. */
 export const WHATS_NEW_LIVE: WhatsNewItem[] = [
     item('sliders-horizontal', 'panels.whatsNew.sliders.title', 'panels.whatsNew.sliders.text', 'sliders'),
     item('calculator', 'panels.whatsNew.calculations.title', 'panels.whatsNew.calculations.text', 'computed-values'),
     item('file-text', 'panels.whatsNew.notes.title', 'panels.whatsNew.notes.text', 'charts-in-notes'),
 ];
 
-/** The rest of version 4, one line each. */
+/** New in 4.3: AI makes charts. Its link opens the editor's AI tab. */
+export const WHATS_NEW_AI: WhatsNewItem = item('bot', 'panels.whatsNew.ai.title', 'panels.whatsNew.ai.text');
+
+/** The rest of version 4, newest first, one line each, behind "Earlier in version 4" (closed). */
 export const WHATS_NEW_MORE: WhatsNewItem[] = [
+    item('palette', 'panels.whatsNew.colormaps.title', 'panels.whatsNew.colormaps.text'),
+    item('maximize-2', 'panels.whatsNew.fit.title', 'panels.whatsNew.fit.text'),
+    item('box', 'panels.whatsNew.cube.title', 'panels.whatsNew.cube.text'),
+    item('globe', 'panels.whatsNew.language.title', 'panels.whatsNew.language.text'),
+    ...WHATS_NEW_LIVE,
+    WHATS_NEW_AI,
     item('languages', 'panels.whatsNew.words.title', 'panels.whatsNew.words.text'),
     item('type', 'panels.whatsNew.plain.title', 'panels.whatsNew.plain.text'),
     item('eye', 'panels.whatsNew.under.title', 'panels.whatsNew.under.text'),
@@ -188,14 +196,9 @@ export function whatsNewText(): string {
     return printChartText(whatsNewChart());
 }
 
-/** New in 4.3: AI makes charts. Its button opens the editor's AI tab. */
-export const WHATS_NEW_AI: WhatsNewItem = item('bot', 'panels.whatsNew.ai.title', 'panels.whatsNew.ai.text');
-
 /** Every icon the popup uses (its items, buttons and the Help tab link). */
 export const WHATS_NEW_ICONS: readonly string[] = [
     ...WHATS_NEW_RECENT.map((i) => i.icon),
-    ...WHATS_NEW_LIVE.map((i) => i.icon),
-    WHATS_NEW_AI.icon,
     ...WHATS_NEW_MORE.map((i) => i.icon),
     'play',
     'pause',

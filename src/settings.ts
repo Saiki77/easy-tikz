@@ -4,6 +4,7 @@ import { View } from './geometry';
 import { SCHEMA_VERSION, migrateSettings } from './migrate';
 import { generateTikz2D, generateTikz3D } from './export';
 import { t } from './i18n';
+import { GRID_OPACITY, opacityValue } from './opacity';
 
 /** The six axis range keys. */
 export type RangeKey = 'xmin' | 'xmax' | 'ymin' | 'ymax' | 'zmin' | 'zmax';
@@ -54,6 +55,8 @@ function defaultValues(): Record<string, unknown> {
         showAxis: true,
         showLargeGrid: false,
         showSmallGrid: false,
+        // Opacity of the major grid lines (minor lines at half), see src/opacity.ts.
+        gridOpacity: GRID_OPACITY,
         // Minor tick subdivisions (export: minor tick num).
         gridSize: 5,
         // Major grid density (live preview only; pgfplots picks its own ticks).
@@ -291,6 +294,7 @@ export class SettingsManager {
             axisStyle: axisStyle === 'middle' || axisStyle === 'axes' ? axisStyle : 'box',
             gridMajor: this.getValue('showLargeGrid') === true,
             gridMinor: this.getValue('showSmallGrid') === true,
+            gridOpacity: opacityValue(this.getValue('gridOpacity'), GRID_OPACITY),
             minorTickNum: numberValue(this.getValue('gridSize'), 5),
             majorTickNum: numberValue(this.getValue('majorTickNum'), 8),
             functions: arrayValue<FunctionParameters>(this.getValue('functions')),

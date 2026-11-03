@@ -165,6 +165,7 @@ export const problems: Messages<typeof en> = {
     'problems.text.kindPlane': '平面',
     'problems.text.needsRange': '"{option}" には 0..2pi のような範囲が必要です',
     'problems.text.needsNumber': '"{option}" には数値が必要です',
+    'problems.text.needsFraction': '"{option}" には 0 から 1 までの数値が必要です',
     'problems.text.unknownPattern': '不明なパターン "{pattern}" です。使えるパターン：{patterns}',
     'problems.text.colormapNotSurface': '{map} は曲面を高さで色分けする指定です（plot z = x^2 in {map}）。{kind}には in blue のような色を書きます',
     'problems.text.theRegionUnclear':
@@ -172,7 +173,7 @@ export const problems: Messages<typeof en> = {
     'problems.text.theRegionMissing': '"the region" には塗りつぶした領域が必要です：shade where x + y <= 4 and x >= 0 and y >= 0',
     'problems.text.noOptions': '{word} には | の後のオプションを付けられません',
     'problems.text.didYouMean': '"{phrase}" のことですか？',
-    'problems.text.gridTakes': 'grid の後には何も書かないか、major、minor、fine のどれかを書きます',
+    'problems.text.gridTakes': 'grid の後には何も書かないか、major、minor、fine、不透明度（grid opacity 0.3）のどれかを書きます',
     'problems.text.sizeTakes': 'size には幅 x 高さを cm で書きます（例：size 12 x 6）',
     'problems.text.standsAlone': '{word} はそれだけで 1 行に書きます',
     'problems.text.optimumTakes': '{word} には目的関数と領域が必要です：{word} 2x + 3y over R1',

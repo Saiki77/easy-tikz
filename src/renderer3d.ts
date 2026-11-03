@@ -2,7 +2,9 @@ import { RendererConfig, Colormap, Function3DParameters, MarkerSize, AnnotationS
 import { LABEL_LOCALS, MathContext, labelDisplayText } from './mathcontext';
 import { ArrowHeads, Scene3D, SceneIssue, computeScene3D, edgeLabelSide3D } from './scene';
 import { COLOR_MAP, THICKNESS_MAP, resolveCssColor } from './colors';
-import { FACET_LINE, colormapCss, colormapRange, isColormap } from './colormaps';
+import { colormapCss, colormapRange, colormapRgb, isColormap, rgbCss } from './colormaps';
+import { BOX_EDGES, edgeKind, farFirst, gridLines, stepValues, tickSides, toViewer } from './box3d';
+import { MESH_OPACITY, opacityValue } from './opacity';
 import { niceInterval, formatTick, stripLatex, hexToRgb, rgbStringToRgb } from './util';
 import { t as msg } from './i18n';
 
@@ -68,6 +70,8 @@ interface Quad {
     stroke: string;
     wireframe: boolean;
     opacity: number;
+    /** Opacity of the mesh lines of a filled surface quad (0: none). */
+    mesh: number;
     /**
      * -1 for surface quads; for plane cells the plane's index. Consecutive
      * cells of one plane are filled as a single path so their shared edges
@@ -93,7 +97,16 @@ interface ProjectedPoint {
 interface BoxEdge {
     p1Idx: number;
     p2Idx: number;
+    /** 'back': behind everything, drawn before the surfaces; 'front': the outline, drawn after them (see box3d.edgeKind). */
     layer: 'back' | 'front';
+}
+
+interface GridSegment {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    minor: boolean;
 }
 
 interface TickEdge {
@@ -174,6 +187,21 @@ function shadeRgb(rgb: { r: number; g: number; b: number }, t: number): string {
 
 /** Each colour map at SHADE_LEVELS heights, built on first use (the maps never change). */
 const MAP_SHADES = new Map<Colormap, string[]>();
+/** The mesh lines of a map at the same heights: each colour 20 % toward black, as pgfplots' `mapped color!80!black`. */
+const MAP_EDGE_SHADES = new Map<Colormap, string[]>();
+
+function mapEdgeShades(map: Colormap): string[] {
+    let shades = MAP_EDGE_SHADES.get(map);
+    if (!shades) {
+        shades = [];
+        for (let k = 0; k < SHADE_LEVELS; k++) shades.push(rgbCss(colormapRgb(map, k / (SHADE_LEVELS - 1)).map((c) => c * 0.8)));
+        MAP_EDGE_SHADES.set(map, shades);
+    }
+    return shades;
+}
+
+/** A fill at least this opaque counts as solid: its facets also get a stroke in their own colour, so no background shows between them. */
+const SOLID = 0.999;
 
 function mapShades(map: Colormap): string[] {
     let shades = MAP_SHADES.get(map);
@@ -286,15 +314,18 @@ export class SVG3DRenderer {
     /** Box geometry. Refreshed per render via `prepareBox`. */
     private boxCorners: ProjectedPoint[] = [];
     private boxEdges: BoxEdge[] = [];
+    /** Grid lines on the floor and the back walls, in screen space (see prepareBox). */
+    private gridSegments: GridSegment[] = [];
     private xTickEdge: TickEdge | null = null;
     private yTickEdge: TickEdge | null = null;
     private zTickEdge: TickEdge | null = null;
 
     /** Resolved theme colors, refreshed per render so theme switches repaint. */
-    private themeColors: { textNormal: string; textMuted: string; bgPrimary: string } = {
+    private themeColors: { textNormal: string; textMuted: string; bgPrimary: string; border: string } = {
         textNormal: '#000',
         textMuted: '#666',
         bgPrimary: '#fff',
+        border: '#ddd',
     };
 
     /** Theme text font for canvas text (`--font-text` resolved), and the raw value it came from. */
@@ -552,7 +583,7 @@ export class SVG3DRenderer {
         this.prepareSurfaces(math, allQuads);
         this.planeOutlines = [];
         scene.planes.forEach((plane, i) => this.pushPlane(plane, i, allQuads));
-        allQuads.sort(quadDepthCompare);
+        allQuads.sort(farFirst);
         this.quads = allQuads;
 
         for (const issue of scene.issues) this.issues.push(issue);
@@ -683,58 +714,55 @@ export class SVG3DRenderer {
         ];
         this.boxCorners = corners;
 
-        let cdepth = 0;
         let csx = 0;
         let csy = 0;
         for (const c of corners) {
-            cdepth += c.depth;
             csx += c.sx;
             csy += c.sy;
         }
-        cdepth /= 8;
         csx /= 8;
         csy /= 8;
 
-        // 12 edges of the cuboid as corner-index pairs.
-        const edgeIndices: [number, number][] = [
-            // Bottom face (z=zmin).
-            [0, 1], [1, 3], [3, 2], [2, 0],
-            // Top face (z=zmax).
-            [4, 5], [5, 7], [7, 6], [6, 4],
-            // Vertical edges connecting bottom and top.
-            [0, 4], [1, 5], [2, 6], [3, 7],
-        ];
-        this.boxEdges = edgeIndices.map(([i, j]) => {
-            const midDepth = (corners[i].depth + corners[j].depth) / 2;
-            return {
-                p1Idx: i,
-                p2Idx: j,
-                layer: midDepth < cdepth ? 'back' : 'front',
-            };
-        });
+        // Which edges show and where, as pgfplots draws its box (src/box3d.ts): the
+        // edges at the back behind the surfaces, the outline over them, the three
+        // at the front corner not at all, so no line crosses a surface.
+        const view = toViewer(cfg.rotationZ, cfg.rotationX);
+        this.boxEdges = [];
+        for (const [i, j] of BOX_EDGES) {
+            const kind = edgeKind(view, i, j);
+            if (kind !== 'hidden') this.boxEdges.push({ p1Idx: i, p2Idx: j, layer: kind === 'back' ? 'back' : 'front' });
+        }
 
-        // Pick the back face along each direction so ticks live on the edge
-        // the user is "looking into".
-        const yMinFace = this.project((xmin + xmax) / 2, ymin, (zmin + zmax) / 2);
-        const yMaxFace = this.project((xmin + xmax) / 2, ymax, (zmin + zmax) / 2);
-        const yBack = yMinFace.depth < yMaxFace.depth ? ymin : ymax;
+        // Tick edges outside the box: x and y on the floor edges at the front, z on the left outline.
+        const sides = tickSides(view, corners.map((c) => c.sx));
+        const X = [xmin, xmax];
+        const Y = [ymin, ymax];
+        const Z = [zmin, zmax];
+        const xy = Y[sides.x.y];
+        const xz = Z[sides.x.z];
+        this.xTickEdge = this.buildTickEdge(this.project(xmin, xy, xz), this.project(xmax, xy, xz), xy, xz, csx, csy);
+        const yx = X[sides.y.x];
+        const yz = Z[sides.y.z];
+        this.yTickEdge = this.buildTickEdge(this.project(yx, ymin, yz), this.project(yx, ymax, yz), yx, yz, csx, csy);
+        const zx = X[sides.z.x];
+        const zy = Y[sides.z.y];
+        this.zTickEdge = this.buildTickEdge(this.project(zx, zy, zmin), this.project(zx, zy, zmax), zx, zy, csx, csy);
 
-        const xMinFace = this.project(xmin, (ymin + ymax) / 2, (zmin + zmax) / 2);
-        const xMaxFace = this.project(xmax, (ymin + ymax) / 2, (zmin + zmax) / 2);
-        const xBack = xMinFace.depth < xMaxFace.depth ? xmin : xmax;
-
-        // Tick-bearing edges.
-        const xP1 = this.project(xmin, yBack, zmin);
-        const xP2 = this.project(xmax, yBack, zmin);
-        this.xTickEdge = this.buildTickEdge(xP1, xP2, yBack, zmin, csx, csy);
-
-        const yP1 = this.project(xBack, ymin, zmin);
-        const yP2 = this.project(xBack, ymax, zmin);
-        this.yTickEdge = this.buildTickEdge(yP1, yP2, xBack, zmin, csx, csy);
-
-        const zP1 = this.project(xBack, yBack, zmin);
-        const zP2 = this.project(xBack, yBack, zmax);
-        this.zTickEdge = this.buildTickEdge(zP1, zP2, xBack, yBack, csx, csy);
+        // The grid on the floor and the back walls, at the tick values (minor lines between them), as in the PDF.
+        this.gridSegments = [];
+        if (cfg.gridMajor || cfg.gridMinor) {
+            const ranges: Array<[number, number]> = [[xmin, xmax], [ymin, ymax], [zmin, zmax]];
+            const steps = ranges.map(([lo, hi]) => niceInterval(hi - lo, this.tickTarget()));
+            const major = ranges.map(([lo, hi], k) => stepValues(lo, hi, steps[k]));
+            const n = Math.round(Number(cfg.minorTickNum));
+            const minor = cfg.gridMinor && n >= 1 ? ranges.map(([lo, hi], k) => stepValues(lo, hi, steps[k] / (n + 1))) : [[], [], []];
+            const box = { xmin, xmax, ymin, ymax, zmin, zmax };
+            for (const line of gridLines(view, box, major, minor)) {
+                const a = this.project(line.from[0], line.from[1], line.from[2]);
+                const b = this.project(line.to[0], line.to[1], line.to[2]);
+                this.gridSegments.push({ x1: a.sx, y1: a.sy, x2: b.sx, y2: b.sy, minor: line.minor });
+            }
+        }
     }
 
     private buildTickEdge(p1: ProjectedPoint, p2: ProjectedPoint, fixedA: number, fixedB: number, centroidSx: number, centroidSy: number): TickEdge {
@@ -760,6 +788,8 @@ export class SVG3DRenderer {
         this.themeColors.textNormal = cs.getPropertyValue('--text-normal').trim() || '#000';
         this.themeColors.textMuted = cs.getPropertyValue('--text-muted').trim() || '#666';
         this.themeColors.bgPrimary = cs.getPropertyValue('--background-primary').trim() || '#fff';
+        // The grid takes the colour of the 2D grid (renderer.ts BORDER).
+        this.themeColors.border = cs.getPropertyValue('--background-modifier-border').trim() || '#ddd';
         // Canvas `font` does not understand var(): an invalid font string is
         // silently ignored and the previous (10px) font stays. Resolve the
         // theme's text font once and keep it only if the canvas accepts it.
@@ -930,7 +960,9 @@ export class SVG3DRenderer {
         }
         const wireframe = func.wireframe;
         const opacity = Number.isFinite(func.opacity) ? Math.max(0, Math.min(1, func.opacity)) : 0.7;
-        const edge = map && !wireframe ? FACET_LINE.css : color.css;
+        const edge = color.css;
+        const edgeShades = map && !wireframe ? mapEdgeShades(map) : null;
+        const mesh = wireframe ? 0 : opacityValue(func.meshOpacity, MESH_OPACITY);
         const zs = data.zs;
         for (let i = 0; i < samples; i++) {
             const rowA = i * stride;
@@ -950,9 +982,11 @@ export class SVG3DRenderer {
                 let stroke = edge;
                 if (shades && (map || !wireframe)) {
                     const t = ((zs[i00] + zs[i10] + zs[i01] + zs[i11]) * 0.25 - lo) * inv;
-                    const shade = shades[Math.round((t < 0 ? 0 : t > 1 ? 1 : t) * (SHADE_LEVELS - 1))];
+                    const level = Math.round((t < 0 ? 0 : t > 1 ? 1 : t) * (SHADE_LEVELS - 1));
+                    const shade = shades[level];
                     if (wireframe) stroke = shade;
                     else fill = shade;
+                    if (edgeShades) stroke = edgeShades[level];
                 }
                 out.push({
                     p0x: sxBuf[i00], p0y: syBuf[i00],
@@ -964,6 +998,7 @@ export class SVG3DRenderer {
                     stroke,
                     wireframe,
                     opacity,
+                    mesh,
                     plane: -1,
                 });
             }
@@ -1018,6 +1053,7 @@ export class SVG3DRenderer {
                     stroke: css,
                     wireframe: false,
                     opacity,
+                    mesh: 0,
                     plane: index,
                 });
             }
@@ -1181,6 +1217,7 @@ export class SVG3DRenderer {
         const ry = nx * this.sinA + ny * this.cosA;
         const ry2 = ry * this.cosE - nz * this.sinE;
         const rz2 = ry * this.sinE + nz * this.cosE;
+        // depth = -(toViewer . n) (box3d.ts): larger is farther, and the painter draws it first.
         return { sx: this.centerX + rx * this.scale, sy: this.centerY - rz2 * this.scale, depth: ry2 };
     }
 
@@ -1229,9 +1266,20 @@ export class SVG3DRenderer {
             } else {
                 path.setAttribute('fill', q.fill);
                 path.setAttribute('fill-opacity', String(q.opacity));
-                path.setAttribute('stroke', q.stroke);
-                path.setAttribute('stroke-width', '0.3');
-                path.setAttribute('stroke-opacity', '0.4');
+                if (q.mesh > 0) {
+                    path.setAttribute('stroke', q.stroke);
+                    path.setAttribute('stroke-width', '0.3');
+                    path.setAttribute('stroke-opacity', String(q.mesh));
+                } else if (q.opacity >= SOLID) {
+                    // One stroke per path: without mesh lines it closes the seams between facets instead.
+                    path.setAttribute('stroke', q.fill);
+                    path.setAttribute('stroke-width', '0.6');
+                    path.setAttribute('stroke-opacity', '1');
+                } else {
+                    path.setAttribute('stroke', 'none');
+                    path.removeAttribute('stroke-width');
+                    path.removeAttribute('stroke-opacity');
+                }
             }
         }
         for (let i = used; i < pool.length; i++) {
@@ -1320,6 +1368,13 @@ export class SVG3DRenderer {
         const axisGroup = layer === 'back' ? this.backAxesGroup : this.frontAxesGroup;
         const axisColor = 'var(--text-muted)';
 
+        // The grid on the floor and the back walls, under the back edges (see drawGridToCanvas).
+        if (layer === 'back' && cfg.gridOpacity > 0) {
+            for (const g of this.gridSegments) {
+                this.svgLine(axisGroup, g.x1, g.y1, g.x2, g.y2, 'var(--background-modifier-border)', g.minor ? '0.5' : '1', g.minor ? cfg.gridOpacity / 2 : cfg.gridOpacity);
+            }
+        }
+
         // Edges classified to this layer.
         for (const edge of this.boxEdges) {
             if (edge.layer !== layer) continue;
@@ -1345,9 +1400,15 @@ export class SVG3DRenderer {
      * first and the last label of an axis are placed first, so thinning
      * keeps the ends of the range.
      */
+    /** About how many ticks an axis gets: Major divisions, fewer in 3D, where the axes are short. */
+    private tickTarget(): number {
+        const cfg = this.requireConfig();
+        return cfg.majorTickNum ? Math.max(2, Math.round(cfg.majorTickNum * 0.6)) : DEFAULT_TARGET_TICKS;
+    }
+
     private tickPlan(): TickMark[] {
         const cfg = this.requireConfig();
-        const target = cfg.majorTickNum ? Math.max(2, Math.round(cfg.majorTickNum * 0.6)) : DEFAULT_TARGET_TICKS;
+        const target = this.tickTarget();
         const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
         const marks: TickMark[] = [];
         const axes: Array<['x' | 'y' | 'z', TickEdge | null, number, number]> = [
@@ -1476,7 +1537,8 @@ export class SVG3DRenderer {
         roundedRectPath(ctx, 0, 0, cfg.width, cfg.height, 4);
         ctx.fill();
 
-        // Back axes -> surfaces and plane cells -> tools -> front axes -> annotations -> title.
+        // Grid -> back edges -> surfaces and plane cells (far to near) -> tools -> outline and ticks -> annotations -> title.
+        this.drawGridToCanvas();
         this.drawBoxToCanvas('back');
         this.drawQuadsToCanvas(this.quads);
         this.drawToolsToCanvas();
@@ -1510,10 +1572,19 @@ export class SVG3DRenderer {
                 ctx.fillStyle = q.fill;
                 ctx.globalAlpha = q.opacity;
                 ctx.fill();
-                ctx.globalAlpha = 0.4;
-                ctx.strokeStyle = q.stroke;
-                ctx.lineWidth = 0.3;
-                ctx.stroke();
+                if (q.opacity >= SOLID) {
+                    // A solid surface: close the anti-aliased seams between facets in their own colour.
+                    ctx.globalAlpha = 1;
+                    ctx.strokeStyle = q.fill;
+                    ctx.lineWidth = 0.6;
+                    ctx.stroke();
+                }
+                if (q.mesh > 0) {
+                    ctx.globalAlpha = q.mesh;
+                    ctx.strokeStyle = q.stroke;
+                    ctx.lineWidth = 0.3;
+                    ctx.stroke();
+                }
                 ctx.globalAlpha = 1;
             }
         }
@@ -1585,6 +1656,27 @@ export class SVG3DRenderer {
     }
 
     /** Draw the cuboid edges on the canvas plus, in front layer, tick marks and labels. */
+    /** The grid on the floor and the back walls, under everything: as the 2D grid, minor lines thinner and at half the opacity. */
+    private drawGridToCanvas() {
+        if (!this.gridSegments.length) return;
+        const ctx = this.ctx;
+        const opacity = this.requireConfig().gridOpacity;
+        if (!(opacity > 0)) return;
+        ctx.strokeStyle = this.themeColors.border;
+        for (const minor of [true, false]) {
+            ctx.globalAlpha = minor ? opacity / 2 : opacity;
+            ctx.lineWidth = minor ? 0.5 : 1;
+            ctx.beginPath();
+            for (const g of this.gridSegments) {
+                if (g.minor !== minor) continue;
+                ctx.moveTo(g.x1, g.y1);
+                ctx.lineTo(g.x2, g.y2);
+            }
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+    }
+
     private drawBoxToCanvas(layer: 'back' | 'front') {
         const ctx = this.ctx;
         const cfg = this.requireConfig();
@@ -1668,10 +1760,6 @@ export class SVG3DRenderer {
         ctx.textBaseline = 'alphabetic';
         ctx.fillText(this.titleText, cfg.width / 2, PADDING_TOP - 10);
     }
-}
-
-function quadDepthCompare(a: Quad, b: Quad): number {
-    return a.depth - b.depth;
 }
 
 function quadPath(ctx: CanvasRenderingContext2D, q: Quad) {

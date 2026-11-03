@@ -1310,7 +1310,7 @@ test('EXAMPLES: the six documented ids, complete and migrateSettings-stable', ()
     assert.deepEqual(EXAMPLES.map((e) => e.id), ['lp', 'areas', 'tangent', 'levels', 'surplus', 'plane3d']);
     const required = [
         'v', 'dimension', 'documentSetup', 'title', 'size_x_cm', 'size_y_cm', 'show_axis_label', 'axis_label_x',
-        'axis_label_y', 'showAxis', 'showLargeGrid', 'showSmallGrid', 'gridSize', 'xmin', 'xmax', 'ymin', 'ymax',
+        'axis_label_y', 'showAxis', 'showLargeGrid', 'showSmallGrid', 'gridOpacity', 'gridSize', 'xmin', 'xmax', 'ymin', 'ymax',
         'zmin', 'zmax', 'axis_style', 'functions', 'functions3D', 'tools', 'annotations', 'parameters', 'variables',
         'equalScale', 'showSlidersInNote', 'coordinateSystem', 'previewSize', 'majorTickNum',
     ];
@@ -1455,4 +1455,42 @@ test('palette: preview colours, labels and TikZ definitions agree', () => {
     assert.equal(mixHex('#e74c3c', 'rgb(0, 0, 0)', 0), '#e74c3c');
     assert.equal(mixHex('#f00', '#00f', 1), '#0000ff');
     assert.equal(mixHex('var(--x)', '#000000', 0.5), 'var(--x)');
+});
+
+// ---------------------------------------------------------------------------
+// Grid opacity and mesh lines (4.9)
+// ---------------------------------------------------------------------------
+
+test('surfaces keep a numeric meshOpacity clamped to 0..1 and drop anything else', () => {
+    const out = migrateSettings({
+        v: 4,
+        functions3D: [
+            { expression: 'x', meshOpacity: 0.2 },
+            { expression: 'x', meshOpacity: 0 },
+            { expression: 'x', meshOpacity: 2 },
+            { expression: 'x', meshOpacity: -1 },
+            { expression: 'x', meshOpacity: '0.3' },
+            { expression: 'x', meshOpacity: null },
+            { expression: 'x', meshOpacity: Number.NaN },
+            { expression: 'x' },
+        ],
+    });
+    const list = out.functions3D as Array<Record<string, unknown>>;
+    assert.deepEqual(list.slice(0, 4).map((s) => s.meshOpacity), [0.2, 0, 1, 0]);
+    for (const s of list.slice(4)) assert.ok(!('meshOpacity' in s), JSON.stringify(s));
+    assert.deepEqual(migrateSettings(clone(out)), out, 'idempotent');
+    // The editor keeps it, and the renderers get it.
+    const settings = SettingsManager.fromJSON({ v: 4, dimension: true, functions3D: [{ expression: 'x', meshOpacity: 0.15 }] });
+    assert.equal((settings.serialize().functions3D as Array<Record<string, unknown>>)[0].meshOpacity, 0.15);
+    assert.equal(settings.toRendererConfig().functions3D[0].meshOpacity, 0.15);
+});
+
+test('the chart keeps gridOpacity as written, like its other numbers; the renderers read it clamped', () => {
+    for (const v of [0.3, 7, 'faint']) {
+        const out = migrateSettings({ v: 4, gridOpacity: v });
+        assert.equal(out.gridOpacity, v);
+    }
+    assert.ok(!('gridOpacity' in migrateSettings({ v: 4 })));
+    assert.equal(SettingsManager.fromJSON({ v: 4 }).getValue('gridOpacity'), 0.5);
+    assert.equal(SettingsManager.fromJSON({ v: 4, gridOpacity: 7 }).toRendererConfig().gridOpacity, 1);
 });

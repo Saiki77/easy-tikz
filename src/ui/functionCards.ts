@@ -18,6 +18,7 @@ import { RESERVED_NAMES } from '../migrate';
 import { COLOR_MAP, FILL_PATTERN_OPTIONS, THICKNESS_OPTIONS, mixHex, resolveCssColor } from '../colors';
 import { COLORMAPS, COLORMAP_STOPS, colormapName, isColormap, rgbCss } from '../colormaps';
 import { MAX_SAMPLES_3D } from '../export';
+import { MESH_OPACITY, opacityValue } from '../opacity';
 import { MAX_PREVIEW_SAMPLES_3D } from '../renderer3d';
 import { UserTemplate } from '../templates';
 import { CardActions, PanelHost } from './host';
@@ -59,6 +60,9 @@ const OK: ValidateResult = { ok: true };
 /** Surface sampling range: the 3D renderer clamps to the same bounds. */
 const SURFACE_SAMPLES_MIN = 8;
 const SURFACE_SAMPLES_DEFAULT_MAX = 80;
+
+/** The opacity of a surface's mesh lines (MESH_OPACITY when the field is left out). */
+const meshOf = (surface: Function3DParameters) => opacityValue(surface.meshOpacity, MESH_OPACITY);
 
 /** UI state of a card that survives panel rebuilds (kept by the Build panel per item). */
 export interface CardUiState {
@@ -938,6 +942,7 @@ export function createSurfaceCard(
         onChange: (v) => {
             surface.wireframe = v;
             shell.setSummary(surfaceSummary(surface));
+            syncMeshRow();
             host.requestUpdate();
         },
     });
@@ -1004,6 +1009,28 @@ export function createSurfaceCard(
     });
     opacityRow.bind(opacity.input);
 
+    // The mesh lines of a filled surface; left out at 40 %, the look before the slider. A wireframe is only lines.
+    const meshRow = field(body, { label: t('build.surface.mesh'), layout: 'inline', cls: 'etz-fn-row', hint: t('build.surface.meshHint') });
+    const mesh = liveSlider(meshRow.controlEl, {
+        min: 0,
+        max: 1,
+        step: 0.05,
+        value: meshOf(surface),
+        label: t('build.surface.mesh'),
+        format: (v) => `${Math.round(v * 100)} %`,
+        fixedRange: true,
+        onInput: (v) => {
+            if (Math.abs(v - MESH_OPACITY) < 1e-9) delete surface.meshOpacity;
+            else surface.meshOpacity = v;
+            host.requestFrame();
+        },
+    });
+    meshRow.bind(mesh.input);
+    function syncMeshRow(): void {
+        setShown(meshRow.el, !surface.wireframe);
+    }
+    syncMeshRow();
+
     // The plugin setting sets the slider's top, but never past what the preview can draw.
     const maxSamples = Math.max(40, Math.min(MAX_PREVIEW_SAMPLES_3D, (host.plugin && host.plugin.data.maxSamples3D) || SURFACE_SAMPLES_DEFAULT_MAX));
     const samplesRow = field(body, { label: t('build.surface.samples'), layout: 'inline', cls: 'etz-fn-row' });
@@ -1044,6 +1071,8 @@ export function createSurfaceCard(
         syncHeightColours();
         paintOwnBar();
         if (opacity.getValue() !== surface.opacity) opacity.setValue(surface.opacity);
+        if (mesh.getValue() !== meshOf(surface)) mesh.setValue(meshOf(surface));
+        syncMeshRow();
         if (samples.getValue() !== surface.samples) samples.setValue(surface.samples);
         syncSamplesHint();
         fields.syncError();

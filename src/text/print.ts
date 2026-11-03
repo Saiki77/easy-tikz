@@ -75,6 +75,9 @@ function andList(items: string[]): string {
 const generic = (key: string, value: unknown) => `${key}=${JSON.stringify(value)}`;
 const raw = (kind: 'tool' | 'function' | 'surface' | 'label' | 'slider', item: Data) => `raw ${kind} ${JSON.stringify(item)}`;
 
+/** A number from 0 to 1, what `grid opacity` and `mesh` read; anything else is written as a field. */
+const fraction = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1;
+
 /** Options in a fixed order: the words first, then `key=value` for the rest. */
 class Options {
     readonly out: string[] = [];
@@ -245,6 +248,7 @@ function surfaceLine(min: Data, full: Data, ctx: Ctx): string {
     o.colour();
     o.take('colormap', (v) => (isColormap(v) ? `in ${v}` : null));
     o.take('opacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
+    o.take('meshOpacity', (v) => (fraction(v) ? `mesh ${v}` : null));
     o.take('samples', (v) => (typeof v === 'number' && Number.isFinite(v) ? `with ${v} samples` : null));
     o.take('wireframe', (v) => (v === true ? 'wireframe' : null));
     return withOptions(`plot ${name}(x, y) = ${expr}`, o.finish());
@@ -504,6 +508,11 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
             else if ('showSmallGrid' in m) out.push(`set showSmallGrid = ${JSON.stringify(small)}`);
             return out;
         },
+    },
+    // The grid's opacity, after the grid lines; without the line it is the default, 0.5.
+    {
+        keys: ['gridOpacity'],
+        print: (m) => (fraction(m.gridOpacity) ? [`grid opacity ${m.gridOpacity}`] : 'gridOpacity' in m ? [`set gridOpacity = ${JSON.stringify(m.gridOpacity)}`] : []),
     },
     { keys: ['title'], print: (m) => (typeof m.title === 'string' ? [`title ${text(m.title)}`] : 'title' in m ? [`set title = ${JSON.stringify(m.title)}`] : []) },
     ...(['x', 'y', 'z'] as const).map((a) => ({

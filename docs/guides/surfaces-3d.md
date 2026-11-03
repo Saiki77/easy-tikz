@@ -58,7 +58,7 @@ For exact angles, use Elevation and Azimuth under 3D view in the Chart tab. This
 
 ## 4. Style the surface
 
-Go back to the Build tab. On the card f1, drag Opacity down to 50 % and Samples down to 24. The surface becomes more transparent and its mesh coarser, which leaves room for the things you add next. Wireframe in the Style row removes the faces and keeps only the mesh.
+Go back to the Build tab. On the card f1, drag Opacity down to 50 % and Samples down to 24. The surface becomes more transparent and its mesh coarser, which leaves room for the things you add next. Mesh lines, under Opacity, fades the lines on the surface: at 0 % it is smooth. Wireframe in the Style row removes the faces and keeps only the mesh.
 
 ![Screenshot of the editor for step 4: Style the surface](img/surfaces-3d-4.png)
 

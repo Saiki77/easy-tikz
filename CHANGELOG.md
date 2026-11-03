@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [4.9.0] - 2026-11-03
+
+Solid surfaces in 3D: the preview paints in the right depth order and draws its box like the PDF, the grid shows in 3D, and two sliders fade the grid and the mesh lines.
+
+### Fixed
+
+- **Depth order in the 3D preview** (`src/renderer3d.ts`, `src/box3d.ts`). The preview painted the nearest parts first, as if the camera were below the chart, so far parts covered near ones: a floor over a plateau, back edges over a solid surface. It now paints far to near with the camera the export uses, for surfaces and planes alike, and a surface at 100 % opacity hides everything behind it. The facets of a solid surface also close the hairline seams between them, so no background shows through.
+- **The 3D box as pgfplots draws it.** The outline and the edges at the back; the three edges at the front corner are left out, so no line crosses a surface. The back and front edges had been swapped.
+- **Tick numbers outside the box:** z on the left outline, x and y on the front edges of the floor, as in the PDF. The z numbers had sat on an edge through the middle, on top of the surface.
+- **Guide pictures on GitHub:** in four guides (Your first chart, Parametric and polar curves, Shade the areas between two curves, Surfaces in 3D) the pictures had caught the curves while they drew themselves. The guide builder now turns chart motion off.
+- The smoke test checks that a solid surface hides what lies behind it.
+
+### Added
+
+- **The grid in 3D.** Major grid and Minor grid draw on the floor and the back walls, under the surfaces, in the preview and in the PDF (`grid=major` or `grid=both`); both had left it out in 3D.
+- **Grid opacity** (Chart, Grid): 0 to 100 %, for 2D and 3D, in the preview and the PDF (`grid style={draw=black!50, draw opacity=...}`, minor lines at half). 50 % is the old look and writes nothing new. In text: `grid opacity 0.3`.
+- **Mesh lines** on the surface card: the opacity of the lines on a filled surface, from none (a smooth surface) to full, hidden while Wireframe is on. 40 % is the old look of the preview. In text: `mesh 0.2`. Values outside 0 to 1 are a problem.
+
+### Changed
+
+- **What's new** opens once more, and calmer: the three 4.9 items, the live chart beside the lines it is written in, and the rest of version 4 (18 items, with sliders, calculations and AI) closed under **Earlier in version 4**. It fits without scrolling.
+- **Mesh lines of a colour map** are a darker shade of each facet (pgfplots' own `mapped color!80!black`) instead of light grey, which read as holes on dark colours.
+- **The PDF of a filled surface** draws its facet lines at the Mesh lines opacity (`fill opacity` for the surface, `draw opacity` for the lines; they had taken the surface's opacity), and at 0 % a smooth surface (`shader=interp`). 2D exports and charts without a surface are unchanged.
+
 ## [4.8.0] - 2026-11-03
 
 Colours by height, a fit that picks round ranges for everything drawn, and cubes for new 3D charts.

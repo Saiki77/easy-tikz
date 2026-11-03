@@ -604,3 +604,109 @@ test('text: cube stands alone, and a formula with a slider called cube stays a f
     assert.equal(f.data.boxAspect, undefined);
     assert.equal(parseChartText('cube(x) = x^3').data.boxAspect, undefined, 'a function called cube');
 });
+
+// ------------------------------------------------- grid opacity and mesh lines (4.9)
+
+test('text: grid opacity 0.3 is the grid opacity, printed right after the grid lines', () => {
+    const text = ['show x from 0 to 5 and y from 0 to 4', 'with a fine grid', 'grid opacity 0.3', 'title Faint', 'plot f(x) = x'].join('\n');
+    const r = parseChartText(text);
+    assert.deepEqual(r.problems, []);
+    assert.equal(r.data.gridOpacity, 0.3);
+    const printed = printChartText(r.data).split('\n');
+    assert.equal(printed[printed.indexOf('with a fine grid') + 1], 'grid opacity 0.3', printed.join('\n'));
+    assert.equal(canonical(parseChartText(printed.join('\n')).data), canonical(r.data));
+    assert.equal(writeChartText(text, r.data), text, 'an unchanged block stays as typed');
+    // The ends of the range, and the grid lines on their own: no line, the default.
+    for (const v of [0, 1]) assert.equal(parseChartText(`grid opacity ${v}`).data.gridOpacity, v);
+    assert.ok(!printChartText(parseChartText('with a grid').data).includes('opacity'));
+    assert.ok(!printChartText({ v: 4, showLargeGrid: true, gridOpacity: 0.5 }).includes('opacity'));
+    // A set line and a stored value the words cannot say still read back.
+    assert.equal(canonical(parseChartText('set gridOpacity = 0.2').data), canonical(parseChartText('grid opacity 0.2').data));
+    const odd = { v: 4, showLargeGrid: true, gridOpacity: 7 };
+    assert.equal(canonical(parseChartText(printChartText(odd)).data), canonical(odd));
+});
+
+test('text: changing the grid opacity rewrites that line only, or adds it with the chart lines', () => {
+    const text = ['show x from 0 to 5 and y from 0 to 4', 'with a grid', 'grid opacity 0.3', '% the line', 'plot f(x) = x'].join('\n');
+    const data = parseChartText(text).data;
+    assert.deepEqual(writeChartText(text, { ...data, gridOpacity: 0.8 }).split('\n'), ['show x from 0 to 5 and y from 0 to 4', 'with a grid', 'grid opacity 0.8', '% the line', 'plot f(x) = x']);
+    const plain = { ...data };
+    delete plain.gridOpacity;
+    assert.deepEqual(writeChartText(text, plain).split('\n'), ['show x from 0 to 5 and y from 0 to 4', 'with a grid', '% the line', 'plot f(x) = x']);
+    const added = writeChartText(['with a grid', 'plot f(x) = x'].join('\n'), { ...parseChartText('with a grid\nplot f(x) = x').data, gridOpacity: 0.1 });
+    assert.deepEqual(added.split('\n'), ['with a grid', 'grid opacity 0.1', 'plot f(x) = x']);
+});
+
+test('text: a grid opacity outside 0..1 or not a number is a problem, and nothing is set', () => {
+    const cases: Array<[string, RegExp]> = [
+        ['grid opacity 1.5', /^"grid opacity 1\.5" needs a number from 0 to 1$/],
+        ['grid opacity -0.2', /^"grid opacity -0\.2" needs a number from 0 to 1$/],
+        ['grid opacity faint', /^"grid opacity faint" needs a number$/],
+        ['grid opacity', /^"grid opacity" needs a number$/],
+        ['grid opacity 30 %', /^"grid opacity 30 %" needs a number$/],
+    ];
+    for (const [line, message] of cases) {
+        const r = parseChartText(`plot f(x) = x\n${line}`);
+        assert.equal(r.problems.length, 1, line);
+        assert.deepEqual([r.problems[0].line, r.problems[0].column], [2, 1], line);
+        assert.match(r.problems[0].message, message, line);
+        assert.ok(!('gridOpacity' in r.data), line);
+    }
+    // grid still takes major, minor and fine, and names its forms when it gets something else.
+    assert.equal(parseChartText('grid fine').data.showSmallGrid, true);
+    assert.match(parseChartText('grid sparkly').problems[0].message, /grid opacity 0\.3/);
+});
+
+test('text: a surface takes mesh 0.2 after its opacity, read and printed', () => {
+    const line = 'plot s(x, y) = x*y for x from -2 to 2 and y from -2 to 2 in red, opacity 0.6, mesh 0.2, with 30 samples';
+    const r = parseChartText(line);
+    assert.deepEqual(r.problems, []);
+    const s = (r.data.functions3D as Data[])[0];
+    assert.deepEqual([s.opacity, s.meshOpacity, s.samples], [0.6, 0.2, 30]);
+    assert.ok(printChartText(r.data).split('\n').includes(line), printChartText(r.data));
+    assert.equal(writeChartText(line, r.data), line);
+    // 0 and 1, the short form, a colour map, and the default (no option printed).
+    for (const v of [0, 1]) assert.equal((parseChartText(`plot z = x*y, mesh ${v}`).data.functions3D as Data[])[0].meshOpacity, v);
+    assert.equal((parseChartText('z = x*y | viridis, mesh 0').data.functions3D as Data[])[0].meshOpacity, 0);
+    assert.ok(printChartText(parseChartText('plot z = x*y in viridis, mesh 0').data).split('\n').includes('plot s1(x, y) = x*y in viridis, mesh 0'));
+    assert.ok(!printChartText(parseChartText('plot z = x*y').data).includes('mesh'));
+    // A value the words cannot say (stored out of range) still reads back.
+    const odd = { v: 4, dimension: true, functions3D: [{ name: 's', expression: 'x', meshOpacity: 3 }] };
+    assert.equal(canonical(parseChartText(printChartText(odd)).data), canonical(odd));
+});
+
+test('text: changing the mesh lines rewrites that surface line only', () => {
+    const text = ['3d', '% the saddle', 'plot z = x^2 - y^2 in viridis', 'plot w(x, y) = 1 in orange, mesh 0.8'].join('\n');
+    const data = parseChartText(text).data;
+    const surfaces = data.functions3D as Data[];
+    surfaces[0] = { ...surfaces[0], meshOpacity: 0 };
+    const out = writeChartText(text, data).split('\n');
+    assert.deepEqual(out, ['3d', '% the saddle', 'plot s1(x, y) = x^2 - y^2 in viridis, mesh 0', 'plot w(x, y) = 1 in orange, mesh 0.8']);
+    delete surfaces[1].meshOpacity;
+    assert.equal(writeChartText(text, data).split('\n')[3], 'plot w(x, y) = 1 in orange');
+});
+
+test('text: mesh outside 0..1, without a number or on anything but a surface is a problem', () => {
+    const out = parseChartText(['3d', 'plot z = x*y, mesh 2', 'plot w(x, y) = x, mesh lots', 'plot v(x, y) = 2, mesh'].join('\n'));
+    assert.deepEqual(
+        out.problems.map((p) => [p.line, p.column]),
+        [
+            [2, 'plot z = x*y, '.length + 1],
+            [3, 'plot w(x, y) = x, '.length + 1],
+            [4, 'plot v(x, y) = 2, '.length + 1],
+        ]
+    );
+    assert.match(out.problems[0].message, /^"mesh 2" needs a number from 0 to 1$/);
+    assert.match(out.problems[1].message, /^"mesh lots" needs a number$/);
+    assert.match(out.problems[2].message, /^unknown option "mesh"; a surface takes: .*opacity 0\.7, mesh 0\.4, 40 samples/);
+    for (const s of out.data.functions3D as Data[]) assert.ok(!('meshOpacity' in s), JSON.stringify(s));
+    for (const line of ['plot f(x) = x^2, mesh 0.2', 'shade where x + y <= 4, mesh 0.2', 'draw the plane z = 1, mesh 0.2']) {
+        const p = parseChartText(line);
+        assert.equal(p.problems.length, 1, line);
+        assert.match(p.problems[0].message, /^unknown option "mesh 0\.2"/, line);
+    }
+    // A slider called mesh is still a slider in formulas.
+    const named = parseChartText('3d\nslider mesh from 0 to 1\nplot z = mesh*x, mesh 0.5');
+    assert.deepEqual(named.problems, []);
+    assert.deepEqual([(named.data.functions3D as Data[])[0].expression, (named.data.functions3D as Data[])[0].meshOpacity], ['mesh*x', 0.5]);
+});

@@ -241,6 +241,8 @@ export const build = {
     'build.surface.colormapDivergingHint': 'Diverging is near white at z = 0, blue below and red above.',
     'build.surface.summaryColormap': '{formula}, {map}',
     'build.surface.summaryWireframeColormap': '{formula}, wireframe, {map}',
+    'build.surface.mesh': 'Mesh lines',
+    'build.surface.meshHint': 'The lines drawn on the surface between its facets. At 0 % the surface is smooth.',
 
     // ---- colour maps by height (src/colormaps.ts; the stored values and the chart words stay English)
     'build.colormap.own': 'Your colour',

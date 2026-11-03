@@ -3,13 +3,14 @@
  * pgfplots' own (checked against the installed pgfplots when there is one),
  * the preview's colour at a height mixes them linearly as pgfplots does, the
  * diverging map spreads over a range symmetric about z = 0, the export writes
- * the map with the same range, the migration keeps a known map and drops an
- * unknown one, and every map has a name and a chart word.
+ * the map with the same range (facet lines a darker shade of each facet), the
+ * migration keeps a known map and drops an unknown one, and every map has a
+ * name and a chart word.
  */
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import { test, assert, near } from './_lib';
-import { COLORMAPS, COLORMAP_NAMES, COLORMAP_STOPS, ColormapStop, FACET_LINE, colormapCss, colormapOption, colormapRange, colormapRgb, isColormap } from '../src/colormaps';
+import { COLORMAPS, COLORMAP_NAMES, COLORMAP_STOPS, ColormapStop, colormapCss, colormapOption, colormapRange, colormapRgb, isColormap } from '../src/colormaps';
 import { SettingsManager } from '../src/settings';
 import { migrateSettings } from '../src/migrate';
 import { EN } from '../src/i18n/en';
@@ -84,7 +85,6 @@ test('colormaps: what the export writes for each map', () => {
     assert.equal(colormapOption('diverging'), 'colormap={etDiverging}{rgb255=(33,102,172) rgb255=(247,247,247) rgb255=(178,24,43)}');
     assert.equal(colormapOption('rainbow'), 'colormap/jet');
     assert.equal(colormapOption('greyscale'), 'colormap/blackwhite');
-    assert.deepEqual(FACET_LINE, { tikz: 'black!16', css: 'rgb(214,214,214)' });
 });
 
 /** pgfplots' own definition of a built-in colormap, as stops (null when pgfplots is not installed or the map not found). */
@@ -129,7 +129,7 @@ test('colormaps: the stops are the ones pgfplots prints', () => {
     }
 });
 
-test('colormaps: a surface with a map exports the map over the box, faint neutral facets and its opacity', () => {
+test('colormaps: a surface with a map exports the map over the box, facets a darker shade of their own colour, and its opacity', () => {
     const code = exportOf({
         zmin: '-1',
         zmax: '3',
@@ -137,25 +137,36 @@ test('colormaps: a surface with a map exports the map over the box, faint neutra
             surface({ name: 'f1', colormap: 'viridis' }),
             surface({ name: 'f2', colormap: 'diverging', opacity: 0.5 }),
             surface({ name: 'f3', colormap: 'rainbow', wireframe: true }),
+            surface({ name: 'f4', colormap: 'heat', meshOpacity: 0 }),
         ],
     });
-    const [viridis, diverging, mesh] = surfaceLines(code);
-    assert.ok(viridis.startsWith('\\addplot3[surf, colormap/viridis, point meta min=-1, point meta max=3, faceted color=black!16, opacity=0.8, '), viridis);
+    const [viridis, diverging, mesh, smooth] = surfaceLines(code);
+    // The fill takes the surface's opacity, the mesh lines theirs (40 % when left out), in pgfplots' own facet colour.
+    assert.ok(
+        viridis.startsWith('\\addplot3[surf, colormap/viridis, point meta min=-1, point meta max=3, faceted color=mapped color!80!black, fill opacity=0.8, draw opacity=0.4, '),
+        viridis
+    );
     assert.ok(
         diverging.startsWith(
-            '\\addplot3[surf, colormap={etDiverging}{rgb255=(33,102,172) rgb255=(247,247,247) rgb255=(178,24,43)}, point meta min=-3, point meta max=3, faceted color=black!16, opacity=0.5, '
+            '\\addplot3[surf, colormap={etDiverging}{rgb255=(33,102,172) rgb255=(247,247,247) rgb255=(178,24,43)}, point meta min=-3, point meta max=3, faceted color=mapped color!80!black, fill opacity=0.5, draw opacity=0.4, '
         ),
         diverging
     );
     assert.ok(mesh.startsWith('\\addplot3[mesh, colormap/jet, point meta min=-1, point meta max=3, domain='), mesh);
-    // The surfaces' own colour is not used, so it is not defined.
+    // Without mesh lines: pgfplots' smooth shading, no facet colour.
+    assert.ok(smooth.startsWith('\\addplot3[surf, colormap/hot2, point meta min=-1, point meta max=3, shader=interp, fill opacity=0.8, domain='), smooth);
+    // The surfaces' own colour is not used, so it is not defined; nor is the light grey facet line of 4.8.
     assert.ok(!code.includes('\\definecolor{etRed}'), code);
+    assert.ok(!code.includes('black!16'), code);
 });
 
-test('colormaps: a surface without a map exports as before', () => {
+test('colormaps: a surface without a map keeps its colour ramp and draws its facets in its colour', () => {
     const code = exportOf({ zmin: '-1', zmax: '1', functions3D: [surface(), surface({ name: 'f2', wireframe: true, color: 'blue' })] });
     const [surf, mesh] = surfaceLines(code);
-    assert.ok(surf.startsWith('\\addplot3[surf, colormap={etSurface1}{color=(etRed!30!white) color=(etRed)}, point meta min=-1, point meta max=1, faceted color=etRed, opacity=0.8, '), surf);
+    assert.ok(
+        surf.startsWith('\\addplot3[surf, colormap={etSurface1}{color=(etRed!30!white) color=(etRed)}, point meta min=-1, point meta max=1, faceted color=etRed, fill opacity=0.8, draw opacity=0.4, '),
+        surf
+    );
     assert.ok(mesh.startsWith('\\addplot3[mesh, colormap={etSurface2}{color=(etBlue) color=(etBlue)}, domain='), mesh);
 });
 

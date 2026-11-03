@@ -146,3 +146,5 @@ screen. Add a term here before using a new one in several places.
 | Your colour (a surface's own colour, light to dark) | 指定した色 |
 | Viridis / Heat / Cool / Diverging / Rainbow / Greyscale | Viridis / 暖色 / 寒色 / 発散型 / 虹色 / グレースケール |
 | cube / proportional (the 3D box) | 立方体 / 比例 |
+| Grid opacity (the grid's lines, Chart tab) | グリッドの不透明度 |
+| Mesh lines (the lines on a filled surface) | メッシュ線 |

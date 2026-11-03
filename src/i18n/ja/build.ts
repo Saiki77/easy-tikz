@@ -243,6 +243,8 @@ export const build: Messages<typeof en> = {
     'build.surface.colormapDivergingHint': '発散型では z = 0 が白に近い色になり、それより低いところは青、高いところは赤になります。',
     'build.surface.summaryColormap': '{formula}（{map}）',
     'build.surface.summaryWireframeColormap': '{formula}（ワイヤーフレーム、{map}）',
+    'build.surface.mesh': 'メッシュ線',
+    'build.surface.meshHint': '曲面に描く網目の線です。0 % にすると滑らかな曲面になります。',
 
     // ---- colour maps by height
     'build.colormap.own': '指定した色',

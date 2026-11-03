@@ -129,8 +129,11 @@ function knownKeys(part: string, defaults: Record<string, Data>): Set<string> {
     if (TOOL_TYPES.includes(part as ToolType)) keys.add('type');
     if (part === 'function') keys.add('legendLabel');
     if (part === 'label') keys.add('z');
-    // A surface may take a colour map by height instead of its own colour's ramp.
-    if (part === 'surface') keys.add('colormap');
+    // A surface may take a colour map by height instead of its own colour's ramp, and its own mesh line opacity.
+    if (part === 'surface') {
+        keys.add('colormap');
+        keys.add('meshOpacity');
+    }
     return keys;
 }
 

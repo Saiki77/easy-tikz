@@ -3,10 +3,11 @@
  * main.ts and src/whatsnew.ts; what it says: src/whatsnew.ts).
  *
  *   header      "Easy TikZ 4" and one line
+ *   new         what this release brings, the only items shown open
  *   hero        a live chart (the Tangent explorer with the area to its
  *               tangent) with the slider strip of a chart in a note, plus
- *               play; beside it sliders and live calculations
- *   more        the other highlights of version 4, one line each
+ *               play; beside it the lines of text the chart is made of
+ *   earlier     the rest of version 4, one line each, closed until opened
  *   actions     Try an example, Open the guides, Close
  *
  * The chart is drawn by the plugin's own renderer, offline, like a chart in
@@ -26,7 +27,6 @@ import {
     WHATS_NEW_RECENT,
     WHATS_NEW_AI,
     WHATS_NEW_CHART_GUIDE,
-    WHATS_NEW_LIVE,
     WHATS_NEW_MORE,
     WHATS_NEW_TITLE,
     whatsNewChart,
@@ -91,7 +91,7 @@ export class WhatsNewModal extends Modal {
         const freshHeading = fresh.createEl('h3', { cls: 'etz-whatsnew-h', text: whatsNewRecentTitle() });
         freshHeading.id = uniqueId('whatsnew-new');
         fresh.setAttr('aria-labelledby', freshHeading.id);
-        const freshGrid = fresh.createDiv({ cls: ['etz-whatsnew-list', 'mod-grid'] });
+        const freshGrid = fresh.createDiv({ cls: ['etz-whatsnew-list', 'mod-new'] });
         for (const item of WHATS_NEW_RECENT) this.item(freshGrid, item);
 
         // --- hero: the live chart, and what makes it move
@@ -116,8 +116,6 @@ export class WhatsNewModal extends Modal {
         });
 
         const side = hero.createDiv({ cls: 'etz-whatsnew-side' });
-        const liveList = side.createDiv({ cls: ['etz-whatsnew-list', 'mod-live'] });
-        for (const item of WHATS_NEW_LIVE) this.item(liveList, item);
 
         // The chart beside, as its block writes it: these lines are the whole chart.
         const recipe = side.createDiv({ cls: 'etz-whatsnew-recipe' });
@@ -125,18 +123,11 @@ export class WhatsNewModal extends Modal {
         recipeTitle.id = uniqueId('whatsnew-recipe');
         recipe.createEl('pre', { cls: 'etz-whatsnew-text', text: whatsNewText(), attr: { 'aria-labelledby': recipeTitle.id } });
 
-        // --- new in 4.3: AI makes charts
-        const ai = contentEl.createEl('section', { cls: 'etz-whatsnew-ai' });
-        this.item(ai, WHATS_NEW_AI);
-        if (this.opts.actions.openAi) {
-            textButton(ai, { text: t('panels.whatsNew.openAi'), icon: 'bot', size: 'sm', onClick: () => this.run((a) => a.openAi?.()) });
-        }
-
-        // --- the rest of version 4
-        const more = contentEl.createEl('section', { cls: 'etz-whatsnew-more' });
-        const heading = more.createEl('h3', { cls: 'etz-whatsnew-h', text: t('panels.whatsNew.moreTitle') });
-        heading.id = uniqueId('whatsnew-more');
-        more.setAttr('aria-labelledby', heading.id);
+        // --- the rest of version 4, closed: the popup is about this release
+        const more = contentEl.createEl('details', { cls: 'etz-whatsnew-more' });
+        const summary = more.createEl('summary', { cls: 'etz-whatsnew-h' });
+        summary.createSpan({ text: t('panels.whatsNew.moreTitle') });
+        summary.createSpan({ cls: 'etz-whatsnew-count', text: String(WHATS_NEW_MORE.length) });
         const grid = more.createDiv({ cls: ['etz-whatsnew-list', 'mod-grid'] });
         for (const item of WHATS_NEW_MORE) this.item(grid, item);
 
@@ -197,6 +188,8 @@ export class WhatsNewModal extends Modal {
             // The visible word is short; the name (and Obsidian's tooltip) says which guide.
             const link = this.guideLink(head, t('panels.whatsNew.guide'), guide.id, 'etz-whatsnew-item-guide');
             link.el.setAttr('aria-label', t('panels.whatsNew.guideLabel', { title: guide.title }));
+        } else if (item === WHATS_NEW_AI && this.opts.actions.openAi) {
+            textButton(head, { text: t('panels.whatsNew.openAi'), variant: 'link', cls: 'etz-whatsnew-item-guide', onClick: () => this.run((a) => a.openAi?.()) });
         }
         const text = body.createDiv({ cls: 'etz-whatsnew-item-text' });
         item.text.split('`').forEach((part, i) => {

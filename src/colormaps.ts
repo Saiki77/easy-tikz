@@ -109,13 +109,6 @@ export const COLORMAP_NAMES: Readonly<Record<Colormap, MessageKey>> = {
     greyscale: 'build.colormap.greyscale',
 };
 
-/**
- * The facet lines of a surface with a map: neutral and faint whatever the
- * map, the same colour in the preview and the PDF (xcolor's black!16, that
- * is 16 % black and 84 % white).
- */
-export const FACET_LINE = { tikz: 'black!16', css: 'rgb(214,214,214)' } as const;
-
 export function isColormap(v: unknown): v is Colormap {
     return typeof v === 'string' && (COLORMAPS as readonly string[]).includes(v);
 }

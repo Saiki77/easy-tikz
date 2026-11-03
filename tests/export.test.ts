@@ -162,9 +162,10 @@ function boxExtent(u: Array<[number, number]>, spans: number[]): [number, number
 
 /** `\addplot3[...]` lines of surfaces (surf or mesh) and planes, in order, as 'S' / 'P'. */
 function plotOrder(code: string): string {
+    const isSurface = (l: string) => l.startsWith('\\addplot3[surf') || l.startsWith('\\addplot3[mesh');
     return lines(code)
-        .filter((l) => l.startsWith('\\addplot3[surf') || l.startsWith('\\addplot3[mesh') || l.includes('fill opacity'))
-        .map((l) => (l.includes('fill opacity') ? 'P' : 'S'))
+        .filter((l) => isSurface(l) || l.includes('fill opacity'))
+        .map((l) => (isSurface(l) ? 'S' : 'P'))
         .join('');
 }
 
@@ -839,4 +840,85 @@ test('3D: samples clamped, segments clipped to the box, outside points dropped',
     // generateTikzCode dispatches on the dimension; generate3DTikzCode is the same output.
     const s = settings({ dimension: true, functions3D: [{ expression: 'x', xDomain: '', yDomain: '', color: 'blue', wireframe: false, opacity: 0.5, samples: 10 }] });
     assert.equal(s.generateTikzCode(), s.generate3DTikzCode());
+});
+
+// ------------------------------------------------- grid opacity and mesh lines (4.9)
+
+test('grid opacity: the default writes what pgfplots draws by itself, so old exports stay as they were', () => {
+    const grid = (over: Record<string, unknown>) => exportOf({ functions: [fn('f1', 'x')], ...over });
+    for (const on of [{ showLargeGrid: true }, { showSmallGrid: true }, { showLargeGrid: true, showSmallGrid: true }]) {
+        const before = grid(on);
+        assert.equal(grid({ ...on, gridOpacity: 0.5 }), before, JSON.stringify(on));
+        assert.ok(!before.includes('grid style'), before);
+    }
+    assert.ok(lines(grid({ showLargeGrid: true })).includes('  grid=major,'));
+    assert.ok(lines(grid({ showSmallGrid: true })).includes('  grid=both, minor tick num=5,'));
+    // No grid: nothing, whatever its opacity.
+    assert.ok(!grid({ gridOpacity: 0.2 }).includes('grid'), grid({ gridOpacity: 0.2 }));
+});
+
+test('grid opacity: major lines in black!50 at the opacity, minor lines at half, after the grid option', () => {
+    const grid = (over: Record<string, unknown>) => lines(exportOf({ functions: [fn('f1', 'x')], ...over }));
+    const major = grid({ showLargeGrid: true, gridOpacity: 0.2 });
+    const at = major.indexOf('  grid=major,');
+    assert.ok(at > 0 && major[at + 1] === '  grid style={draw=black!50, draw opacity=0.2},', major.join('\n'));
+    assert.ok(!major.some((l) => l.includes('minor grid style')));
+    const both = grid({ showLargeGrid: true, showSmallGrid: true, gridSize: 4, gridOpacity: 0.3 });
+    const i = both.indexOf('  grid=both, minor tick num=4,');
+    assert.ok(i > 0 && both[i + 1] === '  grid style={draw=black!50, draw opacity=0.3}, minor grid style={draw opacity=0.15},', both.join('\n'));
+    // 0 hides the lines, 1 draws them at full strength; stored values outside 0..1 are clamped.
+    assert.ok(grid({ showLargeGrid: true, gridOpacity: 0 }).includes('  grid style={draw=black!50, draw opacity=0},'));
+    assert.ok(grid({ showSmallGrid: true, gridOpacity: 7 }).includes('  grid style={draw=black!50, draw opacity=1}, minor grid style={draw opacity=0.5},'));
+    assert.ok(!grid({ showLargeGrid: true, gridOpacity: 'faint' }).some((l) => l.includes('grid style')));
+});
+
+test('grid opacity: the chart field, 0.5 by default, clamped to 0..1 for the renderers', () => {
+    assert.equal(new SettingsManager().getValue('gridOpacity'), 0.5);
+    assert.equal(settings({}).toRendererConfig().gridOpacity, 0.5);
+    assert.equal(settings({ gridOpacity: 0.25 }).toRendererConfig().gridOpacity, 0.25);
+    assert.equal(settings({ gridOpacity: 3 }).toRendererConfig().gridOpacity, 1);
+    assert.equal(settings({ gridOpacity: -1 }).toRendererConfig().gridOpacity, 0);
+    assert.equal(settings({ gridOpacity: 'x' }).toRendererConfig().gridOpacity, 0.5);
+});
+
+test('3D: the grid lies on the back planes of the box, with the same opacity rules as 2D', () => {
+    const chart = (over: Record<string, unknown>) => lines(exportOf({ dimension: true, functions3D: [surface('f1', 'x*y')], ...over }));
+    // Without the grid nothing changes.
+    assert.ok(!chart({}).some((l) => /grid/.test(l)), chart({}).join('\n'));
+    const major = chart({ showLargeGrid: true });
+    assert.ok(major.includes('  grid=major,') && !major.some((l) => l.includes('grid style')), major.join('\n'));
+    assert.ok(major.indexOf('  grid=major,') < major.indexOf('  trig format plots=rad,'));
+    const faint = chart({ showLargeGrid: true, showSmallGrid: true, gridOpacity: 0.2 });
+    assert.ok(faint.includes('  grid=both, minor tick num=5,'), faint.join('\n'));
+    assert.ok(faint.includes('  grid style={draw=black!50, draw opacity=0.2}, minor grid style={draw opacity=0.1},'), faint.join('\n'));
+    assert.deepEqual(chart({ showLargeGrid: true, gridOpacity: 0.5 }), major);
+});
+
+test('3D: the mesh lines of a filled surface follow its mesh opacity; the fill keeps the surface opacity', () => {
+    const surf = (over: Partial<Function3DParameters>) => {
+        const code = exportOf({ dimension: true, zmin: '-1', zmax: '1', functions3D: [surface('f1', 'x*y', { opacity: 0.6, ...over })] });
+        const line = lines(code).find((l) => l.startsWith('\\addplot3['));
+        assert.ok(line, code);
+        // opacity= alone would set the lines to the fill's opacity too.
+        assert.ok(!/(?:\[|, )opacity=/.test(line), line);
+        return line;
+    };
+    const own = 'surf, colormap={etSurface1}{color=(etBlue!30!white) color=(etBlue)}, point meta min=-1, point meta max=1';
+    assert.ok(surf({}).startsWith(`\\addplot3[${own}, faceted color=etBlue, fill opacity=0.6, draw opacity=0.4, domain=`), surf({}));
+    assert.equal(surf({ meshOpacity: 0.4 }), surf({}));
+    assert.ok(surf({ meshOpacity: 1 }).startsWith(`\\addplot3[${own}, faceted color=etBlue, fill opacity=0.6, draw opacity=1, domain=`));
+    assert.ok(surf({ meshOpacity: 0.15, opacity: 1 }).startsWith(`\\addplot3[${own}, faceted color=etBlue, fill opacity=1, draw opacity=0.15, domain=`));
+    // 0: pgfplots' smooth shading, without lines and without seams between the facets.
+    const smooth = surf({ meshOpacity: 0 });
+    assert.ok(smooth.startsWith(`\\addplot3[${own}, shader=interp, fill opacity=0.6, domain=`), smooth);
+    assert.ok(!smooth.includes('faceted color') && !smooth.includes('draw opacity'), smooth);
+    // A colour map: the same, with pgfplots' facet colour.
+    const map = surf({ colormap: 'viridis', meshOpacity: 0.2 });
+    assert.ok(map.startsWith('\\addplot3[surf, colormap/viridis, point meta min=-1, point meta max=1, faceted color=mapped color!80!black, fill opacity=0.6, draw opacity=0.2, domain='), map);
+    assert.ok(surf({ colormap: 'viridis', meshOpacity: 0 }).startsWith('\\addplot3[surf, colormap/viridis, point meta min=-1, point meta max=1, shader=interp, fill opacity=0.6, domain='));
+    // A wireframe is only lines: the mesh opacity does not change it.
+    assert.equal(surf({ wireframe: true, meshOpacity: 0 }), surf({ wireframe: true }));
+    assert.ok(surf({ wireframe: true, meshOpacity: 0 }).startsWith('\\addplot3[mesh, colormap={etSurface1}{color=(etBlue) color=(etBlue)}, domain='));
+    // Stored values outside 0..1 are clamped by the migration.
+    assert.equal(surf({ meshOpacity: 3 }), surf({ meshOpacity: 1 }));
 });

@@ -83,6 +83,11 @@ export interface Function3DParameters {
      * colour, light at the bottom of the box to full at the top.
      */
     colormap?: Colormap;
+    /**
+     * Opacity of the mesh lines on a filled surface, 0..1 (src/opacity.ts:
+     * MESH_OPACITY when absent). 0 draws a smooth surface; a wireframe ignores it.
+     */
+    meshOpacity?: number;
     /** Optional user-readable name. Mirrors `FunctionParameters.name`. */
     name?: string;
     hidden?: boolean;
@@ -275,6 +280,8 @@ export interface RendererConfig {
     axisStyle: AxisStyle;
     gridMajor: boolean;
     gridMinor: boolean;
+    /** Opacity of the major grid lines, 0..1 (minor lines draw at half); chart field `gridOpacity`. */
+    gridOpacity: number;
     minorTickNum: number;
     majorTickNum: number;
     functions: FunctionParameters[];

@@ -461,6 +461,37 @@ if (started) {
             await obs.closeEditor();
         });
 
+        await check('3D: a solid surface hides what lies behind it (a plateau in front of the floor)', async () => {
+            await obs.openEditor();
+            const surface = '-3 + 6*exp(-((x/2)^4 + (y/2)^4))';
+            await loadClean(
+                {
+                    v: 4, dimension: true, boxAspect: 'equal', rotationX: 30, rotationZ: 45,
+                    xmin: '-5', xmax: '5', ymin: '-5', ymax: '5', zmin: '-4', zmax: '4',
+                    functions3D: [{ name: 'f1', expression: surface, xDomain: '-5:5', yDomain: '-5:5', color: 'blue', wireframe: false, opacity: 1, samples: 40 }],
+                },
+                true
+            );
+            // The plateau's front wall at (0, -1.8) covers the floor behind it on screen; the floor at the front corner lies open.
+            const px = await obs.call(() => {
+                const r = window.__etzMedia.requireEditor().renderer3d;
+                const ctx = r.canvas.getContext('2d');
+                const dpr = window.devicePixelRatio || 1;
+                const z = (x, y) => -3 + 6 * Math.exp(-((x / 2) ** 4 + (y / 2) ** 4));
+                const at = (x, y, zz) => {
+                    const p = r.project(x, y, zz);
+                    const d = ctx.getImageData(Math.round(p.sx * dpr) - 2, Math.round(p.sy * dpr) - 2, 5, 5).data;
+                    let sum = 0;
+                    for (let k = 0; k < d.length; k += 4) sum += d[k] + d[k + 1] + d[k + 2];
+                    return Math.round(sum / 25);
+                };
+                return { wall: at(0, -1.8, z(0, -1.8)), floor: at(-4.5, -4.5, -3) };
+            });
+            assert(px.floor - px.wall > 50, `the plateau's wall (${px.wall}) is not darker than the open floor (${px.floor}): the floor is painted over it`);
+            await obs.closeEditor();
+            return `wall ${px.wall}, floor ${px.floor}`;
+        });
+
         // Notes: insert, render, sliders, edit from the note, save back.
         const note = 'Smoke test';
         let inserted = null;
@@ -723,7 +754,8 @@ if (started) {
             const state = await whatsNewState();
             assert(state.count === 1, `${state.count} popups are open`);
             assert(state.title === 'Easy TikZ 4', `the title is "${state.title}"`);
-            const expected = WHATS_NEW.WHATS_NEW_RECENT.length + WHATS_NEW.WHATS_NEW_LIVE.length + 1 + WHATS_NEW.WHATS_NEW_MORE.length;
+            // The rest of version 4 (closed) holds the live and AI items too.
+            const expected = WHATS_NEW.WHATS_NEW_RECENT.length + WHATS_NEW.WHATS_NEW_MORE.length;
             assert(state.items === expected, `${state.items} highlights, expected ${expected}`);
             assert(state.blankIcons === 0, `${state.blankIcons} icons are blank (an icon id Obsidian does not know)`);
             assert(state.slope === 'slope at x = 0.8: -1.08' && state.area === 'A = 2.76', `the live example shows "${state.slope}" and "${state.area}"`);

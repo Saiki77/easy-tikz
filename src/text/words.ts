@@ -44,6 +44,7 @@ export const PIECES: readonly Piece[] = [
     piece('no-axes', 'no axes', 'lines', 'panels.words.what.noAxes'),
     piece('with-a-grid', 'with a grid', 'lines', 'panels.words.what.withAGrid'),
     piece('with-a-fine-grid', 'with a fine grid', 'lines', 'panels.words.what.withAFineGrid'),
+    piece('grid-opacity', 'grid opacity', 'lines', 'panels.words.what.gridOpacity'),
     piece('equal-scale', 'equal scale', 'lines', 'panels.words.what.equalScale'),
     piece('cube', 'cube', 'lines', 'panels.words.what.cube'),
     piece('title', 'title', 'lines', 'panels.words.what.title', { keepsRest: true }),
@@ -107,6 +108,8 @@ export const PIECES: readonly Piece[] = [
     piece('backwards', 'backwards', 'options', 'panels.words.what.backwards'),
     piece('above', 'above', 'options', 'panels.words.what.above'),
     piece('below', 'below', 'options', 'panels.words.what.below'),
+    // The mesh lines on a filled surface: mesh 0.2.
+    piece('mesh', 'mesh', 'options', 'panels.words.what.mesh'),
 
     piece('red', 'red', 'colours', 'panels.words.what.red'),
     piece('blue', 'blue', 'colours', 'panels.words.what.blue'),

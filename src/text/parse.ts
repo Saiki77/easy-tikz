@@ -279,7 +279,7 @@ function isOption(raw: string): boolean {
     if (isColour(lower) || isMapWord(lower) || THICKNESSES.includes(lower) || OPTION_WORDS.has(lower)) return true;
     if (/^(label|labels|legend)\s+"/i.test(o)) return true;
     if (/^tangent(\s+at)?\s+\S/i.test(o)) return true;
-    if (/^(opacity\s+[-+\d.e]+|pattern\s+[a-z-]+|samples\s+[\d.]+)$/i.test(o)) return true;
+    if (/^((?:opacity|mesh)\s+[-+\d.e]+|pattern\s+[a-z-]+|samples\s+[\d.]+)$/i.test(o)) return true;
     if (/^(domain|t|theta|θ)\s+\S.*\.\..*\S$/i.test(o)) return true;
     if (/^(from\s+(x|t|theta|θ)\s*=|for\s+(x|y|t|theta|θ)\s+from\s).+\sto\s.+$/i.test(o)) return true;
     if (/^[xy]\s+(from\s.+\sto\s.+|\S.*\.\..*\S)$/i.test(o)) return true;
@@ -457,7 +457,7 @@ const OPTION_HELP: Record<string, string> = {
     segment: 'in a colour, thin, thick, dashed, backwards, labelled "text", hidden',
     text: 'in a colour, small, large, above, below, left, right, center, hidden',
     surface:
-        'in a colour, in a colour map (viridis, heat, cool, diverging, rainbow, greyscale), for x from a to b and y from c to d, opacity 0.7, 40 samples, wireframe, hidden',
+        'in a colour, in a colour map (viridis, heat, cool, diverging, rainbow, greyscale), for x from a to b and y from c to d, opacity 0.7, mesh 0.4, 40 samples, wireframe, hidden',
     plane: 'in a colour, opacity 0.25, hidden',
 };
 
@@ -601,6 +601,9 @@ function applyKindOption(b: Builder, kind: string, target: Data, opt: Piece): bo
         }
         m = word(/^opacity\s+(.+)$/i);
         if (m) return numberOption(b, opt, target, 'opacity', m[1]);
+        // The mesh lines on a filled surface, 0 to 1 (0: a smooth surface).
+        m = word(/^mesh\s+(.+)$/i);
+        if (m) return fractionOption(b, opt, target, 'meshOpacity', m[1]);
         m = word(/^samples\s+(.+)$/i);
         if (m) return numberOption(b, opt, target, 'samples', m[1]);
         if (lower === 'wireframe') return set(target, 'wireframe', true);
@@ -627,6 +630,15 @@ function badRange(b: Builder, opt: Piece): true {
 function numberOption(b: Builder, opt: Piece, target: Data, key: string, value: string): true {
     const n = numberOf(value);
     if (n === null) b.problem(opt.at, msg('problems.text.needsNumber', { option: opt.text }));
+    else target[key] = n;
+    return true;
+}
+
+/** A number from 0 to 1, such as an opacity; anything else is a problem and is left out. */
+function fractionOption(b: Builder, opt: Piece, target: Data, key: string, value: string): true {
+    const n = numberOf(value);
+    if (n === null) b.problem(opt.at, msg('problems.text.needsNumber', { option: opt.text }));
+    else if (n < 0 || n > 1) b.problem(opt.at, msg('problems.text.needsFraction', { option: opt.text }));
     else target[key] = n;
     return true;
 }
@@ -859,6 +871,12 @@ function statement(b: Builder, line: string) {
             return withLine(b, rest);
         case 'grid': {
             const g = rest.text.trim().toLowerCase();
+            // grid opacity 0.3: the major lines at 0.3, the minor ones at half.
+            const opacity = /^opacity(?:\s+(.*))?$/i.exec(rest.text.trim());
+            if (opacity) {
+                fractionOption(b, { text: `grid ${rest.text.trim()}`, at: body.at }, b.chart, 'gridOpacity', opacity[1] ?? '');
+                return;
+            }
             if (!g || g === 'major') b.chart.showLargeGrid = true;
             else if (g === 'minor') b.chart.showSmallGrid = true;
             else if (g === 'fine' || g === 'both') b.chart.showLargeGrid = b.chart.showSmallGrid = true;

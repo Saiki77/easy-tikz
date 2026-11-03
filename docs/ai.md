@@ -76,7 +76,8 @@ The short forms of version 4.4 still work and mean the same: `view x -3..3, y -4
 | --- | --- |
 | `show x from -3 to 3 and y from -4 to 4` (3D: `show x from -2 to 2, y from -2 to 2 and z from 0 to 8`) | The visible range. Formulas allowed: `x from -a to a`, `x from 0 to 2pi`. Always write it. |
 | `axes in the middle`, `axes in a box`, `axes on the edges`, `no axes` | Axes through the origin (school style), a frame with ticks (the default), axes along the left and bottom edges (optimisation charts), or none. |
-| `with a grid`, `with a minor grid`, `with a fine grid` | Major grid, minor grid, both. |
+| `with a grid`, `with a minor grid`, `with a fine grid` | Major grid, minor grid, both. In 3D the grid lies on the floor and the back walls of the box. |
+| `grid opacity 0.3` | How strong the grid lines are, from 0 to 1 (without the line: 0.5). Minor lines are drawn at half of it. |
 | `title ...`, `xlabel ...`, `ylabel ...`, `zlabel ...` | Title (a template) and axis names (plain text). Quote them when they hold a `|`. |
 | `size 12 x 6` | Size of the exported figure in cm; it also gives the chart its shape in the note. |
 | `equal scale` | Same unit on both axes, so circles stay round. |
@@ -100,7 +101,7 @@ The short forms of version 4.4 still work and mean the same: `view x -3..3, y -4
 
 Function options: `in blue` (a colour), `thin` `thick` `very thin` `very thick`, `dashed`, `hidden` (not drawn, still usable by name), `with a legend` or `with the legend "text"`, `from x = 0 to 4` (parametric and polar: `for t from 0 to 2pi`, `for theta from 0 to pi`), `with its tangent at a` (a number, a formula, a slider, or `min`, `max`, `min2`, ...), `with its extrema`, `filled` (to the x-axis), `opacity 0.3`, `pattern dots`.
 
-Surface options: `in blue`, `in viridis` (colours by height, see 3D), `for x from -2 to 2 and y from -2 to 2`, `opacity 0.7`, `with 40 samples`, `wireframe`, `hidden`.
+Surface options: `in blue`, `in viridis` (colours by height, see 3D), `for x from -2 to 2 and y from -2 to 2`, `opacity 0.7`, `mesh 0.2` (the mesh lines, see 3D), `with 40 samples`, `wireframe`, `hidden`.
 
 **Regions**
 
@@ -158,6 +159,7 @@ The options above set these fields. A `set` line or a `key=value` option can set
 | `show_axis_label` `axis_label_x` `axis_label_y` | `true` `"x"` `"y"` | Axis names, plain text (no `{...}` values). |
 | `showAxis` | `true` | Draw the axes. |
 | `showLargeGrid` `showSmallGrid` `gridSize` | `false` `false` `5` | Major grid, minor grid, minor ticks per major step. |
+| `gridOpacity` | `0.5` | Opacity of the major grid lines, 0 to 1 (the line `grid opacity 0.3`); minor lines at half of it. |
 | `size_x_cm` `size_y_cm` | `10` `10` | Size of the exported figure in cm. It also sets the shape of the chart in the note: `12` by `6` gives a wide chart. |
 | `equalScale` | `false` | Same unit on both axes, so circles stay round. |
 | `coordinateSystem` | `"cartesian"` | `"polar"`: every function is r(θ), written with `theta`. |
@@ -291,6 +293,8 @@ Crossings (intersections) come sorted from left to right, so `P1_x < P1_x2 < ...
 Write `3d` and a `show` line with a z range; add `cube` for a box that is a cube whatever the ranges. Surfaces are `plot s(x, y) = x^2 + y^2 for x from -2 to 2 and y from -2 to 2 in blue, opacity 0.7` (or `plot z = ...`); planes are `draw the plane z = h`; points, segments and text labels take `(x, y, z)`. In JSON: `"dimension": true`, surfaces in `functions3D`, points and segments with `"dim": 3`.
 
 A surface in a colour is shaded by height: light at the bottom of the box, the full colour at the top. A colour map colours it by height instead, written like a colour: `plot z = x^2 - y^2 in viridis`. The maps: `viridis` (dark purple to yellow), `heat` (black, red, yellow, white), `cool` (white, blue, magenta), `diverging` (blue below z = 0, white at 0, red above), `rainbow` (dark blue, cyan, yellow, dark red), `greyscale` (black to white). The colours spread over the z range of the box (`diverging`: from -m to m, m the larger of |zmin| and |zmax|); a wireframe draws its lines in the map's colours. The map is a surface's own option: on anything else it is a problem. In JSON it is the surface field `colormap`: `"colormap": "viridis"`; without it the surface takes its `color`.
+
+A filled surface draws mesh lines between its facets at 40 %. `mesh 0.2` makes them fainter, `mesh 1` draws them at full strength, and `mesh 0` draws a smooth surface without lines. The value is a number from 0 to 1 (anything else is a problem); a wireframe is only lines and ignores it. In JSON it is the surface field `meshOpacity`: `"meshOpacity": 0.2`; without it the lines are at 0.4. The grid (`with a grid`, `grid opacity 0.3`) lies on the floor and the back walls of the box, under the surfaces.
 
 ```easy-tikz
 3d

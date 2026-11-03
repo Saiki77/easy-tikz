@@ -2,6 +2,23 @@
 
 [Overview](../README.md) · [Guides](guides/README.md) · [Reference](reference.md) · [Changelog](../CHANGELOG.md)
 
+## 4.9: solid surfaces, the grid in 3D, grid and mesh opacity
+
+- **Solid surfaces.** The 3D preview painted the nearest parts first, as if the camera were below the chart: a floor could cover a plateau standing on it, and lines and numbers showed through a surface at 100 % opacity. It now paints from far to near with the same camera as the PDF, so a solid surface hides what lies behind it and a translucent one lets it show through by its transparency.
+- **The box of the PDF.** The outline and the edges at the back, as pgfplots draws it; the three edges at the front corner are left out, so no line crosses a surface. The numbers sit outside the box: z on the left outline, x and y on the front edges of the floor.
+- **The grid in 3D.** Major grid and Minor grid (Chart, Grid) draw on the floor and the back walls, under the surfaces, in the preview and in the PDF, which had both left them out in 3D.
+- **Grid opacity.** A slider in Chart, Grid fades the grid lines in 2D and 3D, in the preview and the PDF (`grid opacity 0.3` in the chart's text). 50 % is the old look.
+- **Mesh lines.** A slider on the surface card fades the lines on a filled surface, down to a smooth surface at 0 % (`mesh 0.2` in the surface's line). 40 % is the old look. With a colour map the lines are a darker shade of each facet.
+
+```easy-tikz
+3d
+cube
+show x from -5 to 5, y from -5 to 5 and z from -25 to 25
+with a grid
+grid opacity 0.3
+plot z = x^2 - y^2 for x from -5 to 5 and y from -5 to 5 in viridis, mesh 0.15
+```
+
 ## 4.8: colours by height, a smarter fit, cubes for 3D
 
 - **Colours by height.** A 3D surface can take a colour map instead of its own colour: Viridis (dark purple to yellow), Heat (black, red, yellow, white), Cool (white, blue, magenta), Diverging (blue below z = 0, white at 0, red above), Rainbow or Greyscale. Pick one in the row **Colours by height** on the surface card, or write it like a colour: `plot z = x^2 - y^2 in viridis`. The colours spread over the z range of the box, and the LaTeX export draws the same ones with pgfplots.

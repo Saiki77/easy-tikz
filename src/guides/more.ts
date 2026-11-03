@@ -514,7 +514,7 @@ const SURFACES_3D: Guide = {
         },
         {
             title: 'Style the surface',
-            body: 'Go back to the Build tab. On the card f1, drag Opacity down to 50 % and Samples down to 24. The surface becomes more transparent and its mesh coarser, which leaves room for the things you add next. Wireframe in the Style row removes the faces and keeps only the mesh.',
+            body: 'Go back to the Build tab. On the card f1, drag Opacity down to 50 % and Samples down to 24. The surface becomes more transparent and its mesh coarser, which leaves room for the things you add next. Mesh lines, under Opacity, fades the lines on the surface: at 0 % it is smooth. Wireframe in the Style row removes the faces and keeps only the mesh.',
             chart: saddleChart(4),
             shot: { reveal: ['f1'], caption: 'Opacity 50 % and 24 samples per axis on the surface card.' },
             tip: 'The exported LaTeX uses at most 60 samples per axis, because pdflatex runs out of memory above that. The hint under Samples says the same.',

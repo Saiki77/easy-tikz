@@ -151,7 +151,8 @@ test('whats new: compareVersions', () => {
 
 // ---------------------------------------------------------------- content
 
-const ITEMS = [...WHATS_NEW_RECENT, ...WHATS_NEW_LIVE, WHATS_NEW_AI, ...WHATS_NEW_MORE];
+// The rest of version 4 holds the live and AI items too: every item once.
+const ITEMS = [...WHATS_NEW_RECENT, ...WHATS_NEW_MORE];
 
 test('whats new: every line is short, plain and free of em dashes', () => {
     const texts = [WHATS_NEW_TITLE, WHATS_NEW_SUBTITLE, ...ITEMS.flatMap((i) => [i.title, i.text])];
@@ -168,12 +169,13 @@ test('whats new: every line is short, plain and free of em dashes', () => {
     assert.equal(WHATS_NEW_TITLE, 'Easy TikZ 4');
 });
 
-test('whats new: it covers the highlights of version 4, sliders and calculations first', () => {
+test('whats new: it covers the highlights of version 4, with sliders, calculations and AI among them', () => {
     const all = ITEMS.map((i) => `${i.title} ${i.text}`.toLowerCase()).join('\n');
     for (const topic of ['editor', 'slider', 'play', 'drag', 'shift', 'five general tools', 'inequalities', 'equations', 'intersections', 'optimum', 'segments', '3d planes', 'p1_x', 'labels', 'notes', 'latex', 'guides', '3.x']) {
         assert.ok(all.includes(topic), `nothing says "${topic}"`);
     }
     assert.deepEqual(WHATS_NEW_LIVE.map((i) => i.title), ['Live sliders', 'Live calculations', 'Sliders in your notes']);
+    for (const item of [...WHATS_NEW_LIVE, WHATS_NEW_AI]) assert.ok(WHATS_NEW_MORE.includes(item), `${item.title} is not in the popup`);
 });
 
 test('whats new: icons are lucide ids, guides exist', () => {
@@ -217,13 +219,15 @@ test('whats new: the text beside the chart is the whole chart, in a few lines', 
     assert.ok(!lines.some((l) => l.startsWith('raw ') || l.startsWith('set ')), text);
 });
 
-test('whats new: 4.7 and 4.8 come first and name colours by height, the smarter auto-fit, cubes and the interface in your language', () => {
-    assert.deepEqual(
-        WHATS_NEW_RECENT.map((i) => i.title),
-        ['Colours by height', 'A smarter Auto-fit', 'Cubes for 3D', 'In your language']
-    );
-    assert.equal(WHATS_NEW_RECENT_TITLE, 'New in 4.7 and 4.8');
-    assert.equal(WHATS_NEW_VERSION, '4.8.0');
+test('whats new: 4.9 comes first and names solid surfaces, grid opacity and mesh lines; 4.8 opens the rest', () => {
+    assert.deepEqual(WHATS_NEW_RECENT.map((i) => i.title), ['Solid surfaces in 3D', 'The grid, as strong as you like', 'Mesh lines']);
+    assert.equal(WHATS_NEW_RECENT_TITLE, 'New in 4.9');
+    assert.equal(WHATS_NEW_MORE[0].title, 'Colours by height');
+    assert.equal(WHATS_NEW_VERSION, '4.9.0');
+    // The example of the mesh lines is a surface option the plugin reads.
+    const mesh = WHATS_NEW_RECENT.find((i) => i.title === 'Mesh lines');
+    const option = mesh ? /`([^`]+)`/.exec(mesh.text) : null;
+    assert.ok(mesh && option && parseChartText(`3d\nplot z = x^2 - y^2, ${option[1]}`).problems.length === 0, mesh ? mesh.text : 'no item Mesh lines');
     // The example of the lines in words is a line the plugin reads.
     const plain = [...WHATS_NEW_RECENT, ...WHATS_NEW_MORE].find((i) => i.title === 'Charts in plain words');
     const example = plain ? /`([^`]+)`/.exec(plain.text) : null;

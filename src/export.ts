@@ -13,7 +13,8 @@
 import type { SettingsManager } from './settings';
 import { AnnotationSize, FillPattern, Function3DParameters, MarkerSize, RendererConfig } from './types';
 import { THICKNESS_MAP, TIKZ_COLOR_DEFS } from './colors';
-import { FACET_LINE, colormapOption, colormapRange, isColormap } from './colormaps';
+import { colormapOption, colormapRange, isColormap } from './colormaps';
+import { GRID_OPACITY, MESH_OPACITY, opacityValue } from './opacity';
 import { FunctionInfo, MathContext, fmtNum, texLabel } from './mathcontext';
 import { Pt, View, clipPolylineToView, pointInRings, simplifyPolyline } from './geometry';
 import {
@@ -490,6 +491,25 @@ function commonOptions(config: RendererConfig, ctx: MathContext, size: string): 
     return opts;
 }
 
+/**
+ * The grid, 2D and 3D (pgfplots draws the 3D grid on the back planes of the
+ * box): `grid=major`, or `grid=both` with the minor lines, which come with the
+ * major ones. pgfplots' own grid (thin black!25) is the default opacity, so
+ * nothing more is written then. Another opacity g draws black!50 at g, which
+ * is black!25 on white at 0.5, and the minor lines at g / 2, as in the preview.
+ */
+function gridOptions(config: RendererConfig): string[] {
+    const opts: string[] = [];
+    if (config.gridMinor) opts.push(`grid=both, minor tick num=${Math.max(1, Math.round(num(config.minorTickNum, 5)))}`);
+    else if (config.gridMajor) opts.push('grid=major');
+    else return opts;
+    const g = opacityValue(config.gridOpacity, GRID_OPACITY);
+    if (g === GRID_OPACITY) return opts;
+    const style = `grid style={draw=black!50, draw opacity=${fmtNum(g)}}`;
+    opts.push(config.gridMinor ? `${style}, minor grid style={draw opacity=${fmtNum(g / 2)}}` : style);
+    return opts;
+}
+
 /** `width=..cm, height=..cm`: pgfplots fits the axis and its labels into the paper. */
 function sizeOption(paper: { w: number; h: number }): string {
     return `width=${fmtNum(paper.w)}cm, height=${fmtNum(paper.h)}cm`;
@@ -565,8 +585,7 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
         const titled = !!labelText(ctx.formatTemplate(String(config.title ?? '')));
         if (titled && config.showAxisLabels && labelText(String(config.yLabel ?? ''))) opts.push(`title style={yshift=${MIDDLE_TITLE_LIFT_PT}pt}`);
     } else if (config.axisStyle === 'axes') opts.push('axis lines=left');
-    if (config.gridMinor) opts.push(`grid=both, minor tick num=${Math.max(1, Math.round(num(config.minorTickNum, 5)))}`);
-    else if (config.gridMajor) opts.push('grid=major');
+    opts.push(...gridOptions(config));
     // Without rad, pgfplots evaluates sin(x) in degrees.
     opts.push('trig format plots=rad');
     // NaN and out-of-range samples become gaps instead of errors or straight connectors.
@@ -989,6 +1008,8 @@ export function generateTikz3D(settings: SettingsManager, ctx: MathContext): str
     // view={az}{el} turns the other way round than the preview's azimuth.
     const view = `view={${fmtNum(-camera.azimuth)}}{${fmtNum(camera.elevation)}}`;
     if (!vectors) opts.push(view);
+    // pgfplots draws the grid on the back planes of the box, under the surfaces.
+    opts.push(...gridOptions(config));
     opts.push('trig format plots=rad');
     opts.push('unbounded coords=jump');
     opts.push(restrict('z', box.zmin, box.zmax));
@@ -1144,11 +1165,12 @@ function surfaceSpec(f: Function3DParameters, index: number, ctx: MathContext, b
     const opacity = clamp(num(f.opacity, 0.7), 0, 1);
     if (isColormap(f.colormap)) {
         // Colours by height through a colour map, over the box's z range (diverging: symmetric
-        // about z = 0), as the preview spreads it; facet lines neutral and faint.
+        // about z = 0), as the preview spreads it. The mesh lines are pgfplots' own, a darker
+        // shade of each facet: light lines on dark facets read as holes.
         const [lo, hi] = colormapRange(f.colormap, box.zmin, box.zmax);
         const meta = `point meta min=${fmtNum(lo)}, point meta max=${fmtNum(hi)}`;
         if (f.wireframe) style.push('mesh', colormapOption(f.colormap), meta);
-        else style.push('surf', colormapOption(f.colormap), meta, `faceted color=${FACET_LINE.tikz}`, `opacity=${fmtNum(opacity)}`);
+        else style.push('surf', colormapOption(f.colormap), meta, ...facetOptions(f, 'mapped color!80!black', opacity));
     } else {
         const c = colors.use(f.color);
         const map = `etSurface${index + 1}`;
@@ -1160,8 +1182,7 @@ function surfaceSpec(f: Function3DParameters, index: number, ctx: MathContext, b
                 'surf',
                 `colormap={${map}}{color=(${c}!30!white) color=(${c})}`,
                 `point meta min=${fmtNum(box.zmin)}, point meta max=${fmtNum(box.zmax)}`,
-                `faceted color=${c}`,
-                `opacity=${fmtNum(opacity)}`
+                ...facetOptions(f, c, opacity)
             );
         }
     }
@@ -1174,6 +1195,19 @@ function surfaceSpec(f: Function3DParameters, index: number, ctx: MathContext, b
         samples: clamp(Math.round(num(f.samples, DEFAULT_SAMPLES_3D)), 4, MAX_SAMPLES_3D),
         style,
     };
+}
+
+/**
+ * The fill and mesh lines of a filled surface: the surface's opacity fills the
+ * facets and the mesh opacity draws their lines in `line` (`opacity=` would
+ * set both). Without mesh lines it is pgfplots' smooth shading: facets drawn
+ * without edges show hairline seams between them, and edges in the facets'
+ * own colour show as a mesh once the fill is translucent.
+ */
+function facetOptions(f: Function3DParameters, line: string, opacity: number): string[] {
+    const mesh = opacityValue(f.meshOpacity, MESH_OPACITY);
+    if (mesh === 0) return ['shader=interp', `fill opacity=${fmtNum(opacity)}`];
+    return [`faceted color=${line}`, `fill opacity=${fmtNum(opacity)}`, `draw opacity=${fmtNum(mesh)}`];
 }
 
 function surfaceLine(s: SurfaceSpec, p: SurfacePiece): string {

@@ -8,6 +8,7 @@ import { MathContext, ValidateResult } from '../mathcontext';
 import { RANGE_DEFAULTS, RangeKey, SettingsManager } from '../settings';
 import { FieldHandle, PanelHost } from './host';
 import { MessageKey, t } from '../i18n';
+import { GRID_OPACITY, opacityValue } from '../opacity';
 import {
     ChipHandle,
     ExprInputHandle,
@@ -55,6 +56,8 @@ function num(v: unknown, fallback: number): number {
     const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v) : NaN;
     return Number.isFinite(n) ? n : fallback;
 }
+
+const percent = (v: number) => `${Math.round(v * 100)} %`;
 
 /** What a taken name is, as the problem says it ('x1 is already a slider name.'). */
 const TAKEN: Readonly<Record<'slider' | 'function' | 'surface' | 'tool', MessageKey>> = {
@@ -104,6 +107,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
     const ranges = new Map<RangeKey, ExprInputHandle>();
     let gridMajor: ChipHandle | null = null;
     let gridMinor: ChipHandle | null = null;
+    let gridOpacity: LiveSliderHandle | null = null;
     let elevation: LiveSliderHandle | null = null;
     let azimuth: LiveSliderHandle | null = null;
     let axisStyle: SegmentedHandle<string> | null = null;
@@ -276,7 +280,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
         parent: HTMLElement,
         label: string,
         key: string,
-        range: { min: number; max: number; step: number; fallback: number },
+        range: { min: number; max: number; step: number; fallback: number; fixed?: boolean; value?: number },
         format?: (v: number) => string,
         hint?: string
     ): LiveSliderHandle => {
@@ -285,9 +289,10 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
             min: range.min,
             max: range.max,
             step: range.step,
-            value: num(settings.getValue(key), range.fallback),
+            value: range.value ?? num(settings.getValue(key), range.fallback),
             label,
             format,
+            fixedRange: range.fixed,
             onInput: (value) => {
                 settings.setValue(key, value);
                 host.requestFrame();
@@ -318,6 +323,16 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
         });
         sliderField(g.body, t('panels.chart.majorDivisions'), 'majorTickNum', { min: 2, max: 20, step: 1, fallback: 8 });
         sliderField(g.body, t('panels.chart.minorLines'), 'gridSize', { min: 1, max: 10, step: 1, fallback: 5 });
+        // Major lines at this opacity, minor lines at half; 2D and 3D, the preview and the PDF.
+        const opacity = opacityValue(settings.getValue('gridOpacity'), GRID_OPACITY);
+        gridOpacity = sliderField(
+            g.body,
+            t('panels.chart.gridOpacity'),
+            'gridOpacity',
+            { min: 0, max: 1, step: 0.05, fallback: GRID_OPACITY, fixed: true, value: opacity },
+            percent,
+            t('panels.chart.gridOpacityHint')
+        );
     };
 
     const buildExportSize = () => {
@@ -378,7 +393,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
         unregister = [];
         ranges.forEach((h) => h.destroy());
         ranges.clear();
-        gridMajor = gridMinor = elevation = azimuth = null;
+        gridMajor = gridMinor = elevation = azimuth = gridOpacity = null;
         axisStyle = null;
         el.empty();
         buildRanges();
@@ -402,6 +417,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
             });
             gridMajor?.setValue(settings.getValue('showLargeGrid') === true);
             gridMinor?.setValue(settings.getValue('showSmallGrid') === true);
+            gridOpacity?.setValue(opacityValue(settings.getValue('gridOpacity'), GRID_OPACITY));
             elevation?.setValue(num(settings.getValue('rotationX'), 30));
             azimuth?.setValue(num(settings.getValue('rotationZ'), 45));
             axisStyle?.setValue(str(settings.getValue('axis_style')) || 'box');

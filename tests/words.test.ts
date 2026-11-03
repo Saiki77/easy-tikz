@@ -333,3 +333,28 @@ test('words: a colour map and the cube line take words of their own', () => {
     assert.match(wordProblem('cube', 'plot', GERMAN), /built-in word for "cube"/);
     assert.match(wordsToText(clean({ words: { heat: ['Glut'] }, bundles: [], write: 'yours' })), /^heat = Glut$/m);
 });
+
+test('words: grid opacity and mesh take words of their own', () => {
+    const words = clean({ ...GERMAN, words: { ...GERMAN.words, 'grid-opacity': ['Gitterdeckkraft'], mesh: ['Netz'] } });
+    withWords(words, () => {
+        const text = ['3d', 'mit Gitter', 'Gitterdeckkraft 0.3', 'plotte z = x*y, Netz 0.2'].join('\n');
+        const r = parseChartText(text);
+        assert.deepEqual(r.problems, []);
+        assert.equal(r.data.gridOpacity, 0.3);
+        assert.equal((r.data.functions3D as Data[])[0].meshOpacity, 0.2);
+        // The built-in words still work beside them.
+        assert.equal(canonical(parseChartText('3d\nwith a grid\ngrid opacity 0.3\nplot z = x*y, mesh 0.2').data), canonical(r.data));
+        const printed = printChartText(r.data).split('\n');
+        assert.deepEqual(printed, ['3d', 'mit Gitter', 'Gitterdeckkraft 0.3', 'plotte s1(x, y) = x*y, Netz 0.2']);
+        assert.equal(writeChartText(text, r.data), text);
+        // Problems point at what was typed.
+        const wrong = parseChartText('plotte z = x*y, Netz 2\nGitterdeckkraft 9');
+        assert.deepEqual(wrong.problems.map((p) => [p.line, p.column]), [
+            [1, 'plotte z = x*y, '.length + 1],
+            [2, 1],
+        ]);
+    });
+    assert.match(wordProblem('mesh', 'plot', GERMAN), /built-in word for "mesh"/);
+    assert.match(wordsToText(clean({ words: { 'grid-opacity': ['Gitterdeckkraft'] }, bundles: [], write: 'yours' })), /^grid opacity = Gitterdeckkraft$/m);
+    assert.deepEqual(wordsFromText('grid opacity = Gitterdeckkraft\nmesh = Netz').words.words, { 'grid-opacity': ['Gitterdeckkraft'], mesh: ['Netz'] });
+});

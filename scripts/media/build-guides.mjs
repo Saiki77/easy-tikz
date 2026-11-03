@@ -215,7 +215,8 @@ let obs = null;
 const heldKeys = new Set();
 
 async function startObsidian() {
-    obs = await launch({ port, workDir, plugin: args.root ? 'root' : 'source', width: WINDOW.width, height: WINDOW.height, scale: WINDOW.scale, theme: 'light' });
+    // Charts move when they change (src/motion.ts): a picture must show the end, not a curve halfway through drawing itself.
+    obs = await launch({ port, workDir, plugin: args.root ? 'root' : 'source', width: WINDOW.width, height: WINDOW.height, scale: WINDOW.scale, theme: 'light', pluginData: { animateCharts: false } });
     // Inside the work dir, so only after launch() has made (and marked) it.
     fs.mkdirSync(rawDir, { recursive: true });
     const view = await obs.call(() => ({ w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio, light: document.body.classList.contains('theme-light') }));

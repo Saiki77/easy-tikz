@@ -32,6 +32,7 @@ import {
 } from './scene';
 import { Grid, Pt, View, pointInRings } from './geometry';
 import { t as msg } from './i18n';
+import { GRID_OPACITY, opacityValue } from './opacity';
 
 /** CONTRACT (v4): options for one render. */
 export interface SVGRendererOptions {
@@ -935,7 +936,10 @@ export class SVGRenderer {
 
     // ------------------------------------------------------------ layers
 
-    /** Layer 1. Minor lines follow pgfplots' `minor tick num=n`: n lines between two major ticks. */
+    /**
+     * Layer 1. Minor lines follow pgfplots' `minor tick num=n`: n lines between two major ticks.
+     * Major lines take the chart's grid opacity, minor lines half of it.
+     */
     private drawGrid(svg: SVGElement): void {
         const cfg = this.config;
         if (!cfg.gridMajor && !cfg.gridMinor) return;
@@ -943,8 +947,9 @@ export class SVGRenderer {
         const v = this.view;
         const { x: left, y: top, w, h } = this.plot;
         const [stepX, stepY] = this.tickSteps();
-        const draw = (xs: number[], ys: number[], width: string, opacity: string) => {
-            const attrs = { stroke: BORDER, 'stroke-width': width, 'stroke-opacity': opacity };
+        const opacity = opacityValue(cfg.gridOpacity, GRID_OPACITY);
+        const draw = (xs: number[], ys: number[], width: string, alpha: number) => {
+            const attrs = { stroke: BORDER, 'stroke-width': width, 'stroke-opacity': String(alpha) };
             for (const x of xs) g.appendChild(this.line(this.sx(x), top, this.sx(x), top + h, attrs));
             for (const y of ys) g.appendChild(this.line(left, this.sy(y), left + w, this.sy(y), attrs));
         };
@@ -954,10 +959,10 @@ export class SVGRenderer {
                 tickValues(v.xmin, v.xmax, stepX / (minor + 1)),
                 tickValues(v.ymin, v.ymax, stepY / (minor + 1)),
                 '0.5',
-                '0.25'
+                opacity / 2
             );
         }
-        draw(tickValues(v.xmin, v.xmax, stepX), tickValues(v.ymin, v.ymax, stepY), '1', '0.5');
+        draw(tickValues(v.xmin, v.xmax, stepX), tickValues(v.ymin, v.ymax, stepY), '1', opacity);
         this.attach(svg, g);
     }
 
