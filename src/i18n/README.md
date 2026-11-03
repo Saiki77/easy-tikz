@@ -142,3 +142,7 @@ screen. Add a term here before using a new one in several places.
 | Getting started / Functions and sliders / Regions and optimisation | はじめに / 関数とスライダー / 領域と最適化 |
 | Points, lines and labels / Notes and export / Reference | 点・線・ラベル / ノートと出力 / リファレンス |
 | Start here / Core / Advanced (guide levels) | ここから / 基本 / 応用 |
+| Colours by height (a surface's colour map) | 高さで色分け |
+| Your colour (a surface's own colour, light to dark) | 指定した色 |
+| Viridis / Heat / Cool / Diverging / Rainbow / Greyscale | Viridis / 暖色 / 寒色 / 発散型 / 虹色 / グレースケール |
+| cube / proportional (the 3D box) | 立方体 / 比例 |

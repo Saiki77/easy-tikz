@@ -135,7 +135,7 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 
 ```easy-tikz
 polar
-show x from -2.2 to 2.2 and y from -2.195 to 2.195
+show x from -2.25 to 2.25 and y from -2.25 to 2.25
 slider k from 1 to 8, starting at 5, in steps of 1
 plot f1(theta) = 2cos(k theta)
 ```

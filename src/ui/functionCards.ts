@@ -11,11 +11,12 @@
  * host.commit(), which also re-validates every other registered field.
  */
 import { Menu, Notice } from 'obsidian';
-import { FillPattern, Function3DParameters, FunctionParameters } from '../types';
+import { Colormap, FillPattern, Function3DParameters, FunctionParameters } from '../types';
 import { FunctionKind, ValidateResult, fmtNum } from '../mathcontext';
 import { splitDomain } from '../expr';
 import { RESERVED_NAMES } from '../migrate';
-import { FILL_PATTERN_OPTIONS, THICKNESS_OPTIONS } from '../colors';
+import { COLOR_MAP, FILL_PATTERN_OPTIONS, THICKNESS_OPTIONS, mixHex, resolveCssColor } from '../colors';
+import { COLORMAPS, COLORMAP_STOPS, colormapName, isColormap, rgbCss } from '../colormaps';
 import { MAX_SAMPLES_3D } from '../export';
 import { MAX_PREVIEW_SAMPLES_3D } from '../renderer3d';
 import { UserTemplate } from '../templates';
@@ -40,6 +41,7 @@ import {
     textButton,
     textInput,
     thicknessPicker,
+    uniqueId,
 } from './kit';
 import { t } from '../i18n';
 
@@ -194,7 +196,50 @@ export function functionSummary(host: PanelHost, fn: FunctionParameters): string
 export function surfaceSummary(surface: Function3DParameters): string {
     const z = surface.expression.trim();
     if (!z) return t('build.surface.empty');
-    return surface.wireframe ? t('build.surface.summaryWireframe', { formula: `z = ${z}` }) : `z = ${z}`;
+    const formula = `z = ${z}`;
+    if (isColormap(surface.colormap)) {
+        const map = colormapName(surface.colormap);
+        return t(surface.wireframe ? 'build.surface.summaryWireframeColormap' : 'build.surface.summaryColormap', { formula, map });
+    }
+    return surface.wireframe ? t('build.surface.summaryWireframe', { formula }) : formula;
+}
+
+/** What the "Colours by height" row of a surface offers: its own colour (light to dark) or a colour map. */
+type HeightColours = 'own' | Colormap;
+
+interface GradientStop {
+    at: number;
+    css: string;
+}
+
+/**
+ * A small bar painted with a gradient, the lowest colour on the left, the
+ * highest on the right (the swatch of a choice in the "Colours by height"
+ * row). Returns its stops, so the bar of "Your colour" can follow the
+ * surface's colour.
+ */
+function gradientBar(holder: HTMLElement, stops: GradientStop[]): SVGStopElement[] {
+    const id = uniqueId('colormap');
+    const svg = holder.createSvg('svg', { attr: { width: 24, height: 12, viewBox: '0 0 24 12' } });
+    const gradient = svg.createSvg('defs').createSvg('linearGradient', { attr: { id, x1: 0, y1: 0, x2: 1, y2: 0 } });
+    const out = stops.map((s) => gradient.createSvg('stop', { attr: { offset: s.at, 'stop-color': s.css } }));
+    svg.createSvg('rect', { attr: { x: 0.5, y: 2.5, width: 23, height: 7, rx: 2, fill: `url(#${id})`, stroke: 'currentColor', 'stroke-opacity': 0.25 } });
+    return out;
+}
+
+/** The bar of "Your colour": the preview's shading, 30 % of the colour at the bottom of the box to all of it at the top. */
+function ownColourStops(color: string): GradientStop[] {
+    const key = color || 'black';
+    const css = resolveCssColor(COLOR_MAP[key] ?? key);
+    return [
+        { at: 0, css: mixHex('#ffffff', css, 0.3) },
+        { at: 1, css },
+    ];
+}
+
+/** The bar of a colour map: its stops as pgfplots places them. */
+function colormapStops(map: Colormap): GradientStop[] {
+    return COLORMAP_STOPS[map].map((s) => ({ at: s.at, css: rgbCss(s.rgb) }));
 }
 
 /** Center of the visible x range, for prefilling the tangent point. */
@@ -781,7 +826,7 @@ export function createFunctionCard(
 
 // ---------------------------------------------------------- 3D surface
 
-/** Card for one surface z = f(x, y): formula, x / y ranges, wireframe, live opacity and samples. */
+/** Card for one surface z = f(x, y): formula, x / y ranges, wireframe, colours by height, live opacity and samples. */
 export function createSurfaceCard(
     parent: HTMLElement,
     surface: Function3DParameters,
@@ -809,6 +854,13 @@ export function createSurfaceCard(
         color: surface.color,
         onColorChange: (c) => {
             surface.color = c;
+            // Picking a colour means that colour: a colour map would hide it.
+            if (surface.colormap) {
+                delete surface.colormap;
+                syncHeightColours();
+                shell.setSummary(surfaceSummary(surface));
+            }
+            paintOwnBar();
             host.requestUpdate();
         },
         // Surfaces are not referenced from formulas, so a rename only relabels the card.
@@ -891,6 +943,52 @@ export function createSurfaceCard(
     });
     styleRow.bind(wireframe.el);
 
+    // Colours by height: the surface's own colour, light to dark, or a colour map; each choice a small gradient bar.
+    const heightRow = field(body, { label: t('build.surface.colormap'), cls: 'etz-fn-row' });
+    let ownBar: SVGStopElement[] = [];
+    const heightColours = segmented<HeightColours>(heightRow.controlEl, {
+        label: t('build.surface.colormap'),
+        value: isColormap(surface.colormap) ? surface.colormap : 'own',
+        options: [
+            {
+                value: 'own',
+                ariaLabel: t('build.colormap.own'),
+                render: (holder) => {
+                    ownBar = gradientBar(holder, ownColourStops(surface.color));
+                },
+            },
+            ...COLORMAPS.map((map) => ({
+                value: map,
+                ariaLabel: colormapName(map),
+                render: (holder: HTMLElement) => {
+                    gradientBar(holder, colormapStops(map));
+                },
+            })),
+        ],
+        onChange: (v) => {
+            if (v === 'own') delete surface.colormap;
+            else surface.colormap = v;
+            shell.setSummary(surfaceSummary(surface));
+            syncHeightHint();
+            host.requestUpdate();
+        },
+    });
+    heightRow.bind(heightColours.el);
+    /** Diverging's middle is z = 0 whatever the box: said under the row while it is picked. */
+    function syncHeightHint(): void {
+        heightRow.setHint(surface.colormap === 'diverging' ? t('build.surface.colormapDivergingHint') : '');
+    }
+    function syncHeightColours(): void {
+        heightColours.setValue(isColormap(surface.colormap) ? surface.colormap : 'own');
+        syncHeightHint();
+    }
+    /** The bar of "Your colour" in the surface's colour now. */
+    function paintOwnBar(): void {
+        const stops = ownColourStops(surface.color);
+        ownBar.forEach((stop, i) => stop.setAttribute('stop-color', (stops[i] ?? stops[stops.length - 1]).css));
+    }
+    syncHeightHint();
+
     const opacityRow = field(body, { label: t('build.card.opacity'), layout: 'inline', cls: 'etz-fn-row' });
     const opacity = liveSlider(opacityRow.controlEl, {
         min: 0.05,
@@ -943,6 +1041,8 @@ export function createSurfaceCard(
         syncExpr(xRange.input, surface.xDomain);
         syncExpr(yRange.input, surface.yDomain);
         wireframe.setValue(surface.wireframe);
+        syncHeightColours();
+        paintOwnBar();
         if (opacity.getValue() !== surface.opacity) opacity.setValue(surface.opacity);
         if (samples.getValue() !== surface.samples) samples.setValue(surface.samples);
         syncSamplesHint();

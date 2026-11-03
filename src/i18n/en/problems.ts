@@ -162,6 +162,7 @@ export const problems = {
     'problems.text.needsRange': '"{option}" needs a range such as 0..2pi',
     'problems.text.needsNumber': '"{option}" needs a number',
     'problems.text.unknownPattern': 'unknown pattern "{pattern}"; patterns: {patterns}',
+    'problems.text.colormapNotSurface': '{map} colours a surface by height (plot z = x^2 in {map}); a {kind} takes a colour such as in blue',
     'problems.text.theRegionUnclear': '"the region" is unclear: this chart shades {count} regions. Name one (R1: shade ...) and write R1 instead',
     'problems.text.theRegionMissing': '"the region" needs a shaded region: shade where x + y <= 4 and x >= 0 and y >= 0',
     'problems.text.noOptions': '{word} takes no options after |',

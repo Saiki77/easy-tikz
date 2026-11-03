@@ -64,6 +64,12 @@ export interface FunctionParameters {
     hidden?: boolean;
 }
 
+/**
+ * Colour maps by height for 3D surfaces (src/colormaps.ts): the colour of a
+ * point follows its z value, the same in the preview and the PDF.
+ */
+export type Colormap = 'viridis' | 'heat' | 'cool' | 'diverging' | 'rainbow' | 'greyscale';
+
 export interface Function3DParameters {
     expression: string;
     xDomain: string;
@@ -72,6 +78,11 @@ export interface Function3DParameters {
     wireframe: boolean;
     opacity: number;
     samples: number;
+    /**
+     * Colours by height through a colour map. Absent: the surface's own
+     * colour, light at the bottom of the box to full at the top.
+     */
+    colormap?: Colormap;
     /** Optional user-readable name. Mirrors `FunctionParameters.name`. */
     name?: string;
     hidden?: boolean;

@@ -3,8 +3,8 @@
  * of every guide, the chart of the What's new popup, one 3.x block per
  * legacy tool type, and stress cases (steep functions, awkward label text,
  * a patterned region with a hole, parametric, polar, 3D surfaces at the
- * memory budget, surfaces cut at planes, turned cameras, extreme 3D
- * ranges, CSS colour names, snippet mode).
+ * memory budget, surfaces cut at planes, every colour map by height,
+ * turned cameras, extreme 3D ranges, CSS colour names, snippet mode).
  * Skipped with a message when pdflatex is not on PATH.
  *
  * ETZ_LATEX_KEEP=<dir> keeps the .tex / .pdf / .log files in <dir>.
@@ -19,6 +19,7 @@ import { EXAMPLES } from '../src/migrate';
 import { whatsNewChart } from '../src/whatsnew';
 import { GUIDES } from '../src/guides';
 import { Function3DParameters, FunctionParameters } from '../src/types';
+import { COLORMAPS } from '../src/colormaps';
 
 const TIMEOUT_MS = 30000;
 const PARALLEL = 4;
@@ -330,6 +331,30 @@ const STRESS: Record<string, Record<string, unknown>> = {
         tools: [
             { id: 'p', name: 'P1', type: 'points', color: 'red', dim: 3, source: 'list', points: '(2000, 0, 0); (0, 1000, 500)', ref1: '', ref2: '', regionName: '', objective: '', sense: 'max', label: 'corner A; corner B', dropLines: false, size: 'normal' },
         ],
+    }),
+    // Every colour map by height, side by side, a wireframe in one, a z range that is not symmetric
+    // (diverging spreads over -3..3), a cube box and a z plane that cuts the surfaces into pieces.
+    colormaps: chart({
+        dimension: true,
+        boxAspect: 'equal',
+        xmin: '-3',
+        xmax: '3',
+        ymin: '-3',
+        ymax: '3',
+        zmin: '-1',
+        zmax: '3',
+        functions3D: [
+            ...COLORMAPS.map((colormap, i) =>
+                surface3(`f${i + 1}`, `1 + sin(2x + ${i})*cos(y)`, 'blue', {
+                    colormap,
+                    samples: 16,
+                    xDomain: `${-3 + (i % 3) * 2}:${-1 + (i % 3) * 2}`,
+                    yDomain: i < 3 ? '-3:0' : '0:3',
+                })
+            ),
+            surface3('f7', '2 - x*y/4', 'red', { colormap: 'rainbow', wireframe: true, samples: 12 }),
+        ],
+        tools: [{ id: 'a', name: 'PL1', type: 'plane3D', color: 'orange', axis: 'z', value: '1', fillOpacity: 0.3 }],
     }),
     // Ranges TeX cannot hold as unit vectors: pgfplots' own fit.
     tiny3d: chart({

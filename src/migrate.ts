@@ -10,6 +10,7 @@
  * Implementations may add private helpers and extra exports.
  */
 import { THICKNESS_MAP } from './colors';
+import { isColormap } from './colormaps';
 import { dollarMath, splitDomain } from './expr';
 import { t } from './i18n';
 import {
@@ -820,6 +821,8 @@ function normalizeSurfaces(raw: unknown): Function3DParameters[] {
             opacity: opacityOf(src.opacity, 0.7),
             samples: Math.max(2, Math.round(num(src.samples, 40))),
         };
+        // A colour map the plugin does not know is dropped: the surface keeps its own colour.
+        if (isColormap(src.colormap)) surface.colormap = src.colormap;
         if (typeof src.name === 'string') surface.name = src.name;
         if (src.hidden === true) surface.hidden = true;
         out.push(surface);

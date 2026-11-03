@@ -571,7 +571,7 @@ test('centred axes: the exported title is lifted over the y label above the axis
 // ---------------------------------------------------------------------- 3D
 
 test('3D: a centred label on an edge of the box steps to the side away from the box', () => {
-    // surfaces-3d step 7: "z = {h}" at (5.5, -5.5, h), a corner of the plane on a vertical edge of the box.
+    // surfaces-3d step 7: "z = {h}" at (5, -5, h), a corner of the plane on a vertical edge of the box.
     const chart = guideStep('surfaces-3d', 7);
     const settings = SettingsManager.fromJSON(clone(chart));
     const math = settings.createMathContext({ memo: false });
@@ -582,28 +582,28 @@ test('3D: a centred label on an edge of the box steps to the side away from the 
     const label = (config.annotations || [])[0];
     assert.equal(label.anchor, 'center');
     const at: [number, number, number] = [math.value(label.x), math.value(label.y), math.value(String(label.z))];
-    assert.deepEqual(at, [5.5, -5.5, 1]);
+    assert.deepEqual(at, [5, -5, 1]);
     // That edge is the right outline of the box for this camera (rotation 60, tilt 20).
     assert.equal(side(at), 'right');
     // The opposite vertical edge: the left outline.
-    assert.equal(side([-5.5, 5.5, 1]), 'left');
+    assert.equal(side([-5, 5, 1]), 'left');
     // The same along the whole edge, whatever the slider h says.
-    assert.equal(side([5.5, -5.5, -20]), 'right');
+    assert.equal(side([5, -5, -20]), 'right');
     // Inside the box, on a face, or outside: the label stays where it was put.
     assert.equal(side([0, 0, 0]), null);
-    assert.equal(side([5.5, 0, 0]), null);
-    assert.equal(side([5.5, -5.5, 99]), null);
-    assert.equal(side([NaN, -5.5, 1]), null);
+    assert.equal(side([5, 0, 0]), null);
+    assert.equal(side([5, -5, 99]), null);
+    assert.equal(side([NaN, -5, 1]), null);
     // Edges of the top and bottom faces: above and below.
-    assert.equal(side([0, 5.5, box.zmax]), 'above');
-    assert.equal(side([0, -5.5, box.zmin]), 'below');
+    assert.equal(side([0, 5, box.zmax]), 'above');
+    assert.equal(side([0, -5, box.zmin]), 'below');
     // A corner: away from the middle of the box.
-    assert.equal(side([5.5, -5.5, box.zmax]), 'right');
+    assert.equal(side([5, -5, box.zmax]), 'right');
 
     // The export puts the node on the same side (anchor=west is "right of the point"), at the same coordinates.
     const code = settings.generateTikzCode(math);
     const node = code.split('\n').find((line) => line.includes('{z = 1}'));
-    assert.ok(node && node.includes('anchor=west') && node.includes('at (axis cs:5.5,-5.5,1)'), node);
+    assert.ok(node && node.includes('anchor=west') && node.includes('at (axis cs:5,-5,1)'), node);
     // A side the user chose is kept.
     const fixed = clone(chart);
     (fixed.annotations as Array<Record<string, unknown>>)[0].anchor = 'above';

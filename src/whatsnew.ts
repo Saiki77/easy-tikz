@@ -27,7 +27,7 @@ import type { FunctionParameters, Parameter, RegionTool } from './types';
 import { MessageKey, MessageValues, t, tIn } from './i18n';
 
 /** Version of the popup's content. Raise it when the popup says something new. */
-export const WHATS_NEW_VERSION = '4.7.0';
+export const WHATS_NEW_VERSION = '4.8.0';
 
 /**
  * Compare two version strings numerically, part by part ('4.10.0' > '4.9.1',
@@ -153,12 +153,12 @@ export const whatsNewRecentTitle = (): string => t('panels.whatsNew.recentTitle'
 /** The same heading in English, as the tests read it. */
 export const WHATS_NEW_RECENT_TITLE = tIn('en', 'panels.whatsNew.recentTitle');
 
-/** New in 4.6 and 4.7, at the top. */
+/** New in 4.7 and 4.8, at the top. */
 export const WHATS_NEW_RECENT: WhatsNewItem[] = [
+    item('palette', 'panels.whatsNew.colormaps.title', 'panels.whatsNew.colormaps.text'),
+    item('maximize-2', 'panels.whatsNew.fit.title', 'panels.whatsNew.fit.text'),
+    item('box', 'panels.whatsNew.cube.title', 'panels.whatsNew.cube.text'),
     item('globe', 'panels.whatsNew.language.title', 'panels.whatsNew.language.text'),
-    item('languages', 'panels.whatsNew.words.title', 'panels.whatsNew.words.text'),
-    item('type', 'panels.whatsNew.plain.title', 'panels.whatsNew.plain.text'),
-    item('eye', 'panels.whatsNew.under.title', 'panels.whatsNew.under.text'),
 ];
 
 /** Next to the live chart: sliders and the values computed from them. */
@@ -170,6 +170,9 @@ export const WHATS_NEW_LIVE: WhatsNewItem[] = [
 
 /** The rest of version 4, one line each. */
 export const WHATS_NEW_MORE: WhatsNewItem[] = [
+    item('languages', 'panels.whatsNew.words.title', 'panels.whatsNew.words.text'),
+    item('type', 'panels.whatsNew.plain.title', 'panels.whatsNew.plain.text'),
+    item('eye', 'panels.whatsNew.under.title', 'panels.whatsNew.under.text'),
     item('layout-panel-left', 'panels.whatsNew.editor.title', 'panels.whatsNew.editor.text'),
     item('move', 'panels.whatsNew.drag.title', 'panels.whatsNew.drag.text'),
     item('shapes', 'panels.whatsNew.tools.title', 'panels.whatsNew.tools.text'),

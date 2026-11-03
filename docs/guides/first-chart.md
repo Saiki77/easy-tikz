@@ -31,7 +31,7 @@ Click the Easy TikZ icon in the ribbon on the left, or run `Easy TikZ: Open edit
 
 Type the formula into the field under Start a chart and press Enter.
 
-A card named `f1` appears with the summary `y = 2 + sin(x)`, and the curve is drawn. Because the ranges were still the defaults, the editor fits them to the curve once. From now on the preview redraws while you type.
+A card named `f1` appears with the summary `y = 2 + sin(x)`, and the curve is drawn. Because the ranges were still the defaults, the editor fits the y range to the curve once. From now on the preview redraws while you type.
 
 | Where | Type |
 | --- | --- |
@@ -39,7 +39,7 @@ A card named `f1` appears with the summary `y = 2 + sin(x)`, and the curve is dr
 
 ![Screenshot of the editor for step 2: Type a formula and press Enter](img/first-chart-2.png)
 
-*The first function card and its curve. The ranges were fitted to the curve.*
+*The first function card and its curve. The y range was fitted to the curve.*
 
 > **Tip:** Functions need brackets: write `sin(x)`, not `sin x`. If you forget them, the message under the field offers the button Use sin(x).
 
@@ -73,7 +73,7 @@ Type the formula. The second curve appears while you type.
 
 ## 5. Set the ranges
 
-The automatic fit left odd bounds such as -1.025. Open the Chart tab and type your own under Ranges: x from `0` to `2pi`, y from `0` to `4`.
+The automatic fit kept x from -0.5 to 10 and set y from 0.8 to 3.2. To show one period, open the Chart tab and type your own under Ranges: x from `0` to `2pi`, y from `0` to `4`.
 
 The preview now shows exactly one period, with room above the curves. Ranges accept formulas, so `2pi` works as typed.
 

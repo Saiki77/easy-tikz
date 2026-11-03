@@ -77,8 +77,11 @@ function label(x: string, y: string, text: string, fields: Partial<Annotation> =
 
 // ------------------------------------------------------- 1. first chart
 
-/** Ranges the editor writes when `2 + sin(x)` is the first formula of a new chart (the automatic fit). */
-const FIRST_FIT = { xmin: '-1.025', xmax: '10.525', ymin: '0.902', ymax: '3.099' };
+/**
+ * Ranges the editor writes when `2 + sin(x)` is the first formula of a new chart (the automatic fit):
+ * the curve goes on forever, so x keeps the default view and y is fitted over it.
+ */
+const FIRST_FIT = { ymin: '0.8', ymax: '3.2' };
 /** Ranges typed in the Chart tab. */
 const FIRST_RANGES = { xmin: '0', xmax: '2pi', ymin: '0', ymax: '4' };
 
@@ -120,11 +123,11 @@ const FIRST_CHART: Guide = {
             body:
                 'Type the formula into the field under Start a chart and press Enter.\n\n' +
                 'A card named `f1` appears with the summary `y = 2 + sin(x)`, and the curve is drawn. ' +
-                'Because the ranges were still the defaults, the editor fits them to the curve once. ' +
+                'Because the ranges were still the defaults, the editor fits the y range to the curve once. ' +
                 'From now on the preview redraws while you type.',
             type: [{ where: 'Start a chart', text: '2 + sin(x)' }],
             chart: firstChart('typed'),
-            shot: { tab: 'build', frame: 'editor', reveal: ['f1'], caption: 'The first function card and its curve. The ranges were fitted to the curve.' },
+            shot: { tab: 'build', frame: 'editor', reveal: ['f1'], caption: 'The first function card and its curve. The y range was fitted to the curve.' },
             tip: 'Functions need brackets: write `sin(x)`, not `sin x`. If you forget them, the message under the field offers the button Use sin(x).',
         },
         {
@@ -155,7 +158,7 @@ const FIRST_CHART: Guide = {
         {
             title: 'Set the ranges',
             body:
-                'The automatic fit left odd bounds such as -1.025. Open the Chart tab and type your own under Ranges: x from `0` to `2pi`, y from `0` to `4`.\n\n' +
+                'The automatic fit kept x from -0.5 to 10 and set y from 0.8 to 3.2. To show one period, open the Chart tab and type your own under Ranges: x from `0` to `2pi`, y from `0` to `4`.\n\n' +
                 'The preview now shows exactly one period, with room above the curves. Ranges accept formulas, so `2pi` works as typed.',
             type: [
                 { where: 'Chart > Ranges, x from', text: '0' },
@@ -675,7 +678,7 @@ const TANGENTS_EXTREMA: Guide = {
 // --------------------------------------------- 6. parametric and polar
 
 /** Ranges the editor writes when `2cos(2theta)` is the first formula of a new polar chart. */
-const ROSE_FIT = { xmin: '-2.2', xmax: '2.2', ymin: '-2.195', ymax: '2.195' };
+const ROSE_FIT = { xmin: '-2.25', xmax: '2.25', ymin: '-2.25', ymax: '2.25' };
 
 function parametricChart(stage: 'ellipse' | 'equal' | 'spiral' | 'turns'): ChartData {
     const order = ['ellipse', 'equal', 'spiral', 'turns'];

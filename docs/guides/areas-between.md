@@ -136,7 +136,7 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-show x from -1.025 to 10.525 and y from 0.902 to 3.099
+show x from -0.5 to 10 and y from 0.8 to 3.2
 plot f1(x) = 2 + sin(x)
 plot f2(x) = 2 + cos(x) in blue
 shade where f2 <= y <= f1 and P1_x <= x <= P1_x2, labelled "A1"

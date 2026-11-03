@@ -166,6 +166,7 @@ export const problems: Messages<typeof en> = {
     'problems.text.needsRange': '"{option}" には 0..2pi のような範囲が必要です',
     'problems.text.needsNumber': '"{option}" には数値が必要です',
     'problems.text.unknownPattern': '不明なパターン "{pattern}" です。使えるパターン：{patterns}',
+    'problems.text.colormapNotSurface': '{map} は曲面を高さで色分けする指定です（plot z = x^2 in {map}）。{kind}には in blue のような色を書きます',
     'problems.text.theRegionUnclear':
         '"the region" がどれを指すかわかりません：このグラフには塗りつぶした領域が {count} 個あります。1 つに名前を付けて（R1: shade ...）、代わりに R1 と書いてください',
     'problems.text.theRegionMissing': '"the region" には塗りつぶした領域が必要です：shade where x + y <= 4 and x >= 0 and y >= 0',

@@ -15,6 +15,7 @@ import { marchingGrid } from '../util';
 import { impliedV4, parseLenientJson } from '../blockjson';
 import { GUIDES } from '../guides';
 import { COLOR_MAP, THICKNESS_MAP } from '../colors';
+import { COLORMAPS } from '../colormaps';
 import type { Pt } from '../geometry';
 import type { Annotation, RendererConfig, Tool, ToolType } from '../types';
 import { Data, LIST_KEYS, canonical, clone, minimize } from '../chartdata';
@@ -128,6 +129,8 @@ function knownKeys(part: string, defaults: Record<string, Data>): Set<string> {
     if (TOOL_TYPES.includes(part as ToolType)) keys.add('type');
     if (part === 'function') keys.add('legendLabel');
     if (part === 'label') keys.add('z');
+    // A surface may take a colour map by height instead of its own colour's ramp.
+    if (part === 'surface') keys.add('colormap');
     return keys;
 }
 
@@ -224,7 +227,9 @@ function fieldNotes(data: Data, loaded: Loaded, defaults: Record<string, Data>):
                     notes.push(`${where}: name ${JSON.stringify(was)} became "${now}" (names are letters, digits and _, unique, and not a reserved word)`);
                     continue;
                 }
-                notes.push(`${where}${name ? ` (${name})` : ''}: "${k}": ${JSON.stringify(was)} is not valid here; the chart uses ${JSON.stringify(now)}${allowed(k)}`);
+                // A value that is dropped (an optional field such as colormap) has nothing the chart uses instead.
+                const instead = now === undefined ? 'it is left out' : `the chart uses ${JSON.stringify(now)}`;
+                notes.push(`${where}${name ? ` (${name})` : ''}: "${k}": ${JSON.stringify(was)} is not valid here; ${instead}${allowed(k)}`);
             }
         });
     };
@@ -266,6 +271,7 @@ function allowed(key: string): string {
         size: ['small', 'normal', 'large'],
         anchor: ['center', 'above', 'below', 'left', 'right'],
         axis: ['x', 'y', 'z'],
+        colormap: [...COLORMAPS],
     };
     const list = lists[key];
     return list ? ` (allowed: ${list.map((v) => `"${v}"`).join(', ')})` : '';

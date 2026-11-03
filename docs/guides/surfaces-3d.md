@@ -4,13 +4,13 @@
 
 [All guides](README.md) · 3D · Core · about 10 minutes
 
-Plot a surface z = f(x, y), fix the shape of the box, turn the view, and cut the surface with a plane on a slider.
+Plot a surface z = f(x, y), choose the shape of its box, turn the view, and cut the surface with a plane on a slider.
 
 <p align="center"><img src="img/surfaces-3d-card.png" alt="The finished chart of the guide Surfaces, planes and points in 3D" width="480"></p>
 
 **What you can do afterwards**
 
-- Plot a surface and give its box a sensible shape
+- Plot a surface and choose the shape of its box
 - Rotate, zoom and style a 3D chart
 - Add a plane on a slider, a labelled point and a label that moves with the slider
 
@@ -20,7 +20,7 @@ Plot a surface z = f(x, y), fix the shape of the box, turn the view, and cut the
 
 Open the editor on an empty chart and click 3D in the header. Type the formula into the Start a chart field and press Enter.
 
-The surface appears as a tall, narrow sail. That is correct: the editor fitted the box to the surface, z runs from about -27 to 27 while x and y only run from -5.5 to 5.5, and the box is drawn in true proportions.
+The saddle appears in a cube: the surface rises along x and falls along y. The editor fitted the ranges to the surface and rounded them: x and y run from -5 to 5, z from -25 to 25.
 
 | Where | Type |
 | --- | --- |
@@ -28,19 +28,21 @@ The surface appears as a tall, narrow sail. That is correct: the editor fitted t
 
 ![Screenshot of the editor for step 1: Switch to 3D and type a surface](img/surfaces-3d-1.png)
 
-*The surface in a box with true proportions: tall and narrow.*
+*The saddle z = x^2 - y^2 in a cube, with the ranges fitted to it.*
 
 > **Tip:** A surface has its own x range and y range on its card (here `-5:5`). They say where the surface is computed. The box around it is set in the Chart tab under Ranges.
 
-## 2. Make the box a cube
+## 2. Choose the shape of the box
 
-Open the Chart tab. Under 3D view, set Box to Cube. Every axis now has the same length on screen, and the saddle shows: the surface rises along x and falls along y.
+Open the Chart tab. Under 3D view, Box reads Cube: a new 3D chart draws every axis with the same length on screen. That is why the saddle shows, although z runs from -25 to 25 and x and y only from -5 to 5.
 
-![Screenshot of the editor for step 2: Make the box a cube](img/surfaces-3d-2.png)
+Set Box to Proportional to see the true proportions: the surface turns into a narrow column, five times as high as it is wide. Then set Box back to Cube.
 
-*Box set to Cube under 3D view in the Chart tab.*
+![Screenshot of the editor for step 2: Choose the shape of the box](img/surfaces-3d-2.png)
 
-> **Tip:** Proportional suits charts whose three ranges are similar, such as a sphere. Cube suits charts where z is on a different scale than x and y.
+*Box under 3D view in the Chart tab. Cube gives every axis the same length.*
+
+> **Tip:** Proportional suits charts whose three ranges are similar, such as a sphere. Charts from older versions of Easy TikZ keep the box they had: if one looks like a narrow column, set its Box to Cube.
 
 ## 3. Turn the view
 
@@ -104,8 +106,8 @@ The x and y positions are a corner of the box, and the z position is the slider 
 | Where | Type |
 | --- | --- |
 | Label 1, Text | `z = {h}` |
-| Label 1, Position x | `5.5` |
-| Label 1, Position y | `-5.5` |
+| Label 1, Position x | `5` |
+| Label 1, Position y | `-5` |
 | Label 1, Position z | `h` |
 
 ![Screenshot of the editor for step 7: Let a label ride on the plane](img/surfaces-3d-7.png)
@@ -123,15 +125,15 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 
 ```easy-tikz
 3d
-show x from -5.5 to 5.5, y from -5.5 to 5.5 and z from -27.011 to 27.011
+cube
+show x from -5 to 5, y from -5 to 5 and z from -25 to 25
 set rotationX = 20
 set rotationZ = 60
-set boxAspect = "equal"
 slider h from -10 to 10, starting at 1, in steps of 0.1
 plot f1(x, y) = x^2 - y^2, opacity 0.5, with 24 samples
 draw the plane z = h
 mark (0, 0, 0), labelled "saddle point"
-write "z = {h}" at (5.5, -5.5, h), center
+write "z = {h}" at (5, -5, h), center
 ```
 
 </details>

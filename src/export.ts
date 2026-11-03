@@ -13,6 +13,7 @@
 import type { SettingsManager } from './settings';
 import { AnnotationSize, FillPattern, Function3DParameters, MarkerSize, RendererConfig } from './types';
 import { THICKNESS_MAP, TIKZ_COLOR_DEFS } from './colors';
+import { FACET_LINE, colormapOption, colormapRange, isColormap } from './colormaps';
 import { FunctionInfo, MathContext, fmtNum, texLabel } from './mathcontext';
 import { Pt, View, clipPolylineToView, pointInRings, simplifyPolyline } from './geometry';
 import {
@@ -950,9 +951,10 @@ const AXIS_INDEX: Record<Axis3, number> = { x: 0, y: 1, z: 2 };
 
 /**
  * pgfplots code for a 3D chart: surfaces as `\addplot3[surf|mesh]` with
- * the preview's shading (30 % tint at zmin to the full colour at zmax),
- * planes, points and segments from computeScene3D, labels. The axis takes
- * the preview's camera and box shape (previewCamera3D, unitVectors).
+ * the preview's shading (30 % tint at zmin to the full colour at zmax, or
+ * the surface's colour map, src/colormaps.ts), planes, points and segments
+ * from computeScene3D, labels. The axis takes the preview's camera and box
+ * shape (previewCamera3D, unitVectors).
  */
 export function generateTikz3D(settings: SettingsManager, ctx: MathContext): string {
     const config = settings.toRendererConfig(ctx);
@@ -1138,21 +1140,30 @@ function surfaceSpec(f: Function3DParameters, index: number, ctx: MathContext, b
     } catch {
         fn = null;
     }
-    const c = colors.use(f.color);
-    const map = `etSurface${index + 1}`;
     const style: string[] = [];
-    if (f.wireframe) {
-        // One-colour colormap: mesh lines take the surface colour.
-        style.push('mesh', `colormap={${map}}{color=(${c}) color=(${c})}`);
+    const opacity = clamp(num(f.opacity, 0.7), 0, 1);
+    if (isColormap(f.colormap)) {
+        // Colours by height through a colour map, over the box's z range (diverging: symmetric
+        // about z = 0), as the preview spreads it; facet lines neutral and faint.
+        const [lo, hi] = colormapRange(f.colormap, box.zmin, box.zmax);
+        const meta = `point meta min=${fmtNum(lo)}, point meta max=${fmtNum(hi)}`;
+        if (f.wireframe) style.push('mesh', colormapOption(f.colormap), meta);
+        else style.push('surf', colormapOption(f.colormap), meta, `faceted color=${FACET_LINE.tikz}`, `opacity=${fmtNum(opacity)}`);
     } else {
-        const opacity = clamp(num(f.opacity, 0.7), 0, 1);
-        style.push(
-            'surf',
-            `colormap={${map}}{color=(${c}!30!white) color=(${c})}`,
-            `point meta min=${fmtNum(box.zmin)}, point meta max=${fmtNum(box.zmax)}`,
-            `faceted color=${c}`,
-            `opacity=${fmtNum(opacity)}`
-        );
+        const c = colors.use(f.color);
+        const map = `etSurface${index + 1}`;
+        if (f.wireframe) {
+            // One-colour colormap: mesh lines take the surface colour.
+            style.push('mesh', `colormap={${map}}{color=(${c}) color=(${c})}`);
+        } else {
+            style.push(
+                'surf',
+                `colormap={${map}}{color=(${c}!30!white) color=(${c})}`,
+                `point meta min=${fmtNum(box.zmin)}, point meta max=${fmtNum(box.zmax)}`,
+                `faceted color=${c}`,
+                `opacity=${fmtNum(opacity)}`
+            );
+        }
     }
     return {
         name: f.name || `Surface ${index + 1}`,

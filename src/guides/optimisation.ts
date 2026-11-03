@@ -256,8 +256,8 @@ function regionsGuide(): Guide {
 // ------------------------------------------------------------ areas between
 
 function areasBetweenGuide(): Guide {
-    // The view the editor fits to the first formula typed into "Start a chart".
-    const view = { xmin: '-1.025', xmax: '10.525', ymin: '0.902', ymax: '3.099' };
+    // The view the editor fits to the first formula typed into "Start a chart": x keeps the default, y is fitted.
+    const view = { ymin: '0.8', ymax: '3.2' };
     const f1 = fn('f1', '2 + sin(x)', 'black');
     const f2 = fn('f2', '2 + cos(x)', 'blue');
     const above = 'f2 <= y <= f1';

@@ -49,7 +49,7 @@ The same guides are in the editor: open the Help tab. There each step shows a li
 
 | Finished chart | Guide |
 | --- | --- |
-| <a href="surfaces-3d.md"><img src="img/surfaces-3d-card.png" alt="Finished chart of the guide: Surfaces, planes and points in 3D" width="260"></a> | **[Surfaces, planes and points in 3D](surfaces-3d.md)**<br>Plot a surface z = f(x, y), fix the shape of the box, turn the view, and cut the surface with a plane on a slider.<br>Core · 10 min · 7 steps |
+| <a href="surfaces-3d.md"><img src="img/surfaces-3d-card.png" alt="Finished chart of the guide: Surfaces, planes and points in 3D" width="260"></a> | **[Surfaces, planes and points in 3D](surfaces-3d.md)**<br>Plot a surface z = f(x, y), choose the shape of its box, turn the view, and cut the surface with a plane on a slider.<br>Core · 10 min · 7 steps |
 
 ## Notes and export
 

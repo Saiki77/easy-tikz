@@ -310,3 +310,26 @@ test('words: after a word changed, a note\'s charts that used it are rewritten i
     assert.ok(r.text.includes('{ "v": 4, "functions": [{ "name": "f", "expression": "x" }] }'), 'a JSON block stays');
     assert.equal(rewordNote(note, GERMAN, GERMAN).changed, 0);
 });
+
+test('words: a colour map and the cube line take words of their own', () => {
+    const words = clean({ ...GERMAN, words: { ...GERMAN.words, viridis: ['Farbverlauf'], cube: ['Würfel'] } });
+    withWords(words, () => {
+        const text = ['3d', 'Würfel', 'plotte z = x^2 - y^2 in Farbverlauf'].join('\n');
+        const r = parseChartText(text);
+        assert.deepEqual(r.problems, []);
+        assert.equal(r.data.boxAspect, 'equal');
+        assert.equal((r.data.functions3D as Data[])[0].colormap, 'viridis');
+        // The built-in words still work beside them.
+        assert.equal(canonical(parseChartText('3d\ncube\nplot z = x^2 - y^2 in viridis').data), canonical(r.data));
+        const printed = printChartText(r.data).split('\n');
+        assert.deepEqual(printed, ['3d', 'Würfel', 'plotte s1(x, y) = x^2 - y^2 in Farbverlauf']);
+        assert.equal(writeChartText(text, r.data), text);
+        // A map on a function is still named as typed.
+        const wrong = parseChartText('plotte f(x) = x^2 in Farbverlauf');
+        assert.equal(wrong.problems.length, 1);
+        assert.equal(wrong.problems[0].column, 'plotte f(x) = x^2 '.length + 1);
+    });
+    assert.match(wordProblem('viridis', 'plot', GERMAN), /built-in word for "viridis"/);
+    assert.match(wordProblem('cube', 'plot', GERMAN), /built-in word for "cube"/);
+    assert.match(wordsToText(clean({ words: { heat: ['Glut'] }, bundles: [], write: 'yours' })), /^heat = Glut$/m);
+});

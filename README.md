@@ -23,10 +23,12 @@
 - **Pictures for lectures.** Areas between curves, tangents, linear and integer programs with their optimum, level curves, market equilibria, parametric and polar curves, 3D surfaces.
 - **LaTeX and AI.** Export a standalone pgfplots document that compiles with pdflatex, or let an AI app make the chart: it checks it with the plugin's own code ([AI guide](docs/ai.md)).
 
-## What's new in 4.7
+## What's new in 4.8
 
-- **In your language.** Menus, settings, messages and the 24 guides in the Help tab follow the language Obsidian is set to. Japanese is the first one besides English, asked for in [issue #4](https://github.com/Saiki77/easy-tikz/issues/4), where corrections are welcome. Formulas and the words of the chart language stay as they are. Settings, Interface language.
-- **Your own chart words** (4.6). Give any piece of the chart language your own words, in your language or your own terms (`plot` can be `graph`, or `zeichne`), and one word of your own for several options (`objective` = `in red, dashed`). Settings, Chart words. The built-in words keep working beside yours, and the editor writes yours.
+- **Colours by height.** Colour a 3D surface by its height: Viridis, Heat, Cool, Diverging (white at 0), Rainbow or Greyscale, on the surface card or in text as `in viridis`. The LaTeX export draws the same colours.
+- **A smarter fit.** The first formula and the fit button give round ranges that hold everything drawn: curves, surfaces, points, labels and bounded regions. 0 is taken in when it is near, asymptotes no longer stretch the view, and fitting twice changes nothing.
+- **Cubes for 3D.** New 3D charts start in a cube box, so a surface such as z = x² − y² shows its shape. Proportional is one click away, and charts you already have keep their box.
+- **In your language** (4.7). Menus, settings, messages and the 24 guides in the Help tab follow the language Obsidian is set to. Japanese is the first one besides English, asked for in [issue #4](https://github.com/Saiki77/easy-tikz/issues/4), where corrections are welcome.
 From 4.5, charts in plain words with the chart drawn under the block as you type:
 
 <p align="center">
@@ -34,7 +36,7 @@ From 4.5, charts in plain words with the chart drawn under the block as you type
 </p>
 <p align="center">From a note with no chart: a block is opened, each line is typed in words, and the chart appears under the block and follows every key. <a href="docs/media/text.mp4">Watch the MP4</a> (37 s).</p>
 
-[Everything new in version 4](docs/whats-new.md): the interface in Japanese (4.7), your own chart words (4.6), charts in plain words (4.5), charts as text and phones (4.4), charts with AI (4.3), drag to edit and live sliders (4.0).
+[Everything new in version 4](docs/whats-new.md): colours by height and a smarter fit (4.8), the interface in Japanese (4.7), your own chart words (4.6), charts in plain words (4.5), charts as text and phones (4.4), charts with AI (4.3), drag to edit and live sliders (4.0).
 
 ## Guides
 

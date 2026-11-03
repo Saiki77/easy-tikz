@@ -2,6 +2,19 @@
 
 [Overview](../README.md) · [Guides](guides/README.md) · [Reference](reference.md) · [Changelog](../CHANGELOG.md)
 
+## 4.8: colours by height, a smarter fit, cubes for 3D
+
+- **Colours by height.** A 3D surface can take a colour map instead of its own colour: Viridis (dark purple to yellow), Heat (black, red, yellow, white), Cool (white, blue, magenta), Diverging (blue below z = 0, white at 0, red above), Rainbow or Greyscale. Pick one in the row **Colours by height** on the surface card, or write it like a colour: `plot z = x^2 - y^2 in viridis`. The colours spread over the z range of the box, and the LaTeX export draws the same ones with pgfplots.
+- **A smarter fit.** The fit after the first formula, the fit button in the preview (now **Fit ranges to the chart**) and Chart, Auto-fit pick round ends, such as `-25` to `25` instead of `-27.011` to `27.011`. They hold everything the chart draws: curves, surfaces, points (computed ones too), labels, segments, arrows, and the regions and level curves that are bounded. 0 is taken in when it is near, a nearly symmetric range becomes symmetric, a curve that runs off to an asymptote no longer stretches the view, and fitting twice changes nothing. A function without a domain goes on forever, so x stays and y is fitted over it.
+- **Cubes for 3D.** A chart switched to 3D starts in a cube box, so z = x² − y² is a saddle instead of a thin column. Chart, 3D view, **Box** switches to Proportional, the true proportions of the ranges. Charts that are already 3D keep their box. In text, the line `cube` asks for a cube.
+
+```easy-tikz
+3d
+cube
+show x from -5 to 5, y from -5 to 5 and z from -25 to 25
+plot z = x^2 - y^2 for x from -5 to 5 and y from -5 to 5 in viridis, opacity 0.9
+```
+
 ## 4.7: the interface in your language
 
 - **Japanese.** When Obsidian is set to Japanese, so is Easy TikZ: every menu, button, setting, notice, dialog and problem message (about 1,400 texts), and the 24 guides in the Help tab. It was asked for in [issue #4](https://github.com/Saiki77/easy-tikz/issues/4) by a reader who offered to check it; corrections are welcome there.

@@ -20,7 +20,7 @@ This guide is everything you need. It is served by the plugin's local AI server 
 - Every letter that is not `x`, `y`, a function name, a shape name or a built-in (`pi`, `e`, `sin`, ...) must be a slider: `slider a from 0 to 5, starting at 1`.
 - Names: a function is named in its line, `plot f(x) = ...` or `plot demand(x) = ...`. Shapes are named `R1` (regions), `C1` (curves), `P1` (points), `S1` (segments) in order, or by a prefix: `eq: mark where demand and supply cross`. Other lines use the names: `f2 <= y <= f1`, `P1_x`, `eq_y`. `the region` is the chart's only shaded region. Built-in names such as `E`, `e`, `x` or `pi` cannot be taken.
 - Shading is `shade where ...` with `<=` and `>=` conditions joined by `and`. A line or circle is an equation such as `draw 2x + 3y = 12`. A region condition never uses a single `=`.
-- Colours: `black`, `gray`, `red`, `orange`, `brown`, `green`, `teal`, `blue`, `purple`, `magenta`, written `in red`. Nothing else exports.
+- Colours: `black`, `gray`, `red`, `orange`, `brown`, `green`, `teal`, `blue`, `purple`, `magenta`, written `in red`. Nothing else exports. A surface may take a colour map instead (`in viridis`, see 3D).
 - Labels are templates in quotes: `labelled "z = {c}"`; `{c}` or `{P1_val:2}` print a live value, `$x^2$` is math.
 - Never invent options. The checker reports every word it does not know, with the options that object takes.
 - The plugin does not differentiate or integrate. A slope or an area in a label is a formula you work out (for example `3a^2 - 3` or an antiderivative as a hidden function); tell the user it is yours.
@@ -82,6 +82,7 @@ The short forms of version 4.4 still work and mean the same: `view x -3..3, y -4
 | `equal scale` | Same unit on both axes, so circles stay round. |
 | `polar` | Every function is r(θ), written with `theta`. A line `plot r(theta) = ...` makes the chart polar too. |
 | `3d` | A 3D chart. A surface or plane line makes the chart 3D too. |
+| `cube` | 3D: the box is a cube, whatever the ranges. Without it, its edges follow the ranges. |
 | `variables q, p` | Other axis letters. `x` and `y` keep working. |
 | `snippet` | The LaTeX export is only the tikzpicture, not a document. |
 | `set field = value` | Any chart field from the tables below, the value as JSON: `set showSlidersInNote = false`, `set displayWidth = 480`. |
@@ -99,7 +100,7 @@ The short forms of version 4.4 still work and mean the same: `view x -3..3, y -4
 
 Function options: `in blue` (a colour), `thin` `thick` `very thin` `very thick`, `dashed`, `hidden` (not drawn, still usable by name), `with a legend` or `with the legend "text"`, `from x = 0 to 4` (parametric and polar: `for t from 0 to 2pi`, `for theta from 0 to pi`), `with its tangent at a` (a number, a formula, a slider, or `min`, `max`, `min2`, ...), `with its extrema`, `filled` (to the x-axis), `opacity 0.3`, `pattern dots`.
 
-Surface options: `in blue`, `for x from -2 to 2 and y from -2 to 2`, `opacity 0.7`, `with 40 samples`, `wireframe`, `hidden`.
+Surface options: `in blue`, `in viridis` (colours by height, see 3D), `for x from -2 to 2 and y from -2 to 2`, `opacity 0.7`, `with 40 samples`, `wireframe`, `hidden`.
 
 **Regions**
 
@@ -163,6 +164,7 @@ The options above set these fields. A `set` line or a `key=value` option can set
 | `variables` | `"x, y"` | Other axis letters, such as `"q, p"` or `"x1, x2"`. `x` and `y` keep working, and point labels still use `{x}` and `{y}`. |
 | `dimension` | `false` | `true` makes a 3D chart (see 3D). |
 | `zmin` `zmax` `axis_label_z` | `"-5"` `"5"` `"z"` | 3D only. |
+| `boxAspect` | `"true"` | 3D only: `"true"` gives the box the proportions of the ranges, `"equal"` makes it a cube (the line `cube`). |
 | `showSlidersInNote` | `true` | Sliders under the chart in the note. Moving them never edits the note. |
 | `documentSetup` | `true` | The LaTeX export is a standalone document (`false`: only the tikzpicture). |
 | `displayWidth` `displayAlign` | (unset) | Width in px and `"left"`, `"center"` or `"right"` of the chart in the note. Usually leave them out. |
@@ -286,10 +288,13 @@ Crossings (intersections) come sorted from left to right, so `P1_x < P1_x2 < ...
 
 ## 3D
 
-Write `3d` and a `show` line with a z range. Surfaces are `plot s(x, y) = x^2 + y^2 for x from -2 to 2 and y from -2 to 2 in blue, opacity 0.7` (or `plot z = ...`); planes are `draw the plane z = h`; points, segments and text labels take `(x, y, z)`. In JSON: `"dimension": true`, surfaces in `functions3D`, points and segments with `"dim": 3`.
+Write `3d` and a `show` line with a z range; add `cube` for a box that is a cube whatever the ranges. Surfaces are `plot s(x, y) = x^2 + y^2 for x from -2 to 2 and y from -2 to 2 in blue, opacity 0.7` (or `plot z = ...`); planes are `draw the plane z = h`; points, segments and text labels take `(x, y, z)`. In JSON: `"dimension": true`, surfaces in `functions3D`, points and segments with `"dim": 3`.
+
+A surface in a colour is shaded by height: light at the bottom of the box, the full colour at the top. A colour map colours it by height instead, written like a colour: `plot z = x^2 - y^2 in viridis`. The maps: `viridis` (dark purple to yellow), `heat` (black, red, yellow, white), `cool` (white, blue, magenta), `diverging` (blue below z = 0, white at 0, red above), `rainbow` (dark blue, cyan, yellow, dark red), `greyscale` (black to white). The colours spread over the z range of the box (`diverging`: from -m to m, m the larger of |zmin| and |zmax|); a wireframe draws its lines in the map's colours. The map is a surface's own option: on anything else it is a problem. In JSON it is the surface field `colormap`: `"colormap": "viridis"`; without it the surface takes its `color`.
 
 ```easy-tikz
 3d
+cube
 show x from -2 to 2, y from -2 to 2 and z from 0 to 8
 slider h from 0 to 8, starting at 3
 plot z = x^2 + y^2 for x from -2 to 2 and y from -2 to 2 in blue, opacity 0.7

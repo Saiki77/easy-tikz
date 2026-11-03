@@ -217,15 +217,15 @@ test('whats new: the text beside the chart is the whole chart, in a few lines', 
     assert.ok(!lines.some((l) => l.startsWith('raw ') || l.startsWith('set ')), text);
 });
 
-test('whats new: 4.6 and 4.7 come first and name the interface in your language, your own words, the lines in words and the chart under the block', () => {
+test('whats new: 4.7 and 4.8 come first and name colours by height, the smarter auto-fit, cubes and the interface in your language', () => {
     assert.deepEqual(
         WHATS_NEW_RECENT.map((i) => i.title),
-        ['In your language', 'Your own chart words', 'Charts in plain words', 'The chart under the block']
+        ['Colours by height', 'A smarter Auto-fit', 'Cubes for 3D', 'In your language']
     );
-    assert.equal(WHATS_NEW_RECENT_TITLE, 'New in 4.6 and 4.7');
-    assert.equal(WHATS_NEW_VERSION, '4.7.0');
+    assert.equal(WHATS_NEW_RECENT_TITLE, 'New in 4.7 and 4.8');
+    assert.equal(WHATS_NEW_VERSION, '4.8.0');
     // The example of the lines in words is a line the plugin reads.
-    const plain = WHATS_NEW_RECENT.find((i) => i.title === 'Charts in plain words');
+    const plain = [...WHATS_NEW_RECENT, ...WHATS_NEW_MORE].find((i) => i.title === 'Charts in plain words');
     const example = plain ? /`([^`]+)`/.exec(plain.text) : null;
     assert.ok(plain && example && parseChartText(example[1]).problems.length === 0, plain ? plain.text : 'no item Charts in plain words');
 });

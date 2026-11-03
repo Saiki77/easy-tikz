@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [4.8.0] - 2026-11-03
+
+Colours by height, a fit that picks round ranges for everything drawn, and cubes for new 3D charts.
+
+### Added
+
+- **Colours by height** (`src/colormaps.ts`): six colour maps for 3D surfaces, Viridis, Heat, Cool, Diverging (blue below z = 0, white at 0, red above), Rainbow and Greyscale. The surface card has a row **Colours by height** with a swatch for each; the default stays your colour, light to dark. The preview and the LaTeX export use the same colour stops (pgfplots' `viridis`, `hot2`, `cool`, `jet` and `blackwhite`, Diverging as a `colormap` of its own). Choosing a colour in the card's header goes back to that colour. In text a map is written like a colour (`plot z = x^2 - y^2 in viridis`), in JSON it is the surface field `colormap`, and a map on anything but a surface is a problem. AI apps find the maps in the guide and the checker.
+- **The line `cube`** in a chart's text: a 3D box that is a cube whatever the ranges (`boxAspect: "equal"`).
+
+### Changed
+
+- **Auto-fit** (`src/fit.ts`), for the first formula, the preview's fit button and Chart, Auto-fit: round ends on a nice step of about a twentieth of the span (`-25` to `25`, not `-27.011` to `27.011`), holding everything the chart draws: functions and surfaces, points (computed ones too), labels, segments, arrows, and the regions and level curves that are bounded. 0 is taken in when it is near, and a range that is nearly symmetric becomes symmetric. A curve is cut at its 1st and 99th percentile only when it runs off to an asymptote. A function without a domain goes on forever, so x stays and y is fitted over it; when everything drawn goes on forever, a message says there is nothing to fit. Fitting twice changes nothing.
+- **The fit button** in the preview's action pill is now called **Fit ranges to the chart**.
+- **New 3D charts start in a cube box.** Switching a chart to 3D before it holds anything 3D makes its box a cube; switching back right away restores the box it had. Charts that are already 3D keep their box, and Proportional is one click away in Chart, 3D view.
+- **Guides:** Your first chart, Parametric and polar curves, Shade the areas between two curves, and Surfaces, planes and points in 3D show the ranges the new fit writes. In the 3D guide, the second step compares Cube with Proportional.
+- **What's new** opens once more: "New in 4.7 and 4.8" names colours by height first.
+
 ## [4.7.0] - 2026-10-30
 
 The interface in your language. Menus, settings, messages and the 24 guides in the Help tab follow the language Obsidian is set to, with Japanese as the first one besides English, as asked for in issue #4.

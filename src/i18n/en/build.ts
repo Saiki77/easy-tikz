@@ -237,6 +237,19 @@ export const build = {
         'Grid points per axis. The preview uses {count}; the exported code uses at most {max}, the most pdflatex has memory for.',
     'build.surface.samplesHint':
         'Grid points per axis. More is smoother but slower. The TikZ export uses at most {max} and shares a budget between surfaces so pdflatex can compile it.',
+    'build.surface.colormap': 'Colours by height',
+    'build.surface.colormapDivergingHint': 'Diverging is near white at z = 0, blue below and red above.',
+    'build.surface.summaryColormap': '{formula}, {map}',
+    'build.surface.summaryWireframeColormap': '{formula}, wireframe, {map}',
+
+    // ---- colour maps by height (src/colormaps.ts; the stored values and the chart words stay English)
+    'build.colormap.own': 'Your colour',
+    'build.colormap.viridis': 'Viridis',
+    'build.colormap.heat': 'Heat',
+    'build.colormap.cool': 'Cool',
+    'build.colormap.diverging': 'Diverging',
+    'build.colormap.rainbow': 'Rainbow',
+    'build.colormap.greyscale': 'Greyscale',
 
     // ---- kinds of layer cards (read by screen readers with the card's name)
     'build.kind.region': 'Region',

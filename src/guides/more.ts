@@ -166,20 +166,21 @@ function saddleChart(step: number): ChartData {
     if (step >= 6) tools.push(points('t1', 'P1', { dim: 3, points: '(0, 0, 0)', label: 'saddle point' }));
     return newChart({
         dimension: true,
-        // The ranges the editor writes when the first surface is typed into Start a chart.
-        xmin: '-5.5',
-        xmax: '5.5',
-        ymin: '-5.5',
-        ymax: '5.5',
-        zmin: '-27.011',
-        zmax: '27.011',
-        boxAspect: step >= 2 ? 'equal' : 'true',
+        // What the editor writes when the first surface is typed into Start a chart: the
+        // fitted, rounded ranges, in the cube box a new 3D chart starts with.
+        xmin: '-5',
+        xmax: '5',
+        ymin: '-5',
+        ymax: '5',
+        zmin: '-25',
+        zmax: '25',
+        boxAspect: 'equal',
         rotationX: step >= 3 ? 20 : 30,
         rotationZ: step >= 3 ? 60 : 45,
         functions3D: [surface('f1', 'x^2 - y^2', step >= 4 ? { opacity: 0.5, samples: 24 } : {})],
         tools,
         parameters: step >= 5 ? [slider('h')] : [],
-        annotations: step >= 7 ? [label('5.5', '-5.5', 'z = {h}', { z: 'h' })] : [],
+        annotations: step >= 7 ? [label('5', '-5', 'z = {h}', { z: 'h' })] : [],
     });
 }
 
@@ -468,12 +469,12 @@ const ARROWS_BRACES: Guide = {
 const SURFACES_3D: Guide = {
     id: 'surfaces-3d',
     title: 'Surfaces, planes and points in 3D',
-    summary: 'Plot a surface z = f(x, y), fix the shape of the box, turn the view, and cut the surface with a plane on a slider.',
+    summary: 'Plot a surface z = f(x, y), choose the shape of its box, turn the view, and cut the surface with a plane on a slider.',
     category: '3D',
     level: 'core',
     minutes: 10,
     outcomes: [
-        'Plot a surface and give its box a sensible shape',
+        'Plot a surface and choose the shape of its box',
         'Rotate, zoom and style a 3D chart',
         'Add a plane on a slider, a labelled point and a label that moves with the slider',
     ],
@@ -484,19 +485,22 @@ const SURFACES_3D: Guide = {
             title: 'Switch to 3D and type a surface',
             body: paragraphs(
                 'Open the editor on an empty chart and click 3D in the header. Type the formula into the Start a chart field and press Enter.',
-                'The surface appears as a tall, narrow sail. That is correct: the editor fitted the box to the surface, z runs from about -27 to 27 while x and y only run from -5.5 to 5.5, and the box is drawn in true proportions.'
+                'The saddle appears in a cube: the surface rises along x and falls along y. The editor fitted the ranges to the surface and rounded them: x and y run from -5 to 5, z from -25 to 25.'
             ),
             type: [{ where: 'Start a chart', text: 'x^2 - y^2' }],
             chart: saddleChart(1),
-            shot: { reveal: ['f1'], caption: 'The surface in a box with true proportions: tall and narrow.' },
+            shot: { reveal: ['f1'], caption: 'The saddle z = x^2 - y^2 in a cube, with the ranges fitted to it.' },
             tip: 'A surface has its own x range and y range on its card (here `-5:5`). They say where the surface is computed. The box around it is set in the Chart tab under Ranges.',
         },
         {
-            title: 'Make the box a cube',
-            body: 'Open the Chart tab. Under 3D view, set Box to Cube. Every axis now has the same length on screen, and the saddle shows: the surface rises along x and falls along y.',
+            title: 'Choose the shape of the box',
+            body: paragraphs(
+                'Open the Chart tab. Under 3D view, Box reads Cube: a new 3D chart draws every axis with the same length on screen. That is why the saddle shows, although z runs from -25 to 25 and x and y only from -5 to 5.',
+                'Set Box to Proportional to see the true proportions: the surface turns into a narrow column, five times as high as it is wide. Then set Box back to Cube.'
+            ),
             chart: saddleChart(2),
-            shot: { tab: 'chart', caption: 'Box set to Cube under 3D view in the Chart tab.' },
-            tip: 'Proportional suits charts whose three ranges are similar, such as a sphere. Cube suits charts where z is on a different scale than x and y.',
+            shot: { tab: 'chart', caption: 'Box under 3D view in the Chart tab. Cube gives every axis the same length.' },
+            tip: 'Proportional suits charts whose three ranges are similar, such as a sphere. Charts from older versions of Easy TikZ keep the box they had: if one looks like a narrow column, set its Box to Cube.',
         },
         {
             title: 'Turn the view',
@@ -545,8 +549,8 @@ const SURFACES_3D: Guide = {
             ),
             type: [
                 { where: 'Label 1, Text', text: 'z = {h}' },
-                { where: 'Label 1, Position x', text: '5.5' },
-                { where: 'Label 1, Position y', text: '-5.5' },
+                { where: 'Label 1, Position x', text: '5' },
+                { where: 'Label 1, Position y', text: '-5' },
                 { where: 'Label 1, Position z', text: 'h' },
             ],
             chart: saddleChart(7),
@@ -878,7 +882,7 @@ const SHORTCUTS: Guide = {
             body: list(
                 'Drag empty space to pan. Scroll, or pinch on a trackpad, to zoom around the pointer.',
                 'With the preview focused and nothing selected, the arrow keys pan by a twentieth of the view.',
-                'The action pill at the bottom of the preview has Fit ranges to the functions, Reset ranges, Major grid and Lock pan and zoom.',
+                'The action pill at the bottom of the preview has Fit ranges to the chart, Reset ranges, Major grid and Lock pan and zoom.',
                 'A range written as a formula, such as `2a`, is left alone by pan and zoom. Change it in the Chart tab under Ranges.'
             ),
             chart: lpChart(3),
@@ -937,7 +941,7 @@ const SHORTCUTS: Guide = {
             body: list(
                 'Unknown name ax: `ax` is one name. Click the fix under the field (Use a*x), or type `a x`.',
                 'A dot on a tab, or a chip at the top left of the preview: something is wrong. Click the chip to jump to the field. The rest of the chart still draws.',
-                'The picture is empty or cut off: click Reset ranges or Fit ranges to the functions in the action pill, and check the Domain of the function.',
+                'The picture is empty or cut off: click Reset ranges or Fit ranges to the chart in the action pill, and check the Domain of the function.',
                 'A drag pans when it should move a shape: switch on Edit shapes by dragging in the action pill. A drag moves a shape when it should pan: hold Space.',
                 'A point will not move: it is computed (an optimum, a corner, an intersection). Drag the lines that define it.',
                 'A chart in a note does not keep its width: it sits in a callout or a `~~~` fence, where the block cannot be found.'

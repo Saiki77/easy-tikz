@@ -45,6 +45,7 @@ export const PIECES: readonly Piece[] = [
     piece('with-a-grid', 'with a grid', 'lines', 'panels.words.what.withAGrid'),
     piece('with-a-fine-grid', 'with a fine grid', 'lines', 'panels.words.what.withAFineGrid'),
     piece('equal-scale', 'equal scale', 'lines', 'panels.words.what.equalScale'),
+    piece('cube', 'cube', 'lines', 'panels.words.what.cube'),
     piece('title', 'title', 'lines', 'panels.words.what.title', { keepsRest: true }),
     piece('xlabel', 'xlabel', 'lines', 'panels.words.what.xlabel', { keepsRest: true }),
     piece('ylabel', 'ylabel', 'lines', 'panels.words.what.ylabel', { keepsRest: true }),
@@ -117,6 +118,13 @@ export const PIECES: readonly Piece[] = [
     piece('brown', 'brown', 'colours', 'panels.words.what.brown'),
     piece('teal', 'teal', 'colours', 'panels.words.what.teal'),
     piece('magenta', 'magenta', 'colours', 'panels.words.what.magenta'),
+    // Colour maps by height (src/colormaps.ts): written like a colour, `in viridis`.
+    piece('viridis', 'viridis', 'colours', 'panels.words.what.viridis'),
+    piece('heat', 'heat', 'colours', 'panels.words.what.heat'),
+    piece('cool', 'cool', 'colours', 'panels.words.what.cool'),
+    piece('diverging', 'diverging', 'colours', 'panels.words.what.diverging'),
+    piece('rainbow', 'rainbow', 'colours', 'panels.words.what.rainbow'),
+    piece('greyscale', 'greyscale', 'colours', 'panels.words.what.greyscale'),
 ];
 
 /** The title of each group: keys, shown with t(). */

@@ -239,6 +239,19 @@ export const build: Messages<typeof en> = {
         '軸ごとの格子点の数です。プレビューでは {count} 個を使いますが、出力するコードでは pdflatex のメモリに収まる {max} 個までです。',
     'build.surface.samplesHint':
         '軸ごとの格子点の数です。多いほど滑らかになりますが、遅くなります。TikZ 出力では最大 {max} 個までとし、pdflatex でコンパイルできるよう曲面どうしで上限を分け合います。',
+    'build.surface.colormap': '高さで色分け',
+    'build.surface.colormapDivergingHint': '発散型では z = 0 が白に近い色になり、それより低いところは青、高いところは赤になります。',
+    'build.surface.summaryColormap': '{formula}（{map}）',
+    'build.surface.summaryWireframeColormap': '{formula}（ワイヤーフレーム、{map}）',
+
+    // ---- colour maps by height
+    'build.colormap.own': '指定した色',
+    'build.colormap.viridis': 'Viridis',
+    'build.colormap.heat': '暖色',
+    'build.colormap.cool': '寒色',
+    'build.colormap.diverging': '発散型',
+    'build.colormap.rainbow': '虹色',
+    'build.colormap.greyscale': 'グレースケール',
 
     // ---- kinds of layer cards
     'build.kind.region': '領域',

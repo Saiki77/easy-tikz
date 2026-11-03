@@ -26,7 +26,7 @@ export const editor = {
     'editor.preview.emptyTitle': 'Your chart appears here',
     'editor.preview.emptyHint3d': 'Drag to rotate',
     'editor.preview.emptyHint2d': 'Drag to pan, scroll to zoom',
-    'editor.preview.fit': 'Fit ranges to the functions',
+    'editor.preview.fit': 'Fit ranges to the chart',
     'editor.preview.resetRanges': 'Reset ranges',
     'editor.preview.majorGrid': 'Major grid',
     'editor.preview.lockPanZoom': 'Lock pan and zoom',
@@ -46,6 +46,8 @@ export const editor = {
     'editor.status.cannotFit': 'Cannot fit: {error}',
     'editor.status.nothingToFit2d': 'Nothing to fit yet: add a function first.',
     'editor.status.nothingToFit3d': 'Nothing to fit yet: add a surface first.',
+    /** Auto-fit when everything the chart draws goes on forever (lines, half-planes). */
+    'editor.status.nothingBounded': 'Nothing to fit: the lines, curves and regions here go on forever.',
     'editor.status.rangesUseExpressions': 'The ranges use expressions: edit them in Chart > Ranges.',
     'editor.status.tikzFailed': 'Could not generate TikZ: {error}',
     'editor.status.exportFailed': 'Could not export the preview: {error}',

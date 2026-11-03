@@ -19,6 +19,7 @@
  * words do not cover.
  */
 import { RESERVED_NAMES } from '../migrate';
+import { isColormap } from '../colormaps';
 import { ChartWords, chartWords, hasWords, readWords, shadowed, typedColumn } from './words';
 import { MessageKey, t as msg } from '../i18n';
 
@@ -54,7 +55,7 @@ export interface TextChart {
 
 /** Words that start a line (a function may still be called like one: line(x) = ... is a function). */
 export const KEYWORDS = new Set([
-    'view', 'title', 'xlabel', 'ylabel', 'zlabel', 'axes', 'grid', 'size', 'equal', 'polar', '3d', 'snippet', 'variables', 'set',
+    'view', 'title', 'xlabel', 'ylabel', 'zlabel', 'axes', 'grid', 'size', 'equal', 'polar', '3d', 'cube', 'snippet', 'variables', 'set',
     'slider', 'shade', 'line', 'curve', 'levels', 'point', 'points', 'crossings', 'intersections', 'corners', 'max', 'min',
     'integer', 'arrow', 'segment', 'polygon', 'brace', 'text', 'plane', 'raw',
     // the English verbs and openings
@@ -227,6 +228,17 @@ function optionWords(p: Piece): Piece[] {
 
 const isColour = (w: string) => COLORS.has(COLOR_ALIASES[w.toLowerCase()] ?? w.toLowerCase());
 
+/**
+ * Names the block being read gives itself (sliders, functions, named shapes),
+ * lowercase, set while parseBuiltin reads its lines. Such a name stays a name
+ * where a colour map's word could stand (a region called heat in `mark the
+ * maximum of p in heat`), so every line reads as it did before the maps came.
+ */
+let namesNow: ReadonlySet<string> = new Set();
+
+/** A colour map's word (`viridis`, `heat`, ...) that the block does not use as a name. */
+const isMapWord = (w: string) => isColormap(w.toLowerCase()) && !namesNow.has(w.toLowerCase());
+
 /** An option in its short form: the words that only fill it out dropped (`with its tangent at a` is `tangent at a`, `in red` is `red`). */
 function plainOption(o: string): string {
     let t = o.trim();
@@ -236,7 +248,7 @@ function plainOption(o: string): string {
         t = next;
     }
     const colour = /^in\s+([A-Za-z]+)$/i.exec(t);
-    if (colour && isColour(colour[1])) return colour[1];
+    if (colour && (isColour(colour[1]) || isMapWord(colour[1]))) return colour[1];
     const words: Record<string, string> = {
         filled: 'fill',
         'not filled': 'no fill',
@@ -264,7 +276,7 @@ function isOption(raw: string): boolean {
     const o = plainOption(raw);
     const lower = o.toLowerCase();
     if (!o || splitTop(o, ',').length > 1) return false;
-    if (isColour(lower) || THICKNESSES.includes(lower) || OPTION_WORDS.has(lower)) return true;
+    if (isColour(lower) || isMapWord(lower) || THICKNESSES.includes(lower) || OPTION_WORDS.has(lower)) return true;
     if (/^(label|labels|legend)\s+"/i.test(o)) return true;
     if (/^tangent(\s+at)?\s+\S/i.test(o)) return true;
     if (/^(opacity\s+[-+\d.e]+|pattern\s+[a-z-]+|samples\s+[\d.]+)$/i.test(o)) return true;
@@ -444,7 +456,8 @@ const OPTION_HELP: Record<string, string> = {
     points: 'in a colour, small, large, with lines to the axes, with coordinates, labelled "text", hidden',
     segment: 'in a colour, thin, thick, dashed, backwards, labelled "text", hidden',
     text: 'in a colour, small, large, above, below, left, right, center, hidden',
-    surface: 'in a colour, for x from a to b and y from c to d, opacity 0.7, 40 samples, wireframe, hidden',
+    surface:
+        'in a colour, in a colour map (viridis, heat, cool, diverging, rainbow, greyscale), for x from a to b and y from c to d, opacity 0.7, 40 samples, wireframe, hidden',
     plane: 'in a colour, opacity 0.25, hidden',
 };
 
@@ -460,6 +473,11 @@ const KIND_WORDS: Record<keyof typeof OPTION_HELP, MessageKey> = {
     plane: 'problems.text.kindPlane',
 };
 
+/** A kind of object in the reader's words, for messages. */
+function kindWord(kind: string): string {
+    return Object.prototype.hasOwnProperty.call(KIND_WORDS, kind) ? msg(KIND_WORDS[kind]) : kind;
+}
+
 /** Apply the options to `target`; problems are recorded. */
 function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, options: Piece[]) {
     for (const opt of options.flatMap(optionWords)) {
@@ -469,6 +487,12 @@ function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, 
         const color = COLOR_ALIASES[lower] ?? lower;
         if (COLORS.has(color)) {
             target.color = color;
+            continue;
+        }
+        // Colours by height: a surface's option; anything else is told to take a colour.
+        if (isMapWord(lower)) {
+            if (kind === 'surface') target.colormap = lower;
+            else b.problem(opt.at, msg('problems.text.colormapNotSurface', { map: lower, kind: kindWord(kind) }));
             continue;
         }
         const thick = THICKNESSES.find((t) => lower === t);
@@ -490,8 +514,7 @@ function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, 
             continue;
         }
         if (applyKindOption(b, kind, target, opt)) continue;
-        const kindWord = Object.prototype.hasOwnProperty.call(KIND_WORDS, kind) ? msg(KIND_WORDS[kind]) : kind;
-        b.problem(opt.at, msg('problems.text.unknownOption', { option: o, kind: kindWord, options: OPTION_HELP[kind] }));
+        b.problem(opt.at, msg('problems.text.unknownOption', { option: o, kind: kindWord(kind), options: OPTION_HELP[kind] }));
     }
 }
 
@@ -745,14 +768,20 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
         if (explicit) b.explicit.add(explicit);
     });
     const traces: LineTrace[] = [];
-    lines.forEach((raw, i) => {
-        b.line = i + 1;
-        const line = raw.replace(/\s+$/, '');
-        const t = line.trim();
-        const before = opts.trace ? b.snapshot() : null;
-        if (t && !t.startsWith('%') && !t.startsWith('//') && !t.startsWith('#')) statement(b, line);
-        if (before) traces.push(b.traceSince(before, i + 1));
-    });
+    const outside = namesNow;
+    namesNow = new Set([...b.explicit].map((n) => n.toLowerCase()));
+    try {
+        lines.forEach((raw, i) => {
+            b.line = i + 1;
+            const line = raw.replace(/\s+$/, '');
+            const t = line.trim();
+            const before = opts.trace ? b.snapshot() : null;
+            if (t && !t.startsWith('%') && !t.startsWith('//') && !t.startsWith('#')) statement(b, line);
+            if (before) traces.push(b.traceSince(before, i + 1));
+        });
+    } finally {
+        namesNow = outside;
+    }
     // "the region" is the chart's one region.
     const regions = b.tools.filter((tool) => tool.type === 'region');
     for (const ref of b.theRegion) {
@@ -854,6 +883,12 @@ function statement(b: Builder, line: string) {
         case '3d':
             if (rest.text.trim()) b.problem(rest.at, msg('problems.text.standsAlone', { word: '3d' }));
             b.chart.dimension = true;
+            return;
+        case 'cube':
+            // The 3D box as a cube. Only the word alone: `cube + x = 3` (a slider called cube) stays a formula.
+            if (rest.text.trim()) return formulaLine(b, name, body, options);
+            if (options.length) b.problem(options[0].at, msg('problems.text.standsAlone', { word: 'cube' }));
+            b.chart.boxAspect = 'equal';
             return;
         case 'raw':
             return rawLine(b, rest);

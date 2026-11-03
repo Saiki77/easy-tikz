@@ -46,7 +46,7 @@ Example: hold Shift and drag constraint line (2) upwards at the y-axis, from (0,
 
 - Drag empty space to pan. Scroll, or pinch on a trackpad, to zoom around the pointer.
 - With the preview focused and nothing selected, the arrow keys pan by a twentieth of the view.
-- The action pill at the bottom of the preview has Fit ranges to the functions, Reset ranges, Major grid and Lock pan and zoom.
+- The action pill at the bottom of the preview has Fit ranges to the chart, Reset ranges, Major grid and Lock pan and zoom.
 - A range written as a formula, such as `2a`, is left alone by pan and zoom. Change it in the Chart tab under Ranges.
 
 ![Screenshot of the chart preview for step 3: Pan and zoom the preview](img/shortcuts-3.png)
@@ -105,7 +105,7 @@ Example: drag constraint line (1) towards the origin until its condition reads `
 
 - Unknown name ax: `ax` is one name. Click the fix under the field (Use a\*x), or type `a x`.
 - A dot on a tab, or a chip at the top left of the preview: something is wrong. Click the chip to jump to the field. The rest of the chart still draws.
-- The picture is empty or cut off: click Reset ranges or Fit ranges to the functions in the action pill, and check the Domain of the function.
+- The picture is empty or cut off: click Reset ranges or Fit ranges to the chart in the action pill, and check the Domain of the function.
 - A drag pans when it should move a shape: switch on Edit shapes by dragging in the action pill. A drag moves a shape when it should pan: hold Space.
 - A point will not move: it is computed (an optimum, a corner, an intersection). Drag the lines that define it.
 - A chart in a note does not keep its width: it sits in a callout or a `~~~` fence, where the block cannot be found.

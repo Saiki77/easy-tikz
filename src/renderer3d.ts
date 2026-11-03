@@ -1,7 +1,8 @@
-import { RendererConfig, Function3DParameters, MarkerSize, AnnotationSize } from './types';
+import { RendererConfig, Colormap, Function3DParameters, MarkerSize, AnnotationSize } from './types';
 import { LABEL_LOCALS, MathContext, labelDisplayText } from './mathcontext';
 import { ArrowHeads, Scene3D, SceneIssue, computeScene3D, edgeLabelSide3D } from './scene';
 import { COLOR_MAP, THICKNESS_MAP, resolveCssColor } from './colors';
+import { FACET_LINE, colormapCss, colormapRange, isColormap } from './colormaps';
 import { niceInterval, formatTick, stripLatex, hexToRgb, rgbStringToRgb } from './util';
 import { t as msg } from './i18n';
 
@@ -61,9 +62,9 @@ interface Quad {
     p2x: number; p2y: number;
     p3x: number; p3y: number;
     depth: number;
-    /** Resolved fill: shaded by height for surface quads, flat for plane cells. */
+    /** Resolved fill: shaded by height (or a colour map) for surface quads, flat for plane cells. */
     fill: string;
-    /** Resolved base colour, used for edges. */
+    /** Resolved edge colour: the base colour, a wireframe's colour-map colour, or the neutral facet line of a surface with a map. */
     stroke: string;
     wireframe: boolean;
     opacity: number;
@@ -169,6 +170,19 @@ function shadeRgb(rgb: { r: number; g: number; b: number }, t: number): string {
     const g = Math.round(rgb.g * factor + 255 * (1 - factor));
     const b = Math.round(rgb.b * factor + 255 * (1 - factor));
     return `rgb(${r},${g},${b})`;
+}
+
+/** Each colour map at SHADE_LEVELS heights, built on first use (the maps never change). */
+const MAP_SHADES = new Map<Colormap, string[]>();
+
+function mapShades(map: Colormap): string[] {
+    let shades = MAP_SHADES.get(map);
+    if (!shades) {
+        shades = [];
+        for (let k = 0; k < SHADE_LEVELS; k++) shades.push(colormapCss(map, k / (SHADE_LEVELS - 1)));
+        MAP_SHADES.set(map, shades);
+    }
+    return shades;
 }
 
 function errorMessage(e: unknown): string {
@@ -897,14 +911,26 @@ export class SVG3DRenderer {
 
         const color = this.colorInfo(func.color);
         const rgb = color.rgb;
+        // A colour map colours each quad by its height (over the map's range, symmetric
+        // about z = 0 for diverging): the fill of a surface, whose facet lines turn neutral,
+        // or the lines of a wireframe. Without one, the surface's own colour shades the fill.
+        const map = isColormap(func.colormap) ? func.colormap : null;
         let shades = color.shades;
-        if (rgb && !shades) {
+        let lo = zmin;
+        let inv = zRangeInv;
+        if (map) {
+            shades = mapShades(map);
+            const [a, b] = colormapRange(map, zmin, zmax);
+            lo = a;
+            inv = 1 / (b - a || 1);
+        } else if (rgb && !shades) {
             shades = [];
             for (let k = 0; k < SHADE_LEVELS; k++) shades.push(shadeRgb(rgb, k / (SHADE_LEVELS - 1)));
             color.shades = shades;
         }
         const wireframe = func.wireframe;
         const opacity = Number.isFinite(func.opacity) ? Math.max(0, Math.min(1, func.opacity)) : 0.7;
+        const edge = map && !wireframe ? FACET_LINE.css : color.css;
         const zs = data.zs;
         for (let i = 0; i < samples; i++) {
             const rowA = i * stride;
@@ -921,9 +947,12 @@ export class SVG3DRenderer {
                 if (d00 === -Infinity || d10 === -Infinity || d01 === -Infinity || d11 === -Infinity) continue;
                 const avgDepth = (d00 + d10 + d11 + d01) * 0.25;
                 let fill = color.css;
-                if (!wireframe && shades) {
-                    const t = ((zs[i00] + zs[i10] + zs[i01] + zs[i11]) * 0.25 - zmin) * zRangeInv;
-                    fill = shades[Math.round((t < 0 ? 0 : t > 1 ? 1 : t) * (SHADE_LEVELS - 1))];
+                let stroke = edge;
+                if (shades && (map || !wireframe)) {
+                    const t = ((zs[i00] + zs[i10] + zs[i01] + zs[i11]) * 0.25 - lo) * inv;
+                    const shade = shades[Math.round((t < 0 ? 0 : t > 1 ? 1 : t) * (SHADE_LEVELS - 1))];
+                    if (wireframe) stroke = shade;
+                    else fill = shade;
                 }
                 out.push({
                     p0x: sxBuf[i00], p0y: syBuf[i00],
@@ -932,7 +961,7 @@ export class SVG3DRenderer {
                     p3x: sxBuf[i01], p3y: syBuf[i01],
                     depth: avgDepth,
                     fill,
-                    stroke: color.css,
+                    stroke,
                     wireframe,
                     opacity,
                     plane: -1,

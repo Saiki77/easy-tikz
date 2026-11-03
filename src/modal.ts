@@ -9,6 +9,7 @@ import { MATH_REDRAW_LIMIT } from './mathlabel';
 import { SVG3DRenderer } from './renderer3d';
 import { MathContext, renameIdentifier, renameToolReferences } from './mathcontext';
 import { SceneCache, SceneIssue } from './scene';
+import { FitResult, fitSettings } from './fit';
 import { View } from './geometry';
 import { EXAMPLES, defaultParameter } from './migrate';
 import type { ChartDraft } from './templates';
@@ -167,9 +168,6 @@ const WHEEL_MAX_STEPS = 3;
 const ZOOM_3D_STEP = 1.25;
 const ZOOM_3D_MIN = 0.3;
 const ZOOM_3D_MAX = 4;
-/** Fit samples per function / per surface axis. */
-const FIT_SAMPLES = 400;
-const FIT_SAMPLES_3D = 30;
 
 // ---- drag to edit (SPEC3 1.2 to 1.12)
 /** A press becomes an object drag after this much movement (CSS px): mouse and pen, touch. */
@@ -324,17 +322,6 @@ function isTextEditing(el: Element | null): boolean {
     // A focused range slider (the dock) or button leaves Mod+Z to the chart history.
     if (el.tagName === 'INPUT') return ['text', 'search', 'number', 'email', 'url', 'tel', 'password', ''].includes((el as HTMLInputElement).type);
     return (el as HTMLElement).isContentEditable === true;
-}
-
-/**
- * Trim the top and bottom percentile of the values then return min/max.
- * Keeps vertical asymptotes from blowing out auto-fit ranges.
- */
-function trimmedRange(values: number[], percentile = 0.01): [number, number] {
-    if (!values.length) return [0, 1];
-    const sorted = values.slice().sort((a, b) => a - b);
-    const drop = Math.floor(sorted.length * percentile);
-    return [sorted[drop], sorted[sorted.length - 1 - drop]];
 }
 
 /** Decimals that resolve `step` (0.02 -> 2, 5 -> 0), clamped to 0..10. */
@@ -549,6 +536,8 @@ export class TikzModal extends Modal implements PanelHost {
     private onWindowBlur: (() => void) | null = null;
     /** Drag toggle state when no plugin stores it (harness, tests). */
     private dragEditLocal = true;
+    /** The 2D / 3D switch made this chart's box a cube; `before` is the box it had (see cubeOnSwitch). */
+    private cubeSwitch: { before: unknown } | null = null;
 
     constructor(app: App, plugin?: PluginHost, initialState?: TikzModalInitialState) {
         super(app);
@@ -1120,6 +1109,7 @@ export class TikzModal extends Modal implements PanelHost {
         this.dock?.stopAnimations();
         this.resetDrag();
         this.settings.setValue('dimension', is3D);
+        this.cubeOnSwitch(is3D);
         this.drag = null;
         this.layout = null;
         this.hideReadout();
@@ -1127,6 +1117,26 @@ export class TikzModal extends Modal implements PanelHost {
         this.build?.refresh();
         this.chartPanel?.refresh();
         this.commit();
+    }
+
+    /**
+     * A chart the switch turns into 3D with nothing 3D in it yet is a new 3D
+     * chart: its box is a cube, stored explicitly (the stored default stays
+     * Proportional, so existing charts keep their box). A chart that already
+     * holds surfaces or 3D shapes keeps what it has. Back to 2D before
+     * anything 3D was added, the box is what it was, so a look at 3D leaves
+     * no trace in the chart.
+     */
+    private cubeOnSwitch(is3D: boolean) {
+        if (is3D) {
+            if (this.has3DContent()) return;
+            this.cubeSwitch = { before: this.settings.getValue('boxAspect') };
+            this.settings.setValue('boxAspect', 'equal');
+            return;
+        }
+        const made = this.cubeSwitch;
+        this.cubeSwitch = null;
+        if (made && this.settings.getValue('boxAspect') === 'equal' && !this.has3DContent()) this.settings.setValue('boxAspect', made.before);
     }
 
     private setCoordinates(system: 'cartesian' | 'polar') {
@@ -3250,93 +3260,43 @@ export class TikzModal extends Modal implements PanelHost {
     }
 
     /**
-     * Fit the ranges to what the functions (2D) or surfaces (3D) draw.
-     * Drops outliers beyond the 1st / 99th percentile so a vertical
-     * asymptote does not blow out the range. Ranges written as expressions
-     * stay as they are, like pan and zoom. `quiet` (the automatic fit after
-     * the first formula) skips the status messages.
+     * Fit the ranges to everything the chart draws (src/fit.ts): nice ends,
+     * 0 taken in when near, symmetric when nearly so, asymptotes cut. Ranges
+     * written as expressions stay as they are, like pan and zoom; while a
+     * function without a domain is drawn, x stays too and y is fitted over
+     * it. `quiet` (the automatic fit after the first formula) skips the
+     * status messages.
      */
     private autoFit(quiet = false) {
         this.dropPendingWheel();
-        let math: MathContext;
+        let fit: FitResult;
         try {
-            math = this.math();
+            const math = this.math();
             math.setParams(this.list<Parameter>('parameters'));
+            fit = fitSettings(this.settings, math, { x: this.axisFree('x'), y: this.axisFree('y'), z: this.axisFree('z') });
         } catch (e) {
             if (!quiet) this.flashStatus(t('editor.status.cannotFit', { error: errorText(e) }));
             return;
         }
-        const view = this.currentView() ?? this.settings.resolveView(math).view;
-        const xs: number[] = [];
-        const ys: number[] = [];
-        const zs: number[] = [];
-        const push = (x: number, y: number, z?: number) => {
-            if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-            if (z !== undefined && !Number.isFinite(z)) return;
-            xs.push(x);
-            ys.push(y);
-            if (z !== undefined) zs.push(z);
-        };
-
-        if (this.is3D()) {
-            for (const s of this.list<Function3DParameters>('functions3D')) {
-                if (s.hidden || !str(s.expression).trim()) continue;
-                try {
-                    const f = math.fn2(s.expression);
-                    const [x0, x1] = math.domain(s.xDomain, [view.xmin, view.xmax]);
-                    const [y0, y1] = math.domain(s.yDomain, [view.ymin, view.ymax]);
-                    for (let i = 0; i <= FIT_SAMPLES_3D; i++) {
-                        const x = x0 + ((x1 - x0) * i) / FIT_SAMPLES_3D;
-                        for (let j = 0; j <= FIT_SAMPLES_3D; j++) {
-                            const y = y0 + ((y1 - y0) * j) / FIT_SAMPLES_3D;
-                            push(x, y, f(x, y));
-                        }
-                    }
-                } catch {
-                    // A broken surface is reported in the status chip; fit the others.
-                }
-            }
-        } else {
-            for (const info of math.functions()) {
-                if (info.hidden || info.error) continue;
-                if (info.kind === 'cartesian') {
-                    const [a, b] = info.domain ?? [view.xmin, view.xmax];
-                    for (let i = 0; i <= FIT_SAMPLES; i++) {
-                        const x = a + ((b - a) * i) / FIT_SAMPLES;
-                        push(x, info.fn(x));
-                    }
-                } else {
-                    const [a, b] = info.domain ?? [0, 2 * Math.PI];
-                    for (let i = 0; i <= FIT_SAMPLES; i++) {
-                        const t = a + ((b - a) * i) / FIT_SAMPLES;
-                        if (info.kind === 'parametric') push(info.fn(t), info.fnY ? info.fnY(t) : NaN);
-                        else push(info.fn(t) * Math.cos(t), info.fn(t) * Math.sin(t));
-                    }
-                }
-            }
-        }
-
-        if (!xs.length) {
+        if (fit.nothing) {
+            // The fit computed its shapes in other windows: the preview's derived values (P1_x, ...) come back with a render.
+            this.scheduleUpdate();
             if (quiet) return;
-            this.flashStatus(t(this.is3D() ? 'editor.status.nothingToFit3d' : 'editor.status.nothingToFit2d'));
+            if (fit.nothing === 'unbounded') this.flashStatus(t('editor.status.nothingBounded'));
+            else this.flashStatus(t(this.is3D() ? 'editor.status.nothingToFit3d' : 'editor.status.nothingToFit2d'));
             return;
         }
-        const axes: Array<{ axis: 'x' | 'y' | 'z'; values: number[]; trim: boolean }> = [
-            { axis: 'x', values: xs, trim: false },
-            { axis: 'y', values: ys, trim: true },
-        ];
-        if (this.is3D()) axes.push({ axis: 'z', values: zs, trim: true });
+        const axes: Array<'x' | 'y' | 'z'> = this.is3D() ? ['x', 'y', 'z'] : ['x', 'y'];
         let wrote = false;
-        for (const { axis, values, trim } of axes) {
-            if (!this.axisFree(axis)) continue;
-            const [lo, hi] = trim ? trimmedRange(values) : [Math.min(...values), Math.max(...values)];
-            const pad = (hi - lo) * 0.05 || 0.5;
-            const span = hi - lo + 2 * pad;
-            this.settings.setValue(`${axis}min`, formatBound(lo - pad, span));
-            this.settings.setValue(`${axis}max`, formatBound(hi + pad, span));
+        for (const axis of axes) {
+            const range = fit[axis];
+            if (!range || !this.axisFree(axis)) continue;
+            this.settings.setValue(`${axis}min`, range.text[0]);
+            this.settings.setValue(`${axis}max`, range.text[1]);
             wrote = true;
         }
         if (!wrote) {
+            this.scheduleUpdate();
             if (!quiet) this.flashStatus(t('editor.status.rangesUseExpressions'));
             return;
         }
@@ -3663,6 +3623,8 @@ export class TikzModal extends Modal implements PanelHost {
         // The bar's Undo would run an entry of the old chart.
         this.hideUndo();
         const next = SettingsManager.fromJSON(cloneData(data)).serialize();
+        // A loaded chart keeps its own box.
+        this.cubeSwitch = null;
         for (const key of Object.keys(this.settings.serialize())) {
             if (!(key in next)) this.settings.setValue(key, undefined);
         }
@@ -3684,6 +3646,15 @@ export class TikzModal extends Modal implements PanelHost {
     private list<T>(key: string): T[] {
         const v = this.settings.getValue<unknown>(key);
         return Array.isArray(v) ? (v as T[]) : [];
+    }
+
+    /** Something 3D is in the chart: a surface with a formula, or a 3D point, segment or plane. */
+    private has3DContent(): boolean {
+        const filled = (s: unknown) => typeof s === 'string' && s.trim().length > 0;
+        return (
+            this.list<Function3DParameters>('functions3D').some((s) => !!s && filled(s.expression)) ||
+            this.list<Tool>('tools').some((t) => !!t && (t.type === 'plane3D' || ((t.type === 'points' || t.type === 'segment') && t.dim === 3)))
+        );
     }
 
     /** Anything worth keeping: autosave, the replace confirmation and the preview's empty hint use this. */

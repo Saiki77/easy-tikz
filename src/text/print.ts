@@ -16,6 +16,7 @@
 import { Data, canonicalData, minimize, stableJson } from '../chartdata';
 import { ANCHORS, COLORS, NAME_RE, ObjectList, PATTERNS, THICKNESSES, TOOL_PREFIX, definedNames, isSignCondition, niceStep, parseChartText, splitStatement, splitTop } from './parse';
 import { chartWords, hasWords, writeWords } from './words';
+import { isColormap } from '../colormaps';
 
 // ---------------------------------------------------------------- values
 
@@ -142,9 +143,14 @@ function inWords(head: string, options: string[]): string {
     // After "... in the region" a colour reads better behind a comma: "..., in red".
     let comma = /\s(in|over|on)\s+(the\s+region|\S+)$/.test(head);
     let lastWith = false;
+    let lastIn = false;
     for (const o of options) {
-        if (!comma && rank(o) < 2) out += ` ${o}`;
-        else if (lastWith && /^with\s/.test(o)) out += ` and ${o.slice(5)}`;
+        // A second "in" (a surface's colour and its colour map) goes behind a comma: "in red, in viridis".
+        const isIn = /^in\s/.test(o);
+        if (!comma && rank(o) < 2 && !(isIn && lastIn)) {
+            out += ` ${o}`;
+            lastIn = isIn;
+        } else if (lastWith && /^with\s/.test(o)) out += ` and ${o.slice(5)}`;
         else {
             out += `, ${o}`;
             comma = true;
@@ -237,6 +243,7 @@ function surfaceLine(min: Data, full: Data, ctx: Ctx): string {
         o.out.push(`for ${ranges.map((d) => `${d.axis} from ${d.r?.[0] ?? ''} to ${d.r?.[1] ?? ''}`).join(' and ')}`);
     }
     o.colour();
+    o.take('colormap', (v) => (isColormap(v) ? `in ${v}` : null));
     o.take('opacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
     o.take('samples', (v) => (typeof v === 'number' && Number.isFinite(v) ? `with ${v} samples` : null));
     o.take('wireframe', (v) => (v === true ? 'wireframe' : null));
@@ -439,6 +446,8 @@ function labelLine(min: Data, full: Data): string {
 /** The chart lines, each with the fields it covers, in the order a block lists them. */
 const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): string[] }> = [
     { keys: ['dimension'], print: (m) => (m.dimension === true ? ['3d'] : 'dimension' in m ? [`set dimension = ${JSON.stringify(m.dimension)}`] : []) },
+    // The 3D box as a cube; without the line it follows the data ranges (the stored default).
+    { keys: ['boxAspect'], print: (m) => (m.boxAspect === 'equal' ? ['cube'] : 'boxAspect' in m ? [`set boxAspect = ${JSON.stringify(m.boxAspect)}`] : []) },
     {
         keys: ['coordinateSystem'],
         print: (m) => (m.coordinateSystem === 'polar' ? ['polar'] : 'coordinateSystem' in m ? [`set coordinateSystem = ${JSON.stringify(m.coordinateSystem)}`] : []),

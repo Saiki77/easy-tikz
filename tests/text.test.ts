@@ -502,3 +502,105 @@ test('text: # starts a comment, like % and //', () => {
     assert.deepEqual(r.problems, []);
     assert.equal((r.data.functions as Data[]).length, 1);
 });
+
+// ------------------------------------------------- colour maps and the cube (4.8)
+
+const MAPS = ['viridis', 'heat', 'cool', 'diverging', 'rainbow', 'greyscale'];
+
+test('text: a surface takes a colour map like a colour, every map, read and printed', () => {
+    for (const map of MAPS) {
+        const line = `plot z = x^2 - y^2 in ${map}`;
+        const r = parseChartText(line);
+        assert.deepEqual(r.problems, [], line);
+        assert.equal(r.data.dimension, true);
+        assert.equal((r.data.functions3D as Data[])[0].colormap, map, line);
+        const printed = printChartText(r.data);
+        assert.ok(printed.split('\n').includes(`plot s1(x, y) = x^2 - y^2 in ${map}`), printed);
+        assert.equal(canonical(parseChartText(printed).data), canonical(r.data), map);
+        assert.equal(writeChartText(line, r.data), line, `${map}: an unchanged line stays as typed`);
+    }
+    // The short form, the bare word, with other options, and a colour beside the map.
+    const short = parseChartText('z = x*y | viridis, wireframe, opacity 0.5');
+    assert.deepEqual(short.problems, []);
+    assert.deepEqual([(short.data.functions3D as Data[])[0].colormap, (short.data.functions3D as Data[])[0].wireframe], ['viridis', true]);
+    const both = parseChartText('plot s(x, y) = x*y for x from -2 to 2 and y from -2 to 2 in red, in heat, with 30 samples');
+    assert.deepEqual(both.problems, []);
+    const s = (both.data.functions3D as Data[])[0];
+    assert.deepEqual([s.color, s.colormap, s.xDomain, s.samples], ['red', 'heat', '-2:2', 30]);
+    const printed = printChartText(both.data);
+    assert.ok(printed.split('\n').includes('plot s(x, y) = x*y for x from -2 to 2 and y from -2 to 2 in red, in heat, with 30 samples'), printed);
+    assert.equal(canonical(parseChartText(printed).data), canonical(both.data));
+});
+
+test('text: changing or removing a colour map rewrites that line only', () => {
+    const text = ['3d', '% the saddle', 'plot z = x^2 - y^2 in viridis', 'plot w(x, y) = 1 in orange'].join('\n');
+    const data = parseChartText(text).data;
+    const surfaces = data.functions3D as Data[];
+    surfaces[0] = { ...surfaces[0], colormap: 'diverging' };
+    const out = writeChartText(text, data).split('\n');
+    assert.deepEqual(out, ['3d', '% the saddle', 'plot s1(x, y) = x^2 - y^2 in diverging', 'plot w(x, y) = 1 in orange']);
+    const plain = JSON.parse(JSON.stringify(data)) as Data;
+    delete ((plain.functions3D as Data[])[0] as Data).colormap;
+    const back = writeChartText(text, plain).split('\n');
+    assert.equal(back[2], 'plot s1(x, y) = x^2 - y^2');
+    assert.equal(canonical(parseChartText(back.join('\n')).data), canonical(plain));
+});
+
+test('text: a colour map on anything but a surface is a problem that says so', () => {
+    const r = parseChartText('plot f(x) = x^2 in viridis');
+    assert.equal(r.problems.length, 1);
+    assert.deepEqual([r.problems[0].line, r.problems[0].column], [1, 'plot f(x) = x^2 '.length + 1]);
+    assert.match(r.problems[0].message, /^viridis colours a surface by height \(plot z = x\^2 in viridis\); a function takes a colour such as in blue$/);
+    assert.equal((r.data.functions as Data[])[0].expression, 'x^2');
+    for (const line of ['shade where x + y <= 4 in heat', 'draw 2x + 3y = 6, cool', 'mark (1, 2) in rainbow', 'write "A" at (1, 1) in greyscale', 'R1: shade x <= 1 | diverging']) {
+        const p = parseChartText(line);
+        assert.equal(p.problems.length, 1, line);
+        assert.match(p.problems[0].message, /colours a surface by height/, line);
+    }
+});
+
+test('text: names stay names where a colour map could stand, so older lines read as before', () => {
+    const r = parseChartText(['heat: shade where x + y <= 4 and x >= 0 and y >= 0', 'mark the maximum of x + 2y in heat', 'slider cool from 0 to 2', 'plot f(x) = cool x'].join('\n'));
+    assert.deepEqual(r.problems, []);
+    const tools = r.data.tools as Data[];
+    assert.deepEqual([tools[1].type, tools[1].regionName, tools[1].objective], ['points', 'heat', 'x + 2y']);
+    assert.equal((r.data.functions as Data[])[0].expression, 'cool x');
+});
+
+test('text: the cube line is the 3D box as a cube; without it the box follows the ranges', () => {
+    const text = ['3d', 'cube', 'show x from -2 to 2, y from -2 to 2 and z from 0 to 8', 'plot z = x^2 + y^2'].join('\n');
+    const r = parseChartText(text);
+    assert.deepEqual(r.problems, []);
+    assert.equal(r.data.boxAspect, 'equal');
+    const printed = printChartText(r.data);
+    assert.deepEqual(printed.split('\n').slice(0, 2), ['3d', 'cube'], printed);
+    assert.equal(canonical(parseChartText(printed).data), canonical(r.data));
+    assert.equal(writeChartText(text, r.data), text);
+    // Old charts: no line, the stored default; a set line still reads and is kept as typed.
+    assert.equal(parseChartText('3d\nplot z = x*y').data.boxAspect, undefined);
+    assert.equal(canonical(parseChartText('3d\nset boxAspect = "equal"\nplot z = x*y').data), canonical(parseChartText('3d\ncube\nplot z = x*y').data));
+    const set = '3d\nset boxAspect = "equal"\nplot z = x*y in red';
+    const data = parseChartText(set).data;
+    (data.functions3D as Data[])[0].color = 'green';
+    assert.equal(writeChartText(set, data), '3d\nset boxAspect = "equal"\nplot s1(x, y) = x*y in green');
+    // Toggled in the editor: the line comes and goes, the rest stays.
+    const flat = parseChartText('3d\n% a saddle\nplot z = x^2 - y^2').data;
+    const cubed = writeChartText('3d\n% a saddle\nplot z = x^2 - y^2', { ...flat, boxAspect: 'equal' });
+    assert.equal(cubed, '3d\ncube\n% a saddle\nplot z = x^2 - y^2');
+    assert.equal(writeChartText(cubed, flat), '3d\n% a saddle\nplot z = x^2 - y^2');
+    // The built-in example with a cube box says so in words.
+    const plane3d = EXAMPLES.find((e) => e.id === 'plane3d');
+    assert.ok(plane3d && printChartText(plane3d.data as Data).split('\n').includes('cube'));
+});
+
+test('text: cube stands alone, and a formula with a slider called cube stays a formula', () => {
+    const r = parseChartText('3d\ncube in red');
+    assert.equal(r.problems.length, 1);
+    assert.match(r.problems[0].message, /cube stands alone on its line/);
+    assert.equal(r.data.boxAspect, 'equal');
+    const f = parseChartText('slider cube from 0 to 5\ncube + x = 3\nplot g(x) = cube');
+    assert.deepEqual(f.problems, []);
+    assert.equal((f.data.tools as Data[])[0].equation, 'cube + x = 3');
+    assert.equal(f.data.boxAspect, undefined);
+    assert.equal(parseChartText('cube(x) = x^3').data.boxAspect, undefined, 'a function called cube');
+});
