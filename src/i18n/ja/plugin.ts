@@ -23,6 +23,10 @@ export const plugin: Messages<typeof en> = {
         'テーマに合わせる（デフォルト）：Obsidian のテーマの色を使い、ライトモードとダークモードに合わせて変わります。LaTeX 出力と同じ：出力する図の固定の色を使うため、ノートと PDF の見た目がそろいます。',
     'plugin.settings.colours.theme': 'テーマに合わせる',
     'plugin.settings.colours.export': 'LaTeX 出力と同じ',
+    'plugin.settings.imageBackground.name': 'コピーした画像',
+    'plugin.settings.imageBackground.desc': '「PNG をコピー」と「SVG をコピー」の背景です。白ではライトテーマの色を使うので、ダークテーマからでも紙の上で読めます。',
+    'plugin.settings.imageBackground.transparent': '透明（テーマの色）',
+    'plugin.settings.imageBackground.white': '白',
     'plugin.settings.liveChart.name': '編集中はブロックの下にグラフを表示',
     'plugin.settings.liveChart.desc':
         'デフォルトではオンです。ライブプレビューで編集中のブロックのすぐ下にグラフを表示し、入力に合わせてグラフが変わります。オフにすると、カーソルがブロックから離れたときにグラフを表示します。',

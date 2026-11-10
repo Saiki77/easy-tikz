@@ -1,3 +1,5 @@
+import type { AxisNumbers, TickAxis } from './ticks';
+
 export type FillPattern =
     | 'solid'
     | 'horizontal'
@@ -282,6 +284,8 @@ export interface RendererConfig {
     gridMinor: boolean;
     /** Opacity of the major grid lines, 0..1 (minor lines draw at half); chart field `gridOpacity`. */
     gridOpacity: number;
+    /** The numbers on each axis (src/ticks.ts): Auto, Every a step, At chosen values, or Off. */
+    numbers: Record<TickAxis, AxisNumbers>;
     minorTickNum: number;
     majorTickNum: number;
     functions: FunctionParameters[];

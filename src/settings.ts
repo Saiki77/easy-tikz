@@ -5,6 +5,7 @@ import { SCHEMA_VERSION, migrateSettings } from './migrate';
 import { generateTikz2D, generateTikz3D } from './export';
 import { t } from './i18n';
 import { GRID_OPACITY, opacityValue } from './opacity';
+import { AxisNumbers, TickAxis, numbersKeys, numbersMode } from './ticks';
 
 /** The six axis range keys. */
 export type RangeKey = 'xmin' | 'xmax' | 'ymin' | 'ymax' | 'zmin' | 'zmax';
@@ -57,6 +58,16 @@ function defaultValues(): Record<string, unknown> {
         showSmallGrid: false,
         // Opacity of the major grid lines (minor lines at half), see src/opacity.ts.
         gridOpacity: GRID_OPACITY,
+        // The numbers on each axis (src/ticks.ts); a step and values stay when the mode changes.
+        numbers_x: 'auto',
+        numbers_step_x: '',
+        numbers_at_x: '',
+        numbers_y: 'auto',
+        numbers_step_y: '',
+        numbers_at_y: '',
+        numbers_z: 'auto',
+        numbers_step_z: '',
+        numbers_at_z: '',
         // Minor tick subdivisions (export: minor tick num).
         gridSize: 5,
         // Major grid density (live preview only; pgfplots picks its own ticks).
@@ -265,6 +276,16 @@ export class SettingsManager {
     }
 
     /** CONTRACT (v4): `ctx` defaults to createMathContext(); view via resolveView. */
+    /** The numbers of one axis as the chart stores them (src/ticks.ts). */
+    axisNumbers(axis: TickAxis): AxisNumbers {
+        const keys = numbersKeys(axis);
+        return {
+            mode: numbersMode(this.getValue(keys.mode)),
+            step: stringValue(this.getValue(keys.step), ''),
+            at: stringValue(this.getValue(keys.at), ''),
+        };
+    }
+
     toRendererConfig(ctx?: MathContext): RendererConfig {
         const math = ctx || this.createMathContext();
         const { view } = this.resolveView(math);
@@ -295,6 +316,7 @@ export class SettingsManager {
             gridMajor: this.getValue('showLargeGrid') === true,
             gridMinor: this.getValue('showSmallGrid') === true,
             gridOpacity: opacityValue(this.getValue('gridOpacity'), GRID_OPACITY),
+            numbers: { x: this.axisNumbers('x'), y: this.axisNumbers('y'), z: this.axisNumbers('z') },
             minorTickNum: numberValue(this.getValue('gridSize'), 5),
             majorTickNum: numberValue(this.getValue('majorTickNum'), 8),
             functions: arrayValue<FunctionParameters>(this.getValue('functions')),

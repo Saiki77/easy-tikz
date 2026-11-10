@@ -3372,6 +3372,7 @@ export class TikzModal extends Modal implements PanelHost {
      * transparency.
      */
     private prepareSvgForExport(): SVGElement | null {
+        const white = this.plugin?.data.imageBackground === 'white';
         let svg: SVGElement | null = null;
         if (this.is3D()) {
             // 3D's on-screen view is canvas-only; the off-screen SVG holds the
@@ -3385,7 +3386,7 @@ export class TikzModal extends Modal implements PanelHost {
             svg = this.chartSvg;
         }
         if (!svg) return null;
-        return exportableSvg(svg, this.modalEl.ownerDocument);
+        return exportableSvg(svg, this.modalEl.ownerDocument, { white });
     }
 
     private async copySvg(button: TextButtonHandle) {
@@ -3423,7 +3424,7 @@ export class TikzModal extends Modal implements PanelHost {
         }
         try {
             // 2x for a sharper result on Hi-DPI displays.
-            const pngBlob = await svgToPng(clone, 2);
+            const pngBlob = await svgToPng(clone, 2, this.plugin?.data.imageBackground === 'white' ? '#ffffff' : undefined);
             // Older lib.dom.d.ts in this toolchain requires Promise<Blob>; the runtime accepts a Blob too.
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': Promise.resolve(pngBlob) })]);
             this.flashButton(button, t('common.copied'));

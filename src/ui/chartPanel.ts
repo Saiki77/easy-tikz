@@ -9,6 +9,7 @@ import { RANGE_DEFAULTS, RangeKey, SettingsManager } from '../settings';
 import { FieldHandle, PanelHost } from './host';
 import { MessageKey, t } from '../i18n';
 import { GRID_OPACITY, opacityValue } from '../opacity';
+import { NumbersMode, TickAxis, numbersKeys, numbersMode } from '../ticks';
 import {
     ChipHandle,
     ExprInputHandle,
@@ -208,6 +209,50 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
         return input;
     };
 
+    /** The numbers of one axis (src/ticks.ts): Auto, Every a step, At chosen values or Off, with the field for the step or the values. */
+    const numbersRow = (parent: HTMLElement, axis: TickAxis) => {
+        const keys = numbersKeys(axis);
+        const label = t('panels.chart.numbers', { axis });
+        const f = field(parent, { label, layout: 'inline' });
+        let mode: NumbersMode = numbersMode(settings.getValue(keys.mode));
+        const seg = segmented<NumbersMode>(f.controlEl, {
+            label,
+            value: mode,
+            options: [
+                { value: 'auto', text: t('panels.chart.numbersAuto') },
+                { value: 'every', text: t('panels.chart.numbersEvery') },
+                { value: 'at', text: t('panels.chart.numbersAt') },
+                { value: 'off', text: t('panels.chart.numbersOff') },
+            ],
+            onChange: (value) => {
+                mode = value;
+                settings.setValue(keys.mode, value);
+                sync();
+                host.requestUpdate();
+            },
+        });
+        f.bind(seg.el);
+        const input = textInput(f.controlEl, {
+            value: '',
+            monospace: true,
+            onInput: (value) => {
+                settings.setValue(mode === 'every' ? keys.step : keys.at, value);
+                host.requestUpdate();
+            },
+            onCommit: () => host.commit(),
+        });
+        input.el.setAttr('aria-label', label);
+        const sync = () => {
+            const shown = mode === 'every' || mode === 'at';
+            input.el.toggleClass('tikz-hidden', !shown);
+            f.setHint(shown ? t(mode === 'every' ? 'panels.chart.numbersEveryHint' : 'panels.chart.numbersAtHint') : '');
+            if (!shown) return;
+            input.setValue(str(settings.getValue(mode === 'every' ? keys.step : keys.at)));
+            input.el.placeholder = mode === 'every' ? '0.5, pi/2' : '1, 3, a "a"';
+        };
+        sync();
+    };
+
     const buildAxes = () => {
         const g = group(el, t('panels.chart.axes'));
         if (!host.is3D()) {
@@ -254,6 +299,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
         if (host.is3D()) labelInput(g.body, t('panels.chart.axisLabel', { axis: 'z' }), () => 'axis_label_z', 'z');
         const title = labelInput(g.body, t('panels.chart.title'), () => 'title', t('panels.chart.noTitle'));
         title.el.addClass('etz-title-input');
+        for (const axis of host.is3D() ? (['x', 'y', 'z'] as const) : (['x', 'y'] as const)) numbersRow(g.body, axis);
 
         const defaultHint = t('panels.chart.variablesHint');
         const varsField = field(g.body, { label: t('panels.chart.variables'), layout: 'inline', hint: defaultHint });

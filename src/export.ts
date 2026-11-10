@@ -31,6 +31,7 @@ import {
     labelMetricsFor,
 } from './scene';
 import { sampleCurve } from './util';
+import { TickAxis, axisTicks, tickOptions } from './ticks';
 
 // ------------------------------------------------------------------ tuning
 
@@ -498,6 +499,17 @@ function commonOptions(config: RendererConfig, ctx: MathContext, size: string): 
  * nothing more is written then. Another opacity g draws black!50 at g, which
  * is black!25 on white at 0.5, and the minor lines at g / 2, as in the preview.
  */
+/** The numbers of each axis (src/ticks.ts), so the PDF shows the preview's numbers: nothing for Auto. */
+function numbersOptions(config: RendererConfig, ctx: MathContext, ranges: Array<[TickAxis, number, number]>): string[] {
+    const out: string[] = [];
+    for (const [axis, lo, hi] of ranges) {
+        const n = config.numbers ? config.numbers[axis] : undefined;
+        if (!n || n.mode === 'auto') continue;
+        out.push(...tickOptions(axis, axisTicks(n, lo, hi, [], (src) => ctx.value(src)), fmtNum, labelText));
+    }
+    return out;
+}
+
 function gridOptions(config: RendererConfig): string[] {
     const opts: string[] = [];
     if (config.gridMinor) opts.push(`grid=both, minor tick num=${Math.max(1, Math.round(num(config.minorTickNum, 5)))}`);
@@ -586,6 +598,7 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
         if (titled && config.showAxisLabels && labelText(String(config.yLabel ?? ''))) opts.push(`title style={yshift=${MIDDLE_TITLE_LIFT_PT}pt}`);
     } else if (config.axisStyle === 'axes') opts.push('axis lines=left');
     opts.push(...gridOptions(config));
+    opts.push(...numbersOptions(config, ctx, [['x', view.xmin, view.xmax], ['y', view.ymin, view.ymax]]));
     // Without rad, pgfplots evaluates sin(x) in degrees.
     opts.push('trig format plots=rad');
     // NaN and out-of-range samples become gaps instead of errors or straight connectors.
@@ -1010,6 +1023,7 @@ export function generateTikz3D(settings: SettingsManager, ctx: MathContext): str
     if (!vectors) opts.push(view);
     // pgfplots draws the grid on the back planes of the box, under the surfaces.
     opts.push(...gridOptions(config));
+    opts.push(...numbersOptions(config, ctx, [['x', box.xmin, box.xmax], ['y', box.ymin, box.ymax], ['z', box.zmin, box.zmax]]));
     opts.push('trig format plots=rad');
     opts.push('unbounded coords=jump');
     opts.push(restrict('z', box.zmin, box.zmax));

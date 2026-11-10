@@ -10,9 +10,11 @@ import { t } from './i18n';
 /**
  * A copy of `svg` that renders on its own: MathJax labels (foreignObject)
  * become plain text, the theme background goes, and CSS variables are
- * replaced by the values they have in `doc`.
+ * replaced by the values they have in `doc`. With `white`, the picture gets
+ * a white background and the light theme's colours, also in a dark theme
+ * (the setting "Copied images"), so it reads on paper.
  */
-export function exportableSvg(svg: SVGElement, doc: Document): SVGElement {
+export function exportableSvg(svg: SVGElement, doc: Document, opts: { white?: boolean } = {}): SVGElement {
     const clone = svg.cloneNode(true) as SVGElement;
     clone.removeAttribute('class');
     clone.removeAttribute('style');
@@ -40,13 +42,30 @@ export function exportableSvg(svg: SVGElement, doc: Document): SVGElement {
     const background = clone.querySelector(':scope > rect');
     if (background && (background.getAttribute('fill') ?? '').includes('--background-primary')) background.remove();
 
-    const computed = getComputedStyle(doc.body);
-    const resolveVars = (value: string): string =>
-        value.replace(/var\((--[^,)]+)(?:,\s*([^)]+))?\)/g, (_match: string, name: string, fallback: string | undefined) => {
-            const v = computed.getPropertyValue(name).trim();
-            return v || (fallback ? fallback.trim() : '');
-        });
     const nodes: Element[] = [clone, ...Array.from(clone.querySelectorAll('*'))];
+    const VAR = /var\((--[^,)]+)(?:,\s*([^)]+))?\)/g;
+    const names = new Set<string>();
+    for (const el of nodes) {
+        for (const attrName of ['fill', 'stroke', 'font-family', 'stop-color', 'style']) {
+            const v = el.getAttribute(attrName);
+            if (v) for (const m of v.matchAll(VAR)) names.add(m[1]);
+        }
+    }
+    // The values of the variables, read once. White in a dark theme: read them with the body in the light
+    // theme for this one synchronous moment (the theme derives its colours on the body, so no child element
+    // could carry them), then back; nothing is painted in between.
+    const values = new Map<string, string>();
+    const body = doc.body;
+    const swap = !!opts.white && body.classList.contains('theme-dark');
+    if (swap) body.classList.replace('theme-dark', 'theme-light');
+    try {
+        const computed = getComputedStyle(body);
+        for (const name of names) values.set(name, computed.getPropertyValue(name).trim());
+    } finally {
+        if (swap) body.classList.replace('theme-light', 'theme-dark');
+    }
+    const resolveVars = (value: string): string =>
+        value.replace(VAR, (_match: string, name: string, fallback: string | undefined) => values.get(name) || (fallback ? fallback.trim() : ''));
     for (const el of nodes) {
         el.removeAttribute('data-etz-item');
         for (const attrName of ['fill', 'stroke', 'font-family', 'stop-color']) {
@@ -55,6 +74,22 @@ export function exportableSvg(svg: SVGElement, doc: Document): SVGElement {
         }
         const styleAttr = el.getAttribute('style');
         if (styleAttr && styleAttr.includes('var(')) el.setAttribute('style', resolveVars(styleAttr));
+    }
+
+    if (opts.white) {
+        const box = (clone.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+        const rect = createSvg('rect');
+        if (box.length === 4 && box.every(Number.isFinite)) {
+            rect.setAttribute('x', String(box[0]));
+            rect.setAttribute('y', String(box[1]));
+            rect.setAttribute('width', String(box[2]));
+            rect.setAttribute('height', String(box[3]));
+        } else {
+            rect.setAttribute('width', '100%');
+            rect.setAttribute('height', '100%');
+        }
+        rect.setAttribute('fill', '#ffffff');
+        clone.insertBefore(rect, clone.firstChild);
     }
 
     // Proper xmlns so it renders standalone outside the page.

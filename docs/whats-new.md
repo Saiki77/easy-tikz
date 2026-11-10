@@ -2,6 +2,18 @@
 
 [Overview](../README.md) · [Guides](guides/README.md) · [Reference](reference.md) · [Changelog](../CHANGELOG.md)
 
+## 4.10: axis numbers your way, white images
+
+- **Axis numbers.** Chart, Axes has a Numbers row for each axis (z in 3D). **Auto** is as before. **Every** puts a number on each multiple of a step, also a formula such as `pi/2`; a step in pi prints its numbers in π (π/2, π, 3π/2). **At** puts numbers only at chosen values, each with its own label if you like (`pi/2 "a", 3pi/2 "b"`); sliders and computed values (`P1_x`) work. **Off** leaves out the numbers and the tick marks; the grid stays. The PDF shows the same numbers. Asked for in [issue #5](https://github.com/Saiki77/easy-tikz/issues/5).
+- **Copied images on white.** Settings, **Copied images**: Transparent (the theme's colours, as before) or White. White gives Copy PNG and Copy SVG a white background and the light theme's colours, so a chart copied in a dark theme reads on paper.
+
+```easy-tikz
+show x from -0.3 to 6.6 and y from -2.6 to 2.6
+plot f(x) = 2sin(x) in blue, thick
+x numbers every pi/2
+y numbers at -2, 2
+```
+
 ## 4.9: solid surfaces, the grid in 3D, grid and mesh opacity
 
 - **Solid surfaces.** The 3D preview painted the nearest parts first, as if the camera were below the chart: a floor could cover a plateau standing on it, and lines and numbers showed through a surface at 100 % opacity. It now paints from far to near with the same camera as the PDF, so a solid surface hides what lies behind it and a translucent one lets it show through by its transparency.

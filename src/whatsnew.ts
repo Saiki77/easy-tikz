@@ -27,7 +27,7 @@ import type { FunctionParameters, Parameter, RegionTool } from './types';
 import { MessageKey, MessageValues, t, tIn } from './i18n';
 
 /** Version of the popup's content. Raise it when the popup says something new. */
-export const WHATS_NEW_VERSION = '4.9.0';
+export const WHATS_NEW_VERSION = '4.10.0';
 
 /**
  * Compare two version strings numerically, part by part ('4.10.0' > '4.9.1',
@@ -153,11 +153,10 @@ export const whatsNewRecentTitle = (): string => t('panels.whatsNew.recentTitle'
 /** The same heading in English, as the tests read it. */
 export const WHATS_NEW_RECENT_TITLE = tIn('en', 'panels.whatsNew.recentTitle');
 
-/** New in 4.9, at the top: the only items the popup shows open. */
+/** New in 4.10, at the top: the only items the popup shows open. */
 export const WHATS_NEW_RECENT: WhatsNewItem[] = [
-    item('layers', 'panels.whatsNew.solid.title', 'panels.whatsNew.solid.text'),
-    item('grid', 'panels.whatsNew.gridOpacity.title', 'panels.whatsNew.gridOpacity.text'),
-    item('blend', 'panels.whatsNew.mesh.title', 'panels.whatsNew.mesh.text'),
+    item('ruler', 'panels.whatsNew.numbers.title', 'panels.whatsNew.numbers.text'),
+    item('image', 'panels.whatsNew.white.title', 'panels.whatsNew.white.text'),
 ];
 
 /** What makes the live chart move: sliders and the values computed from them. */
@@ -172,6 +171,9 @@ export const WHATS_NEW_AI: WhatsNewItem = item('bot', 'panels.whatsNew.ai.title'
 
 /** The rest of version 4, newest first, one line each, behind "Earlier in version 4" (closed). */
 export const WHATS_NEW_MORE: WhatsNewItem[] = [
+    item('layers', 'panels.whatsNew.solid.title', 'panels.whatsNew.solid.text'),
+    item('grid', 'panels.whatsNew.gridOpacity.title', 'panels.whatsNew.gridOpacity.text'),
+    item('blend', 'panels.whatsNew.mesh.title', 'panels.whatsNew.mesh.text'),
     item('palette', 'panels.whatsNew.colormaps.title', 'panels.whatsNew.colormaps.text'),
     item('maximize-2', 'panels.whatsNew.fit.title', 'panels.whatsNew.fit.text'),
     item('box', 'panels.whatsNew.cube.title', 'panels.whatsNew.cube.text'),

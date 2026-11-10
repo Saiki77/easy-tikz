@@ -19,7 +19,7 @@ The editor has four tabs:
 | Tab       | What is there                                                                                              |
 | --------- | ---------------------------------------------------------------------------------------------------------- |
 | **Build** | Everything you draw, as cards: functions (or surfaces in 3D), then shapes, points and labels.              |
-| **Chart** | Ranges (formulas allowed), axes, axis variables, equal scale, grid and its opacity, export size, note width, 3D view. |
+| **Chart** | Ranges (formulas allowed), axes and their numbers (Auto, Every a step, At chosen values, Off), axis variables, equal scale, grid and its opacity, export size, note width, 3D view. |
 | **Code**  | The LaTeX, with a **Standalone document** switch. Hand edits are kept until you press Regenerate.          |
 | **Help**  | Step-by-step [guides](guides/README.md) with live charts, the full reference with **Open example** buttons, and a link to What's new. |
 

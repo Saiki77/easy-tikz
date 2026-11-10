@@ -1444,7 +1444,7 @@ test('palette: preview colours, labels and TikZ definitions agree', () => {
     // Preview colours are variables (the theme's colours by default) whose fallback is the export colour,
     // and the setting "As in the LaTeX export" (body.etz-export-colours in styles.css) sets exactly those.
     const css = fs.readFileSync(path.join(process.cwd(), 'src', 'styles.css'), 'utf8');
-    const exportBlock = /body\.etz-export-colours\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    const exportBlock = /^body\.etz-export-colours[^{]*\{([^}]*)\}/m.exec(css)?.[1] ?? '';
     for (const key of keys.slice(1)) {
         const hex = `#${TIKZ_COLOR_DEFS[key].hex.toLowerCase()}`;
         assert.equal(COLOR_MAP[key], `var(--etz-${key}, ${hex})`, key);

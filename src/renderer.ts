@@ -13,6 +13,7 @@
 import { AnnotationSize, FillPattern, FunctionParameters, MarkerSize, RendererConfig, Tool } from './types';
 import { COLOR_MAP, THICKNESS_MAP, mixHex, resolveCssColor } from './colors';
 import { niceInterval, formatTick, marchingGrid, sampleCurve, stripLatex, tickValues } from './util';
+import { AxisTicks, Tick, axisTicks } from './ticks';
 import { extractMathSource, renderMathLabel, flushMathRenders } from './mathlabel';
 import { FunctionInfo, FunctionKind, MathContext, labelDisplayText } from './mathcontext';
 import {
@@ -325,6 +326,8 @@ export class SVGRenderer {
     private readonly grid: Grid;
     /** Major tick steps, see computeTickSteps. */
     private steps: [number, number] | null = null;
+    /** The ticks of x and y for this frame (src/ticks.ts), from the chart's numbers. */
+    private axisTicksCache: { x: AxisTicks; y: AxisTicks } | null = null;
     /** Id prefix of the render in progress (`etz-<n>-`) and the defs registered under it. */
     private ids = '';
     private defs: SVGDefsElement | null = null;
@@ -481,15 +484,13 @@ export class SVGRenderer {
     private padding(): [Padding, number] {
         if (this.compact) return [{ top: COMPACT_PADDING, right: COMPACT_PADDING, bottom: COMPACT_PADDING, left: COMPACT_PADDING }, 0];
         const cfg = this.config;
-        const v = this.view;
-        const [stepX, stepY] = this.tickSteps();
         const tickFs = this.fontPx(TICK_PT);
         const axisFs = this.fontPx(AXIS_LABEL_PT);
         const pt = (n: number) => n * this.ptPx;
-        const ys = tickValues(v.ymin, v.ymax, stepY);
-        const xs = tickValues(v.xmin, v.xmax, stepX);
-        const yTickW = ys.reduce((m, y) => Math.max(m, formatTick(y).length * tickFs * CHAR_WIDTH_EM), 0);
-        const lastX = xs.length ? formatTick(xs[xs.length - 1]).length * tickFs * CHAR_WIDTH_EM : 0;
+        const yt = this.ticks('y').ticks;
+        const xt = this.ticks('x').ticks;
+        const yTickW = yt.reduce((m, k) => Math.max(m, tickText(k).length * tickFs * CHAR_WIDTH_EM), 0);
+        const lastX = xt.length ? tickText(xt[xt.length - 1]).length * tickFs * CHAR_WIDTH_EM : 0;
         const titleH = String(cfg.title ?? '').trim() ? this.fontPx(TITLE_PT) * 1.25 : 0;
         const title = titleH ? titleH + pt(TITLE_GAP_PT) : 0;
         const middle = cfg.axisStyle === 'middle';
@@ -552,6 +553,22 @@ export class SVGRenderer {
         const ex = (v.xmax - v.xmin) * (slack + 1e-9);
         const ey = (v.ymax - v.ymin) * (slack + 1e-9);
         return x >= v.xmin - ex && x <= v.xmax + ex && y >= v.ymin - ey && y <= v.ymax + ey;
+    }
+
+    /** The ticks of an axis: Auto, Every, At or Off (src/ticks.ts), with this renderer's own steps for Auto. */
+    private ticks(axis: 'x' | 'y'): AxisTicks {
+        if (!this.axisTicksCache) {
+            const v = this.view;
+            const [sx, sy] = this.tickSteps();
+            const numbers = this.config.numbers;
+            const of = (src: string) => this.math.value(src);
+            const auto = { mode: 'auto' as const, step: '', at: '' };
+            this.axisTicksCache = {
+                x: axisTicks(numbers ? numbers.x : auto, v.xmin, v.xmax, tickValues(v.xmin, v.xmax, sx), of),
+                y: axisTicks(numbers ? numbers.y : auto, v.ymin, v.ymax, tickValues(v.ymin, v.ymax, sy), of),
+            };
+        }
+        return this.axisTicksCache[axis];
     }
 
     /** Major tick steps for x and y (computed once, before the layout). */
@@ -946,7 +963,8 @@ export class SVGRenderer {
         const g = this.el('g', { class: 'etz-grid' });
         const v = this.view;
         const { x: left, y: top, w, h } = this.plot;
-        const [stepX, stepY] = this.tickSteps();
+        const xT = this.ticks('x');
+        const yT = this.ticks('y');
         const opacity = opacityValue(cfg.gridOpacity, GRID_OPACITY);
         const draw = (xs: number[], ys: number[], width: string, alpha: number) => {
             const attrs = { stroke: BORDER, 'stroke-width': width, 'stroke-opacity': String(alpha) };
@@ -954,15 +972,18 @@ export class SVGRenderer {
             for (const y of ys) g.appendChild(this.line(left, this.sy(y), left + w, this.sy(y), attrs));
         };
         const minor = Math.round(Number(cfg.minorTickNum));
-        if (cfg.gridMinor && minor >= 1) {
-            draw(
-                tickValues(v.xmin, v.xmax, stepX / (minor + 1)),
-                tickValues(v.ymin, v.ymax, stepY / (minor + 1)),
-                '0.5',
-                opacity / 2
-            );
-        }
-        draw(tickValues(v.xmin, v.xmax, stepX), tickValues(v.ymin, v.ymax, stepY), '1', opacity);
+        const [stepX, stepY] = this.tickSteps();
+        // Minor lines: n between two major ones; for chosen values (At) only between them, as pgfplots does.
+        const minorOf = (t: AxisTicks, lo: number, hi: number, auto: number): number[] => {
+            if (t.mode !== 'at') return tickValues(lo, hi, (t.mode === 'every' && t.step ? t.step : auto) / (minor + 1));
+            const out: number[] = [];
+            for (let i = 0; i + 1 < t.grid.length; i++) {
+                for (let k = 1; k <= minor; k++) out.push(t.grid[i] + ((t.grid[i + 1] - t.grid[i]) * k) / (minor + 1));
+            }
+            return out;
+        };
+        if (cfg.gridMinor && minor >= 1) draw(minorOf(xT, v.xmin, v.xmax, stepX), minorOf(yT, v.ymin, v.ymax, stepY), '0.5', opacity / 2);
+        draw(xT.grid, yT.grid, '1', opacity);
         this.attach(svg, g);
     }
 
@@ -991,13 +1012,14 @@ export class SVGRenderer {
     private drawAxes(svg: SVGElement): void {
         const cfg = this.config;
         const g = this.el('g', { class: 'etz-axes' });
-        const v = this.view;
         const { x: left, y: top, w, h } = this.plot;
         const right = left + w;
         const bottom = top + h;
         const [stepX, stepY] = this.tickSteps();
-        const xs = this.compact ? [] : tickValues(v.xmin, v.xmax, stepX);
-        const ys = this.compact ? [] : tickValues(v.ymin, v.ymax, stepY);
+        const xT = this.ticks('x');
+        const yT = this.ticks('y');
+        const xs = this.compact ? [] : xT.ticks;
+        const ys = this.compact ? [] : yT.ticks;
         const tickAttrs = { stroke: TEXT_MUTED, 'stroke-width': '1' };
         const axisWidth = this.compact ? 1 : 1.5;
         const axisAttrs = { stroke: TEXT_MUTED, 'stroke-width': String(axisWidth) };
@@ -1020,22 +1042,24 @@ export class SVGRenderer {
         };
         const tick = (x1: number, y1: number, x2: number, y2: number) => g.appendChild(this.line(x1, y1, x2, y2, tickAttrs));
         // x tick labels hang below (x, y); y tick labels end at (x, y), centred on it.
-        const xTickLabel = (value: number, x: number, y: number) => this.tickLabel(g, value, x, y + 0.78 * tickFs, 'middle', tickFs);
-        const yTickLabel = (value: number, x: number, y: number) => this.tickLabel(g, value, x, y + 0.35 * tickFs, 'end', tickFs);
+        const xTickLabel = (k: Tick, x: number, y: number) => this.tickLabel(g, tickText(k), x, y + 0.78 * tickFs, 'middle', tickFs);
+        const yTickLabel = (k: Tick, x: number, y: number) => this.tickLabel(g, tickText(k), x, y + 0.35 * tickFs, 'end', tickFs);
+        // At the origin of middle axes the axes cross: no 0 there, unless the chart lists it (At).
+        const atOrigin = (k: Tick, step: number, t: AxisTicks) => t.mode !== 'at' && Math.abs(k.value) < step * 0.01;
 
         if (cfg.axisStyle === 'middle') {
             axisLine(left, oy, right, oy);
             axisLine(ox, bottom, ox, top);
             for (const x of xs) {
-                if (Math.abs(x) < stepX * 0.01) continue;
-                const px = this.sx(x);
-                tick(px, oy - 4, px, oy + 4);
+                if (atOrigin(x, stepX, xT)) continue;
+                const px = this.sx(x.value);
+                if (xT.marks) tick(px, oy - 4, px, oy + 4);
                 xTickLabel(x, px, oy + 4 + tickGap);
             }
             for (const y of ys) {
-                if (Math.abs(y) < stepY * 0.01) continue;
-                const py = this.sy(y);
-                tick(ox - 4, py, ox + 4, py);
+                if (atOrigin(y, stepY, yT)) continue;
+                const py = this.sy(y.value);
+                if (yT.marks) tick(ox - 4, py, ox + 4, py);
                 yTickLabel(y, ox - 4 - tickGap, py);
             }
         } else if (cfg.axisStyle === 'axes') {
@@ -1043,12 +1067,12 @@ export class SVGRenderer {
             axisLine(left, bottom, right, bottom);
             axisLine(left, bottom, left, top);
             for (const x of xs) {
-                const px = this.sx(x);
+                const px = this.sx(x.value);
                 tick(px, bottom, px, bottom + TICK_LEN);
                 xTickLabel(x, px, bottom + TICK_LEN + tickGap);
             }
             for (const y of ys) {
-                const py = this.sy(y);
+                const py = this.sy(y.value);
                 tick(left - TICK_LEN, py, left, py);
                 yTickLabel(y, left - TICK_LEN - tickGap, py);
             }
@@ -1062,13 +1086,13 @@ export class SVGRenderer {
             g.appendChild(this.line(left, top, left, bottom, border));
             g.appendChild(this.line(right, top, right, bottom, border));
             for (const x of xs) {
-                const px = this.sx(x);
+                const px = this.sx(x.value);
                 tick(px, bottom, px, bottom + TICK_LEN);
                 tick(px, top - TICK_LEN, px, top);
                 xTickLabel(x, px, bottom + TICK_LEN + tickGap);
             }
             for (const y of ys) {
-                const py = this.sy(y);
+                const py = this.sy(y.value);
                 tick(left - TICK_LEN, py, left, py);
                 tick(right, py, right + TICK_LEN, py);
                 yTickLabel(y, left - TICK_LEN - tickGap, py);
@@ -1084,8 +1108,7 @@ export class SVGRenderer {
                 this.drawLabel(g, String(cfg.xLabel ?? ''), right + gap, oy, label('start', 'middle'));
                 this.drawLabel(g, String(cfg.yLabel ?? ''), ox, top - gap, label('middle', 'above'));
             } else {
-                const ys0 = tickValues(v.ymin, v.ymax, stepY);
-                const yTickW = ys0.reduce((m, y) => Math.max(m, formatTick(y).length * tickFs * CHAR_WIDTH_EM), 0);
+                const yTickW = yT.ticks.reduce((m, k) => Math.max(m, tickText(k).length * tickFs * CHAR_WIDTH_EM), 0);
                 this.drawLabel(g, String(cfg.xLabel ?? ''), left + w / 2, bottom + TICK_LEN + tickGap + tickFs * 1.1 + gap, label('middle', 'below'));
                 const cx = Math.max(axisFs * 0.6, left - TICK_LEN - tickGap - yTickW - gap - axisFs * 0.6);
                 const cy = top + h / 2;
@@ -1098,7 +1121,7 @@ export class SVGRenderer {
     }
 
     /** One tick label with its baseline at (x, y). */
-    private tickLabel(g: SVGElement, value: number, x: number, y: number, anchor: HAnchor, fs: number): void {
+    private tickLabel(g: SVGElement, text: string, x: number, y: number, anchor: HAnchor, fs: number): void {
         const t = this.el('text', {
             x: num(x),
             y: num(y),
@@ -1107,7 +1130,7 @@ export class SVGRenderer {
             'font-size': num(fs),
             'font-family': 'var(--font-text)',
         });
-        t.textContent = formatTick(value);
+        t.textContent = text;
         g.appendChild(t);
     }
 
@@ -1489,4 +1512,9 @@ export class SVGRenderer {
         });
         this.attach(svg, g);
     }
+}
+
+/** What a tick prints: the user's label as plain text (`$a$` shows as a), a multiple of π, or the number. */
+function tickText(k: Tick): string {
+    return k.label !== undefined ? stripLatex(k.label) : k.text;
 }

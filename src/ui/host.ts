@@ -29,6 +29,7 @@ export interface PluginHost {
         blockFormat?: 'text' | 'json';
         /** New objects pop in and values glide (src/motion.ts). Undefined = on. */
         animateCharts?: boolean;
+        imageBackground?: 'transparent' | 'white';
     };
     saveUserTemplates(templates: UserTemplate[]): Promise<void>;
     /** Persist `data` (drafts). */

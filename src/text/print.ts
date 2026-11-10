@@ -514,6 +514,31 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
         keys: ['gridOpacity'],
         print: (m) => (fraction(m.gridOpacity) ? [`grid opacity ${m.gridOpacity}`] : 'gridOpacity' in m ? [`set gridOpacity = ${JSON.stringify(m.gridOpacity)}`] : []),
     },
+    // The numbers of each axis (src/ticks.ts): a line for every mode but Auto; a step or values kept while
+    // another mode is chosen stay as `set` lines.
+    ...(['x', 'y', 'z'] as const).map((a) => ({
+        keys: [`numbers_${a}`, `numbers_step_${a}`, `numbers_at_${a}`],
+        print: (m: Data, f: Data) => {
+            const mode = f[`numbers_${a}`];
+            const step = f[`numbers_step_${a}`];
+            const at = f[`numbers_at_${a}`];
+            const filled = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '' && !/[\r\n]/.test(v);
+            const out: string[] = [];
+            let usedStep = false;
+            let usedAt = false;
+            if (mode === 'off') out.push(`${a} numbers off`);
+            else if (mode === 'every' && filled(step)) {
+                out.push(`${a} numbers every ${step.trim()}`);
+                usedStep = true;
+            } else if (mode === 'at' && filled(at)) {
+                out.push(`${a} numbers at ${at.trim()}`);
+                usedAt = true;
+            } else if (`numbers_${a}` in m) out.push(`set numbers_${a} = ${JSON.stringify(mode)}`);
+            if (!usedStep && `numbers_step_${a}` in m) out.push(`set numbers_step_${a} = ${JSON.stringify(step)}`);
+            if (!usedAt && `numbers_at_${a}` in m) out.push(`set numbers_at_${a} = ${JSON.stringify(at)}`);
+            return out;
+        },
+    })),
     { keys: ['title'], print: (m) => (typeof m.title === 'string' ? [`title ${text(m.title)}`] : 'title' in m ? [`set title = ${JSON.stringify(m.title)}`] : []) },
     ...(['x', 'y', 'z'] as const).map((a) => ({
         keys: [`axis_label_${a}`],

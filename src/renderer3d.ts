@@ -5,7 +5,8 @@ import { COLOR_MAP, THICKNESS_MAP, resolveCssColor } from './colors';
 import { colormapCss, colormapRange, colormapRgb, isColormap, rgbCss } from './colormaps';
 import { BOX_EDGES, edgeKind, farFirst, gridLines, stepValues, tickSides, toViewer } from './box3d';
 import { MESH_OPACITY, opacityValue } from './opacity';
-import { niceInterval, formatTick, stripLatex, hexToRgb, rgbStringToRgb } from './util';
+import { AxisTicks, axisTicks } from './ticks';
+import { niceInterval, stripLatex, hexToRgb, rgbStringToRgb } from './util';
 import { t as msg } from './i18n';
 
 
@@ -316,6 +317,9 @@ export class SVG3DRenderer {
     private boxEdges: BoxEdge[] = [];
     /** Grid lines on the floor and the back walls, in screen space (see prepareBox). */
     private gridSegments: GridSegment[] = [];
+    /** The ticks of x, y and z for this frame (src/ticks.ts), and the context that reads their formulas. */
+    private axisTicksCache: Partial<Record<'x' | 'y' | 'z', AxisTicks>> = {};
+    private tickMath: MathContext | null = null;
     private xTickEdge: TickEdge | null = null;
     private yTickEdge: TickEdge | null = null;
     private zTickEdge: TickEdge | null = null;
@@ -522,6 +526,8 @@ export class SVG3DRenderer {
         this.colorCache.clear();
         this.refreshThemeColors();
         const math = shared || contextFromConfig(config);
+        this.tickMath = math;
+        this.axisTicksCache = {};
 
         // SVG dimensions (only matters for the SVG path, but cheap to set).
         this.svg.setAttribute('width', String(config.width));
@@ -753,9 +759,17 @@ export class SVG3DRenderer {
         if (cfg.gridMajor || cfg.gridMinor) {
             const ranges: Array<[number, number]> = [[xmin, xmax], [ymin, ymax], [zmin, zmax]];
             const steps = ranges.map(([lo, hi]) => niceInterval(hi - lo, this.tickTarget()));
-            const major = ranges.map(([lo, hi], k) => stepValues(lo, hi, steps[k]));
+            const all = (['x', 'y', 'z'] as const).map((a) => this.ticksOf(a));
+            const major = all.map((t) => t.grid);
             const n = Math.round(Number(cfg.minorTickNum));
-            const minor = cfg.gridMinor && n >= 1 ? ranges.map(([lo, hi], k) => stepValues(lo, hi, steps[k] / (n + 1))) : [[], [], []];
+            // Minor lines: n between two major ones; for chosen values (At) only between them.
+            const minorOf = (t: AxisTicks, k: number): number[] => {
+                if (t.mode !== 'at') return stepValues(ranges[k][0], ranges[k][1], (t.mode === 'every' && t.step ? t.step : steps[k]) / (n + 1));
+                const out: number[] = [];
+                for (let i = 0; i + 1 < t.grid.length; i++) for (let j = 1; j <= n; j++) out.push(t.grid[i] + ((t.grid[i + 1] - t.grid[i]) * j) / (n + 1));
+                return out;
+            };
+            const minor = cfg.gridMinor && n >= 1 ? all.map((t, k) => minorOf(t, k)) : [[], [], []];
             const box = { xmin, xmax, ymin, ymax, zmin, zmax };
             for (const line of gridLines(view, box, major, minor)) {
                 const a = this.project(line.from[0], line.from[1], line.from[2]);
@@ -1400,6 +1414,20 @@ export class SVG3DRenderer {
      * first and the last label of an axis are placed first, so thinning
      * keeps the ends of the range.
      */
+    /** The ticks of an axis (src/ticks.ts): Auto (this renderer's own step), Every, At or Off. */
+    private ticksOf(axis: 'x' | 'y' | 'z'): AxisTicks {
+        const cached = this.axisTicksCache[axis];
+        if (cached) return cached;
+        const cfg = this.requireConfig();
+        const [lo, hi] = axis === 'x' ? [cfg.xmin, cfg.xmax] : axis === 'y' ? [cfg.ymin, cfg.ymax] : [cfg.zmin, cfg.zmax];
+        const auto = stepValues(lo, hi, niceInterval(hi - lo, this.tickTarget()));
+        const math = this.tickMath;
+        const numbers = cfg.numbers ? cfg.numbers[axis] : { mode: 'auto' as const, step: '', at: '' };
+        const t = axisTicks(numbers, lo, hi, auto, (src) => (math ? math.value(src) : NaN));
+        this.axisTicksCache[axis] = t;
+        return t;
+    }
+
     /** About how many ticks an axis gets: Major divisions, fewer in 3D, where the axes are short. */
     private tickTarget(): number {
         const cfg = this.requireConfig();
@@ -1407,21 +1435,18 @@ export class SVG3DRenderer {
     }
 
     private tickPlan(): TickMark[] {
-        const cfg = this.requireConfig();
-        const target = this.tickTarget();
         const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
         const marks: TickMark[] = [];
-        const axes: Array<['x' | 'y' | 'z', TickEdge | null, number, number]> = [
-            ['x', this.xTickEdge, cfg.xmin, cfg.xmax],
-            ['y', this.yTickEdge, cfg.ymin, cfg.ymax],
-            ['z', this.zTickEdge, cfg.zmin, cfg.zmax],
+        const axes: Array<['x' | 'y' | 'z', TickEdge | null]> = [
+            ['x', this.xTickEdge],
+            ['y', this.yTickEdge],
+            ['z', this.zTickEdge],
         ];
-        for (const [axis, edge, min, max] of axes) {
+        for (const [axis, edge] of axes) {
             if (!edge) continue;
-            const interval = niceInterval(max - min, target);
-            const start = Math.ceil(min / interval) * interval;
             const own: TickMark[] = [];
-            for (let v = start; v <= max + interval * 1e-6; v += interval) {
+            for (const tick of this.ticksOf(axis).ticks) {
+                const v = tick.value;
                 const p =
                     axis === 'x' ? this.project(v, edge.fixedA, edge.fixedB) :
                     axis === 'y' ? this.project(edge.fixedA, v, edge.fixedB) :
@@ -1433,7 +1458,8 @@ export class SVG3DRenderer {
                     y2: p.sy + edge.outwardY * TICK_LENGTH,
                     labelX: p.sx + edge.outwardX * TICK_LABEL_OFFSET,
                     labelY: p.sy + edge.outwardY * TICK_LABEL_OFFSET,
-                    text: formatTick(v),
+                    // The user's label as plain text (`$a$` shows as a), a multiple of π, or the number.
+                    text: tick.label !== undefined ? stripLatex(tick.label) : tick.text,
                 });
             }
             // Ends first, then from the first tick on.

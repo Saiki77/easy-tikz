@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [4.10.0] - 2026-11-10
+
+Axis numbers your way, and copied images on white, as asked for in issue #5.
+
+### Added
+
+- **Axis numbers** (`src/ticks.ts`; Chart, Axes, one row per axis, z in 3D): **Auto** as before, **Every** a step (a formula such as `pi/2`; a step in pi prints its numbers in π: π/2, π, 3π/2), **At** chosen values, each with an optional label in quotes (`a "a", b "b"`; sliders and computed values work), or **Off** (no numbers and no tick marks; the grid stays). The preview and the PDF show the same numbers (`xtick distance`, `xtick` with `xticklabels`, or `xticklabels={}` with the marks hidden). In text: `x numbers every pi/2`, `x numbers at a "a", b "b"`, `x numbers off`. The grid follows the numbers.
+- **Setting: Copied images.** Transparent with the theme's colours (as before) or **White**: Copy PNG and Copy SVG get a white background and the light theme's colours, so a picture copied in a dark theme reads on paper.
+- **What's new** opens once more with these two.
+
 ## [4.9.0] - 2026-11-03
 
 Solid surfaces in 3D: the preview paints in the right depth order and draws its box like the PDF, the grid shows in 3D, and two sliders fade the grid and the mesh lines.

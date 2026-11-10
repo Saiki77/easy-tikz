@@ -174,6 +174,7 @@ export const problems: Messages<typeof en> = {
     'problems.text.noOptions': '{word} には | の後のオプションを付けられません',
     'problems.text.didYouMean': '"{phrase}" のことですか？',
     'problems.text.gridTakes': 'grid の後には何も書かないか、major、minor、fine、不透明度（grid opacity 0.3）のどれかを書きます',
+    'problems.text.numbersTakes': '{axis} numbers every 0.5、{axis} numbers at 1, 3、{axis} numbers off のように書きます。',
     'problems.text.sizeTakes': 'size には幅 x 高さを cm で書きます（例：size 12 x 6）',
     'problems.text.standsAlone': '{word} はそれだけで 1 行に書きます',
     'problems.text.optimumTakes': '{word} には目的関数と領域が必要です：{word} 2x + 3y over R1',

@@ -23,12 +23,11 @@
 - **Pictures for lectures.** Areas between curves, tangents, linear and integer programs with their optimum, level curves, market equilibria, parametric and polar curves, 3D surfaces.
 - **LaTeX and AI.** Export a standalone pgfplots document that compiles with pdflatex, or let an AI app make the chart: it checks it with the plugin's own code ([AI guide](docs/ai.md)).
 
-## What's new in 4.9
+## What's new in 4.10
 
-- **Solid surfaces in 3D.** The 3D preview paints in the right depth order, so a solid surface hides what lies behind it, and it draws its box and numbers like the PDF: the outline and the back edges, the numbers outside the box.
-- **The grid in 3D, as strong as you like.** Major and minor grid show on the floor and the back walls, and Grid opacity in the Chart tab fades the grid in 2D and 3D, in the preview and the PDF.
-- **Mesh lines.** A slider on the surface card fades the lines on a surface, down to a smooth one.
-- **Colours by height and a smarter fit** (4.8). Viridis, Heat, Cool, Diverging, Rainbow or Greyscale for 3D surfaces, round ranges that hold everything drawn, and new 3D charts in a cube box.
+- **Axis numbers your way.** For each axis: numbers every step (steps in π print in π), at chosen values with your own labels, or none at all. Chart tab, Axes; in text `x numbers every pi/2`. Asked for in [issue #5](https://github.com/Saiki77/easy-tikz/issues/5).
+- **White background for copied images.** Settings, Copied images: Copy PNG and Copy SVG on white with light colours, readable on paper also from a dark theme.
+- **Solid 3D surfaces** (4.9). The 3D preview paints in the right depth order and draws its box like the PDF; the grid shows in 3D, and sliders fade the grid and the mesh lines.
 
 From 4.5, charts in plain words with the chart drawn under the block as you type:
 
@@ -37,7 +36,7 @@ From 4.5, charts in plain words with the chart drawn under the block as you type
 </p>
 <p align="center">From a note with no chart: a block is opened, each line is typed in words, and the chart appears under the block and follows every key. <a href="docs/media/text.mp4">Watch the MP4</a> (37 s).</p>
 
-[Everything new in version 4](docs/whats-new.md): solid 3D surfaces and grid opacity (4.9), colours by height and a smarter fit (4.8), the interface in Japanese (4.7), your own chart words (4.6), charts in plain words (4.5), charts as text and phones (4.4), charts with AI (4.3), drag to edit and live sliders (4.0).
+[Everything new in version 4](docs/whats-new.md): axis numbers and white images (4.10), solid 3D surfaces and grid opacity (4.9), colours by height and a smarter fit (4.8), the interface in Japanese (4.7), your own chart words (4.6), charts in plain words (4.5), charts as text and phones (4.4), charts with AI (4.3), drag to edit and live sliders (4.0).
 
 ## Guides
 

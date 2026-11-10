@@ -20,6 +20,10 @@ export const plugin = {
         'From your theme (default): charts use the colours of your Obsidian theme and follow light and dark mode. As in the LaTeX export: the fixed colours of the exported figure, so the note and the PDF look the same.',
     'plugin.settings.colours.theme': 'From your theme',
     'plugin.settings.colours.export': 'As in the LaTeX export',
+    'plugin.settings.imageBackground.name': 'Copied images',
+    'plugin.settings.imageBackground.desc': 'Background of Copy PNG and Copy SVG. White uses the light theme\'s colours, so the picture reads on paper also from a dark theme.',
+    'plugin.settings.imageBackground.transparent': 'Transparent, theme colours',
+    'plugin.settings.imageBackground.white': 'White',
     'plugin.settings.liveChart.name': 'Chart under the block while you edit',
     'plugin.settings.liveChart.desc':
         'On by default. In Live Preview, a block you are editing shows its chart right under its lines, and the chart changes as you type. Off: the chart shows once the cursor leaves the block.',

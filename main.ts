@@ -1525,6 +1525,17 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 },
             },
             {
+                name: t('plugin.settings.imageBackground.name'),
+                desc: t('plugin.settings.imageBackground.desc'),
+                aliases: ['background', 'white', 'png', 'svg', 'copy', '背景', '白', '画像'],
+                control: {
+                    type: 'dropdown',
+                    key: 'imageBackground',
+                    options: { transparent: t('plugin.settings.imageBackground.transparent'), white: t('plugin.settings.imageBackground.white') },
+                    defaultValue: 'transparent',
+                },
+            },
+            {
                 name: t('plugin.settings.liveChart.name'),
                 desc: t('plugin.settings.liveChart.desc'),
                 aliases: ['ライブプレビュー', '編集', 'リアルタイム'],
@@ -1744,6 +1755,9 @@ class EasyTikzSettingTab extends PluginSettingTab {
             case 'chartWordsWrite':
                 this.plugin.data.chartWords = { ...this.plugin.data.chartWords, write: value === 'builtin' ? 'builtin' : 'yours' };
                 setChartWords(this.plugin.data.chartWords);
+                break;
+            case 'imageBackground':
+                this.plugin.data.imageBackground = value === 'white' ? 'white' : 'transparent';
                 break;
             case 'chartColours':
                 this.plugin.data.chartColours = value === 'export' ? 'export' : 'theme';

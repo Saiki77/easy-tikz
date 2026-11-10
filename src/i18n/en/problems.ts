@@ -169,6 +169,7 @@ export const problems = {
     'problems.text.noOptions': '{word} takes no options after |',
     'problems.text.didYouMean': 'did you mean "{phrase}"?',
     'problems.text.gridTakes': 'grid takes nothing, major, minor, fine or an opacity: grid opacity 0.3',
+    'problems.text.numbersTakes': 'Write {axis} numbers every 0.5, {axis} numbers at 1, 3 or {axis} numbers off.',
     'problems.text.sizeTakes': 'size takes width x height in cm, such as size 12 x 6',
     'problems.text.standsAlone': '{word} stands alone on its line',
     'problems.text.optimumTakes': '{word} takes an objective and a region: {word} 2x + 3y over R1',

@@ -166,7 +166,7 @@ function makeSections(): Section[] {
                         ['mark (1, 2) and (3, a)', t('help.ref.text.t4')],
                         ['draw an arrow from (0, 0) to (3, 2)', t('help.ref.text.t5')],
                         ['write "optimum" at (3, 1.2)', t('help.ref.text.t6')],
-                        ['show, axes, with a grid, grid opacity 0.3, title, size 12 x 6, equal scale, polar, 3d, cube', t('help.ref.text.t7')],
+                        ['show, axes, with a grid, grid opacity 0.3, x numbers every 1, title, size 12 x 6, equal scale, polar, 3d, cube', t('help.ref.text.t7')],
                     ],
                 },
                 { note: t('help.ref.text.note') },

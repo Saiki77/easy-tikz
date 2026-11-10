@@ -78,6 +78,7 @@ The short forms of version 4.4 still work and mean the same: `view x -3..3, y -4
 | `axes in the middle`, `axes in a box`, `axes on the edges`, `no axes` | Axes through the origin (school style), a frame with ticks (the default), axes along the left and bottom edges (optimisation charts), or none. |
 | `with a grid`, `with a minor grid`, `with a fine grid` | Major grid, minor grid, both. In 3D the grid lies on the floor and the back walls of the box. |
 | `grid opacity 0.3` | How strong the grid lines are, from 0 to 1 (without the line: 0.5). Minor lines are drawn at half of it. |
+| `x numbers every pi/2` | The numbers on an axis (x, y or z): `every` a step (a formula; a step in pi prints in π), `at` chosen values each with an optional label in quotes (`x numbers at a "a", b "b"`), or `x numbers off` (no numbers, no tick marks; the grid stays). Without the line: automatic. |
 | `title ...`, `xlabel ...`, `ylabel ...`, `zlabel ...` | Title (a template) and axis names (plain text). Quote them when they hold a `|`. |
 | `size 12 x 6` | Size of the exported figure in cm; it also gives the chart its shape in the note. |
 | `equal scale` | Same unit on both axes, so circles stay round. |
@@ -160,6 +161,7 @@ The options above set these fields. A `set` line or a `key=value` option can set
 | `showAxis` | `true` | Draw the axes. |
 | `showLargeGrid` `showSmallGrid` `gridSize` | `false` `false` `5` | Major grid, minor grid, minor ticks per major step. |
 | `gridOpacity` | `0.5` | Opacity of the major grid lines, 0 to 1 (the line `grid opacity 0.3`); minor lines at half of it. |
+| `numbers_x` `numbers_step_x` `numbers_at_x` | `"auto"` `""` `""` | The numbers on x (and `_y`, `_z`): `"auto"`, `"every"` (with the step's formula), `"at"` (with the values) or `"off"` (the line `x numbers ...`). |
 | `size_x_cm` `size_y_cm` | `10` `10` | Size of the exported figure in cm. It also sets the shape of the chart in the note: `12` by `6` gives a wide chart. |
 | `equalScale` | `false` | Same unit on both axes, so circles stay round. |
 | `coordinateSystem` | `"cartesian"` | `"polar"`: every function is r(θ), written with `theta`. |

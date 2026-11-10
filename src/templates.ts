@@ -132,6 +132,8 @@ export interface PluginData {
     chartWords: ChartWords;
     /** Chart colours: the theme's own (default) or the fixed colours of the LaTeX export. */
     chartColours: 'theme' | 'export';
+    /** Copy PNG and Copy SVG: no background and the theme's colours, or white with the light theme's colours. */
+    imageBackground: 'transparent' | 'white';
     /** Setting "Interface language": Obsidian's (auto, default) or one the plugin has (src/i18n). */
     interfaceLanguage: LanguageSetting;
 }
@@ -151,5 +153,6 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     liveChart: true,
     chartWords: { words: {}, bundles: [], write: 'yours' },
     chartColours: 'theme',
+    imageBackground: 'transparent',
     interfaceLanguage: 'auto',
 };

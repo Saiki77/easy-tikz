@@ -833,6 +833,21 @@ function statement(b: Builder, line: string) {
         else b.chart[`axis_label_${key[0]}`] = value;
         return;
     }
+    // Axis numbers keep the rest of the line as written (commas included): `x numbers every pi/2`,
+    // `x numbers at a "a", b "b"`, `x numbers off`.
+    const numbers = /^(\s*)([xyz])\s+numbers\b\s*(every|at|off)?\b\s*(.*)$/i.exec(line);
+    if (numbers) {
+        const axis = numbers[2].toLowerCase();
+        const how = (numbers[3] || '').toLowerCase();
+        const arg = numbers[4].trim();
+        const at = numbers[1].length;
+        if (how === 'off' && !arg) b.chart[`numbers_${axis}`] = 'off';
+        else if ((how === 'every' || how === 'at') && arg) {
+            b.chart[`numbers_${axis}`] = how;
+            b.chart[how === 'every' ? `numbers_step_${axis}` : `numbers_at_${axis}`] = arg;
+        } else b.problem(at, msg('problems.text.numbersTakes', { axis }));
+        return;
+    }
     const split = splitOptions(line, isEnglish(line));
     const options = split.options;
     let body = split.body;
