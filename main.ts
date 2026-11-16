@@ -1666,6 +1666,11 @@ class InlineChart {
         return this.params.some((p) => p.name === name);
     }
 
+    /** Is this chart drawn from a block with this text (the same block in another view)? */
+    sameBlock(source: string): boolean {
+        return this.source.trim() === source.trim();
+    }
+
     /** The link buttons of the note's charts: another chart may have come or gone. */
     private syncNoteLinks() {
         for (const chart of liveCharts) {
@@ -1673,14 +1678,18 @@ class InlineChart {
         }
     }
 
-    /** Show a row's link button when it is on, or when another chart of the note has a slider of its name. */
+    /**
+     * Show a row's link button when it is on, or when another chart of the
+     * note has a slider of its name. The same block drawn twice (Reading view
+     * and Live Preview of one note, or the note in two panes) is not another chart.
+     */
     syncLinks() {
         this.links.forEach((link, i) => {
             const p = this.params[i];
             if (!p) return;
             let shared = false;
             for (const chart of liveCharts) {
-                if (chart !== this && chart.sourcePath === this.sourcePath && chart.hasSlider(p.name)) shared = true;
+                if (chart !== this && chart.sourcePath === this.sourcePath && !chart.sameBlock(this.source) && chart.hasSlider(p.name)) shared = true;
             }
             link.el.toggleClass('tikz-hidden', !(p.connected === true || shared));
         });
