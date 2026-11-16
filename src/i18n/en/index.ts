@@ -11,7 +11,8 @@ import { panels } from './panels';
 import { plugin } from './plugin';
 import { problems } from './problems';
 import { help } from './help';
+import { beyond } from './beyond';
 
-export const EN = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help };
+export const EN = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond };
 
 export type MessageKey = keyof typeof EN;

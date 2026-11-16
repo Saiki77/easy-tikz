@@ -30,6 +30,7 @@
  */
 import type { Affine, IssueFix } from './mathcontext';
 import { Language, language, t as msg } from './i18n';
+import { latexToPlain } from './latex';
 
 /**
  * Compile-time problem in user math (syntax, unknown name, wrong variable,
@@ -184,7 +185,9 @@ const NUM_RE = /(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/y;
 const IDENT_RE = /[A-Za-z_$][A-Za-z0-9_$]*/y;
 const IDENT_FULL_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
-export function tokenize(src: string): Token[] {
+export function tokenize(source: string): Token[] {
+    // LaTeX math (5.0) is read as the plain syntax; a formula without a backslash or a brace stays as it is.
+    const src = latexToPlain(source);
     const tokens: Token[] = [];
     const n = src.length;
     let i = 0;
@@ -2163,8 +2166,16 @@ export function identifiers(ast: Node | Node[], out: Set<string> = new Set()): S
  * names; math fields never contain braces); `template` forces that reading
  * for labels without placeholders. Null when the text does not tokenize.
  */
+/**
+ * A formula in LaTeX (5.0): a command or a group after ^ or _. Its braces
+ * group, so it is no label template with {placeholders}.
+ */
+export function isLatexFormula(src: string): boolean {
+    return /\\[A-Za-z]|[\^_]\s*\{/.test(src);
+}
+
 export function identifierTokens(src: string, template = false): Token[] | null {
-    if (template || src.indexOf('{') >= 0 || src.indexOf('}') >= 0) {
+    if (template || ((src.indexOf('{') >= 0 || src.indexOf('}') >= 0) && !isLatexFormula(src))) {
         const out: Token[] = [];
         for (const part of scanTemplate(src).parts) {
             if (part.kind !== 'expr') continue;
@@ -2200,6 +2211,15 @@ export function identifierTokens(src: string, template = false): Token[] | null 
  * unchanged when it does not tokenize.
  */
 export function renameTokens(src: string, map: (name: string) => string | null, template = false): string {
+    // LaTeX (5.0): the tokens are those of the plain formula it becomes, so their places are not places in src.
+    // Its names are the letter runs outside the commands (\frac, \sin, \theta stay).
+    if (!template && isLatexFormula(src)) {
+        return src.replace(/(\\[A-Za-z]+)|([A-Za-z][A-Za-z0-9_]*)/g, (all: string, command: string | undefined, name: string | undefined) => {
+            if (command !== undefined || name === undefined) return all;
+            const to = map(name);
+            return to === null ? all : to;
+        });
+    }
     const tokens = identifierTokens(src, template);
     if (!tokens) return src;
     let out = src;

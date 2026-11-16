@@ -21,6 +21,8 @@ import { whatsNewChart } from '../src/whatsnew';
 import { GUIDES } from '../src/guides';
 import { Function3DParameters, FunctionParameters } from '../src/types';
 import { COLORMAPS } from '../src/colormaps';
+import { parseChartText } from '../src/text/parse';
+import type { NoteTable } from '../src/beyond/table';
 
 const TIMEOUT_MS = 30000;
 const PARALLEL = 4;
@@ -480,11 +482,111 @@ const STRESS: Record<string, Record<string, unknown>> = {
     }),
 };
 
+// ------------------------------------------------- beyond functions (5.0)
+
+/** A table above a block, as the note holds it: a header with a %, a typeset minus, a row that is no number. */
+const SCORES: NoteTable = {
+    headers: ['Hours studied', 'Score (%)'],
+    rows: [['1', '52'], ['2', '55'], ['3', '61'], ['4', '\u221260'], ['5', '68'], ['6', 'n/a']],
+};
+
+/** Charts of data, probability, Riemann sums and slope fields, written as text, with the note's table where they read one. */
+const BEYOND: Record<string, { text: string; table?: NoteTable | null }> = {
+    // The table's points with labels, bars, a line and the regression line with its equation; the headers name the axes.
+    dataTable: {
+        text: [
+            'show x from 0 to 7 and y from -70 to 80',
+            'axes in the middle',
+            'use the table above',
+            'draw the data as bars in orange, opacity 0.4',
+            'draw the data as a line, dashed',
+            'mark the data, labelled "({x}, {y})"',
+            'draw its regression line in red, thick, labelled',
+        ].join('\n'),
+        table: SCORES,
+    },
+    // Typed data, a second set, a regression label of its own; a chart in a note without a table draws the rest.
+    dataTyped: {
+        text: [
+            'show x from 0 to 6 and y from 0 to 80',
+            'title slope {D1_y2 - D1_y:1}',
+            'data (1, 52), (2, 55), (3, 61), (4, 60), (5, 68)',
+            'mine: data (0.5, 10), (1.5, 30), (2.5, 20)',
+            'mark the data of D1, large',
+            'draw the data of mine as bars, opacity 1',
+            'draw the regression line of D1, labelled "$m = {m:2}$, 50% fit {r2:2}"',
+            'use the table above',
+        ].join('\n'),
+        table: null,
+    },
+    // A normal density on sliders with a LaTeX event, a patterned tail, a narrow second density.
+    normal: {
+        text: [
+            'show x from -4 to 4 and y from 0 to 0.9',
+            'axes in the middle',
+            'slider m from -2 to 2, starting at 0.5',
+            'slider s from 0.5 to 2, starting at 1',
+            'plot the normal distribution with mean m and sd s, thick',
+            'shade $P(m - s \\le X \\le m + s)$, labelled',
+            'shade P(X >= 2.5) in red, pattern north-east, labelled',
+            'N: plot the normal distribution with mean -2 and sd 0.5 in green, dashed',
+            'shade P(X < -2.5) of N in green, labelled "tail {p:3}"',
+        ].join('\n'),
+    },
+    // Riemann sums on a slider, every method, a function with a pole left out, a label of its own.
+    riemann: {
+        text: [
+            'show x from -0.5 to 4.5 and y from -1.5 to 5.5',
+            'slider n from 1 to 40, starting at 12, in steps of 1',
+            'plot f(x) = x^2/4 + 1, thick',
+            'plot g(x) = 1/(x - 3), hidden',
+            'draw the left Riemann sum of f from 0 to 4 with n parts, labelled',
+            'draw the right Riemann sum of f from 0 to 2 with 3 parts in red, opacity 0.2',
+            'draw the middle Riemann sum of f from 2 to 4 with 4 parts in green, labelled "50% {sum:1}"',
+            'draw the trapezoid rule of g from 2.5 to 4 with 6 parts in purple, labelled',
+        ].join('\n'),
+    },
+    // A slope field with solutions through a named point and through points, at a wide size.
+    slopeField: {
+        text: [
+            'show x from -3 to 3 and y from -3 to 3',
+            'size 12 x 8',
+            'axes in the middle',
+            "draw the slope field of $y' = x - y$",
+            'mark P at (-2, 1), large',
+            'draw the solution through P',
+            'draw the solutions through (0, -2) and (1, 2.5) in blue, dashed',
+        ].join('\n'),
+    },
+    // Equal scale, a field with a singular line (y = 0) and a solution that ends where it turns vertical.
+    slopeFieldEqual: {
+        text: [
+            'show x from -4 to 4 and y from -2 to 2',
+            'equal scale',
+            'slider r from 0.5 to 2, starting at 1',
+            'draw the slope field of dy/dx = -x/y, thick, density=30',
+            'draw the solution through (0, r) in green',
+        ].join('\n'),
+    },
+    // Binomial bars, strict bounds, one value, a tiny probability as a power of ten.
+    binomial: {
+        text: [
+            'show x from -1 to 21 and y from 0 to 0.25',
+            'plot the binomial distribution with n = 20 and p = 0.3',
+            'shade P(3 < X <= 8), labelled',
+            'shade P(X = 12) in red, labelled',
+            'shade P(X >= 17) in purple, labelled',
+        ].join('\n'),
+    },
+};
+
 // --------------------------------------------------------------- compile
 
 /** The block's export as a complete document. Snippets are wrapped using their own `% Needs:` lines. */
-function documentFor(data: Record<string, unknown>): string {
-    const code = SettingsManager.fromJSON(JSON.parse(JSON.stringify(data))).generateTikzCode();
+function documentFor(data: Record<string, unknown>, table?: NoteTable | null): string {
+    const settings = SettingsManager.fromJSON(JSON.parse(JSON.stringify(data)));
+    if (table !== undefined) settings.noteTable = table;
+    const code = settings.generateTikzCode();
     if (code.startsWith('\\documentclass')) return code;
     const needs = code
         .split('\n')
@@ -561,7 +663,7 @@ if (!hasLatex) {
     const dir = keep ? path.resolve(keep) : fs.mkdtempSync(path.join(os.tmpdir(), 'etz-latex-'));
     fs.mkdirSync(dir, { recursive: true });
 
-    const cases: Array<{ name: string; data: Record<string, unknown> }> = [];
+    const cases: Array<{ name: string; data: Record<string, unknown>; table?: NoteTable | null }> = [];
     for (const ex of EXAMPLES) cases.push({ name: `example-${ex.id}`, data: ex.data });
     // The live chart of the "What's new" popup, which Try an example opens in the editor.
     cases.push({ name: 'whats-new', data: whatsNewChart() });
@@ -573,12 +675,13 @@ if (!hasLatex) {
     // Snippet mode for a 2D picture with patterns and braces, and for a 3D one.
     cases.push({ name: 'snippet-2d', data: { ...STRESS.pgfmath, documentSetup: false, tools: [...(STRESS.pgfmath.tools as unknown[]), ...(STRESS.hole.tools as unknown[])] } });
     cases.push({ name: 'snippet-3d', data: { ...STRESS.surface3d, documentSetup: false } });
+    for (const [k, c] of Object.entries(BEYOND)) cases.push({ name: `beyond-${k}`, data: parseChartText(c.text).data, table: c.table });
 
     const jobs = pool(
         cases.map((c) => ({
             name: c.name,
             run: () => {
-                const tex = documentFor(c.data);
+                const tex = documentFor(c.data, c.table);
                 // Labels keep their LaTeX: nothing typed is printed as a literal backslash.
                 assert.ok(!tex.includes('\\textbackslash'), `${c.name} prints a literal backslash`);
                 return compile(dir, c.name, tex);

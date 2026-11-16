@@ -167,6 +167,16 @@ button.etz-icon-btn.etz-inline-reset {
     margin-top: 1px;
 }
 
+/* Connect with others (5.0): muted when off, the accent when on. */
+button.etz-icon-btn.etz-inline-link {
+    flex: 0 0 auto;
+    color: var(--text-faint);
+}
+
+button.etz-icon-btn.etz-inline-link.is-on {
+    color: var(--interactive-accent);
+}
+
 /* The chart under a block being edited in Live Preview (src/live.ts): it
    sits right under the block's lines, a little apart from them. */
 .etz-live {

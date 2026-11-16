@@ -50,6 +50,21 @@ mark the maximum of 2x + 3y in the region, large, labelled "x* = ({x:2}, {y:2})"
 
 The Help tab has the reference (**Charts as text**), and the AI guide lists every line and option: [ai.md](ai.md#the-text-syntax). The short forms of 4.4 (`view x 0..5, y 0..4.5`, `f(x) = x^2 | blue`) still work.
 
+**Full LaTeX.** The same chart can be written as LaTeX: `\begin{chart}`, one command per line with its options in `[ ]` before its argument in `{ }` as in pgfplots and TikZ, and `\end{chart}`. Formulas are LaTeX math without `$`:
+
+```easy-tikz
+\begin{chart}
+\axis[xmin=0, xmax=5, ymin=0, ymax=4.5, axis lines=left]
+\slider[min=0, max=15, start=6]{c}
+\shade[numbered, constraint lines]{x + y \le 4, x + 3y \le 6, x \ge 0, y \ge 0}
+\draw[red, dashed, label={$z = {c}$}]{2x + 3y = c}
+\mark[corners, blue, label={({x}, {y})}]
+\mark[max, large, label={x* = ({x:2}, {y:2})}]{2x + 3y}
+\end{chart}
+```
+
+Chart settings go in `\axis[...]` with the names pgfplots gives them (`xmin`, `axis lines`, `grid`, `xtick distance`, `title`, `xlabel`, `width`); `\slider`, `\plot`, `\shade`, `\draw`, `\mark` and `\node` make the objects, with the options of the words (`red`, `dashed`, `label={...}`, `domain=0:4`, `tangent=a`). The setting **Chart language** (Words + LaTeX math, or Full LaTeX) decides how new charts are written: by the editor, the charts of formulas and the AI tools. Both forms are always read, a chart you edit keeps its form, and your own chart words apply to the words only. A problem names its line and column in the block, and a line no command knows is read as `\command[options]{rest}`, so no line is lost. The AI guide has the whole list: [ai.md](ai.md#full-latex).
+
 ## Chart words
 
 Settings, Chart words, **Edit words** gives every piece of the chart language your own words. The pieces are grouped: lines (`show`, `plot`, `shade`, `draw`, `mark`, `write`, `slider`, `title`, ...), phrases (`from`, `to`, `and`, `where`, `the maximum of`, `the region`, `an arrow`, ...), options (`in` before a colour, `dashed`, `thick`, `numbered`, `with its tangent at`, `labelled`, ...) and colours.
@@ -89,6 +104,8 @@ sin(sqrt(x^2 + y^2))         exp(-(x^2 + y^2)/4)           x y
 
 Two traps: `ax` is one name (write `a x` or `a*x`; the error offers **Use a\*x**), and `1/2x` is `(1/2)*x`. The Help tab lists every operator and function. For models in other letters, set **Axis variables** in Chart > Axes to `x1, x2` or `q, p`.
 
+**LaTeX math (5.0).** A formula can also be written as in your notes, in LaTeX between dollars: `plot $f(x) = \frac{1}{2}x^2 - 2$ in blue`, `shade where $x + y \le 4$ and $x \ge 0$`, `plot $r(\theta) = 1 + \cos\theta$`. `\frac`, `\sqrt`, powers in braces, `\sin x`, `|x|`, `\cdot`, `\le`, `\ge`, `\pi` and Greek letters read as you expect. The plugin writes a LaTeX formula back in dollars and a plain one as it is. Drag to edit changes the numbers of plain formulas only.
+
 Guides: [Write formulas that work](guides/formulas.md), [Tangents and extrema](guides/tangents-extrema.md), [Parametric and polar curves](guides/parametric-polar.md), [Surfaces, planes and points in 3D](guides/surfaces-3d.md).
 
 ## Tools
@@ -111,6 +128,48 @@ Names are stable: functions are `f1, f2, ...`, tools `R1, C1, P1, S1, PL1, ...`,
 
 Guides: [Shade a region with inequalities](guides/regions.md), [Shade the areas between two curves](guides/areas-between.md), [Shade between a curve and its tangent](guides/tangent-area.md), [Points, intersections and live labels](guides/points-labels.md), [Segments, arrows and braces](guides/arrows-braces.md), [Calculate with computed points](guides/computed-values.md).
 
+## Data, probability and calculus
+
+Beyond functions, a 2D chart draws data, distributions, Riemann sums and slope fields, in the preview and in the LaTeX export alike. **+ Add** has them under their own headings; in text they are lines like any other ([AI guide](ai.md#the-text-syntax)).
+
+**Data.** Put a Markdown table in the note and the chart block below it, with the line `use the table above`: the chart takes the first two columns of numbers as x and y (or `use the table above, columns hours and score`), and the headers name the axes when the chart has no axis names of its own. Rows with something that is not a number are left out, and a minus may be `−`. The chart reads the table where it is drawn (Reading view, Live Preview, the chart under a block you edit, and the editor opened from the block) and follows it a moment after you change it; the block keeps its one line, and **Save changes** never writes the rows into it. Points can be typed too: `data (1, 52), (2, 55), (3, 61)`. Draw the data with `mark the data`, `draw the data as bars`, `draw the data as a line`, and `draw its regression line, labelled` (the least-squares line with its equation and R²). The export writes the values the chart has at that moment, so the `.tex` file compiles on its own.
+
+```easy-tikz
+show x from 0 to 6 and y from 0 to 80
+data (1, 52), (2, 55), (3, 61), (4, 60), (5, 68)
+mark the data
+draw its regression line in red, labelled
+```
+
+**Probability.** `plot the normal distribution with mean 0 and sd 1` draws the bell curve and `plot the binomial distribution with n = 10 and p = 0.4` its bars; the parameters may be sliders. `shade P(-1 <= X <= 1), labelled` shades the area under the curve (or colours the bars in range) and labels it with the probability, `P(-1 ≤ X ≤ 1) = 0.683`. The event may be written in LaTeX as in a note (`$P(X \le 2)$`), with `<`, `>` and `=` too, and its bounds may be sliders. A shade line is about the distribution its event names, else the nearest one above it.
+
+```easy-tikz
+show x from -4 to 4 and y from 0 to 0.5
+slider a from 0 to 3, starting at 1
+plot the normal distribution with mean 0 and sd 1, thick
+shade P(-a <= X <= a), labelled
+```
+
+**Riemann sums.** `draw the left Riemann sum of f from 0 to 2 with 6 parts, labelled` draws the rectangles under a function of the chart (`right` and `middle` too, and `draw the trapezoid rule of f ...`), labelled with the sum and the integral. Put the number of parts on a slider and press play to watch the sum close in on the integral; **+ Add > Riemann sum** sets that up.
+
+```easy-tikz
+show x from -0.5 to 4.5 and y from -0.5 to 5.5
+slider n from 1 to 40, starting at 6, in steps of 1
+plot f(x) = x^2/4 + 1, thick
+draw the left Riemann sum of f from 0 to 4 with n parts, labelled
+```
+
+**Slope fields.** `draw the slope field of $y' = x - y$` draws short segments with the slope at each point of a grid, all the same length on screen. `draw the solution through P` adds the solution through a point (`mark P at (1, 2)`): drag P in the editor's preview and the solution follows it.
+
+```easy-tikz
+show x from -3 to 3 and y from -3 to 3
+draw the slope field of $y' = x - y$
+mark P at (-2, 1), large
+draw the solution through P
+```
+
+Each of these draws in 2D charts only; in a 3D chart its line shows a problem.
+
 ## Sliders and live values
 
 A slider is a named number you can use anywhere: in formulas, domains, region conditions, point lists, labels and axis ranges (`xmax = 2a`).
@@ -120,6 +179,7 @@ A slider is a named number you can use anywhere: in formulas, domains, region co
 - **Play** sweeps a slider between its minimum and maximum. Type a value outside the range and the range widens.
 - **Computed values.** Every points tool publishes its results under its name: `P1_x`, `P1_y` (`P1_z` in 3D), `P1_val` (objective value), `P1_n` (count), and `P1_x2`, `P1_y2`, ... for later points. Any field can use them, and they update live: a line `2x + 3y = P1_val` through the optimum, a region bounded by `P1_y`, a tangent at `P1_x`.
 - **Label templates.** Every text (title, text labels, region, condition, curve, point and segment labels) can show values: `{c}` (up to 3 decimals), `{P1_val:1}` (1 decimal). Points add `{x}`, `{y}`, `{z}`, `{val}` and `{i}`; curves add `{level}`. `$...$` is LaTeX math.
+- **Connected sliders (5.0).** `slider a from 0 to 2, connected` in two charts of one note: moving `a` in one chart moves `a` in the other, as long as both are connected. The link button at the end of a slider row in the note (shown when another chart of the note has a slider of that name) switches it on or off and writes it into the block; in the editor it is **Connect with others** in the slider's options. Like every slider in a note, it never changes the note itself.
 - **In your notes** the chart shows its sliders underneath (up to three rows, then "Show N more", plus a reset button). Moving them changes the picture for the current session only and never edits the note. Switch them off in Chart > In your note.
 
 Guides: [Sliders that move the picture](guides/sliders.md), [Animate a chart with play](guides/animate-play.md), [From secant to tangent](guides/secant-tangent.md), [An area that grows with a slider](guides/area-accumulation.md), [Calculate with computed points](guides/computed-values.md).
@@ -182,6 +242,14 @@ The plugin registers an `easy-tikz` markdown code-block processor. **Insert into
 
 Guide: [Charts in your notes](guides/charts-in-notes.md).
 
+## Every formula is a chart
+
+Rest the pointer on a formula in a note, `$...$` or `$$...$$`, in Reading view or Live Preview (also in lists, callouts and tables), and a card opens next to it: the formula, what it is (function, surface, polar curve, curve, region), its chart and a slider for each letter (`a`, `b`, `k`). On a phone, tap the formula. **Insert chart** writes the chart as a block under the paragraph; **Open in the editor** opens it to change first. In the editor, the command **Plot the formula at the cursor** and the right-click item **Plot this formula** do the same.
+
+- `y = ax^2 + b` and `f(x) = \frac{1}{2}x^2` are functions, `z = x^2 - y^2` is a surface (3D), `r = 1 + \cos\theta` a polar curve, `x^2 + y^2 = 4` a curve, `x + y \le 4` a region.
+- **Charts for formulas** switches the card off. **Highlight formulas in notes** (on by default) draws a dotted line under each formula that has a chart and tints it under the pointer; switched off, formulas look as usual and their chart still opens. **Sliders in formula charts** leaves out the sliders.
+- **Default chart for formulas:** **Edit** opens the editor on a sample formula chart; set it up as you like (axes, grid, numbers, size, the line, the 3D view) and click **Save as default**. Every formula card and every inserted chart then has this look. **Reset** goes back to the built-in look.
+
 Plugin setting **"Also render plain `tikz` blocks"** opts in to claim the `tikz` language tag as well; off by default to coexist peacefully with `obsidian-tikzjax` and similar.
 
 ## Export
@@ -199,6 +267,8 @@ The preview and the export draw the same scene, so what you see is what pgfplots
 
 The editor's **Copy SVG** and **Copy PNG** buttons serialize the live preview with theme colours already resolved.
 
+**Charts as SVG files (5.0).** With the setting **Charts as SVG files** on, every chart of a note also lives as an SVG file in your attachment folder, named after the note (`Week 3 · chart 1.svg`, numbered from the top), with a white background and the light theme's colours. The files follow the note: a short time after a change, the plugin writes the files whose picture changed, with the sliders at their saved values. Obsidian Publish, GitHub and other apps show such a file where the plugin does not run: embed it with `![[Week 3 · chart 1.svg]]`. The command **Save the charts of this note as SVG files** writes them at once, also with the setting off. The plugin never deletes a file.
+
 Guide: [Export to LaTeX](guides/export-latex.md) (standalone document or snippet, the size on paper, colours and label text, what the export freezes, hand edits).
 
 ## Plugin settings
@@ -214,7 +284,9 @@ Settings → Community plugins → **Easy TikZ**:
 - **Max 3D samples per axis.** Upper bound of the per-surface Samples slider. Default 80, at most 120. The export always uses at most 60 samples per axis, because pdflatex runs out of memory above that.
 - **2D pan sensitivity.** Default 1.0 (direct: 1 mouse pixel = 1 chart pixel), from 0.1 to 2.0.
 - **Also render plain `tikz` blocks.** Off by default; on if you want one tag for everything (conflicts with obsidian-tikzjax).
-- **Show what's new after updates.** On by default. After an update that brings something new, a short popup shows what changed, once. The command **Show what's new in version 4** and the link in the Help tab open it at any time.
+- **Charts for formulas**, **Highlight formulas in notes**, **Sliders in formula charts** and **Default chart for formulas**: see [Every formula is a chart](#every-formula-is-a-chart).
+- **Charts as SVG files.** Off by default: see [Export](#export).
+- **Show what's new after updates.** On by default. After an update that brings something new, a short popup shows what changed, once. The command **Show what's new in Easy TikZ 5** and the link in the Help tab open it at any time.
 - **AI access** (on a computer; phones and tablets show only the guide and the agents' section). **Let AI apps make charts** (off by default) starts the local AI server; below it: its status, the **Port** (default 27150), the **Token** with **Copy** and **New token**, **Connect an AI app** with the line each app needs, **Tell AI agents in this vault** and **Copy the guide for AI chats**. The editor's **AI** tab has the same switch.
 
 ## Live rendering, briefly
@@ -222,3 +294,16 @@ Settings → Community plugins → **Easy TikZ**:
 The preview is drawn in-process by a small custom pipeline (no shell-out, no LaTeX compile, no image round-trip), which is what lets sliders and the camera follow the cursor without lag. Expressions are parsed once and compiled into plain closures (no `eval`, no `Function`); sliders are read when the closure runs, so dragging one never recompiles anything. Regions, curves and points are memoised per tool and keyed by the sliders and names they use: dragging the objective slider `c` recomputes the objective line, not the feasible region. While a slider moves, the 2D preview draws at draft resolution on every animation frame and redraws at full quality once you stop. Drag to edit rides on the same loop: each pointer event solves for the new numbers, rewrites the text and requests a draft frame.
 
 A typical 3D surface (samples=40, 1,600 quads) sits at ~60 fps; the slider's upper end (samples=120, 14,400 quads) settles above 30 fps. Sampled surface data is cached per surface, keyed by expression, domain, sample count, z-range and the sliders the surface uses, so a pure camera change (rotation, zoom) re-projects from the cache without re-evaluating the function.
+
+## Privacy and permissions
+
+- **Clipboard:** writes TikZ code / SVG / PNG on the *Copy …* buttons, the text of a "type" row when you press **Copy** in a guide, the AI guide, connection lines and token when you press their **Copy** buttons in the AI tab or the settings, and your chart words when you press **Copy your words**. It reads the clipboard only when you press **Paste the chart** in the AI tab.
+- **Active note:** inserts an `easy-tikz` block on **Insert into note** or a formula's **Insert chart** (under its paragraph), replaces an existing block when saving from click-to-edit, updates `displayWidth` / `displayAlign` when you use a chart's width or alignment controls, and adds or removes `connected` on a slider line when you press its link button. Inline sliders never write to the note.
+- **SVG files, on request:** with **Charts as SVG files** switched on (off by default), or with the command **Save the charts of this note as SVG files**, the plugin writes one SVG file per chart into your attachment folder, named after the note, and rewrites a file only when its picture changed. It never deletes a file.
+- **Plugin data:** the [plugin settings](#plugin-settings) (with the AI access token), your saved function templates, the state of the **Edit shapes by dragging** switch (and that its first-use tip was shown), which version of the What's new popup was shown and, while the editor is open, an autosaved draft of the chart (cleared when you insert or save).
+- **Notes with charts, after you change your chart words:** the plugin looks through the notes that hold `easy-tikz` blocks for charts that used a word you changed. Only when you agree (**Rewrite N charts**) does it rewrite those lines in your new words, each chart only when it stays exactly the same chart.
+- **Your notes, read only:** when the plugin starts without any stored data and What's new is switched on, it looks through your notes for an `easy-tikz` block and stops at the first one. A 3.x user who never changed a setting has charts but no stored data, and this tells such an update from a new install. It runs once, since its answer is stored, and it never writes to a note.
+- **Network:** nothing goes to the internet. The guides in the Help tab are part of the plugin and their charts are drawn locally; each guide has a link to its page on GitHub, which opens in your browser only when you click it. With **Let AI apps make charts** switched on (off by default), the plugin answers HTTP on `127.0.0.1` at the port you choose, which only programs on this computer can reach. Every request needs the token from the settings, and a POST must carry JSON; requests from web pages (with an `Origin` header) and for other host names are refused. It serves the AI guide, checks and draws charts one at a time (charts over its size limits are refused before anything is computed), and adds `easy-tikz` blocks to Markdown notes (at the end, below a heading, or in place of a placeholder line) or replaces them, nothing else: never in hidden folders and never in instruction files for AI agents such as `AGENTS.md` or `CLAUDE.md`. A new note is only made when the AI asks for it. Each change shows a notice, with **Undo** when an existing note changed.
+- **Vault root, on request:** **Tell AI agents in this vault** adds or updates a marked Easy TikZ section in `AGENTS.md` and `CLAUDE.md` at the top of the vault (creating them if needed). It never touches the rest of those files.
+- **Telemetry:** none.
+- **Math evaluation:** user expressions are parsed by a built-in parser and compiled into closures; no dynamically generated code runs. Nothing is persisted or transmitted.

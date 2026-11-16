@@ -2,6 +2,22 @@
 
 [Overview](../README.md) · [Guides](guides/README.md) · [Reference](reference.md) · [Changelog](../CHANGELOG.md)
 
+## 5.0: every formula is a chart, LaTeX as the chart language
+
+- **Every formula is a chart.** Rest the pointer on a formula in a note (`$...$` or `$$...$$`, in Reading view and Live Preview): its chart opens next to it, with a slider for each letter. **Insert chart** puts it under the paragraph. On a phone, tap the formula. A dotted line marks the formulas that have a chart (setting **Highlight formulas in notes**), and **Default chart for formulas** gives all of them your look.
+- **LaTeX is the chart language.** Formulas in a chart are LaTeX in dollars, as in your notes: `plot $f(x) = \frac{1}{2}x^2 - 2$ in blue`. With the setting **Chart language: Full LaTeX**, new charts are written as LaTeX commands inside `\begin{chart} ... \end{chart}`, as in pgfplots. Both forms are always read.
+- **Connected sliders.** Sliders with the same name and `connected` move together in all charts of a note.
+- **Charts as SVG files.** With the setting on, every chart is also an SVG file in your attachment folder, so Obsidian Publish and GitHub show it.
+- **New pictures.** Data from a Markdown table above the chart with its regression line, normal and binomial distributions with a shaded probability, Riemann sums and the trapezoid rule, slope fields with the solution through a point.
+- **What's new** is now a slideshow, with a live chart on every slide.
+
+```easy-tikz
+show x from -3 to 3 and y from -3 to 3
+axes in the middle
+slider a from -1 to 2, starting at 1, connected
+plot $f(x) = \frac{x^3}{3} - a x$ in blue, thick, with its extrema
+```
+
 ## 4.10: axis numbers your way, white images
 
 - **Axis numbers.** Chart, Axes has a Numbers row for each axis (z in 3D). **Auto** is as before. **Every** puts a number on each multiple of a step, also a formula such as `pi/2`; a step in pi prints its numbers in π (π/2, π, 3π/2). **At** puts numbers only at chosen values, each with its own label if you like (`pi/2 "a", 3pi/2 "b"`); sliders and computed values (`P1_x`) work. **Off** leaves out the numbers and the tick marks; the grid stays. The PDF shows the same numbers. Asked for in [issue #5](https://github.com/Saiki77/easy-tikz/issues/5).

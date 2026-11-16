@@ -1191,11 +1191,22 @@ function assertStructurallyValid(ctx: RecipeContext, id: string): void {
             break;
         case 'label':
             break;
+        case 'items': {
+            // Several items at once (5.0): each valid, with a name and an id of its own.
+            const fns = res.functions ?? [];
+            if (fns.length) assert.deepEqual(normalizeFunctions(fns).functions, fns, id);
+            assert.deepEqual(normalizeTools(res.tools, { is3D: ctx.is3D, takenNames: fns.map((f) => f.name || '') }), res.tools, id);
+            const added = [...fns.map((f) => f.name || ''), ...res.tools.map((t) => t.name)];
+            assert.equal(new Set(added).size, added.length, `${id}: two new items with one name`);
+            for (const name of added) assert.ok(!names.has(name), `${id}: name clash`);
+            assert.ok(!res.tools.some((t) => ctx.tools.some((o) => o.id === t.id)), `${id}: id clash`);
+            break;
+        }
     }
 }
 
 test('recipes: the documented lists, unique ids, sections and plain-language text', () => {
-    const sections = ['Functions', 'Regions', 'Curves and lines', 'Points', 'Segments and arrows', 'Labels', 'Sliders', '3D'];
+    const sections = ['Functions', 'Regions', 'Curves and lines', 'Points', 'Segments and arrows', 'Labels', 'Sliders', '3D', 'Data', 'Probability', 'Calculus'];
     for (const is3D of [false, true]) {
         const list = recipes(is3D);
         assert.equal(new Set(list.map((r) => r.id)).size, list.length);
@@ -1213,7 +1224,11 @@ test('recipes: the documented lists, unique ids, sections and plain-language tex
             'function', 'parametric', 'area-between', 'area-under', 'feasible-region', 'rectangle', 'disk',
             'vertical-line', 'horizontal-line', 'line-equation', 'circle', 'level-curves',
             'points-list', 'intersections', 'corner-points', 'optimum', 'lattice',
-            'segment', 'arrow', 'polyline', 'brace', 'label', 'slider',
+            'segment', 'arrow', 'polyline', 'brace',
+            'data-table', 'data-points', 'regression',
+            'normal-distribution', 'binomial-distribution', 'probability',
+            'riemann-sum', 'slope-field', 'solution',
+            'label', 'slider',
         ]
     );
     assert.deepEqual(recipes(true).map((r) => r.id), ['surface', 'plane', 'point', 'segment', 'arrow', 'label', 'slider']);

@@ -128,7 +128,22 @@ export function createLayerCard(parent: HTMLElement, item: LayerItem, host: Pane
             return new SegmentCard(parent, item, tool, host, actions);
         case 'plane3D':
             return new PlaneCard(parent, item, tool, host, actions);
+        default: {
+            const make = EXTRA_CARDS.get(tool.type);
+            if (!make) throw new Error(`No card for a ${tool.type} tool`);
+            return make(parent, item, tool, host, actions);
+        }
     }
+}
+
+/** Makes the card of a tool type defined outside this file. */
+export type ToolCardFactory = (parent: HTMLElement, item: LayerItem, tool: Tool, host: PanelHost, actions: LayerCardActions) => LayerCardHandle;
+
+/** Cards of the tools beyond functions (5.0): src/beyond/cards.ts registers them when it loads. */
+const EXTRA_CARDS = new Map<string, ToolCardFactory>();
+
+export function registerToolCard(type: Tool['type'], make: ToolCardFactory): void {
+    EXTRA_CARDS.set(type, make);
 }
 
 // ------------------------------------------------------------- constants
@@ -154,16 +169,23 @@ const TOOL_KIND: Record<Tool['type'], MessageKey> = {
     points: 'build.kind.points',
     segment: 'build.kind.segment',
     plane3D: 'build.kind.plane',
+    data: 'beyond.kind.data',
+    dataPlot: 'beyond.kind.dataPlot',
+    distribution: 'beyond.kind.distribution',
+    probability: 'beyond.kind.probability',
+    riemann: 'beyond.kind.riemann',
+    slopeField: 'beyond.kind.slopeField',
+    solution: 'beyond.kind.solution',
 };
 
 // --------------------------------------------------------------- helpers
 
-function percent(v: number): string {
+export function percent(v: number): string {
     return `${Math.round(v * 100)} %`;
 }
 
 /** Whitespace-collapsed text for summaries and dropdown entries. */
-function squash(s: string, max = 0): string {
+export function squash(s: string, max = 0): string {
     const t = s.replace(/\s+/g, ' ').trim();
     return max > 0 && t.length > max ? t.slice(0, max - 1) + '…' : t;
 }
@@ -187,7 +209,7 @@ function shortOption<T extends string>(value: T, text: string, ariaLabel: string
 }
 
 /** Small / medium / large, for marker and text sizes. */
-function sizeOptions<T extends string>(small: T, normal: T, large: T): SegmentOption<T>[] {
+export function sizeOptions<T extends string>(small: T, normal: T, large: T): SegmentOption<T>[] {
     return [
         shortOption(small, t('build.size.smallShort'), t('build.size.small')),
         shortOption(normal, t('build.size.mediumShort'), t('build.size.medium')),
@@ -233,6 +255,8 @@ interface ExprFieldOptions {
     cls?: string;
     /** Template locals the label gets (LABEL_LOCALS); none when omitted. */
     locals?: readonly string[];
+    /** Optional (5.0): validation of its own, instead of the math context's for `kind`. */
+    check?(src: string): ValidateResult;
 }
 
 interface SelectFieldOptions {
@@ -472,6 +496,7 @@ abstract class BaseCard implements LayerCardHandle {
             cls: o.cls,
             validate: (src) => {
                 if (!src.trim() && (o.optional || (o.required && !touched))) return OK;
+                if (o.check) return o.check(src);
                 return this.host.math().validate(src, kindOf(), undefined, o.locals);
             },
             onInput: (v) => {
@@ -767,7 +792,7 @@ abstract class BaseCard implements LayerCardHandle {
 
 // ------------------------------------------------------------- tool card
 
-abstract class ToolCard<T extends Tool> extends BaseCard {
+export abstract class ToolCard<T extends Tool> extends BaseCard {
     protected readonly tool: T;
 
     protected constructor(parent: HTMLElement, item: LayerItem, tool: T, host: PanelHost, actions: LayerCardActions) {

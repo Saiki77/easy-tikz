@@ -14,6 +14,7 @@
  * the notice about a change, which the person reads, is in their language.
  */
 import { guideWithWords } from '../text/words';
+import { chartLanguage, guideWithLanguage, isFullText, wordsToFull } from '../text/full';
 import GUIDE from '../../docs/ai.md';
 import { Data, Report, blocksOf, check, examples, fenced, minimize, parseJson, tikzOf, withSliders } from './charttool';
 import { LINE_BREAK, TextProblem, isChartText, parseChartText } from '../text/parse';
@@ -135,11 +136,21 @@ function chartArg(value: unknown): ChartInput {
     throw new ToolError('"chart" is required: the text of an easy-tikz block, one line per object (see get_guide).');
 }
 
-/** The block a chart gets in a note: text (as the AI wrote it, or printed) or JSON, as the user chose. */
+/**
+ * The block a chart gets in a note: text or JSON, as the user chose, and
+ * text in their chart language (words, or Full LaTeX): the AI's own lines
+ * when they are in it, else written in it (words become Full LaTeX line by
+ * line, comments kept).
+ */
 function blockFor(input: ChartInput, host: ChartHost): string {
     const format = host.blockFormat ? host.blockFormat() : 'text';
     if (format === 'json') return fenced(input.data);
-    return '```easy-tikz\n' + (input.text ?? printChartText(input.data)) + '\n```';
+    const full = chartLanguage() === 'full';
+    let body: string;
+    if (input.text !== null && isFullText(input.text) === full) body = input.text;
+    else if (input.text !== null && full) body = wordsToFull(input.text);
+    else body = printChartText(input.data);
+    return '```easy-tikz\n' + body + '\n```';
 }
 
 function slidersArg(value: unknown): Record<string, number> {
@@ -268,7 +279,7 @@ const TOOLS: ToolDef[] = [
         annotations: { readOnlyHint: true },
         async run(args) {
             const section = stringArg(args, 'section');
-            const guide = guideWithWords(GUIDE);
+            const guide = guideWithLanguage(guideWithWords(GUIDE));
             if (!section) return text(guide);
             const parts = guide.split(/\n(?=#{2,3} )/);
             const want = section.toLowerCase();
@@ -397,7 +408,8 @@ const TOOLS: ToolDef[] = [
                     let state: string;
                     if (isChartText(b.text)) {
                         const parsed = parseChartText(b.text);
-                        state = parsed.problems.length || check(parsed.data).errors.length ? 'text, has problems' : 'text, ok';
+                        const form = isFullText(b.text) ? 'Full LaTeX' : 'text';
+                        state = parsed.problems.length || check(parsed.data).errors.length ? `${form}, has problems` : `${form}, ok`;
                     } else {
                         const parsed = parseJson(b.text);
                         state = parsed.ok ? (check(parsed.data).errors.length ? 'JSON, has problems' : 'JSON, ok') : `not valid JSON: ${parsed.message}`;
@@ -412,7 +424,7 @@ const TOOLS: ToolDef[] = [
         name: 'update_chart',
         title: 'Replace a chart in a note',
         description:
-            'Check the chart and put it in place of chart number "index" (from list_charts) of the note. Refused while the check reports problems. The block keeps its form: a text block takes text as given, and a JSON chart for a text block rewrites only the lines whose object changed.',
+            'Check the chart and put it in place of chart number "index" (from list_charts) of the note. Refused while the check reports problems. The block keeps its form: a text block takes text as given when it is in the same form (words, or Full LaTeX), and otherwise (a JSON chart, or text in the other form) rewrites only the lines whose object changed.',
         inputSchema: {
             type: 'object',
             properties: { index: { type: 'integer', minimum: 1, description: 'Which chart of the note, counting from 1.' }, chart: CHART_SCHEMA, note: NOTE_SCHEMA },
@@ -438,7 +450,9 @@ const TOOLS: ToolDef[] = [
                     if (!b.end) throw new ToolError(`Chart ${index} has no closing fence; fix the note first.`);
                     const lines = old.split('\n');
                     let body: string[];
-                    if (isChartText(b.text) && b.text.trim()) body = (input.text ?? writeChartText(b.text.replace(/\s+$/, ''), chart)).split('\n');
+                    // Text in the block's own form goes in as given; otherwise the block is rewritten in its form, line by line.
+                    const given = input.text !== null && isFullText(input.text) === isFullText(b.text) ? input.text : null;
+                    if (isChartText(b.text) && b.text.trim()) body = (given ?? writeChartText(b.text.replace(/\s+$/, ''), chart)).split('\n');
                     else body = fenced(chart).split('\n').slice(1, -1);
                     lines.splice(b.line, b.end - b.line - 1, ...body.map((l) => b.prefix + l));
                     return lines.join('\n');

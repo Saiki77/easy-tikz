@@ -10,7 +10,7 @@ export const help: Messages<typeof en> = {
     'help.search.guides': 'ガイド {count} 件',
     'help.search.sections': 'リファレンスの項目 {count} 件',
     'help.search.both': 'ガイド {guides} 件、リファレンスの項目 {sections} 件',
-    'help.whatsNew': 'バージョン 4 の新機能',
+    'help.whatsNew': 'Easy TikZ 5 の新機能',
     'help.categories': 'カテゴリ',
     'help.referenceSections': 'リファレンスの項目',
     'help.category.gettingStarted': 'はじめに',
@@ -78,9 +78,21 @@ export const help: Messages<typeof en> = {
     'help.ref.text.t5': 'draw a line from A to B、draw a polygon through A, B and C、draw a brace from A to B とも書けます。',
     'help.ref.text.t6': 'テキストラベルです。オプションで above、below、left、right を指定できます。',
     'help.ref.text.t7': 'グラフそのものです。ほかの項目は set field = value で設定します。',
+    'help.ref.text.t8': 'LaTeX の数式。ノートと同じくドル記号で囲みます（5.0）。ふつうの数式も使えます。',
+    'help.ref.text.t9': 'ノートのほかのグラフにある同じ名前のスライダーと一緒に動くスライダー。',
+    'help.ref.text.t10': 'グラフの上の Markdown の表の点。続けて：mark the data、draw its regression line, labelled。または：data (1, 2), (2, 3)。',
+    'help.ref.text.t11': '分布（二項分布も：the binomial distribution with n = 10 and p = 0.4）。shade P(-1 <= X <= 1), labelled で確率に色を付けます。',
+    'help.ref.text.t12': 'f の下の長方形とその和：左、右、中点、または台形公式。分割の数はスライダーにできます。',
+    'help.ref.text.t13': '微分方程式の方向場。draw the solution through P で点を通る解を描きます。',
     'help.ref.text.note': '書き間違いは、ノートのグラフの下に行と列の位置とともに表示されます（例：「4 行目、9 列目：不明なオプション」）。AI 用ガイド（「AI」タブ）には、すべての行とオプションが載っています。',
     'help.ref.text.p3':
         'あなたの言葉：設定の「**グラフの言葉**」では、グラフ記法のどの部分にも、自分の言語や自分の用語で言葉を付けられます（plot を graph や zeichne にするなど）。複数のオプションを 1 語にまとめたまとめ言葉も作れます。組み込みの言葉も、あなたの言葉と並んでそのまま使えます。',
+    'help.ref.text.sub2': 'Full LaTeX',
+    'help.ref.text.full':
+        '同じグラフを LaTeX でも書けます。`\\begin{chart}` で始め、1 行に 1 つのコマンドを書き（pgfplots と同じく、オプションは `[ ]` に、引数は `{ }` に入れます）、`\\end{chart}` で終えます。数式は `$` を付けない LaTeX 数式です。設定「**グラフの記法**」を Full LaTeX にすると、新しいグラフはこの形で書かれます。どちらの形もいつでも読み込め、編集したグラフは元の形のままです。',
+    'help.ref.text.c7': '範囲、軸、グリッド、タイトル、サイズ',
+    'help.ref.text.full2':
+        'グラフの設定は `\\axis[...]` に pgfplots の名前（xmin、axis lines、grid、xtick、title、xlabel、width）で書きます。`\\slider`、`\\plot`、`\\shade`、`\\draw`、`\\mark`、`\\node` がオブジェクトを作り、オプションは言葉の記法と同じです（`red`、`dashed`、`label={...}`、`domain=0:4`、`tangent=a`）。AI 用ガイドにすべて載っています。',
 
     // Drag to edit
     'help.ref.drag.title': 'ドラッグで編集',

@@ -1,4 +1,4 @@
-import { App, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, Notice, Platform, Plugin, PluginSettingTab, SettingDefinitionItem, SettingGroupItem, TFile, getLanguage, normalizePath, setIcon } from 'obsidian';
+import { App, Editor, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, Notice, Platform, Plugin, PluginSettingTab, SettingDefinitionItem, SettingGroupItem, TFile, getLanguage, normalizePath, setIcon } from 'obsidian';
 import { TikzModal } from './src/modal';
 import { SettingsManager } from './src/settings';
 import { SVGRenderer } from './src/renderer';
@@ -22,9 +22,16 @@ import AI_GUIDE from './docs/ai.md';
 import { BlockFormat, readBlock } from './src/blockjson';
 import { TextProblem } from './src/text/parse';
 import { printChartText, writeChartText } from './src/text/print';
+import { applyFormulaDefault, formulaAt, formulaBlock, formulaChart } from './src/formula';
+import { parseChartText } from './src/text/parse';
+import { FormulaHover } from './src/ui/formulaHover';
+import { SvgFiles } from './src/svgFiles';
 import { GLIDE_MS, PopIn, PopInState, drawnNames, ease, glides, mixCharts, reducedMotion } from './src/motion';
 import { LiveHost, editingCharts } from './src/live';
+import { NoteTable, tableAbove, tableKey } from './src/beyond/table';
+import { noteLines, readsTable, tableForBlock } from './src/beyond/note';
 import { ChartWords, NO_WORDS, clean, guideWithWords, setChartWords } from './src/text/words';
+import { guideWithLanguage, setChartLanguage } from './src/text/full';
 import { rewordNote } from './src/text/reword';
 import { ChartWordsModal } from './src/ui/wordsModal';
 import { LANGUAGE_NAMES, languageSetting, resolveLanguage, setLanguage, t } from './src/i18n';
@@ -112,6 +119,29 @@ const chartMemory = new Map<string, ChartMemory[]>();
 
 /** Charts in notes, so a theme change can redraw them (3D shading and mixed label inks use concrete colours). */
 const liveCharts = new Set<InlineChart>();
+
+/**
+ * Connected sliders (5.0), per note: the value each connected slider name
+ * has now, so a chart that is drawn later (or again) starts there too.
+ * Session only, like the slider positions.
+ */
+const connectedValues = new Map<string, Map<string, number>>();
+
+function connectedGet(path: string, name: string): number | undefined {
+    return connectedValues.get(path)?.get(name);
+}
+
+function connectedSet(path: string, name: string, value: number) {
+    let values = connectedValues.get(path);
+    if (!values) {
+        values = new Map();
+        connectedValues.set(path, values);
+    }
+    values.set(name, value);
+}
+
+/** A chart that reads the table above its block reads it again this long after the note last changed (5.0). */
+const TABLE_PAUSE_MS = 400;
 
 /** Lines two block bodies share, as a share of the longer one (1: the same block). */
 function sharedLines(a: string, b: string): number {
@@ -259,6 +289,8 @@ function showBlockError(el: HTMLElement, message: string) {
 
 export default class EasyTikzPlugin extends Plugin implements PluginHost {
     data: PluginData = { ...DEFAULT_PLUGIN_DATA };
+    /** Charts as SVG files (5.0): writes a note's files after it changed, with the setting on. */
+    readonly svgFiles = new SvgFiles(this.app, () => new Set(this.data.renderTikzBlocks ? ['easy-tikz', 'tikz'] : ['easy-tikz']));
     /** The open "What's new" popup, closed when the plugin unloads. */
     private whatsNew: WhatsNewModal | null = null;
     private unloaded = false;
@@ -278,6 +310,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             // A damaged draft is dropped instead of offered for restore.
             draft: isDraft(storedDraft) ? storedDraft : null,
             chartWords: clean(stored?.chartWords ?? NO_WORDS),
+            chartLanguage: stored?.chartLanguage === 'full' ? 'full' : 'words',
             interfaceLanguage: languageSetting(stored?.interfaceLanguage),
         };
         // The interface in the reader's language (src/i18n): Obsidian's, unless the setting fixes one. Set before
@@ -287,6 +320,9 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         // Their own words for the chart language (src/text/words.ts): read in every block, written by the editor and the AI tools.
         setChartWords(this.data.chartWords);
         this.register(() => setChartWords(NO_WORDS));
+        // The form new charts are written in (src/text/full.ts): words with LaTeX math, or Full LaTeX. Both are always read.
+        setChartLanguage(this.data.chartLanguage);
+        this.register(() => setChartLanguage('words'));
 
         this.addRibbonIcon('square-function', 'Easy TikZ', () => {
             new TikzModal(this.app, this).open();
@@ -336,6 +372,63 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             callback: () => void this.copyAiGuide(),
         });
 
+        // Every formula in a note is a chart (5.0): the chart of the formula under the pointer (a tap on
+        // phones), and a command and a right-click item for the formula at the cursor.
+        const hover = new FormulaHover(this.app, {
+            enabled: () => this.data.formulaHover !== false,
+            sliders: () => this.data.formulaSliders !== false,
+            formulaDefault: () => this.data.formulaDefault ?? null,
+            openChart: (data, file) => new TikzModal(this.app, this, { data, sourceFile: file }).open(),
+        });
+        this.registerMarkdownPostProcessor((el, ctx) => hover.tag(el, ctx));
+        this.registerEditorExtension(hover.editorMarks());
+        // The highlight under formulas with a chart: a class on the body of each window.
+        this.applyFormulaMarks(activeDocument);
+        this.registerEvent(this.app.workspace.on('window-open', (_w, win) => this.applyFormulaMarks(win.document)));
+        this.register(() => {
+            for (const doc of this.markDocs) doc.body.removeClass('etz-formula-marks');
+        });
+        const hoverIn = (doc: Document) => {
+            this.registerDomEvent(doc, 'mouseover', (e) => hover.over(e));
+            if (Platform.isMobile) this.registerDomEvent(doc, 'click', (e) => hover.tap(e));
+            this.registerDomEvent(doc, 'keydown', (e) => {
+                if (e.key === 'Escape') hover.close();
+            });
+        };
+        hoverIn(activeDocument);
+        this.registerEvent(this.app.workspace.on('window-open', (_w, win) => hoverIn(win.document)));
+        this.register(() => hover.close());
+        this.addCommand({
+            id: 'plot-formula',
+            name: t('plugin.command.plotFormula'),
+            editorCallback: (editor) => this.plotFormulaAt(editor),
+        });
+
+        // Charts as SVG files (5.0): a note's files follow it when it is saved, with the setting on.
+        this.registerEvent(
+            this.app.vault.on('modify', (file) => {
+                if (this.data.svgFiles && file instanceof TFile) this.svgFiles.schedule(file);
+            })
+        );
+        this.register(() => this.svgFiles.cancel());
+        this.addCommand({
+            id: 'save-svg-files',
+            name: t('plugin.command.saveSvgFiles'),
+            checkCallback: (checking) => {
+                const file = this.app.workspace.getActiveFile();
+                if (!file || file.extension !== 'md') return false;
+                if (!checking) void this.saveSvgFiles(file);
+                return true;
+            },
+        });
+        this.registerEvent(
+            this.app.workspace.on('editor-menu', (menu, editor) => {
+                const cur = editor.getCursor();
+                if (!formulaAt(editor.getLine(cur.line), cur.ch)) return;
+                menu.addItem((item) => item.setTitle(t('plugin.menu.plotFormula')).setIcon('square-function').onClick(() => this.plotFormulaAt(editor)));
+            })
+        );
+
         this.addSettingTab(new EasyTikzSettingTab(this.app, this));
 
         // Chart colours: the theme's or the export's (styles.css), in the main window and every popout.
@@ -343,6 +436,22 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         this.registerEvent(this.app.workspace.on('window-open', (_w, win) => this.applyChartColours(win.document)));
         this.register(() => {
             for (const doc of this.colourDocs) doc.body.removeClass('etz-export-colours');
+        });
+        // Charts that read the table above their block follow it when the note changes (5.0).
+        this.registerEvent(
+            this.app.workspace.on('editor-change', (editor, info) => {
+                const file = info.file;
+                if (file) this.followTables(file.path, () => editor.getValue());
+            })
+        );
+        this.registerEvent(
+            this.app.vault.on('modify', (file) => {
+                if (file instanceof TFile && file.extension === 'md') this.followTables(file.path, () => this.app.vault.cachedRead(file));
+            })
+        );
+        this.register(() => {
+            for (const timer of this.tableTimers.values()) window.clearTimeout(timer);
+            this.tableTimers.clear();
         });
         // A theme change: 2D charts follow by themselves; redraw for what holds concrete colours.
         this.registerEvent(
@@ -482,6 +591,14 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
 
     /** Documents (main window, popouts) that carry the chart colour class. */
     private colourDocs = new Set<Document>();
+    private markDocs = new Set<Document>();
+
+    /** The setting Highlight formulas in notes (with Charts for formulas on): a dotted line under formulas with a chart. */
+    applyFormulaMarks(doc?: Document) {
+        if (doc) this.markDocs.add(doc);
+        const on = this.data.formulaHover !== false && this.data.formulaMarks !== false;
+        for (const d of this.markDocs) d.body.toggleClass('etz-formula-marks', on);
+    }
 
     applyChartColours(doc?: Document) {
         if (doc) this.colourDocs.add(doc);
@@ -568,13 +685,13 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
     }
 
     aiGuideText(): string {
-        return guideWithWords(AI_GUIDE);
+        return guideWithLanguage(guideWithWords(AI_GUIDE));
     }
 
     /** The AI guide (docs/ai.md) on the clipboard, for chats that cannot reach the AI server; with the person's chart words when they set some. */
     async copyAiGuide(): Promise<void> {
         try {
-            await navigator.clipboard.writeText(guideWithWords(AI_GUIDE));
+            await navigator.clipboard.writeText(guideWithLanguage(guideWithWords(AI_GUIDE)));
             new Notice(t('plugin.ai.guideCopied'));
         } catch (e) {
             new Notice(t('plugin.ai.guideCopyFailed', { error: errorText(e) }));
@@ -625,6 +742,18 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             return;
         }
         const chart = new InlineChart(this, el, ctx.sourcePath, source, block.data, fromTikzTag ? 'tikz' : 'easy-tikz', block.format, block.problems);
+        // Data from the table above the block (5.0): read from the note as Obsidian gives it.
+        if (readsTable(block.data)) {
+            const info = ctx.getSectionInfo(el);
+            if (info) chart.useTable(tableAbove(noteLines(info.text), info.lineStart + 1), info.lineStart + 1);
+            else {
+                // Not known yet (the block is still being placed): the next frame asks again.
+                window.requestAnimationFrame(() => {
+                    const later = ctx.getSectionInfo(el);
+                    if (later && chart.onPage()) chart.setTable(tableAbove(noteLines(later.text), later.lineStart + 1), later.lineStart + 1);
+                });
+            }
+        }
         chart.mount();
         // When Obsidian removes the block (re-render, Live Preview, closing the note), the chart lets go of its picture.
         const child = new MarkdownRenderChild(el);
@@ -707,7 +836,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         return {
             enabled: () => this.data.liveChart !== false,
             tags: () => tags,
-            draw: (el, sourcePath, tag, body, typed) => this.drawLive(el, sourcePath, tag, body, typed),
+            draw: (el, sourcePath, tag, body, typed, table) => this.drawLive(el, sourcePath, tag, body, typed, table),
             release: (el) => {
                 this.liveDrawn.get(el)?.unload();
                 this.liveDrawn.delete(el);
@@ -723,14 +852,14 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
      * (JSON half typed), the last chart stays, with the reason under it.
      * Problems wait while you type (quietWhileTyping).
      */
-    private drawLive(el: HTMLElement, sourcePath: string, tag: string, body: string, typed: boolean) {
+    private drawLive(el: HTMLElement, sourcePath: string, tag: string, body: string, typed: boolean, table?: () => { table: NoteTable | null; line: number }) {
         const fromTikzTag = tag === 'tikz';
         // A plain tikz block that is not JSON is real TikZ: nothing to draw.
         const block = fromTikzTag && !body.trim().startsWith('{') ? null : readBlock(fromTikzTag ? body.trim() : body);
         const before = this.liveDrawn.get(el);
         if (typed) quietWhileTyping(el);
         el.querySelector(':scope > .etz-live-error')?.remove();
-        const empty = !body.split(/\r\n?|\n/).some((l) => l.trim() && !/^(%|\/\/|#)/.test(l.trim()));
+        const empty = !body.split(/\r\n?|\n/).some((l) => l.trim() && !/^(%|\/\/|#)/.test(l.trim()) && !/^\\(?:begin|end)\s*\{\s*chart\s*\}\s*$/.test(l.trim()));
         const blank = block === null || empty || (typeof block === 'string' ? !before : !Object.keys(block.data).some((k) => k !== 'v'));
         if (blank) {
             before?.unload();
@@ -748,6 +877,11 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         before?.unload();
         el.empty();
         const chart = new InlineChart(this, el, sourcePath, body, block.data, fromTikzTag ? 'tikz' : 'easy-tikz', block.format, block.problems, true);
+        // The table above the block (5.0), read from the editor's text.
+        if (table && readsTable(block.data)) {
+            const found = table();
+            chart.useTable(found.table, found.line);
+        }
         chart.mount();
         this.liveDrawn.set(el, chart);
         if (appear) appearIn(el);
@@ -759,7 +893,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
      * (more robust than line numbers when other parts of the file were
      * edited meanwhile).
      */
-    openBlockEditor(sourcePath: string, source: string, data: Record<string, unknown>, fenceTag: FenceTag, format: BlockFormat) {
+    openBlockEditor(sourcePath: string, source: string, data: Record<string, unknown>, fenceTag: FenceTag, format: BlockFormat, table?: NoteTable | null) {
         const file = this.app.vault.getAbstractFileByPath(sourcePath);
         new TikzModal(this.app, this, {
             // A copy: the editor must never change the object the note's display patches start from.
@@ -768,12 +902,84 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             originalBlockText: blockText(fenceTag, source),
             fenceTag,
             blockFormat: format,
+            noteTable: table,
         }).open();
     }
 
     /**
-     * Merge a display patch (width / alignment) into the block's JSON and
-     * write the file. The markdown post-processor then re-renders the
+     * Charts that read the table above their block follow it (5.0): after
+     * the note changes (typing in it, or the file changed), once typing
+     * pauses, each such chart of the note reads its table again and draws
+     * when it changed.
+     */
+    private tableTimers = new Map<string, number>();
+
+    private followTables(path: string, text: () => string | Promise<string>) {
+        if (![...liveCharts].some((c) => c.readsTableOf(path))) return;
+        const timer = this.tableTimers.get(path);
+        if (timer !== undefined) window.clearTimeout(timer);
+        this.tableTimers.set(
+            path,
+            window.setTimeout(() => {
+                this.tableTimers.delete(path);
+                void Promise.resolve(text()).then((note) => {
+                    for (const chart of [...liveCharts]) {
+                        if (!chart.onPage()) liveCharts.delete(chart);
+                        else if (chart.readsTableOf(path)) chart.followTable(note);
+                    }
+                });
+            }, TABLE_PAUSE_MS)
+        );
+    }
+
+    /** Write the chart of the formula at the cursor under its paragraph (5.0). */
+    plotFormulaAt(editor: Editor): void {
+        const cur = editor.getCursor();
+        const found = formulaAt(editor.getLine(cur.line), cur.ch);
+        if (!found) {
+            new Notice(t('plugin.notice.noFormula'));
+            return;
+        }
+        const body = formulaBlock(found.tex, this.data.formulaDefault);
+        if (!body) {
+            new Notice(t('plugin.notice.formulaUnreadable', { formula: found.tex }));
+            return;
+        }
+        let at = cur.line;
+        while (at < editor.lastLine() && editor.getLine(at + 1).trim() !== '') at++;
+        editor.replaceRange(`\n\n\`\`\`easy-tikz\n${body}\n\`\`\``, { line: at, ch: editor.getLine(at).length });
+    }
+
+    /** Write the SVG files of a note's charts now and say how it went. */
+    async saveSvgFiles(file: TFile): Promise<void> {
+        try {
+            const count = await this.svgFiles.write(file);
+            new Notice(count ? t('plugin.notice.svgFilesSaved', { count }) : t('plugin.notice.svgFilesSame'));
+        } catch (e) {
+            new Notice(t('plugin.notice.svgFilesFailed', { error: errorText(e) }));
+        }
+    }
+
+    /** Set up the default chart for formulas in the editor: its button saves the chart as the default. */
+    editFormulaDefault(done: () => void): void {
+        const sample = parseChartText((formulaChart('f(x) = \\frac{1}{2}x^2 - 2') ?? []).join('\n')).data as Record<string, unknown>;
+        new TikzModal(this.app, this, {
+            data: applyFormulaDefault(sample, this.data.formulaDefault),
+            saveAs: {
+                label: t('plugin.formula.saveDefault'),
+                save: (chart) => {
+                    this.data.formulaDefault = chart;
+                    void this.saveSettings();
+                    new Notice(t('plugin.formula.defaultSaved'));
+                    done();
+                },
+            },
+        }).open();
+    }
+
+    /**
+     * Merge a display patch (width / alignment, or the sliders when Connect
+     * with others changes in the note) into the block and write the file. The markdown post-processor then re-renders the
      * block from the new source; slider positions survive (see sourceKey).
      * Returns the new block body, or null (after a Notice) when nothing
      * was saved.
@@ -782,7 +988,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         sourcePath: string,
         fenceTag: FenceTag,
         source: string,
-        patch: Partial<{ displayWidth: number; displayAlign: Align }>
+        patch: Partial<{ displayWidth: number; displayAlign: Align; parameters: Parameter[] }>
     ): Promise<string | null> {
         const notFound = () => {
             new Notice(t('plugin.display.notFound'));
@@ -854,6 +1060,8 @@ class InlineChart {
     private saved: Parameter[] = [];
     private params: Parameter[] = [];
     private sliders: LiveSliderHandle[] = [];
+    /** Connect with others in the strip (5.0), one per slider row. */
+    private links: IconButtonHandle[] = [];
     private resetButton: IconButtonHandle | null = null;
     private expanded = false;
 
@@ -885,6 +1093,10 @@ class InlineChart {
     private memory: ChartMemory | null = null;
     /** Drawn under a block being edited (src/live.ts): no editor to open, no width and alignment to save. */
     private readonly live: boolean;
+    /** The Markdown table above the block (5.0): undefined while the chart reads none or it is not known. */
+    private table: NoteTable | null | undefined = undefined;
+    /** Line of the block's opening fence when the table was read (1-based), to find the block again. */
+    private blockLine = 0;
 
     constructor(
         plugin: EasyTikzPlugin,
@@ -909,10 +1121,41 @@ class InlineChart {
         this.key = sourceKey(sourcePath, data);
     }
 
+    /** Before mount: the table above the block (5.0), whose opening fence is on line `line`. */
+    useTable(table: NoteTable | null, line: number) {
+        this.table = table;
+        this.blockLine = line;
+    }
+
+    /** The table above the block changed (or became known): draw with it. */
+    setTable(table: NoteTable | null, line: number) {
+        this.blockLine = line;
+        if (this.table !== undefined && tableKey(this.table) === tableKey(table)) return;
+        this.table = table;
+        if (!this.manager) return;
+        this.manager.noteTable = table;
+        this.math = this.manager.createMathContext();
+        this.cache.clear();
+        this.render('full');
+    }
+
+    /** This chart reads the table above its block in the note at `path`. */
+    readsTableOf(path: string): boolean {
+        return !this.live && this.sourcePath === path && this.blockLine > 0 && readsTable(this.data);
+    }
+
+    /** The note's text changed: read the table above the block again. */
+    followTable(text: string) {
+        const tags: ReadonlySet<string> = new Set([this.fenceTag]);
+        const found = tableForBlock(text, this.source, this.blockLine, tags);
+        if (found) this.setTable(found.table, found.line);
+    }
+
     mount() {
         try {
             // fromJSON migrates 3.x blocks; it gets a copy so `data` stays the block's own JSON.
             this.manager = SettingsManager.fromJSON(cloneData(this.data));
+            this.manager.noteTable = this.table;
             this.math = this.manager.createMathContext();
         } catch (e) {
             showBlockError(this.el, t('plugin.block.renderError', { error: errorText(e) }));
@@ -922,7 +1165,7 @@ class InlineChart {
         const session = sessionGet(this.key);
         this.expanded = !!session && session.expanded;
         this.params = this.saved.map((p) => {
-            const v = session ? session.values[p.name] : undefined;
+            const v = (p.connected === true ? connectedGet(this.sourcePath, p.name) : undefined) ?? (session ? session.values[p.name] : undefined);
             return typeof v === 'number' && Number.isFinite(v) ? { ...p, value: v } : { ...p };
         });
 
@@ -954,6 +1197,7 @@ class InlineChart {
         this.buildStrip();
 
         liveCharts.add(this);
+        this.syncNoteLinks();
         // What is there at first sight never pops in; a block that comes back moves from its last picture.
         this.popIn = new PopIn(drawnNames(this.chartEl));
         if (this.plugin.data.animateCharts !== false) {
@@ -974,7 +1218,7 @@ class InlineChart {
     }
 
     private openEditor() {
-        this.plugin.openBlockEditor(this.sourcePath, this.source, this.data, this.fenceTag, this.format);
+        this.plugin.openBlockEditor(this.sourcePath, this.source, this.data, this.fenceTag, this.format, this.table);
     }
 
     // ------------------------------------------------------------ rendering
@@ -1070,6 +1314,7 @@ class InlineChart {
         this.cancelFrames();
         this.popIn?.stop();
         liveCharts.delete(this);
+        this.syncNoteLinks();
         this.renderer3d = null;
         this.chartEl = null;
     }
@@ -1127,6 +1372,7 @@ class InlineChart {
         }
         if (!changed) return false;
         this.manager = SettingsManager.fromJSON(now);
+        this.manager.noteTable = this.table;
         this.math = this.manager.createMathContext();
         // A slider kept from before draws at the value it had; the others keep theirs.
         const values = new Map(this.params.map((p) => [p.name, p]));
@@ -1165,6 +1411,7 @@ class InlineChart {
     private drawState(state: Record<string, unknown>, cache: SceneCache) {
         try {
             const manager = SettingsManager.fromJSON(cloneData(state));
+            manager.noteTable = this.table;
             const math = manager.createMathContext({ memo: false });
             const params = normalizeParameters(manager.getValue('parameters'));
             math.setParams(params);
@@ -1334,6 +1581,22 @@ class InlineChart {
                 onCommit: () => this.render('full'),
             });
         });
+        // Connect with others: shown where another chart of the note has a slider of the same name (or it is on).
+        this.links = this.live
+            ? []
+            : this.params.map((p, i) => {
+                  const on = p.connected === true;
+                  const link = iconButton(rows.children[i] as HTMLElement, {
+                      icon: 'link',
+                      label: t('plugin.chart.connect', { name: p.name }),
+                      size: 'sm',
+                      cls: on ? 'etz-inline-link is-on' : 'etz-inline-link',
+                      onClick: () => void this.toggleConnected(i),
+                  });
+                  link.el.setAttr('aria-pressed', String(on));
+                  return link;
+              });
+        this.syncLinks();
 
         if (extraRows.length) {
             const more = textButton(rows, { text: '', variant: 'link', size: 'sm', cls: 'etz-inline-more' });
@@ -1364,6 +1627,7 @@ class InlineChart {
     private rebuildStrip() {
         this.wrapper.querySelector(':scope > .etz-inline-strip')?.remove();
         this.sliders = [];
+        this.links = [];
         this.resetButton = null;
         this.buildStrip();
     }
@@ -1374,6 +1638,65 @@ class InlineChart {
         this.storeSession();
         this.updateReset();
         this.requestFrame();
+        if (this.params[index].connected === true) this.share(this.params[index].name, value);
+    }
+
+    /** A connected slider moved: the note's other charts with a connected slider of that name follow (5.0). */
+    private share(name: string, value: number) {
+        connectedSet(this.sourcePath, name, value);
+        for (const chart of liveCharts) {
+            if (chart !== this && chart.sourcePath === this.sourcePath) chart.follow(name, value);
+        }
+    }
+
+    /** Another chart of the note moved its connected slider `name`: this one moves too, when its slider is connected. */
+    follow(name: string, value: number) {
+        const i = this.params.findIndex((p) => p.name === name && p.connected === true);
+        if (i < 0 || Object.is(this.params[i].value, value)) return;
+        this.stopGlide();
+        this.params[i] = { ...this.params[i], value };
+        this.sliders[i]?.setValue(value);
+        this.storeSession();
+        this.updateReset();
+        this.requestFrame();
+    }
+
+    /** Has this chart a slider called `name`? */
+    hasSlider(name: string): boolean {
+        return this.params.some((p) => p.name === name);
+    }
+
+    /** The link buttons of the note's charts: another chart may have come or gone. */
+    private syncNoteLinks() {
+        for (const chart of liveCharts) {
+            if (chart.sourcePath === this.sourcePath) chart.syncLinks();
+        }
+    }
+
+    /** Show a row's link button when it is on, or when another chart of the note has a slider of its name. */
+    syncLinks() {
+        this.links.forEach((link, i) => {
+            const p = this.params[i];
+            if (!p) return;
+            let shared = false;
+            for (const chart of liveCharts) {
+                if (chart !== this && chart.sourcePath === this.sourcePath && chart.hasSlider(p.name)) shared = true;
+            }
+            link.el.toggleClass('tikz-hidden', !(p.connected === true || shared));
+        });
+    }
+
+    /** Connect with others on or off for one slider: the block's line gets or loses `connected` (the file is written). */
+    private async toggleConnected(index: number) {
+        const parameters = this.saved.map((p, i) => {
+            const copy: Parameter = { ...p };
+            if (i !== index) return copy;
+            if (copy.connected === true) delete copy.connected;
+            else copy.connected = true;
+            return copy;
+        });
+        const body = await this.plugin.persistDisplayPatch(this.sourcePath, this.fenceTag, this.source, { parameters });
+        if (body !== null) this.source = body;
     }
 
     private resetParams() {
@@ -1382,6 +1705,7 @@ class InlineChart {
         this.params.forEach((p, i) => this.sliders[i]?.setValue(p.value));
         this.storeSession();
         this.updateReset();
+        for (const p of this.params) if (p.connected === true) this.share(p.name, p.value);
         // The button is disabled now; keep keyboard users in the strip.
         if (hadFocus) this.sliders[0]?.input.focus();
         this.render('full');
@@ -1536,6 +1860,12 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 },
             },
             {
+                name: t('plugin.settings.svgFiles.name'),
+                desc: t('plugin.settings.svgFiles.desc'),
+                aliases: ['svg', 'file', 'publish', 'github', 'attachment', 'ファイル', '添付', '公開'],
+                control: { type: 'toggle', key: 'svgFiles', defaultValue: false },
+            },
+            {
                 name: t('plugin.settings.liveChart.name'),
                 desc: t('plugin.settings.liveChart.desc'),
                 aliases: ['ライブプレビュー', '編集', 'リアルタイム'],
@@ -1580,6 +1910,54 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 desc: t('plugin.settings.animate.desc'),
                 aliases: ['アニメーション', '動き', 'モーション'],
                 control: { type: 'toggle', key: 'animateCharts', defaultValue: true },
+            },
+            {
+                name: t('plugin.settings.formulaHover.name'),
+                desc: t('plugin.settings.formulaHover.desc'),
+                aliases: ['formula', 'hover', 'math', 'LaTeX', '数式', 'ホバー'],
+                control: { type: 'toggle', key: 'formulaHover', defaultValue: true },
+            },
+            {
+                name: t('plugin.settings.formulaMarks.name'),
+                desc: t('plugin.settings.formulaMarks.desc'),
+                aliases: ['highlight', 'underline', 'mark', 'formula', 'ハイライト', '下線', '数式'],
+                control: { type: 'toggle', key: 'formulaMarks', defaultValue: true },
+            },
+            {
+                name: t('plugin.settings.formulaSliders.name'),
+                desc: t('plugin.settings.formulaSliders.desc'),
+                aliases: ['slider', 'formula', 'スライダー', '数式'],
+                control: { type: 'toggle', key: 'formulaSliders', defaultValue: true },
+            },
+            {
+                name: t('plugin.settings.formulaDefault.name'),
+                desc: t('plugin.settings.formulaDefault.descBuiltIn'),
+                aliases: ['default', 'template', 'layout', 'formula', '既定', 'テンプレート', '数式'],
+                render: (setting) => {
+                    const own = !!this.plugin.data.formulaDefault;
+                    setting.setDesc(t(own ? 'plugin.settings.formulaDefault.descOwn' : 'plugin.settings.formulaDefault.descBuiltIn'));
+                    if (own) {
+                        setting.addButton((b) =>
+                            b.setButtonText(t('plugin.settings.formulaDefault.reset')).onClick(async () => {
+                                this.plugin.data.formulaDefault = null;
+                                await this.plugin.saveSettings();
+                                this.update();
+                            })
+                        );
+                    }
+                    setting.addButton((b) => b.setButtonText(t('plugin.settings.formulaDefault.edit')).setCta().onClick(() => this.plugin.editFormulaDefault(() => this.update())));
+                },
+            },
+            {
+                name: t('plugin.settings.chartLanguage.name'),
+                desc: t('plugin.settings.chartLanguage.desc'),
+                aliases: ['LaTeX', 'Full LaTeX', 'pgfplots', 'TikZ', 'words', 'syntax', 'language', '記法', '言葉', '書き方'],
+                control: {
+                    type: 'dropdown',
+                    key: 'chartLanguage',
+                    options: { words: t('plugin.settings.chartLanguage.words'), full: t('plugin.settings.chartLanguage.full') },
+                    defaultValue: 'words',
+                },
             },
             {
                 name: t('plugin.settings.invertDrag.name'),
@@ -1745,8 +2123,23 @@ class EasyTikzSettingTab extends PluginSettingTab {
             case 'blockFormat':
                 this.plugin.data.blockFormat = value === 'json' ? 'json' : 'text';
                 break;
+            case 'chartLanguage':
+                this.plugin.data.chartLanguage = value === 'full' ? 'full' : 'words';
+                setChartLanguage(this.plugin.data.chartLanguage);
+                break;
             case 'animateCharts':
                 this.plugin.data.animateCharts = Boolean(value);
+                break;
+            case 'formulaHover':
+                this.plugin.data.formulaHover = Boolean(value);
+                this.plugin.applyFormulaMarks();
+                break;
+            case 'formulaMarks':
+                this.plugin.data.formulaMarks = Boolean(value);
+                this.plugin.applyFormulaMarks();
+                break;
+            case 'formulaSliders':
+                this.plugin.data.formulaSliders = Boolean(value);
                 break;
             case 'liveChart':
                 this.plugin.data.liveChart = Boolean(value);
@@ -1759,6 +2152,14 @@ class EasyTikzSettingTab extends PluginSettingTab {
             case 'imageBackground':
                 this.plugin.data.imageBackground = value === 'white' ? 'white' : 'transparent';
                 break;
+            case 'svgFiles': {
+                this.plugin.data.svgFiles = Boolean(value);
+                // On: the open note's files at once. Off: no more writes.
+                const file = this.app.workspace.getActiveFile();
+                if (this.plugin.data.svgFiles && file && file.extension === 'md') void this.plugin.saveSvgFiles(file);
+                else if (!this.plugin.data.svgFiles) this.plugin.svgFiles.cancel();
+                break;
+            }
             case 'chartColours':
                 this.plugin.data.chartColours = value === 'export' ? 'export' : 'theme';
                 this.plugin.applyChartColours();

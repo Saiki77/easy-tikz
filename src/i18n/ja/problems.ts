@@ -219,6 +219,12 @@ export const problems: Messages<typeof en> = {
         'この行はグラフのオブジェクトではありません。行は show、plot、draw、shade、mark、write、slider、title、xlabel、ylabel、axes、size、set のどれかで始めるか、式（f(x) = x^2、2x + 3y = 12、x + y <= 4）にします',
     'problems.text.needsPair': '{name}(t) には 2 つの式の組が必要です：{name}(t) = (cos(t), sin(t))',
     'problems.text.whichVariable': '{head}：関数は x、媒介変数曲線は t、極座標の曲線は theta を使います',
+    // Full LaTeX
+    'problems.text.fullUnclosed': '"{open}" が閉じていません。"{close}" を書き足します',
+    'problems.text.fullAxisOption':
+        '\\axis のオプション "{option}" は不明です。使えるのは xmin=0、xmax=5（ymin から zmax も同じ）、axis lines=left、middle、box または none、hide axis、grid=major、minor または both、grid opacity=0.3、xtick distance=1、xtick={1, 2} または xtick=\\empty（ytick、ztick も同じ）、title={...}、xlabel={...}、width=12cm、height=6cm、axis equal、polar、3d、cube、snippet、variables={q, p}、そして displayWidth=480 のような項目です',
+    'problems.text.fullNotAChartLine':
+        'この行はグラフのオブジェクトではありません。\\begin{chart} と \\end{chart} の間の行は \\axis、\\slider、\\plot、\\shade、\\draw、\\mark、\\node、\\set、\\raw のどれかで、オプションを [ ] に、引数を { } に書きます（例：\\plot[blue]{f(x) = x^2}）',
 
     // 組み込みの関数テンプレート（src/templates.ts）：メニューの項目。
     'problems.template.parabola': '放物線',

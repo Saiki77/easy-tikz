@@ -668,6 +668,8 @@ export class SVGRenderer {
                 cache: this.cache,
                 // The exported figure's sizes, so preview and PDF pick the same label sides.
                 labelMetrics: labelMetricsFor(cfg.paperWidthCm ?? 10, cfg.paperHeightCm ?? 10),
+                // Slope fields draw their segments the same length on screen (5.0).
+                equalScale: !!cfg.equalScale,
                 // Draft frames are the frames of a slider or drag gesture: labels hold their spots there.
                 // The full frame that follows places them afresh, as the export does.
                 keepLabels: this.quality === 'draft' && !!this.cache,

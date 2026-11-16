@@ -57,6 +57,9 @@ export const PIECES: readonly Piece[] = [
     piece('draw', 'draw', 'lines', 'panels.words.what.draw'),
     piece('mark', 'mark', 'lines', 'panels.words.what.mark'),
     piece('write', 'write', 'lines', 'panels.words.what.write'),
+    // Beyond functions (5.0): data from the table above the chart or typed in it.
+    piece('use-the-table-above', 'use the table above', 'lines', 'beyond.words.what.useTheTableAbove'),
+    piece('data', 'data', 'lines', 'beyond.words.what.data'),
 
     piece('from', 'from', 'phrases', 'panels.words.what.from'),
     piece('to', 'to', 'phrases', 'panels.words.what.to'),
@@ -83,6 +86,22 @@ export const PIECES: readonly Piece[] = [
     piece('the-plane', 'the plane', 'phrases', 'panels.words.what.thePlane'),
     piece('the-level-curves-of', 'the level curves of', 'phrases', 'panels.words.what.theLevelCurvesOf'),
     piece('at', 'at', 'phrases', 'panels.words.what.at'),
+    piece('columns', 'columns', 'phrases', 'beyond.words.what.columns'),
+    piece('the-data', 'the data', 'phrases', 'beyond.words.what.theData'),
+    piece('as-bars', 'as bars', 'phrases', 'beyond.words.what.asBars'),
+    piece('as-a-line', 'as a line', 'phrases', 'beyond.words.what.asALine'),
+    piece('its-regression-line', 'its regression line', 'phrases', 'beyond.words.what.itsRegressionLine'),
+    piece('the-normal-distribution', 'the normal distribution', 'phrases', 'beyond.words.what.theNormalDistribution'),
+    piece('the-binomial-distribution', 'the binomial distribution', 'phrases', 'beyond.words.what.theBinomialDistribution'),
+    piece('with-mean', 'with mean', 'phrases', 'beyond.words.what.withMean'),
+    piece('sd', 'sd', 'phrases', 'beyond.words.what.sd'),
+    piece('the-left-riemann-sum-of', 'the left Riemann sum of', 'phrases', 'beyond.words.what.theLeftRiemannSumOf'),
+    piece('the-right-riemann-sum-of', 'the right Riemann sum of', 'phrases', 'beyond.words.what.theRightRiemannSumOf'),
+    piece('the-middle-riemann-sum-of', 'the middle Riemann sum of', 'phrases', 'beyond.words.what.theMiddleRiemannSumOf'),
+    piece('the-trapezoid-rule-of', 'the trapezoid rule of', 'phrases', 'beyond.words.what.theTrapezoidRuleOf'),
+    piece('parts', 'parts', 'phrases', 'beyond.words.what.parts'),
+    piece('the-slope-field-of', 'the slope field of', 'phrases', 'beyond.words.what.theSlopeFieldOf'),
+    piece('the-solution-through', 'the solution through', 'phrases', 'beyond.words.what.theSolutionThrough'),
 
     piece('in-colour', 'in', 'options', 'panels.words.what.inColour', { beforeColour: true }),
     piece('dashed', 'dashed', 'options', 'panels.words.what.dashed'),
@@ -111,6 +130,8 @@ export const PIECES: readonly Piece[] = [
     piece('below', 'below', 'options', 'panels.words.what.below'),
     // The mesh lines on a filled surface: mesh 0.2.
     piece('mesh', 'mesh', 'options', 'panels.words.what.mesh'),
+    // A slider that moves with the sliders of the same name in the note's other charts (5.0).
+    piece('connected', 'connected', 'options', 'panels.words.what.connected'),
 
     piece('red', 'red', 'colours', 'panels.words.what.red'),
     piece('blue', 'blue', 'colours', 'panels.words.what.blue'),

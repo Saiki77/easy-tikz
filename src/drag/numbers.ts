@@ -18,6 +18,7 @@ import { conditionClauseNodes } from '../mathcontext';
 import type { FunctionKind, MathContext } from '../mathcontext';
 import type { Parameter } from '../types';
 import type { DragNumber, FieldRef, NumberRole, UnitSpec, VirtualKind } from './types';
+import { looksLikeLatex } from '../latex';
 
 // ------------------------------------------------------------------ public types
 
@@ -413,6 +414,9 @@ function sniffStyle(roots: Node[], aux: HasTokens, text: string, env: Env): Text
  * Null when the text does not parse or the unit spec does not exist in it. Uses the private context's envs.
  */
 export function parseUnit(spec: UnitSpec, text: string, math: MathContext): ParsedUnit | null {
+    // A LaTeX formula (5.0) is read through a conversion, so its numbers have no place in the text to rewrite:
+    // it is not changed by dragging.
+    if (looksLikeLatex(text)) return null;
     let loc: Located | null;
     const envKind = envKindOf(spec.role);
     const fnKind: FunctionKind = spec.fnKind || 'cartesian';

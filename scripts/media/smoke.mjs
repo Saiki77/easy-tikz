@@ -159,10 +159,10 @@ const whatsNewState = () =>
         return {
             count: modals.length,
             title: (m.querySelector('.etz-whatsnew-title') || { textContent: '' }).textContent.trim(),
-            items: m.querySelectorAll('.etz-whatsnew-item').length,
+            slides: m.querySelectorAll('.etz-whatsnew-dot').length,
+            current: Array.from(m.querySelectorAll('.etz-whatsnew-dot')).findIndex((d) => d.getAttribute('aria-current') === 'step'),
             blankIcons: Array.from(m.querySelectorAll('.etz-whatsnew-icon, .etz-btn-icon, .etz-whatsnew-play')).filter((el) => !el.querySelector('svg')).length,
-            slope: texts.find((t) => t.startsWith('slope')) || null,
-            area: texts.find((t) => t.startsWith('A =')) || null,
+            extrema: texts.filter((t) => t === 'max' || t === 'min').sort().join(','),
             value: input ? Number(input.value) : null,
             playing: play ? play.getAttribute('aria-pressed') === 'true' : null,
         };
@@ -180,7 +180,11 @@ async function reloadPlugin() {
 
 async function clickWhatsNewButton(text) {
     const ok = await obs.call((t) => {
-        const button = Array.from(document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-actions button')).find((b) => (b.textContent || '').trim() === t);
+        // Close is the window's own X; the other buttons are in the footer.
+        const button =
+            t === 'Close'
+                ? document.querySelector('.modal.etz-whatsnew .modal-header-button, .modal.etz-whatsnew .modal-close-button')
+                : Array.from(document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-actions button')).find((b) => (b.textContent || '').trim() === t);
         if (button) button.click();
         return !!button;
     }, text);
@@ -559,6 +563,63 @@ if (started) {
             // The changed line is written in words.
             assert(/^slider a from 0 to 2, starting at 1\.5\b/.test(lines[2]), `slider line: ${lines[2]}`);
         });
+        // 5.0: every formula is a chart, connected sliders, charts as SVG files.
+        const formulaNote = 'Formulas';
+        await check('formulas: resting on a formula opens its chart with a slider per letter, and Insert chart writes the block', async () => {
+            await obs.writeNote(formulaNote, 'The parabola $y = a x^2 + b$ opens upwards.\n');
+            await obs.openNote(formulaNote, { mode: 'reading' });
+            await obs.sleep(800);
+            const at = await obs.call(() => {
+                const el = document.querySelector('.markdown-reading-view .math');
+                if (!el) return null;
+                const r = el.getBoundingClientRect();
+                return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+            });
+            assert(at, 'the note shows no formula');
+            await obs.mouse.move({ x: 5, y: 5 });
+            await obs.sleep(400);
+            await obs.mouse.move(at, { steps: 3 });
+            await obs.waitFor(() => obs.call(() => !!document.querySelector('.etz-formula-pop .etz-formula-chart svg')), { timeout: 4000, message: 'the chart of the formula to open' });
+            const sliders = await obs.call(() => Array.from(document.querySelectorAll('.etz-formula-pop .etz-formula-name')).map((n) => n.textContent));
+            assert(sameJson(sliders, ['a', 'b']), `sliders: ${JSON.stringify(sliders)}`);
+            await obs.mouse.click('.etz-formula-pop button.mod-cta');
+            await obs.sleep(600);
+            const text = await obs.readNote(formulaNote);
+            const m = /```easy-tikz\n([\s\S]*?)\n```/.exec(text);
+            assert(m && /plot /.test(m[1]) && /slider a /.test(m[1]) && /slider b /.test(m[1]), `the note after Insert chart:\n${text}`);
+            const charts = await obs.noteCharts();
+            assert(charts.length === 1 && charts[0].drawn && charts[0].issues === null, `the inserted chart: ${JSON.stringify(charts)}`);
+            return `${m[1].split('\n').length} lines`;
+        });
+        const linkedNote = 'Connected';
+        const linked = (body) => ['```easy-tikz', 'size 6 x 2.4', ...body, '```', ''].join('\n');
+        await check('connected sliders: moving one moves the same name in the other connected chart of the note, never the file', async () => {
+            const text = ['Two charts share a:', '', linked(['slider a from 0 to 2, starting at 1, connected', 'plot a x^2']), linked(['slider a from 0 to 2, starting at 1, connected', 'plot a sin(x)']), linked(['slider a from 0 to 2, starting at 1', 'plot a x'])].join('\n');
+            await obs.writeNote(linkedNote, text);
+            await obs.openNote(linkedNote, { mode: 'reading', charts: 3 });
+            await obs.call(() => {
+                const input = document.querySelector('.markdown-reading-view .etz-inline .etz-inline-strip input[type=range]');
+                input.value = '1.5';
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            await obs.sleep(400);
+            const values = await obs.call(() => Array.from(document.querySelectorAll('.markdown-reading-view .etz-inline .etz-inline-strip input[type=range]')).map((i) => Number(i.value)));
+            assert(values[0] === 1.5 && values[1] === 1.5 && values[2] === 1, `slider values: ${JSON.stringify(values)}`);
+            assert((await obs.readNote(linkedNote)) === text, 'moving connected sliders changed the file');
+            return JSON.stringify(values);
+        });
+        await check('SVG files: the command writes one SVG per chart into the attachment folder, white and standalone', async () => {
+            await obs.openNote(linkedNote, { mode: 'reading' });
+            const ok = await obs.call((id) => app.commands.executeCommandById(`${id}:save-svg-files`), PLUGIN_ID);
+            assert(ok !== false, 'the command easy-tikz:save-svg-files does not exist');
+            await obs.sleep(800);
+            const files = fs.readdirSync(obs.vault, { recursive: true }).map(String).filter((f) => f.endsWith('.svg') && path.basename(f).startsWith(`${linkedNote} · chart `)).sort();
+            assert(files.length === 3, `SVG files: ${JSON.stringify(files)}`);
+            const svg = fs.readFileSync(path.join(obs.vault, files[0]), 'utf8');
+            assert(svg.startsWith('<?xml') && /fill="#ffffff"/.test(svg) && !svg.includes('var(--'), `the first file: ${svg.slice(0, 200)}`);
+            return files.map((f) => path.basename(f)).join(', ');
+        });
         await check('motion: a block that changes glides, and its new object pops in', async () => {
             await obs.openNote(textNote, { mode: 'reading' });
             await obs.sleep(400);
@@ -753,12 +814,12 @@ if (started) {
             await obs.waitFor(async () => (await whatsNewState()).count > 0, { timeout: 5000, message: 'the popup to open after the plugin loaded' });
             const state = await whatsNewState();
             assert(state.count === 1, `${state.count} popups are open`);
-            assert(state.title === 'Easy TikZ 4', `the title is "${state.title}"`);
-            // The rest of version 4 (closed) holds the live and AI items too.
-            const expected = WHATS_NEW.WHATS_NEW_RECENT.length + WHATS_NEW.WHATS_NEW_MORE.length;
-            assert(state.items === expected, `${state.items} highlights, expected ${expected}`);
+            assert(state.title === 'Easy TikZ 5', `the title is "${state.title}"`);
+            // A slideshow: one dot per slide, the first one shown.
+            assert(state.slides === WHATS_NEW.WHATS_NEW_SLIDES.length && state.current === 0, `${state.slides} slides, slide ${state.current} shown`);
             assert(state.blankIcons === 0, `${state.blankIcons} icons are blank (an icon id Obsidian does not know)`);
-            assert(state.slope === 'slope at x = 0.8: -1.08' && state.area === 'A = 2.76', `the live example shows "${state.slope}" and "${state.area}"`);
+            // f(x) = x^3/3 - a x at a = 1: a maximum and a minimum, labelled.
+            assert(state.extrema === 'max,min', `the live example shows the extrema "${state.extrema}"`);
             // Seen as soon as it opened, and nothing else of the user's data changed.
             await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 3000, message: 'data.json to record the popup' });
             const data = readData();
@@ -766,28 +827,34 @@ if (started) {
             return `whatsNewSeen ${data.whatsNewSeen}`;
         });
         await check('what\'s new: the live example responds to its slider and to play', async () => {
-            await obs.call(() => {
-                const input = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip input[type=range]');
-                input.value = '-0.9';
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-            });
+            const slide = (v) =>
+                obs.call((value) => {
+                    const input = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip input[type=range]');
+                    input.value = value;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }, String(v));
+            // a below 0: f'(x) = x^2 - a has no zero, so no extremum.
+            await slide(-0.5);
             await obs.sleep(250);
             let state = await whatsNewState();
-            // At a = -0.9 the slope is 3a^2 - 3 = -0.57 and the area 27a^4/4 = 4.43.
-            assert(state.slope === 'slope at x = -0.9: -0.57' && state.area === 'A = 4.43', `after the slider: "${state.slope}", "${state.area}"`);
+            assert(state.extrema === '', `at a = -0.5 the chart shows the extrema "${state.extrema}"`);
+            await slide(1.5);
+            await obs.sleep(250);
+            state = await whatsNewState();
+            assert(state.extrema === 'max,min', `at a = 1.5 the chart shows the extrema "${state.extrema}"`);
             await obs.mouse.click('.modal.etz-whatsnew .etz-whatsnew-play');
             await obs.sleep(600);
             state = await whatsNewState();
             assert(state.playing === true, 'play is not pressed');
-            assert(state.slope !== 'slope at x = -0.9: -0.57', 'playing did not move the chart');
+            assert(state.value !== 1.5, 'playing did not move the slider');
             await obs.mouse.click('.modal.etz-whatsnew .etz-whatsnew-play');
             await obs.sleep(250);
             state = await whatsNewState();
-            const a = Number(/x = (-?[\d.]+)/.exec(state.slope || '')?.[1]);
+            const a = state.value;
             assert(state.playing === false, 'play is still pressed');
             assert(Number.isFinite(a) && Math.abs(a * 20 - Math.round(a * 20)) < 1e-9, `after play a = ${a} is not on the slider's step 0.05`);
-            // A typed value outside -1.1..1.1 stops at the end (a wider slider would push the shading out of the view).
+            // A typed value outside -1..2 stops at the end (a wider slider would push the extrema out of the view).
             const typed = await obs.call(() => {
                 const box = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip .etz-slider-number');
                 const range = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip input[type=range]');
@@ -799,10 +866,9 @@ if (started) {
             });
             await obs.sleep(250);
             state = await whatsNewState();
-            assert(typed.max === '1.1' && typed.value === '1.1' && typed.box === '1.1', `typing 5: ${JSON.stringify(typed)}`);
-            // At a = 1.1: slope 3(1.21) - 3 = 0.63, area 27(1.4641)/4 = 9.88.
-            assert(state.slope === 'slope at x = 1.1: 0.63' && state.area === 'A = 9.88', `after typing 5: "${state.slope}", "${state.area}"`);
-            return `slider to -0.9, play stopped at a = ${a}, typing 5 gives 1.1`;
+            assert(typed.max === '2' && typed.value === '2' && typed.box === '2', `typing 5: ${JSON.stringify(typed)}`);
+            assert(state.extrema === 'max,min', `at a = 2 the chart shows the extrema "${state.extrema}"`);
+            return `extrema off at -0.5, on at 1.5, play stopped at a = ${a}, typing 5 gives 2`;
         });
         await check('what\'s new: Close removes it, and reloading the plugin does not show it again', async () => {
             await clickWhatsNewButton('Close');
@@ -818,7 +884,7 @@ if (started) {
             await reloadPlugin();
             await obs.waitFor(async () => (await whatsNewState()).count > 0, { timeout: 8000, message: 'the popup to open after the vault check' });
             const state = await whatsNewState();
-            assert(state.count === 1 && state.title === 'Easy TikZ 4', `${state.count} popups, title "${state.title}"`);
+            assert(state.count === 1 && state.title === 'Easy TikZ 5', `${state.count} popups, title "${state.title}"`);
             await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 3000, message: 'data.json to record the popup' });
             await clickWhatsNewButton('Close');
             await reloadPlugin();
@@ -870,8 +936,8 @@ if (started) {
             }), { timeout: 8000, message: 'the editor to open' });
             await obs.waitForRender();
             const chart = await obs.chart();
-            assert(chart.parameters.length === 1 && chart.parameters[0].name === 'a' && chart.parameters[0].value === 0.8, `sliders: ${JSON.stringify(chart.parameters)}`);
-            assert(chart.tools.length === 1 && chart.tools[0].name === 'R1', `tools: ${chart.tools.map((t) => t.name).join(', ')}`);
+            assert(chart.parameters.length === 1 && chart.parameters[0].name === 'a' && chart.parameters[0].value === 1, `sliders: ${JSON.stringify(chart.parameters)}`);
+            assert(chart.functions.length === 1 && chart.functions[0].name === 'f' && chart.functions[0].extrema === true, `functions: ${JSON.stringify(chart.functions)}`);
             assert((await obs.issues()).length === 0 && (await obs.statusChip()) === null, 'the example has issues in the editor');
             await obs.closeEditor();
         });
@@ -892,6 +958,17 @@ if (started) {
             await obs.mouse.click('.modal.etz-whatsnew .etz-whatsnew-play');
             await obs.sleep(150);
             for (const icon of await drawnIcons('.modal.etz-whatsnew')) seen.add(icon);
+            // Every slide, with Next: a slide is built when it is first shown.
+            for (let i = 1; i < WHATS_NEW.WHATS_NEW_SLIDES.length; i++) {
+                await obs.call(() => {
+                    const next = Array.from(document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-actions button')).find((b) => (b.textContent || '').trim() === 'Next');
+                    if (next) next.click();
+                });
+                await obs.sleep(250);
+                const state = await whatsNewState();
+                assert(state.current === i, `Next showed slide ${state.current}, expected ${i}`);
+                for (const icon of await drawnIcons('.modal.etz-whatsnew')) seen.add(icon);
+            }
             await clickWhatsNewButton('Close');
             await obs.openEditor();
             await obs.showTab('help');
@@ -921,7 +998,7 @@ if (started) {
             // Replace: the example is in, on the Build tab.
             [state, chart] = await tryFromHelp('Replace');
             assert(state.tab === 'build', `after Replace the editor shows the ${state.tab} tab`);
-            assert(chart.tools.length === 1 && chart.tools[0].name === 'R1', 'the example did not load into this editor');
+            assert(chart.functions.length === 1 && chart.functions[0].name === 'f' && chart.tools.length === 0, 'the example did not load into this editor');
             const editors = await obs.call(() => document.querySelectorAll('.modal.tikz-modal').length);
             assert(editors === 1, `${editors} editors are open`);
             await obs.closeEditor();

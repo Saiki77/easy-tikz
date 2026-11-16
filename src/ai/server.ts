@@ -21,6 +21,7 @@
  * person, is in their language.
  */
 import { guideWithWords } from '../text/words';
+import { guideWithLanguage } from '../text/full';
 import GUIDE from '../../docs/ai.md';
 import { ChartHost, SERVER_NAME, callTool, handleMcp, toolList } from './mcp';
 import { inEnglish, t } from '../i18n';
@@ -183,7 +184,7 @@ export class AiServer {
             if (head.method === 'GET' && path === '/') {
                 return send(res, 200, { name: SERVER_NAME, mcp: '/mcp', guide: '/guide', tools: '/tools', call: 'POST /tools/<name> with the arguments as JSON' });
             }
-            if (head.method === 'GET' && path === '/guide') return sendText(res, 200, inEnglish(() => guideWithWords(GUIDE)), 'text/markdown; charset=utf-8');
+            if (head.method === 'GET' && path === '/guide') return sendText(res, 200, inEnglish(() => guideWithLanguage(guideWithWords(GUIDE))), 'text/markdown; charset=utf-8');
             if (head.method === 'GET' && path === '/tools') return send(res, 200, { tools: toolList() });
             if (path === '/mcp') {
                 if (head.method !== 'POST') {

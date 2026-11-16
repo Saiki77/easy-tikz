@@ -267,6 +267,20 @@ input.etz-input.etz-number.etz-dock-pop-input {
     width: 100%;
 }
 
+/* Connect with others (5.0): the chip and one muted line on what it does. */
+.etz-dock-connect {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.etz-dock-connect-desc {
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    line-height: 1.35;
+}
+
 button.etz-btn.etz-dock-delete {
     align-self: flex-start;
     color: var(--text-error);

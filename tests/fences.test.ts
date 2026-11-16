@@ -4,7 +4,7 @@
  * languages skipped, callouts, and blocks nobody closed yet.
  */
 import { test, assert } from './_lib';
-import { chartFences } from '../src/text/fences';
+import { chartFences, noteChartBodies, svgFileName } from '../src/text/fences';
 
 const TAGS = new Set(['easy-tikz']);
 const find = (text: string) => {
@@ -47,4 +47,12 @@ test('fences: inline code is not a fence, and a closing fence must be as long as
     assert.deepEqual(find('``` `x` ```\n```easy-tikz\nplot f(x) = x\n```').map((b) => b.first), [2]);
     const long = find('````easy-tikz\nplot f(x) = x\n```\n````');
     assert.deepEqual([long[0].last, long[0].body], [4, 'plot f(x) = x\n```']);
+});
+
+test('fences: the chart bodies of a note in order, and their SVG file names (5.0)', () => {
+    const note = ['# Week 3', '```easy-tikz', 'plot x^2', '```', 'text', '> ```easy-tikz', '> plot sin(x)', '> ```', '```python', 'print(1)', '```', '```tikz', '\\draw (0,0);', '```'].join('\n');
+    assert.deepEqual(noteChartBodies(note, new Set(['easy-tikz'])), ['plot x^2', 'plot sin(x)']);
+    assert.equal(noteChartBodies(note, new Set(['easy-tikz', 'tikz'])).length, 3);
+    assert.equal(svgFileName('Week 3', 0), 'Week 3 · chart 1.svg');
+    assert.equal(svgFileName('Week 3', 1), 'Week 3 · chart 2.svg');
 });

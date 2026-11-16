@@ -564,6 +564,7 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
         axisStyle: config.axisStyle || 'box',
         polar,
         labelMetrics: labelMetricsFor(paperCm.w, paperCm.h),
+        equalScale: !!config.equalScale,
     });
     const items = scene.items || [];
     const colors = new ColorSet();

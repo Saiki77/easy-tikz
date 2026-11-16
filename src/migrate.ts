@@ -20,6 +20,9 @@ import {
     AnnotationSize,
     ArrowStyle,
     CurveTool,
+    DataPlotTool,
+    DataTool,
+    DistributionTool,
     FillPattern,
     Function3DParameters,
     FunctionParameters,
@@ -28,7 +31,11 @@ import {
     Parameter,
     PlaneTool,
     PointsTool,
+    ProbabilityTool,
     RegionTool,
+    RiemannTool,
+    SlopeFieldTool,
+    SolutionTool,
     SegmentStyle,
     SegmentTool,
     Tool,
@@ -97,6 +104,13 @@ const TOOL_PREFIX: Record<ToolType, string> = {
     points: 'P',
     segment: 'S',
     plane3D: 'PL',
+    data: 'D',
+    dataPlot: 'DP',
+    distribution: 'X',
+    probability: 'PR',
+    riemann: 'RS',
+    slopeField: 'SF',
+    solution: 'Y',
 };
 
 const PARAMETER_LETTERS = ['a', 'b', 'c', 'd', 'k', 'm', 'n', 'p', 'q', 'r', 's', 'u', 'v', 'w'];
@@ -574,6 +588,13 @@ type CurveBody = Omit<CurveTool, 'id' | 'name' | 'hidden'>;
 type PointsBody = Omit<PointsTool, 'id' | 'name' | 'hidden'>;
 type SegmentBody = Omit<SegmentTool, 'id' | 'name' | 'hidden'>;
 type PlaneBody = Omit<PlaneTool, 'id' | 'name' | 'hidden'>;
+type DataBody = Omit<DataTool, 'id' | 'name' | 'hidden'>;
+type DataPlotBody = Omit<DataPlotTool, 'id' | 'name' | 'hidden'>;
+type DistributionBody = Omit<DistributionTool, 'id' | 'name' | 'hidden'>;
+type ProbabilityBody = Omit<ProbabilityTool, 'id' | 'name' | 'hidden'>;
+type RiemannBody = Omit<RiemannTool, 'id' | 'name' | 'hidden'>;
+type SlopeFieldBody = Omit<SlopeFieldTool, 'id' | 'name' | 'hidden'>;
+type SolutionBody = Omit<SolutionTool, 'id' | 'name' | 'hidden'>;
 
 function regionDefaults(): RegionBody {
     return {
@@ -629,6 +650,45 @@ function segmentDefaults(dim: 2 | 3): SegmentBody {
 
 function planeDefaults(): PlaneBody {
     return { type: 'plane3D', color: 'orange', axis: 'z', value: '0', fillOpacity: 0.25 };
+}
+
+function dataDefaults(): DataBody {
+    return { type: 'data', color: 'black', source: 'table', points: '', xColumn: '', yColumn: '' };
+}
+
+function dataPlotDefaults(): DataPlotBody {
+    return {
+        type: 'dataPlot',
+        color: 'blue',
+        data: '',
+        style: 'points',
+        size: 'normal',
+        thickness: 'thin',
+        dashed: false,
+        fillOpacity: 0.35,
+        label: '',
+        valueLabel: false,
+    };
+}
+
+function distributionDefaults(): DistributionBody {
+    return { type: 'distribution', color: 'blue', kind: 'normal', mean: '0', sd: '1', n: '10', p: '0.5', thickness: 'thin', dashed: false, fillOpacity: 0.35 };
+}
+
+function riemannDefaults(): RiemannBody {
+    return { type: 'riemann', color: 'orange', function: '', method: 'left', from: '0', to: '1', parts: '6', thickness: 'thin', fillOpacity: 0.35, label: '', valueLabel: false };
+}
+
+function slopeFieldDefaults(): SlopeFieldBody {
+    return { type: 'slopeField', color: 'gray', expression: '', density: 20, thickness: 'thin' };
+}
+
+function solutionDefaults(): SolutionBody {
+    return { type: 'solution', color: 'red', field: '', through: '', thickness: 'thick', dashed: false };
+}
+
+function probabilityDefaults(): ProbabilityBody {
+    return { type: 'probability', color: 'orange', distribution: '', event: '', fillOpacity: 0.5, fillPattern: 'solid', label: '', valueLabel: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -987,6 +1047,20 @@ function convertTool(src: Record<string, unknown>, ctx: ConvertContext): { body:
         case 'plane3D':
             // The legacy plane is the v4 plane minus id / name.
             return { body: completePlane(src), hidden: false };
+        case 'data':
+            return { body: completeData(src), hidden: false };
+        case 'dataPlot':
+            return { body: completeDataPlot(src), hidden: false };
+        case 'distribution':
+            return { body: completeDistribution(src), hidden: false };
+        case 'probability':
+            return { body: completeProbability(src), hidden: false };
+        case 'riemann':
+            return { body: completeRiemann(src), hidden: false };
+        case 'slopeField':
+            return { body: completeSlopeField(src), hidden: false };
+        case 'solution':
+            return { body: completeSolution(src), hidden: false };
         case 'segment':
             return isLegacySegment(src) ? legacySegment(src) : { body: completeSegment(src, ctx), hidden: false };
         case 'areaBetween':
@@ -1098,6 +1172,108 @@ function completePlane(src: Record<string, unknown>): PlaneBody {
         axis: oneOf(src.axis, ['x', 'y', 'z'] as const, d.axis),
         value: str(src.value, d.value),
         fillOpacity: opacityOf(src.fillOpacity, d.fillOpacity),
+    };
+}
+
+const DATA_PLOT_STYLES: readonly DataPlotTool['style'][] = ['points', 'bars', 'line', 'regression'];
+
+function completeData(src: Record<string, unknown>): DataBody {
+    const d = dataDefaults();
+    return {
+        type: 'data',
+        color: colorOf(src.color, d.color),
+        source: oneOf(src.source, ['table', 'list'] as const, d.source),
+        points: str(src.points, d.points),
+        xColumn: str(src.xColumn, d.xColumn),
+        yColumn: str(src.yColumn, d.yColumn),
+    };
+}
+
+function completeDataPlot(src: Record<string, unknown>): DataPlotBody {
+    const d = dataPlotDefaults();
+    return {
+        type: 'dataPlot',
+        color: colorOf(src.color, d.color),
+        data: str(src.data, d.data).trim(),
+        style: oneOf(src.style, DATA_PLOT_STYLES, d.style),
+        size: oneOf(src.size, MARKER_SIZES, d.size),
+        thickness: thicknessOf(src.thickness, d.thickness),
+        dashed: bool(src.dashed, d.dashed),
+        fillOpacity: opacityOf(src.fillOpacity, d.fillOpacity),
+        label: str(src.label, d.label),
+        valueLabel: bool(src.valueLabel, d.valueLabel),
+    };
+}
+
+function completeDistribution(src: Record<string, unknown>): DistributionBody {
+    const d = distributionDefaults();
+    return {
+        type: 'distribution',
+        color: colorOf(src.color, d.color),
+        kind: oneOf(src.kind, ['normal', 'binomial'] as const, d.kind),
+        mean: str(src.mean, d.mean),
+        sd: str(src.sd, d.sd),
+        n: str(src.n, d.n),
+        p: str(src.p, d.p),
+        thickness: thicknessOf(src.thickness, d.thickness),
+        dashed: bool(src.dashed, d.dashed),
+        fillOpacity: opacityOf(src.fillOpacity, d.fillOpacity),
+    };
+}
+
+function completeProbability(src: Record<string, unknown>): ProbabilityBody {
+    const d = probabilityDefaults();
+    return {
+        type: 'probability',
+        color: colorOf(src.color, d.color),
+        distribution: str(src.distribution, d.distribution).trim(),
+        event: str(src.event, d.event),
+        fillOpacity: opacityOf(src.fillOpacity, d.fillOpacity),
+        fillPattern: oneOf(src.fillPattern, FILL_PATTERNS, d.fillPattern),
+        label: str(src.label, d.label),
+        valueLabel: bool(src.valueLabel, d.valueLabel),
+    };
+}
+
+const RIEMANN_METHODS: readonly RiemannTool['method'][] = ['left', 'right', 'middle', 'trapezoid'];
+
+function completeRiemann(src: Record<string, unknown>): RiemannBody {
+    const d = riemannDefaults();
+    return {
+        type: 'riemann',
+        color: colorOf(src.color, d.color),
+        function: str(src.function, d.function).trim(),
+        method: oneOf(src.method, RIEMANN_METHODS, d.method),
+        from: str(src.from, d.from),
+        to: str(src.to, d.to),
+        parts: str(src.parts, d.parts),
+        thickness: thicknessOf(src.thickness, d.thickness),
+        fillOpacity: opacityOf(src.fillOpacity, d.fillOpacity),
+        label: str(src.label, d.label),
+        valueLabel: bool(src.valueLabel, d.valueLabel),
+    };
+}
+
+function completeSlopeField(src: Record<string, unknown>): SlopeFieldBody {
+    const d = slopeFieldDefaults();
+    return {
+        type: 'slopeField',
+        color: colorOf(src.color, d.color),
+        expression: str(src.expression, d.expression),
+        density: Math.round(clamp(num(src.density, d.density), 4, 60)),
+        thickness: thicknessOf(src.thickness, d.thickness),
+    };
+}
+
+function completeSolution(src: Record<string, unknown>): SolutionBody {
+    const d = solutionDefaults();
+    return {
+        type: 'solution',
+        color: colorOf(src.color, d.color),
+        field: str(src.field, d.field).trim(),
+        through: str(src.through, d.through),
+        thickness: thicknessOf(src.thickness, d.thickness),
+        dashed: bool(src.dashed, d.dashed),
     };
 }
 
@@ -1302,7 +1478,7 @@ export function normalizeParameters(raw: unknown): Parameter[] {
         max = Math.max(max, value);
         let step = num(src.step, NaN);
         if (!(step > 0)) step = niceStep(max - min);
-        out.push({ name, value, min, max, step });
+        out.push(src.connected === true ? { name, value, min, max, step, connected: true } : { name, value, min, max, step });
     }
     return out;
 }
@@ -1418,6 +1594,34 @@ function newPlane(opts: ToolOpts): PlaneTool {
     return { ...planeDefaults(), ...identity('plane3D', opts) };
 }
 
+function newData(opts: ToolOpts): DataTool {
+    return { ...dataDefaults(), ...identity('data', opts) };
+}
+
+function newDataPlot(opts: ToolOpts): DataPlotTool {
+    return { ...dataPlotDefaults(), ...identity('dataPlot', opts) };
+}
+
+function newDistribution(opts: ToolOpts): DistributionTool {
+    return { ...distributionDefaults(), ...identity('distribution', opts) };
+}
+
+function newProbability(opts: ToolOpts): ProbabilityTool {
+    return { ...probabilityDefaults(), ...identity('probability', opts) };
+}
+
+function newRiemann(opts: ToolOpts): RiemannTool {
+    return { ...riemannDefaults(), ...identity('riemann', opts) };
+}
+
+function newSlopeField(opts: ToolOpts): SlopeFieldTool {
+    return { ...slopeFieldDefaults(), ...identity('slopeField', opts) };
+}
+
+function newSolution(opts: ToolOpts): SolutionTool {
+    return { ...solutionDefaults(), ...identity('solution', opts) };
+}
+
 /**
  * Default tool of a kind. New regions cycle through the palette (next
  * colour not used by another region) at opacity 0.25.
@@ -1434,6 +1638,20 @@ export function defaultTool(type: ToolType, opts: { is3D: boolean; tools: Tool[]
             return newSegment(opts);
         case 'plane3D':
             return newPlane(opts);
+        case 'data':
+            return newData(opts);
+        case 'dataPlot':
+            return newDataPlot(opts);
+        case 'distribution':
+            return newDistribution(opts);
+        case 'probability':
+            return newProbability(opts);
+        case 'riemann':
+            return newRiemann(opts);
+        case 'slopeField':
+            return newSlopeField(opts);
+        case 'solution':
+            return newSolution(opts);
     }
 }
 
@@ -1481,7 +1699,12 @@ export type RecipeResult =
     | { kind: 'function'; fn: FunctionParameters; surface?: Function3DParameters }
     | { kind: 'tool'; tool: Tool }
     | { kind: 'label' }
-    | { kind: 'parameter'; parameter: Parameter };
+    | { kind: 'parameter'; parameter: Parameter }
+    /**
+     * Optional (5.0): several items at once (data and its plot), sliders and
+     * functions first; the card of `reveal` (an index into tools) opens.
+     */
+    | { kind: 'items'; parameters?: Parameter[]; functions?: FunctionParameters[]; tools: Tool[]; reveal?: number };
 
 /** Every name in the chart (functions, tools, parameters). */
 function chartNames(ctx: RecipeContext): string[] {
@@ -1751,8 +1974,150 @@ function recipes2D(): Recipe[] {
             available: in2D,
             build: (ctx) => segmentRecipe(ctx, { path: '(1, 1); (4, 1)', style: 'brace', label: 'width' }),
         },
+        ...beyondRecipes(in2D),
         labelRecipe(in2D),
         sliderRecipe(in2D),
+    ];
+}
+
+// ------------------------------------------------- beyond functions (5.0)
+
+/** Sample data for a new data set typed in the chart. */
+const SAMPLE_DATA = '(1, 52); (2, 55); (3, 61); (4, 60); (5, 68)';
+
+/** A chart's data sets, and a context whose names include the new tools so far (each new tool takes a name of its own). */
+function withTools(ctx: RecipeContext, tools: Tool[]): RecipeContext {
+    return { ...ctx, tools: [...ctx.tools, ...tools] };
+}
+
+/** The recipes of data, probability, Riemann sums and slope fields (2D). */
+function beyondRecipes(in2D: (ctx: RecipeContext) => boolean): Recipe[] {
+    return [
+        {
+            id: 'data-table',
+            section: 'Data',
+            label: t('beyond.recipe.dataTable'),
+            hint: t('beyond.recipeHint.dataTable'),
+            available: in2D,
+            build: (ctx) => {
+                const data = newData(toolOpts(ctx));
+                const plot: DataPlotTool = { ...newDataPlot(toolOpts(withTools(ctx, [data]))), data: data.name };
+                return { kind: 'items', tools: [data, plot], reveal: 0 };
+            },
+        },
+        {
+            id: 'data-points',
+            section: 'Data',
+            label: t('beyond.recipe.dataPoints'),
+            hint: t('beyond.recipeHint.dataPoints'),
+            available: in2D,
+            build: (ctx) => {
+                const data: DataTool = { ...newData(toolOpts(ctx)), source: 'list', points: SAMPLE_DATA };
+                const plot: DataPlotTool = { ...newDataPlot(toolOpts(withTools(ctx, [data]))), data: data.name };
+                return { kind: 'items', tools: [data, plot], reveal: 0 };
+            },
+        },
+        {
+            id: 'regression',
+            section: 'Data',
+            label: t('beyond.recipe.regression'),
+            hint: t('beyond.recipeHint.regression'),
+            available: in2D,
+            build: (ctx) => {
+                const existing = ctx.tools.filter((x) => x.type === 'data');
+                const regression = (c: RecipeContext, data: string): DataPlotTool => ({
+                    ...newDataPlot(toolOpts(c)),
+                    data,
+                    style: 'regression',
+                    color: 'red',
+                    valueLabel: true,
+                });
+                if (existing.length) return { kind: 'tool', tool: regression(ctx, existing[existing.length - 1].name) };
+                const data: DataTool = { ...newData(toolOpts(ctx)), source: 'list', points: SAMPLE_DATA };
+                const points: DataPlotTool = { ...newDataPlot(toolOpts(withTools(ctx, [data]))), data: data.name };
+                return { kind: 'items', tools: [data, points, regression(withTools(ctx, [data, points]), data.name)], reveal: 2 };
+            },
+        },
+        {
+            id: 'normal-distribution',
+            section: 'Probability',
+            label: t('beyond.recipe.normal'),
+            hint: t('beyond.recipeHint.normal'),
+            available: in2D,
+            build: (ctx) => ({ kind: 'tool', tool: newDistribution(toolOpts(ctx)) }),
+        },
+        {
+            id: 'binomial-distribution',
+            section: 'Probability',
+            label: t('beyond.recipe.binomial'),
+            hint: t('beyond.recipeHint.binomial'),
+            available: in2D,
+            build: (ctx) => ({ kind: 'tool', tool: { ...newDistribution(toolOpts(ctx)), kind: 'binomial', n: '10', p: '0.4' } }),
+        },
+        {
+            id: 'probability',
+            section: 'Probability',
+            label: t('beyond.recipe.probability'),
+            hint: t('beyond.recipeHint.probability'),
+            available: in2D,
+            build: (ctx) => {
+                const shade = (c: RecipeContext, dist: Tool): ProbabilityTool => ({
+                    ...newProbability(toolOpts(c)),
+                    distribution: dist.name,
+                    event: dist.type === 'distribution' && dist.kind === 'binomial' ? 'X <= 3' : '-1 <= X <= 1',
+                    valueLabel: true,
+                });
+                const existing = ctx.tools.filter((x) => x.type === 'distribution');
+                if (existing.length) return { kind: 'tool', tool: shade(ctx, existing[existing.length - 1]) };
+                const dist = newDistribution(toolOpts(ctx));
+                return { kind: 'items', tools: [dist, shade(withTools(ctx, [dist]), dist)], reveal: 1 };
+            },
+        },
+        {
+            id: 'riemann-sum',
+            section: 'Calculus',
+            label: t('beyond.recipe.riemann'),
+            hint: t('beyond.recipeHint.riemann'),
+            available: in2D,
+            build: (ctx) => {
+                // The number of parts on a slider n, when the name is free: the usual way to watch the sum close in.
+                const taken = new Set(chartNames(ctx));
+                const n = taken.has('n') ? null : { name: 'n', value: 6, min: 1, max: 40, step: 1 };
+                const own = callableFunctions(ctx).find((name) => !ctx.functions.find((f) => f.name === name)?.hidden);
+                const fn = own ? null : { ...defaultFunction(chartNames(ctx), nextFunctionColor(ctx.functions)), expression: 'x^2 / 4 + 1' };
+                const c: RecipeContext = fn ? { ...ctx, functions: [...ctx.functions, fn] } : ctx;
+                const sum: RiemannTool = { ...newRiemann(toolOpts(c)), function: own ?? fn?.name ?? '', from: '0', to: '4', parts: n ? 'n' : '6', valueLabel: true };
+                if (!fn && !n) return { kind: 'tool', tool: sum };
+                return { kind: 'items', parameters: n ? [n] : [], functions: fn ? [fn] : [], tools: [sum] };
+            },
+        },
+        {
+            id: 'slope-field',
+            section: 'Calculus',
+            label: t('beyond.recipe.slopeField'),
+            hint: t('beyond.recipeHint.slopeField'),
+            available: in2D,
+            build: (ctx) => ({ kind: 'tool', tool: { ...newSlopeField(toolOpts(ctx)), expression: 'x - y' } }),
+        },
+        {
+            id: 'solution',
+            section: 'Calculus',
+            label: t('beyond.recipe.solution'),
+            hint: t('beyond.recipeHint.solution'),
+            available: in2D,
+            build: (ctx) => {
+                const fields = ctx.tools.filter((x) => x.type === 'slopeField');
+                const field: SlopeFieldTool | null = fields.length ? null : { ...newSlopeField(toolOpts(ctx)), expression: 'x - y' };
+                const c1 = withTools(ctx, field ? [field] : []);
+                // A point to drag, called P when that name is free.
+                const point: PointsTool = { ...newPoints(toolOpts(c1)), points: '(0, 1)', size: 'large' };
+                if (!chartNames(c1).includes('P')) point.name = 'P';
+                const c2 = withTools(c1, [point]);
+                const fieldName = field ? field.name : fields[fields.length - 1].name;
+                const solution: SolutionTool = { ...newSolution(toolOpts(c2)), field: fieldName, through: point.name };
+                return { kind: 'items', tools: [...(field ? [field] : []), point, solution], reveal: field ? 2 : 1 };
+            },
+        },
     ];
 }
 

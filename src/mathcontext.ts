@@ -41,6 +41,7 @@ import {
     topLevelColon,
 } from './expr';
 import { MessageKey, language, t as msg } from './i18n';
+import { NoteTable, tableKey } from './beyond/table';
 
 export type FunctionKind = 'cartesian' | 'parametric' | 'polar';
 
@@ -166,6 +167,15 @@ export interface MathContextInput {
      * Values are supplied at render time through `setDerived`; unset -> NaN.
      */
     toolNames?: string[];
+    /**
+     * Optional (5.0): the nearest Markdown table above the chart's block in
+     * its note, which data tools with source 'table' read
+     * (src/beyond/table.ts). null: the chart is in a note that has no table
+     * above it; undefined (the default): the chart is not in a note (a new
+     * chart in the editor, the AI tools). Part of the structure key, so a
+     * context is shared only by charts with the same table.
+     */
+    table?: NoteTable | null;
 }
 
 /** A slider problem, shaped like a SceneIssue (scene.ts) so hosts can list it with the others. */
@@ -377,6 +387,8 @@ export class MathContext {
     /** Sliders that cannot work (named like an axis variable), as chart issues. */
     private readonly paramProblems: ParameterIssue[] = [];
     private readonly toolSet: Set<string>;
+    /** The note's table above the chart (MathContextInput.table). */
+    private readonly table: NoteTable | null | undefined;
     private readonly recs: FnRec[] = [];
     private readonly byName = new Map<string, FnRec>();
     private readonly envs = new Map<string, Env>();
@@ -447,7 +459,17 @@ export class MathContext {
             this.vals.push(Number(p.value));
         }
         this.toolSet = new Set((Array.isArray(input.toolNames) ? input.toolNames : []).filter((t) => typeof t === 'string'));
+        this.table = input.table;
         this.buildFunctions(Array.isArray(input.functions) ? input.functions : []);
+    }
+
+    /**
+     * Optional (5.0): the Markdown table above the chart's block in its note
+     * (MathContextInput.table): null when the note has none above the block,
+     * undefined when the chart is not in a note.
+     */
+    noteTable(): NoteTable | null | undefined {
+        return this.table;
     }
 
     /** Monotonic counter bumped by setParams / setDerived. */
@@ -1552,6 +1574,7 @@ function structureKey(input: MathContextInput): string {
         !!input.polar,
         str(input.variables),
         Array.isArray(input.toolNames) ? input.toolNames : [],
+        tableKey(input.table),
     ]);
 }
 

@@ -6,6 +6,7 @@ import { generateTikz2D, generateTikz3D } from './export';
 import { t } from './i18n';
 import { GRID_OPACITY, opacityValue } from './opacity';
 import { AxisNumbers, TickAxis, numbersKeys, numbersMode } from './ticks';
+import { NoteTable, tableData } from './beyond/table';
 
 /** The six axis range keys. */
 export type RangeKey = 'xmin' | 'xmax' | 'ymin' | 'ymax' | 'zmin' | 'zmax';
@@ -123,6 +124,13 @@ function numberValue(v: unknown, fallback: number): number {
  */
 export class SettingsManager {
     private values: Map<string, unknown>;
+    /**
+     * Optional (5.0): the Markdown table above the chart's block in its note
+     * (src/beyond/table.ts), handed to the MathContext for data tools. Never
+     * serialized: the block keeps `use the table above`, not the rows.
+     * undefined: the chart is not in a note.
+     */
+    noteTable: NoteTable | null | undefined = undefined;
 
     constructor() {
         this.values = new Map(Object.entries(defaultValues()));
@@ -195,7 +203,23 @@ export class SettingsManager {
             toolNames: this.tools()
                 .map((t) => t && t.name)
                 .filter((n): n is string => typeof n === 'string' && n.length > 0),
+            table: this.noteTable,
         };
+    }
+
+    /**
+     * Optional (5.0): the headers of the columns a data tool reads from the
+     * note's table, as the axis names of a chart that has none of its own
+     * (its labels are the defaults x and y). The first data tool with source
+     * 'table' decides.
+     */
+    tableAxisNames(): { x: string; y: string } {
+        const table = this.noteTable;
+        if (!table || this.getValue('dimension') === true) return { x: '', y: '' };
+        const tool = this.tools().find((t) => !!t && t.type === 'data' && t.source === 'table' && !t.hidden);
+        if (!tool || tool.type !== 'data') return { x: '', y: '' };
+        const d = tableData(table, tool.xColumn, tool.yColumn);
+        return d.ok ? { x: d.xName, y: d.yName } : { x: '', y: '' };
     }
 
     /**
@@ -293,12 +317,18 @@ export class SettingsManager {
         const paper = this.paperSize();
         const coordinateSystem: CoordinateSystem = this.getValue('coordinateSystem') === 'polar' ? 'polar' : 'cartesian';
         const isPolar = coordinateSystem === 'polar';
-        const xLabel = isPolar
+        let xLabel = isPolar
             ? stringValue(this.getValue('axis_label_x_polar'), '')
             : stringValue(this.getValue('axis_label_x'), '') || 'x';
-        const yLabel = isPolar
+        let yLabel = isPolar
             ? stringValue(this.getValue('axis_label_y_polar'), '')
             : stringValue(this.getValue('axis_label_y'), '') || 'y';
+        // Data from the note's table: its headers name axes the chart leaves at x and y.
+        if (!isPolar && this.noteTable) {
+            const names = this.tableAxisNames();
+            if (xLabel === 'x' && names.x) xLabel = names.x;
+            if (yLabel === 'y' && names.y) yLabel = names.y;
+        }
         const axisStyle = this.getValue<AxisStyle | undefined>('axis_style');
         return {
             width,

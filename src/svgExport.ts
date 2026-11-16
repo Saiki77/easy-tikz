@@ -99,6 +99,23 @@ export function exportableSvg(svg: SVGElement, doc: Document, opts: { white?: bo
 }
 
 /**
+ * The same chart gives the same text: the ids the renderer numbers per
+ * drawing (clip paths: etz-21-clip) are renumbered from 1 in the order they
+ * appear, with every reference to them (url(#...), href="#..."). The SVG
+ * files of 5.0 compare texts to write only charts that changed.
+ */
+export function stableSvgIds(svg: string): string {
+    const ids: string[] = [];
+    for (const m of svg.matchAll(/\bid="([^"]+)"/g)) if (!ids.includes(m[1])) ids.push(m[1]);
+    if (!ids.length) return svg;
+    const map = new Map(ids.map((id, i) => [id, `etz-${i + 1}`]));
+    return svg.replace(/\bid="([^"]+)"|#([A-Za-z][\w.:-]*)/g, (all: string, id: string | undefined, ref: string | undefined) => {
+        if (id !== undefined) return map.has(id) ? `id="${map.get(id)}"` : all;
+        return ref !== undefined && map.has(ref) ? `#${map.get(ref)}` : all;
+    });
+}
+
+/**
  * Rasterize an exportable SVG (see exportableSvg) at `scale` times its size.
  * `background` paints the canvas first (a theme colour); without it the PNG
  * is transparent, as Copy PNG has always been. Its error messages are in

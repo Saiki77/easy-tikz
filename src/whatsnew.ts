@@ -21,13 +21,13 @@
  * content raises WHATS_NEW_VERSION.
  */
 import { GUIDES } from './guides';
-import { defaultFunction, defaultTool, EXAMPLES } from './migrate';
+import { parseChartText } from './text/parse';
 import { printChartText } from './text/print';
-import type { FunctionParameters, Parameter, RegionTool } from './types';
+import type { Parameter } from './types';
 import { MessageKey, MessageValues, t, tIn } from './i18n';
 
 /** Version of the popup's content. Raise it when the popup says something new. */
-export const WHATS_NEW_VERSION = '4.10.0';
+export const WHATS_NEW_VERSION = '5.0.0';
 
 /**
  * Compare two version strings numerically, part by part ('4.10.0' > '4.9.1',
@@ -110,6 +110,35 @@ export function chartScanRank(sectionTypes: readonly string[] | null): 0 | 1 | 2
     return sectionTypes.some((t) => t === 'list' || t === 'callout' || t === 'blockquote') ? 1 : 0;
 }
 
+// ------------------------------------------------------------------ chart
+
+/** The formula of the live chart, as a note writes it (typeset beside the chart). */
+export const WHATS_NEW_FORMULA = 'f(x) = \\frac{x^3}{3} - a x';
+
+/** Slider `a` of the live chart: from no extremum (a <= 0) to two that move apart; they stay inside the view. */
+export const WHATS_NEW_SLIDER: Readonly<Parameter> = { name: 'a', value: 1, min: -1, max: 2, step: 0.05 };
+
+/** The live chart as its block is written: the chart of the formula, with its extrema. */
+export const WHATS_NEW_CHART_TEXT = [
+    'show x from -3 to 3 and y from -3 to 3',
+    'axes in the middle',
+    'with a grid',
+    'size 12 x 8',
+    `slider ${WHATS_NEW_SLIDER.name} from ${WHATS_NEW_SLIDER.min} to ${WHATS_NEW_SLIDER.max}, starting at ${WHATS_NEW_SLIDER.value}, in steps of ${WHATS_NEW_SLIDER.step}`,
+    `plot $${WHATS_NEW_FORMULA}$ in blue, thick, with its extrema`,
+].join('\n');
+
+/**
+ * The live chart of the popup: the chart of a formula as every formula in
+ * a note now has one (5.0). f(x) = x^3/3 - a x has f'(x) = x^2 - a: no
+ * extremum for a <= 0, and for a > 0 a maximum at -sqrt(a) and a minimum at
+ * sqrt(a) with the values +-(2/3) a sqrt(a), at most 1.89 for a = 2, so both
+ * stay inside the view. A new copy every time: the popup moves its own.
+ */
+export function whatsNewChart(): Record<string, unknown> {
+    return parseChartText(WHATS_NEW_CHART_TEXT).data;
+}
+
 // ---------------------------------------------------------------- content
 
 export interface WhatsNewItem {
@@ -141,23 +170,143 @@ function item(icon: string, title: MessageKey, text: MessageKey, guide?: string,
     return out;
 }
 
-export const WHATS_NEW_TITLE = 'Easy TikZ 4';
+export const WHATS_NEW_TITLE = 'Easy TikZ 5';
 
 /** The line under the title, in the reader's language. */
 export const whatsNewSubtitle = (): string => t('panels.whatsNew.subtitle');
 /** The same line in English, as the tests read it. */
 export const WHATS_NEW_SUBTITLE = tIn('en', 'panels.whatsNew.subtitle');
 
-/** The heading of the newest items, at the top, in the reader's language. */
-export const whatsNewRecentTitle = (): string => t('panels.whatsNew.recentTitle');
-/** The same heading in English, as the tests read it. */
-export const WHATS_NEW_RECENT_TITLE = tIn('en', 'panels.whatsNew.recentTitle');
+/** What a slide of the popup shows (src/ui/whatsNewModal.ts draws each). */
+export type WhatsNewSlideId = 'formulas' | 'language' | 'connected' | 'svg' | 'data' | 'probability' | 'riemann' | 'slope' | 'earlier';
 
-/** New in 4.10, at the top: the only items the popup shows open. */
-export const WHATS_NEW_RECENT: WhatsNewItem[] = [
-    item('ruler', 'panels.whatsNew.numbers.title', 'panels.whatsNew.numbers.text'),
-    item('image', 'panels.whatsNew.white.title', 'panels.whatsNew.white.text'),
+/** One slide of the popup: a feature of 5.0, shown big with its live charts. */
+export interface WhatsNewSlide {
+    id: WhatsNewSlideId;
+    /** Lucide id known to Obsidian 1.13. */
+    icon: string;
+    /** In the reader's language. */
+    readonly title: string;
+    /** One or two sentences in the reader's language; inline `backticks` become code. */
+    readonly text: string;
+    /** A guide in the Help tab that shows it step by step. */
+    guide?: string;
+    /** Its charts, as chart text: the live charts of the slide. */
+    charts: string[];
+    /** The Markdown table above the chart in the note, for a chart that reads it (`use the table above`). */
+    table?: string[];
+    /** What Try an example opens, when it is not the slide's chart (the editor has no note table: the points written out). */
+    example?: string;
+}
+
+function slide(id: WhatsNewSlideId, icon: string, title: MessageKey, text: MessageKey, charts: string[], more: { guide?: string; table?: string[]; example?: string } = {}): WhatsNewSlide {
+    const out: WhatsNewSlide = {
+        id,
+        icon,
+        get title() {
+            return t(title);
+        },
+        get text() {
+            return t(text);
+        },
+        charts,
+    };
+    if (more.guide) out.guide = more.guide;
+    if (more.table) out.table = more.table;
+    if (more.example) out.example = more.example;
+    return out;
+}
+
+/** The chart of the slide on the chart language: a linear program, formulas in LaTeX. */
+const LANGUAGE_CHART = [
+    'size 12 x 8',
+    'show x from 0 to 5 and y from 0 to 4.5',
+    'axes on the edges',
+    'slider c from 0 to 15, starting at 6',
+    'shade where $x + y \\le 4$ and $x + 3y \\le 6$ and $x \\ge 0$ and $y \\ge 0$, numbered',
+    'draw $2x + 3y = c$ in red, dashed, labelled "$z = {c}$"',
+    'mark the maximum of $2x + 3y$ in the region, large',
+].join('\n');
+
+/** The two charts of the slide on connected sliders: each has a slider a, connected. */
+const CONNECTED_CHARTS = [
+    ['size 12 x 8', 'show x from -3 to 3 and y from -1 to 5', 'axes in the middle', 'with a grid', 'slider a from 0.25 to 2, starting at 1, connected', 'plot $f(x) = a x^2$ in blue, thick'].join('\n'),
+    ['size 12 x 8', 'show x from -4 to 4 and y from -2.5 to 2.5', 'axes in the middle', 'with a grid', 'slider a from 0.25 to 2, starting at 1, connected', 'plot $g(x) = a \\sin(x)$ in red, thick'].join('\n'),
 ];
+
+/** The chart of the slide on SVG files, as its file shows it. */
+const SVG_CHART = ['size 12 x 8', 'show x from -3 to 5 and y from -3 to 5', 'axes in the middle', 'with a grid', 'plot $f(x) = \\frac{1}{2}(x - 1)^2 - 2$ in blue, thick'].join('\n');
+
+/** The table above the chart of the data slide, as the note holds it: hours of study and the test score. */
+const DATA_TABLE = ['| hours | score |', '|---|---|', '| 1 | 52 |', '| 2 | 55 |', '| 3 | 61 |', '| 4 | 64 |', '| 5 | 70 |', '| 6 | 71 |', '| 7 | 77 |'];
+
+/** The chart that reads it: the points and their regression line. */
+const DATA_CHART = ['size 12 x 8', 'show x from 0 to 8 and y from 40 to 85', 'axes on the edges', 'with a grid', 'use the table above', 'mark the data', 'draw its regression line, labelled'].join('\n');
+
+/** The same chart with the table's points written in it, for the editor (Try an example). */
+const DATA_EXAMPLE = DATA_CHART.replace('use the table above', 'xlabel hours\nylabel score\ndata (1, 52), (2, 55), (3, 61), (4, 64), (5, 70), (6, 71), (7, 77)');
+
+/** A normal distribution with the probability between -a and a shaded. */
+const PROBABILITY_CHART = [
+    'size 12 x 7',
+    'show x from -4 to 4 and y from 0 to 0.5',
+    'axes on the edges',
+    'slider a from 0 to 3, starting at 1',
+    'plot the normal distribution with mean 0 and sd 1',
+    'shade $P(-a \\le X \\le a)$, labelled',
+].join('\n');
+
+/** The left Riemann sum of x^2 from 0 to 2, n parts on a slider. */
+const RIEMANN_CHART = [
+    'size 12 x 7',
+    'show x from -0.2 to 2.2 and y from -0.3 to 4.4',
+    'axes on the edges',
+    'slider n from 1 to 40, starting at 6, in steps of 1',
+    'plot $f(x) = x^2$ in blue, thick',
+    'draw the left Riemann sum of f from 0 to 2 with n parts, labelled',
+].join('\n');
+
+/** The slope field of y' = x - y and the solution through P, which a slider moves up and down. */
+const SLOPE_CHART = [
+    'size 12 x 8',
+    'show x from -3 to 3 and y from -3 to 3',
+    'axes in the middle',
+    'slider b from -2.5 to 2.5, starting at 1',
+    "draw the slope field of $y' = x - y$",
+    'mark P at (0, b)',
+    'draw the solution through P',
+].join('\n');
+
+/**
+ * The slides, in order: what 5.0 brings, one feature each, then version 4
+ * in one list. Back, Next, the dots and the arrow keys move between them.
+ */
+export const WHATS_NEW_SLIDES: WhatsNewSlide[] = [
+    slide('formulas', 'square-function', 'panels.whatsNew.formulaCharts.title', 'panels.whatsNew.formulaCharts.text', [WHATS_NEW_CHART_TEXT]),
+    slide('language', 'sigma', 'panels.whatsNew.latexLanguage.title', 'panels.whatsNew.latexLanguage.text', [LANGUAGE_CHART], { guide: 'formulas' }),
+    slide('connected', 'link-2', 'panels.whatsNew.connected.title', 'panels.whatsNew.connected.text', CONNECTED_CHARTS),
+    slide('data', 'table', 'panels.whatsNew.data.title', 'panels.whatsNew.data.text', [DATA_CHART], { table: DATA_TABLE, example: DATA_EXAMPLE }),
+    slide('probability', 'percent', 'panels.whatsNew.probability.title', 'panels.whatsNew.probability.text', [PROBABILITY_CHART]),
+    slide('riemann', 'chart-column', 'panels.whatsNew.riemann.title', 'panels.whatsNew.riemann.text', [RIEMANN_CHART]),
+    slide('slope', 'wind', 'panels.whatsNew.slopeField.title', 'panels.whatsNew.slopeField.text', [SLOPE_CHART]),
+    slide('svg', 'file-image', 'panels.whatsNew.svgFiles.title', 'panels.whatsNew.svgFiles.text', [SVG_CHART]),
+    slide('earlier', 'list', 'panels.whatsNew.moreTitle', 'panels.whatsNew.earlierText', []),
+];
+
+/** Every feature new in 5.0, in the order of the slides. */
+export const WHATS_NEW_RECENT: WhatsNewItem[] = WHATS_NEW_SLIDES.filter((x) => x.id !== 'earlier').map((x) => {
+    const out: WhatsNewItem = {
+        icon: x.icon,
+        get title() {
+            return x.title;
+        },
+        get text() {
+            return x.text;
+        },
+    };
+    if (x.guide) out.guide = x.guide;
+    return out;
+});
 
 /** What makes the live chart move: sliders and the values computed from them. */
 export const WHATS_NEW_LIVE: WhatsNewItem[] = [
@@ -169,8 +318,10 @@ export const WHATS_NEW_LIVE: WhatsNewItem[] = [
 /** New in 4.3: AI makes charts. Its link opens the editor's AI tab. */
 export const WHATS_NEW_AI: WhatsNewItem = item('bot', 'panels.whatsNew.ai.title', 'panels.whatsNew.ai.text');
 
-/** The rest of version 4, newest first, one line each, behind "Earlier in version 4" (closed). */
+/** Version 4, newest first, one line each, behind "Earlier in version 4" (closed). */
 export const WHATS_NEW_MORE: WhatsNewItem[] = [
+    item('ruler', 'panels.whatsNew.numbers.title', 'panels.whatsNew.numbers.text'),
+    item('image', 'panels.whatsNew.white.title', 'panels.whatsNew.white.text'),
     item('layers', 'panels.whatsNew.solid.title', 'panels.whatsNew.solid.text'),
     item('grid', 'panels.whatsNew.gridOpacity.title', 'panels.whatsNew.gridOpacity.text'),
     item('blend', 'panels.whatsNew.mesh.title', 'panels.whatsNew.mesh.text'),
@@ -202,69 +353,15 @@ export function whatsNewText(): string {
 export const WHATS_NEW_ICONS: readonly string[] = [
     ...WHATS_NEW_RECENT.map((i) => i.icon),
     ...WHATS_NEW_MORE.map((i) => i.icon),
+    ...WHATS_NEW_SLIDES.map((x) => x.icon),
     'play',
     'pause',
     'sparkles',
+    'mouse-pointer-2',
+    'arrow-left',
+    'folder-open',
 ];
 
-/** The guide the live chart comes from. */
-export const WHATS_NEW_CHART_GUIDE = 'tangent-area';
+/** The guide on formulas, linked under the live chart. */
+export const WHATS_NEW_CHART_GUIDE = 'formulas';
 
-// ------------------------------------------------------------------ chart
-
-/** Slider `a` of the live chart: inside this range the shaded area stays inside the view. */
-export const WHATS_NEW_SLIDER: Readonly<Parameter> = { name: 'a', value: 0.8, min: -1.1, max: 1.1, step: 0.05 };
-
-/** The exact area between x^3 - 3x and its tangent at a (see whatsNewChart). */
-export const AREA_FORMULA = '27a^4/4';
-/** Label of the shaded area: its size, recalculated with every value of a. */
-export const AREA_LABEL = `A = {${AREA_FORMULA}:2}`;
-
-/**
- * The live chart of the popup: the Tangent explorer example (x^3 - 3x with
- * its tangent at the slider a and the slope as the title) plus the area
- * between the curve and the tangent, shaded and labelled with its size.
- *
- * The tangent is written out as the hidden function f2, because a region
- * can only use named functions (the curve's own tangent line draws it).
- * Curve minus tangent is (x - a)^2 (x + 2a): the tangent touches at a and
- * crosses again at -2a, so the area lies between those two, whichever is
- * further left, and is the integral of |(x - a)^2 (x + 2a)| from -2a to a,
- * which is 27a^4/4. It vanishes at a = 0 and changes sides with the sign
- * of a. For |a| <= 1.1 the crossing at -2a stays above y = -4.1 and the
- * view runs down to -4.5, so the shading stays inside the picture.
- */
-export function whatsNewChart(): Record<string, unknown> {
-    const example = EXAMPLES.find((e) => e.id === 'tangent');
-    if (!example) throw new Error('The Tangent explorer example is missing');
-    const chart = JSON.parse(JSON.stringify(example.data)) as Record<string, unknown>;
-    const functions = (Array.isArray(chart.functions) ? chart.functions : []) as FunctionParameters[];
-    const tangent: FunctionParameters = {
-        ...defaultFunction(functions.map((f) => f.name || '')),
-        name: 'f2',
-        expression: 'f1(a) + (3a^2 - 3)(x - a)',
-        color: 'blue',
-        hidden: true,
-    };
-    const area: RegionTool = {
-        ...(defaultTool('region', { is3D: false, tools: [], functions: [] }) as RegionTool),
-        id: 't0',
-        name: 'R1',
-        color: 'orange',
-        fillOpacity: 0.35,
-        conditions: ['min(f1, f2) <= y <= max(f1, f2)', 'min(a, -2a) <= x <= max(a, -2a)'],
-        conditionLabels: ['', ''],
-        label: AREA_LABEL,
-    };
-    return {
-        ...chart,
-        ymin: '-4.5',
-        ymax: '4.5',
-        // A larger paper than the example's 10 x 8 cm: the same text then takes less of the picture.
-        size_x_cm: 12,
-        size_y_cm: 9.6,
-        parameters: [{ ...WHATS_NEW_SLIDER }],
-        functions: [...functions, tangent],
-        tools: [area],
-    };
-}

@@ -16,11 +16,13 @@ import { SettingsManager } from '../src/settings';
 import { DEFAULT_PLUGIN_DATA } from '../src/templates';
 import { Parameter } from '../src/types';
 import { marchingGrid } from '../src/util';
+import { tableAbove } from '../src/beyond/table';
 import {
-    AREA_FORMULA,
     WHATS_NEW_CHART_GUIDE,
+    WHATS_NEW_CHART_TEXT,
+    WHATS_NEW_FORMULA,
+    WHATS_NEW_SLIDES,
     WHATS_NEW_RECENT,
-    WHATS_NEW_RECENT_TITLE,
     WHATS_NEW_AI,
     WHATS_NEW_ICONS,
     WHATS_NEW_LIVE,
@@ -166,7 +168,7 @@ test('whats new: every line is short, plain and free of em dashes', () => {
         assert.ok(/[.]$/.test(item.text), `a sentence ends with a full stop: ${item.text}`);
         assert.equal((item.text.match(/`/g) || []).length % 2, 0, `unbalanced backticks: ${item.text}`);
     }
-    assert.equal(WHATS_NEW_TITLE, 'Easy TikZ 4');
+    assert.equal(WHATS_NEW_TITLE, 'Easy TikZ 5');
 });
 
 test('whats new: it covers the highlights of version 4, with sliders, calculations and AI among them', () => {
@@ -219,11 +221,36 @@ test('whats new: the text beside the chart is the whole chart, in a few lines', 
     assert.ok(!lines.some((l) => l.startsWith('raw ') || l.startsWith('set ')), text);
 });
 
-test('whats new: 4.10 comes first and names the axis numbers and white images; 4.9 opens the rest', () => {
-    assert.deepEqual(WHATS_NEW_RECENT.map((i) => i.title), ['Axis numbers your way', 'White background for images']);
-    assert.equal(WHATS_NEW_RECENT_TITLE, 'New in 4.10');
-    assert.equal(WHATS_NEW_MORE[0].title, 'Solid surfaces in 3D');
-    assert.equal(WHATS_NEW_VERSION, '4.10.0');
+test('whats new: a slideshow of 5.0, one feature per slide, then version 4', () => {
+    assert.deepEqual(WHATS_NEW_SLIDES.map((x) => x.id), ['formulas', 'language', 'connected', 'data', 'probability', 'riemann', 'slope', 'svg', 'earlier']);
+    assert.deepEqual(WHATS_NEW_RECENT.map((i) => i.title), [
+        'Every formula is a chart',
+        'LaTeX is the chart language',
+        'Connected sliders',
+        'Data and a regression line',
+        'Probability',
+        'Riemann sums',
+        'Slope fields',
+        'Charts as SVG files',
+    ]);
+    assert.equal(WHATS_NEW_SLIDES[WHATS_NEW_SLIDES.length - 1].title, 'Earlier in version 4');
+    assert.deepEqual(WHATS_NEW_MORE.slice(0, 3).map((i) => i.title), ['Axis numbers your way', 'White background for images', 'Solid surfaces in 3D']);
+    assert.equal(WHATS_NEW_VERSION, '5.0.0');
+    // Each feature slide shows something live; the first is the chart of the formula.
+    for (const x of WHATS_NEW_SLIDES) if (x.id !== 'earlier') assert.ok(x.charts.length > 0, `${x.id} has no chart`);
+    assert.equal(WHATS_NEW_SLIDES[0].charts[0], WHATS_NEW_CHART_TEXT);
+    assert.equal(WHATS_NEW_SLIDES.find((x) => x.id === 'connected')?.charts.length, 2);
+    // Try an example on the data slide opens the same chart with the table's points written in it.
+    const dataSlide = WHATS_NEW_SLIDES.find((x) => x.id === 'data');
+    const dataExample = dataSlide && dataSlide.example ? parseChartText(dataSlide.example) : null;
+    assert.ok(dataExample && dataExample.problems.length === 0, JSON.stringify(dataExample && dataExample.problems));
+    // The examples of the language are lines the plugin reads.
+    for (const title of ['LaTeX is the chart language', 'Connected sliders']) {
+        const it = WHATS_NEW_RECENT.find((i) => i.title === title);
+        const example = it ? /`([^`]+)`/.exec(it.text) : null;
+        assert.ok(it && example, `no example in ${title}`);
+        assert.deepEqual(parseChartText(example[1]).problems, [], example[1]);
+    }
     // The example of the mesh lines is a surface option the plugin reads.
     const mesh = WHATS_NEW_MORE.find((i) => i.title === 'Mesh lines');
     const option = mesh ? /`([^`]+)`/.exec(mesh.text) : null;
@@ -281,75 +308,77 @@ function sceneAt(a: number) {
     };
 }
 
-/** Shoelace area of the even-odd rings. */
-function ringArea(rings: { x: number; y: number }[][]): number {
-    let total = 0;
-    for (const ring of rings) {
-        let s = 0;
-        for (let i = 0; i < ring.length; i++) {
-            const p = ring[i];
-            const q = ring[(i + 1) % ring.length];
-            s += p.x * q.y - q.x * p.y;
-        }
-        total += Math.abs(s) / 2;
-    }
-    return total;
-}
 
-test('whats new chart: the Tangent explorer with the area to its tangent, slider a', () => {
+test('whats new chart: the chart of the formula f(x) = x^3/3 - a x, with its extrema, slider a', () => {
     const chart = whatsNewChart();
-    const functions = chart.functions as Array<{ name: string; expression: string; hidden?: boolean; tangent?: boolean; tangentPoint?: string }>;
-    assert.equal(functions[0].expression, 'x^3 - 3x');
-    assert.ok(functions[0].tangent && functions[0].tangentPoint === 'a', 'f1 draws its tangent at a');
-    assert.deepEqual([functions[1].name, functions[1].expression, functions[1].hidden], ['f2', 'f1(a) + (3a^2 - 3)(x - a)', true]);
-    const region = (chart.tools as Array<{ name: string; conditions: string[]; label: string }>)[0];
-    assert.deepEqual(region.conditions, ['min(f1, f2) <= y <= max(f1, f2)', 'min(a, -2a) <= x <= max(a, -2a)']);
-    assert.equal(region.label, `A = {${AREA_FORMULA}:2}`);
+    const functions = chart.functions as Array<{ name: string; expression: string; extrema?: boolean }>;
+    assert.equal(functions.length, 1);
+    assert.equal(`${functions[0].name}(x) = ${functions[0].expression}`, WHATS_NEW_FORMULA);
+    assert.ok(functions[0].extrema, 'f marks its extrema');
     assert.deepEqual(chart.parameters, [WHATS_NEW_SLIDER]);
+    // The chart text writes the formula as LaTeX, in dollars.
+    assert.ok(whatsNewText().includes(`plot $${WHATS_NEW_FORMULA}$`), whatsNewText());
     // A copy every time: the popup changes the slider value of its own copy only.
     (whatsNewChart().parameters as Parameter[])[0].value = 99;
     assert.equal((whatsNewChart().parameters as Parameter[])[0].value, WHATS_NEW_SLIDER.value);
 });
 
-const EMPTY_NOTE = 'R1: no point of the view satisfies all conditions';
-
-test('whats new chart: no problem anywhere on the slider, the hidden tangent included', () => {
+test('whats new chart: no problem anywhere on the slider', () => {
     const { min, max, step } = WHATS_NEW_SLIDER;
     for (let k = 0; min + k * step <= max + 1e-9; k++) {
         const a = Number((min + k * step).toFixed(6));
-        const { errors, notes } = sceneAt(a);
+        const { errors } = sceneAt(a);
         assert.deepEqual(errors, [], `a = ${a}`);
-        // Close to 0 the area is thinner than the tracing grid: the editor then says the region is empty (an info note).
-        assert.deepEqual(notes, Math.abs(a) <= 0.1 + 1e-9 ? notes.filter((n) => n === EMPTY_NOTE) : [], `a = ${a}`);
     }
     assert.deepEqual(sceneAt(WHATS_NEW_SLIDER.value).notes, [], 'the start value draws without a note');
 });
 
-test('whats new chart: the shading is the area 27a^4/4, inside the view, and its label says so', () => {
-    for (const a of [-1.1, -0.8, -0.3, 0.25, 0.5, WHATS_NEW_SLIDER.value, 1, 1.1]) {
-        const { scene, config, math } = sceneAt(a);
-        const item = scene.items.find((i) => i.source === 'R1');
-        assert.ok(item && item.fills.length > 0, `a = ${a}: nothing shaded`);
-        const rings = item.fills.flatMap((f) => f.rings);
-        const exact = (27 * a ** 4) / 4;
-        near(ringArea(rings), exact, Math.max(0.02, exact * 0.02), `a = ${a}: shaded area`);
-        for (const ring of rings) {
-            for (const p of ring) {
-                assert.ok(p.x >= Math.min(a, -2 * a) - 1e-6 && p.x <= Math.max(a, -2 * a) + 1e-6, `a = ${a}: x = ${p.x} outside the contact points`);
-                assert.ok(p.y > config.ymin && p.y < config.ymax, `a = ${a}: y = ${p.y} outside the view`);
-            }
+test('whats new chart: the extrema sit at -sqrt(a) and sqrt(a), inside the view', () => {
+    for (const a of [0.25, 0.5, WHATS_NEW_SLIDER.value, 1.5, 2]) {
+        const { config, math } = sceneAt(a);
+        const f = math.fn1('f(x)');
+        const r = Math.sqrt(a);
+        near(f(r), (-2 / 3) * a * r, 1e-9, `a = ${a}: the minimum`);
+        near(f(-r), (2 / 3) * a * r, 1e-9, `a = ${a}: the maximum`);
+        for (const x of [r, -r]) {
+            assert.ok(x > config.xmin && x < config.xmax, `a = ${a}: x = ${x} outside the view`);
+            assert.ok(f(x) > config.ymin && f(x) < config.ymax, `a = ${a}: y = ${f(x)} outside the view`);
         }
-        const label = item.texts.map((t) => t.text).join(' ');
-        assert.equal(label, `A = ${Number(exact.toFixed(2))}`, `a = ${a}`);
-        assert.equal(math.formatTemplate(String(config.title)), `slope at x = ${a}: ${Number((3 * a * a - 3).toFixed(2))}`);
     }
 });
 
-test('whats new chart: at a = 0 the area vanishes without an error', () => {
-    const { scene, errors, notes } = sceneAt(0);
-    assert.deepEqual(errors, []);
-    assert.deepEqual(notes, [EMPTY_NOTE]);
-    const item = scene.items.find((i) => i.source === 'R1');
-    const area = item ? ringArea(item.fills.flatMap((f) => f.rings)) : 0;
-    assert.ok(area < 1e-6, `area ${area} at a = 0`);
+test('whats new slides: every chart reads without a problem and draws without an error at both ends of its slider', () => {
+    for (const x of WHATS_NEW_SLIDES) {
+        for (const text of x.charts) {
+            const parsed = parseChartText(text);
+            assert.deepEqual(parsed.problems, [], `${x.id}: ${text}`);
+            const settings = SettingsManager.fromJSON(parsed.data);
+            // A chart that reads the table above it gets the slide's table, as the popup gives it.
+            if (x.table) settings.noteTable = tableAbove([...x.table, '```easy-tikz'], x.table.length + 1);
+            const params = (settings.getValue('parameters') as Parameter[]) ?? [];
+            const ends = params.length ? [params[0].min, params[0].value, params[0].max] : [NaN];
+            for (const v of ends) {
+                const math = settings.createMathContext({ memo: false });
+                math.setParams(params.map((p, k) => (k === 0 && Number.isFinite(v) ? { ...p, value: v } : p)));
+                const config = settings.toRendererConfig(math);
+                const scene = computeScene2D({
+                    functions: config.functions || [],
+                    tools: config.tools,
+                    math,
+                    view: { xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax },
+                    grid: marchingGrid(config.width * 0.85, config.height * 0.8, 1, 'full'),
+                    axisStyle: config.axisStyle,
+                    polar: false,
+                    labelMetrics: labelMetricsFor(config.paperWidthCm ?? 10, config.paperHeightCm ?? 10),
+                });
+                const errors = [...math.parameterIssues(), ...scene.issues].filter((i) => i.severity === 'error').map((i) => issueText(i));
+                for (const info of math.functions()) if (info.error) errors.push(`${info.name}: ${info.error}`);
+                assert.deepEqual(errors, [], `${x.id} at ${v}`);
+            }
+        }
+    }
+    // The two charts of the connected slide share a connected slider a with the same range.
+    const pair = (WHATS_NEW_SLIDES.find((x) => x.id === 'connected')?.charts ?? []).map((text) => (parseChartText(text).data.parameters as Parameter[])[0]);
+    assert.ok(pair.length === 2 && pair.every((p) => p.name === 'a' && p.connected === true), JSON.stringify(pair));
+    assert.deepEqual([pair[0].min, pair[0].max], [pair[1].min, pair[1].max]);
 });

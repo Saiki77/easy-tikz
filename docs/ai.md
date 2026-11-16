@@ -89,7 +89,7 @@ The short forms of version 4.4 still work and mean the same: `view x -3..3, y -4
 | `snippet` | The LaTeX export is only the tikzpicture, not a document. |
 | `set field = value` | Any chart field from the tables below, the value as JSON: `set showSlidersInNote = false`, `set displayWidth = 480`. |
 
-**Sliders:** `slider a from -1.1 to 1.1, starting at 0.8, in steps of 0.05`. `starting at` is optional (the slider starts at the low end), and so is `in steps of` (a step of about a hundredth of the range).
+**Sliders:** `slider a from -1.1 to 1.1, starting at 0.8, in steps of 0.05`. `starting at` is optional (the slider starts at the low end), and so is `in steps of` (a step of about a hundredth of the range). Add `connected` when several charts of one note share the slider: `slider a from 0 to 2, connected` in two charts makes their sliders `a` move together in the note.
 
 **Functions**
 
@@ -142,9 +142,112 @@ Instead of `R1`, write `in the region` (or `of the region`) when the chart shade
 
 Options: a colour, a thickness, `dashed`, `labelled "text"`, `hidden`. Text labels: a colour, `small` `normal` `large`, `above` `below` `left` `right` `center` (which side of the point the text sits on), `hidden`. Planes: a colour, `opacity 0.25`.
 
+**Data** (2D charts)
+
+| Line | Means |
+| --- | --- |
+| `use the table above` | A data set: the nearest Markdown table above the block in the note (header row, separator row, body rows). It takes the first two columns of numbers as x and y; `use the table above, columns hours and score` takes them by header name (quote a name with a comma: `columns "hours, total" and score`). Rows with something that is not a number in a used column are left out; a minus may be `-` or `−`. When the chart has no axis names of its own, the headers name the axes. The block keeps this line: the plugin reads the table where the chart is drawn and follows it when it changes, and never writes the rows into the block. |
+| `data (1, 52), (2, 55), (3, 61)` | A data set typed in the chart (formulas and sliders allowed). |
+| `mark the data` | The data as points. Options: a colour, `small` `large`, `labelled` (each point's coordinates), `labelled "({x}, {y})"` (a template per point with `{x}` `{y}` `{i}`). |
+| `draw the data as bars`, `draw the data as a line` | Bars from the x-axis (80 % of the smallest gap between two x values wide; `opacity 0.35`; `labelled` writes each bar's value over it), or a line through the points from left to right. |
+| `draw its regression line, labelled` | The least-squares line y = mx + b over the data's x range. `labelled` shows the equation and R² (`$y = 4.21x + 47.6$, $R^2 = 0.98$`); `labelled "slope {m:2}"` is a label of your own with `{m}` `{b}` `{r2}` `{n}`. |
+
+"The data" is the data set of the nearest data line above (else the first one below); with several, name one: `mark the data of D2`, `draw the data of scores as bars`, `draw the regression line of D2`. A data set publishes `D1_n` and its points (`D1_x`, `D1_y`, `D1_x2`, ...). A chart that reads the table shows the problem "No Markdown table above this chart" in a note without one; checked outside a note (the AI tools) it only notes that it reads the note's table.
+
+**Probability** (2D charts)
+
+| Line | Means |
+| --- | --- |
+| `plot the normal distribution with mean 0 and sd 1` | The density curve over the view. Mean and sd are formulas (sliders work); `standard deviation`, `mu` and `sigma` read too, and `plot the standard normal distribution` is mean 0 and sd 1. Options: a colour, a thickness, `dashed`. |
+| `plot the binomial distribution with n = 10 and p = 0.4` | Bars at k = 0, 1, ..., n (n a whole number up to 1000, p from 0 to 1). Options: a colour, `opacity 0.35`. |
+| `shade P(-1 <= X <= 1), labelled` | The area under the density between the bounds, or the binomial bars in range. The event may be `a <= X <= b`, `X <= b`, `X >= a`, `X = k`, with `<` and `>` too (strict bounds matter for the binomial), and in LaTeX: `shade $P(-1 \le X \le 1)$` (`\le`, `\leq`, `\ge`, `\geq`, `≤`, `≥`). The bounds are formulas. `labelled` shows the probability, `$P(-1 \le X \le 1) = 0.683$`; `labelled "{p:4}"` is a label of your own. Options: a colour, `opacity 0.5`, `pattern dots`. |
+
+A shade line is about the distribution its event names (`P(X2 <= 1)`, or `shade P(X <= 1) of X2`), else the nearest distribution line above it (the first one below when there is none above). Name a distribution with a prefix: `X: plot the normal distribution with mean 0 and sd 1`. The probability is published as `PR1_val`.
+
+**Riemann sums** (2D charts)
+
+| Line | Means |
+| --- | --- |
+| `draw the left Riemann sum of f from 0 to 2 with 6 parts, labelled` | Rectangles under the function f (a function of the chart, named in its line: `plot f(x) = x^2`) over [0, 2] in 6 equal parts, their heights at the left ends; `right`, `middle` (or `midpoint`) take the right ends or the middles. The bounds and the number of parts are formulas: `with n parts` and `slider n from 1 to 40, starting at 6, in steps of 1` lets the sum close in on the integral. `labelled` shows the sum and the integral, `$L_{6} = 2.037$, $\int_{0}^{2} f(x)\,dx = 2.667$`; `labelled "{sum:2}"` is a label of your own (`{sum}`, `{exact}`, `{n}`). Options: a colour, a thickness (the outlines), `opacity 0.35`. |
+| `draw the trapezoid rule of f from 0 to 2 with 6 parts` | The same with trapezoids (`T_{6}` in the label). |
+
+The sum is published as `RS1_val`.
+
+**Slope fields** (2D charts)
+
+| Line | Means |
+| --- | --- |
+| `draw the slope field of $y' = x - y$` | Short segments on a grid over the view, each with the slope f(x, y) at its middle, all the same length on screen (`dy/dx = ...` and `\frac{dy}{dx} = ...` read too). Options: a colour, a thickness, `density=30` (segments across the longer side, 4 to 60, default 20). |
+| `mark P at (1, 2)` | A point with its name (the same as `P: mark (1, 2)`). |
+| `draw the solution through P` | The solution of the slope field's equation through the point P (RK4, forwards and backwards until it leaves the view, blows up or turns vertical). Drag P in the editor and the solution follows. Several: `draw the solutions through P, Q and (0, -1)`. Options: a colour, a thickness, `dashed`. |
+
+A solution belongs to the nearest slope field line above it (else the first below); `draw the solution of SF2 through P` names another.
+
 **Anything else:** every object takes `key=value` options for its fields in the tables below, the value as JSON: `plot f(x) = x^2, filled, fillOpacity=0.4`, `mark (1, 2), dim=2`. And `raw tool {...}`, `raw function {...}`, `raw surface {...}`, `raw label {...}` hold one object as JSON. The editor writes these lines for what the words cannot say; you rarely need them.
 
 A block can also be one JSON object (`"v": 4` first, then the fields below); the plugin reads both, and the editor keeps the form a block has. Write text.
+
+## Full LaTeX
+
+The same charts can be written as LaTeX, for people who think in pgfplots and TikZ. A block whose first line is `\begin{chart}` holds one command per line until `\end{chart}`: the options in `[ ]` before the argument in `{ }`, as in `\addplot[blue]{x^2}`. A formula in the argument is LaTeX math without `$`. The plugin always reads both forms; the setting **Chart language** (Words + LaTeX math, or Full LaTeX) says which one new charts are written in, and a block keeps the form it has. Write words unless the person writes Full LaTeX or asks for it.
+
+The linear program of the first section, in Full LaTeX:
+
+```easy-tikz
+\begin{chart}
+\axis[xmin=0, xmax=5, ymin=0, ymax=4.5, axis lines=left]
+\slider[min=0, max=15, start=6, step=0.1]{c}
+\shade[numbered, constraint lines]{x + y \le 4, x + 3y \le 6, x \ge 0, y \ge 0}
+\draw[red, dashed, label={$z = {c}$}]{2x + 3y = c}
+\mark[corners, blue, label={({x}, {y})}]
+\mark[max, large, label={x* = ({x:2}, {y:2})}]{2x + 3y}
+\node[at={(3, 1.6)}, above]{optimum}
+\end{chart}
+```
+
+- **Options** are separated by commas: words (`red`, `dashed`, `numbered`) and `key=value`. A value with a comma, a bracket or spaces goes in braces: `label={z = {c}}`, `at={(3, 1.2)}`, `title={Production plan}`. Label templates (`{c}`, `{x:2}`) keep their braces inside.
+- **`\axis[...]`** holds everything about the chart, with the names pgfplots gives them. Write one `\axis` line, after `\begin{chart}`.
+- **Names:** `name=R1` instead of `R1:`. `\mark[corners]`, `\mark[max]{...}` and `\mark[integer]` without `in=R1` use the chart's only region (`the region`).
+- `%` starts a comment. A line that is no command is read as a line in words. `\addplot` is `\plot`, a `;` at the end is fine, and TikZ's `\draw[->] (0, 0) -- (3, 2);` and `\node at (1, 2) {A};` work too.
+- **Anything else:** a line in words `<command> <rest>, <options>` is `\<command>[<options>]{<rest>}` (`use the table above, hidden` is `\use[hidden]{the table above}`), `\set{field = value}` sets any chart field as JSON, and `\raw[tool]{...}` (`function`, `surface`, `label`, `slider`) holds one object as JSON.
+
+| Words | Full LaTeX |
+| --- | --- |
+| `show x from 0 to 5 and y from 0 to 4.5` (3D: `and z from 0 to 8`) | `\axis[xmin=0, xmax=5, ymin=0, ymax=4.5]` (`zmin`, `zmax`) |
+| `axes on the edges`, `axes in the middle`, `axes in a box`, `no axes` | `axis lines=left`, `axis lines=middle`, `axis lines=box`, `hide axis` |
+| `with a grid`, `with a minor grid`, `with a fine grid`, `grid opacity 0.3` | `grid=major`, `grid=minor`, `grid=both`, `grid opacity=0.3` |
+| `x numbers every pi/2`, `x numbers at a "a", b "b"`, `x numbers off` | `xtick distance=pi/2`, `xtick={a "a", b "b"}`, `xtick=\empty` (`ytick`, `ztick`) |
+| `title ...`, `xlabel ...`, `ylabel ...`, `zlabel ...` | `title={...}`, `xlabel={...}`, `ylabel={...}`, `zlabel={...}` |
+| `size 12 x 6`, `equal scale` | `width=12cm, height=6cm`, `axis equal` |
+| `3d`, `cube`, `polar`, `snippet`, `variables q, p` | `3d`, `cube`, `polar`, `snippet`, `variables={q, p}` |
+| `set displayWidth = 480` | `displayWidth=480` (in `\axis`), or `\set{displayWidth = 480}` |
+| `slider c from 0 to 15, starting at 6, in steps of 0.1` | `\slider[min=0, max=15, start=6, step=0.1]{c}` |
+| `plot f(x) = x^2 from x = 0 to 4 in blue, thick` | `\plot[domain=0:4, blue, thick]{f(x) = x^2}` |
+| `with its tangent at a and its extrema`, `filled`, `with a legend`, `with the legend "f"` | `tangent=a, extrema`, `fill`, `legend`, `legend={f}` |
+| `plot s(x, y) = x^2 + y^2 for x from -2 to 2 and y from -2 to 2 in viridis` | `\plot[domain=-2:2, y domain=-2:2, colormap/viridis]{s(x, y) = x^2 + y^2}` |
+| `mesh 0.2`, `with 40 samples`, `wireframe` | `mesh=0.2`, `samples=40`, `wireframe` |
+| `shade where x + y <= 4 and x >= 0, numbered` | `\shade[numbered]{x + y \le 4, x \ge 0}` |
+| `shade where x + y <= 4 "(1)" and x >= 0` | `\shade[labels={(1), }]{x + y \le 4, x \ge 0}` |
+| `shade between f and g from x = 0 to 2`, `shade under f` | `\shade[domain=0:2]{between f and g}`, `\shade{under f}` |
+| `outlined`, `with a dashed outline`, `not filled`, `with constraint lines` | `outline`, `dashed outline`, `no fill`, `constraint lines` |
+| `draw 2x + 3y = 12` | `\draw{2x + 3y = 12}` |
+| `draw the level curves of x^2 + y^2 at 1, 4 and 9` | `\draw[levels={1, 4, 9}]{x^2 + y^2}` |
+| `draw a line from (0, 0) to (3, 2) to P1` | `\draw{(0, 0) -- (3, 2) -- P1}` |
+| `draw an arrow from A to B` (`backwards`), `draw a double arrow from A to B` | `\draw[->]{A -- B}` (`<-`), `\draw[<->]{A -- B}` |
+| `draw a polygon through A, B and C`, `draw a brace from A to B` | `\draw{A -- B -- C -- cycle}`, `\draw[brace]{A -- B}` |
+| `draw the plane z = h` | `\draw[plane]{z = h}` |
+| `mark (1, 2) and (3, a)` | `\mark{(1, 2), (3, a)}` |
+| `mark where f and g cross` | `\mark[crossings]{f, g}` |
+| `mark the corners of the region`, `mark the corners of R1` | `\mark[corners]`, `\mark[corners, in=R1]` |
+| `mark the maximum of 2x + 3y in the region` (`minimum`, `in R1`) | `\mark[max]{2x + 3y}` (`min`, `in=R1`) |
+| `mark the integer points in R1`, `mark the integer points` (the whole view) | `\mark[integer, in=R1]`, `\mark[integer, in={}]` |
+| `mark the integer maximum of 3x + 4y in R1` | `\mark[integer, max, in=R1]{3x + 4y}` |
+| `with lines to the axes`, `with coordinates`, `small`, `large` | `drop lines`, `coordinates`, `small`, `large` |
+| `write "optimum" at (3, 1.2), above` | `\node[at={(3, 1.2)}, above]{optimum}` |
+| `R1: shade ...` | `\shade[name=R1]{...}` |
+| `in red`, `thick`, `dashed`, `hidden`, `labelled "A"`, `opacity 0.3`, `pattern dots` | `red`, `thick`, `dashed`, `hidden`, `label={A}`, `opacity=0.3`, `pattern=dots` |
+| `key=value` (a field) | `key=value` |
+| `raw tool {...}` | `\raw[tool]{{...}}` |
 
 ## Fields
 
@@ -180,7 +283,7 @@ The options above set these fields. A `set` line or a `key=value` option can set
 "parameters": [{ "name": "c", "value": 9, "min": 0, "max": 15, "step": 0.1 }]
 ```
 
-Give all five fields. The name is a letter or a word (`a`, `k`, `price`) that is not a built-in (`x`, `y`, `t`, `e`, `pi`, `sin`, ...). Every formula, condition, coordinate, range and label can use it. The note shows a slider for it; the editor also has a play button that sweeps it from `min` to `max` and back. Choose the range so the picture stays meaningful over all of it (a crossing that leaves the view, or two parallel lines, makes points and areas disappear).
+Give all five fields (and `"connected": true` for a slider that moves with the sliders of the same name in the other charts of the note). The name is a letter or a word (`a`, `k`, `price`) that is not a built-in (`x`, `y`, `t`, `e`, `pi`, `sin`, ...). Every formula, condition, coordinate, range and label can use it. The note shows a slider for it; the editor also has a play button that sweeps it from `min` to `max` and back. Choose the range so the picture stays meaningful over all of it (a crossing that leaves the view, or two parallel lines, makes points and areas disappear).
 
 ### Functions: `functions`
 
@@ -248,6 +351,22 @@ A line such as `y = x + 1` can be a function (then regions can use it by name, `
 | `label` | `""` | Template beside the middle of the path. |
 | `color` `thickness` `dashed` | `"black"` `"thin"` `false` | |
 
+#### `data` and `dataPlot` (2D only)
+
+`{"type": "data", "name": "D1", "source": "table", "xColumn": "", "yColumn": ""}` reads the note's table (`xColumn` and `yColumn` by header name, empty: the first two columns of numbers); `{"type": "data", "source": "list", "points": "(1, 52); (2, 55)"}` holds typed points. A data set draws nothing itself. `{"type": "dataPlot", "data": "D1", "style": "points"}` draws one: `style` is `"points"`, `"bars"`, `"line"` or `"regression"`; fields `size`, `thickness`, `dashed`, `fillOpacity` (bars, default 0.35), `label` (a template: points get `{x}` `{y}` `{i}`, the regression line `{m}` `{b}` `{r2}` `{n}`) and `valueLabel` (`true`: the regression line's equation and R² as its label).
+
+#### `distribution` and `probability` (2D only)
+
+`{"type": "distribution", "name": "X1", "kind": "normal", "mean": "0", "sd": "1"}` or `{"type": "distribution", "kind": "binomial", "n": "10", "p": "0.4"}` (formulas), with `color`, `thickness`, `dashed` and `fillOpacity` (the bars). `{"type": "probability", "distribution": "X1", "event": "-1 <= X <= 1", "valueLabel": true}` shades P(event): `event` as written inside P(...), plain or LaTeX; `fillOpacity` (0.5), `fillPattern`, `label` (a template with `{p}`) and `valueLabel`.
+
+#### `riemann` (2D only)
+
+`{"type": "riemann", "name": "RS1", "function": "f", "method": "left", "from": "0", "to": "2", "parts": "6"}`: `method` is `"left"`, `"right"`, `"middle"` or `"trapezoid"`; `from`, `to` and `parts` are formulas (parts 1 to 2000, from less than to); `thickness`, `fillOpacity` (0.35), `label` (a template with `{sum}`, `{exact}`, `{n}`) and `valueLabel`.
+
+#### `slopeField` and `solution` (2D only)
+
+`{"type": "slopeField", "name": "SF1", "expression": "x - y", "density": 20}` (the right side of y' = f(x, y), in x and y), with `color` and `thickness`. `{"type": "solution", "field": "SF1", "through": "P; (0, -1)"}`: `through` lists points tools by name and points, separated by `;`; `thickness` and `dashed`.
+
 #### `plane3D` (3D only)
 
 `{"type": "plane3D", "name": "PL1", "axis": "z", "value": "h", "fillOpacity": 0.25, "color": "orange"}` is the plane z = h (or x = ..., y = ...).
@@ -284,6 +403,7 @@ Crossings (intersections) come sorted from left to right, so `P1_x < P1_x2 < ...
 
 ## Formulas
 
+- LaTeX math: a formula in a line may be LaTeX in dollars, as in a note: `plot $f(x) = \frac{1}{2}x^2 - 2$ in blue`, `shade where $x + y \le 4$ and $x \ge 0$`, `plot $r(\theta) = 1 + \cos\theta$`. `\frac`, `\sqrt`, `\sqrt[n]`, `^{...}`, `\sin x`, `\ln|x|`, `|x|`, `\cdot`, `\le`, `\ge`, `\pi` and Greek letters read as you would expect; `x_1` is the name `x_1`. Dragging in the editor changes only plain formulas, so write plain formulas when the user will drag the numbers.
 - Operators: `+ - * /`, `^` (power, right-associative; `-x^2` is `-(x^2)`), `%`, comparisons `< <= > >= == !=` (1 or 0), `and or !`, `c ? a : b`.
 - Implicit multiplication: `2x`, `3(x + 1)`, `(x + 1)(x - 1)`, `2 pi`, `a x + b y`. But `ax` is one name: write `a x`. `1/2x` is `(1/2)*x`: write `1/(2x)` when x is below. `a(x - h)^2` is `a*(x - h)^2`; `f1(x + 1)` is a call because `f1` is a function.
 - Functions: `sin cos tan sec csc cot asin acos atan atan2(y, x) sinh cosh tanh asinh acosh atanh exp ln log log10 log2 sqrt cbrt abs sign floor ceil round trunc min max hypot pow(a, b)`. `ln` and `log` are both natural. Trigonometry is in radians.
@@ -353,7 +473,7 @@ Computed values: P1_n = 1, P1_val = 9, P1_x = 3, P1_y = 1
 
 With problems, the first line is `2 problems: fix them, then check again.`, followed by one `PROBLEM` line each (problems in the text name their line and column). `add_chart` and `update_chart` refuse such a chart with `"ok": false` and the same lines, and write nothing.
 
-Every `chart` argument is the text of a block (a string; a fenced block is fine too) or a JSON object. `add_chart` writes the block in the form the user chose in the settings (text by default); `update_chart` keeps the form the chart has in the note, and for text it rewrites only the lines whose object changed.
+Every `chart` argument is the text of a block (a string; a fenced block is fine too), in words or in Full LaTeX, or a JSON object. `add_chart` writes the block in the form the user chose in the settings (text by default, in their chart language: text in the other form is written in theirs); `update_chart` keeps the form the chart has in the note (JSON, words or Full LaTeX), and for text it rewrites only the lines whose object changed.
 
 | Tool | Arguments | Does |
 | --- | --- | --- |

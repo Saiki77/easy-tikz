@@ -11,6 +11,7 @@ import { EditorState, Extension, RangeSetBuilder, StateEffect, StateField, Text 
 import { Decoration, DecorationSet, EditorView, WidgetType } from '@codemirror/view';
 import { editorInfoField, editorLivePreviewField } from 'obsidian';
 import { ChartFence, chartFences } from './text/fences';
+import { NoteTable, tableAbove } from './beyond/table';
 
 /** What the plugin does for the chart under a block. */
 export interface LiveHost {
@@ -18,8 +19,11 @@ export interface LiveHost {
     enabled(): boolean;
     /** The fence languages charts are drawn for (easy-tikz, and tikz when that setting is on). */
     tags(): ReadonlySet<string>;
-    /** Draw the chart of `body` into `el`, replacing the one drawn there before; `typed`: the block changed (not: the cursor came in). */
-    draw(el: HTMLElement, sourcePath: string, tag: string, body: string, typed: boolean): void;
+    /**
+     * Draw the chart of `body` into `el`, replacing the one drawn there before; `typed`: the block changed (not: the
+     * cursor came in). `table` reads the Markdown table above the block and the line of its opening fence (5.0).
+     */
+    draw(el: HTMLElement, sourcePath: string, tag: string, body: string, typed: boolean, table?: () => { table: NoteTable | null; line: number }): void;
     /** `el` left the editor: let go of its chart. */
     release(el: HTMLElement): void;
 }
@@ -29,7 +33,9 @@ class LiveChart extends WidgetType {
         private readonly host: LiveHost,
         readonly sourcePath: string,
         readonly tag: string,
-        readonly body: string
+        readonly body: string,
+        /** The table above the block, read when the chart is drawn (5.0). */
+        private readonly table?: () => { table: NoteTable | null; line: number }
     ) {
         super();
     }
@@ -40,13 +46,13 @@ class LiveChart extends WidgetType {
 
     toDOM(): HTMLElement {
         const el = createDiv({ cls: 'etz-live' });
-        this.host.draw(el, this.sourcePath, this.tag, this.body, false);
+        this.host.draw(el, this.sourcePath, this.tag, this.body, false, this.table);
         return el;
     }
 
     /** The block changed: the same element draws the new chart, which moves from the old one. */
     updateDOM(dom: HTMLElement): boolean {
-        this.host.draw(dom, this.sourcePath, this.tag, this.body, true);
+        this.host.draw(dom, this.sourcePath, this.tag, this.body, true, this.table);
         return true;
     }
 
@@ -83,7 +89,9 @@ function charts(state: EditorState, host: LiveHost): DecorationSet {
         const from = doc.line(fence.first).from;
         const to = doc.line(fence.last).to;
         if (!selection.ranges.some((r) => r.from <= to && r.to >= from)) continue;
-        builder.add(to, to, Decoration.widget({ widget: new LiveChart(host, file.path, fence.tag, fence.body), block: true, side: 1 }));
+        // The lines above the block, for a chart that reads the table above it (only then are they read).
+        const table = () => ({ table: tableAbove(Array.from({ length: fence.first - 1 }, (_, i) => doc.line(i + 1).text), fence.first), line: fence.first });
+        builder.add(to, to, Decoration.widget({ widget: new LiveChart(host, file.path, fence.tag, fence.body, table), block: true, side: 1 }));
     }
     return builder.finish();
 }

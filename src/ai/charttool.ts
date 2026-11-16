@@ -24,7 +24,7 @@ import { inEnglish } from '../i18n';
 export type { Data };
 export { canonical, clone, minimize };
 
-const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D'];
+const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution'];
 /** Keys a block may carry that the editor's defaults do not list: how the chart sits in the note. */
 const DISPLAY_KEYS = ['displayWidth', 'displayAlign'];
 
@@ -678,8 +678,17 @@ function toolLine(tool: Tool, scene: Scene2D): string {
             const pts = lines.flat();
             return `${tool.name} segment (${tool.style}${tool.closed ? ', closed' : ''}): ${pts.length ? pts.map((p) => pt([p.x, p.y])).join(' to ') : 'NOT DRAWN'}${texts(items)}${hidden}`;
         }
-        default:
-            return `${tool.name} ${tool.type}${hidden}`;
+        default: {
+            // Data, probability, Riemann sums and slope fields (5.0): what they draw.
+            const marks = items.flatMap((it) => it.markers.map((m) => pt([m.x, m.y])));
+            const lines = items.flatMap((it) => it.strokes.flatMap((s) => s.lines));
+            const rings = items.flatMap((it) => it.fills.flatMap((f) => f.rings));
+            const drawn: string[] = [];
+            if (marks.length) drawn.push(`${marks.length} point${marks.length > 1 ? 's' : ''} ${marks.slice(0, 12).join(' ')}${marks.length > 12 ? ' ...' : ''}`);
+            if (rings.length) drawn.push(`shaded where ${bbox(rings.flat())}`);
+            if (lines.length) drawn.push(`lines where ${bbox(lines.flat())}`);
+            return `${tool.name} ${tool.type}: ${drawn.length ? drawn.join(', ') : 'nothing drawn'}${texts(items)}${hidden}`;
+        }
     }
 }
 

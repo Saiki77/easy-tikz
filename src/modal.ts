@@ -12,6 +12,8 @@ import { SceneCache, SceneIssue } from './scene';
 import { FitResult, fitSettings } from './fit';
 import { View } from './geometry';
 import { EXAMPLES, defaultParameter } from './migrate';
+import { beyondToolReads, renameInBeyondTool } from './beyond/tools';
+import type { NoteTable } from './beyond/table';
 import type { ChartDraft } from './templates';
 import type { BlockFormat } from './blockjson';
 import { isChartText } from './text/parse';
@@ -96,6 +98,14 @@ export interface TikzModalInitialState {
     fenceTag?: 'easy-tikz' | 'tikz';
     /** How the block writes the chart; Save keeps it. */
     blockFormat?: BlockFormat;
+    /** The editor sets up a chart for a setting (the default chart for formulas): its button saves it there. */
+    saveAs?: { label: string; save(data: Record<string, unknown>): void };
+    /**
+     * Optional (5.0): the Markdown table above the block in its note, which
+     * its data reads (null: there is none). The editor draws with it; Save
+     * writes `use the table above`, never the rows.
+     */
+    noteTable?: NoteTable | null;
 }
 
 /** The body of a fenced block as originalBlockText holds it. */
@@ -381,6 +391,8 @@ export class TikzModal extends Modal implements PanelHost {
     private fenceTag: 'easy-tikz' | 'tikz' = 'easy-tikz';
     /** Format of the block being edited; null for a new chart (the setting decides). */
     private blockFormat: BlockFormat | null = null;
+    /** Set when the chart is a setting's (Save as default), not a note's. */
+    private saveAs: TikzModalInitialState['saveAs'] | null = null;
     /** New objects in the preview pop in (+ Add, an example); what the editor opened with does not. */
     private popIn: PopIn | null = null;
     private readonly openedFromBlock: boolean;
@@ -545,11 +557,13 @@ export class TikzModal extends Modal implements PanelHost {
         this.openedFromBlock = !!(initialState && initialState.data);
         if (initialState && initialState.data) {
             this.settings = SettingsManager.fromJSON(initialState.data);
+            if (initialState.noteTable !== undefined) this.settings.noteTable = initialState.noteTable;
             this.sourceFile = initialState.sourceFile ?? null;
             this.originalBlockText = initialState.originalBlockText ?? null;
             this.fenceTag = initialState.fenceTag ?? 'easy-tikz';
             const original = this.originalBlockText;
             this.blockFormat = initialState.blockFormat ?? (original ? (isChartText(blockBody(original)) ? 'text' : 'json') : null);
+            this.saveAs = initialState.saveAs ?? null;
         } else {
             // fromJSON runs the v4 migration, so new charts get the v4 defaults too.
             this.settings = SettingsManager.fromJSON({});
@@ -689,6 +703,8 @@ export class TikzModal extends Modal implements PanelHost {
                 case 'plane3D':
                     t.value = expr(t.value);
                     break;
+                default:
+                    renameInBeyondTool(t, { expr, tpl, ref, kind });
             }
         }
         for (const a of this.list<Annotation>('annotations')) {
@@ -3014,6 +3030,8 @@ export class TikzModal extends Modal implements PanelHost {
                 case 'plane3D':
                     if (reads(t.value)) return true;
                     break;
+                default:
+                    if (beyondToolReads(t, reads)) return true;
             }
         }
         for (const a of this.list<Annotation>('annotations')) {
@@ -3331,7 +3349,7 @@ export class TikzModal extends Modal implements PanelHost {
     private syncCta() {
         const btn = this.ctaBtn;
         if (!btn) return;
-        const text = t(this.sourceFile ? 'editor.actions.save' : 'editor.actions.insert');
+        const text = this.saveAs ? this.saveAs.label : t(this.sourceFile ? 'editor.actions.save' : 'editor.actions.insert');
         btn.setText(text);
         btn.el.setAttr('aria-label', t('editor.actions.shortcut', { action: text, key: Platform.isMacOS ? 'Cmd' : 'Ctrl' }));
     }
@@ -3444,6 +3462,11 @@ export class TikzModal extends Modal implements PanelHost {
      */
     private async emitBlock() {
         const data = this.settings.serialize();
+        if (this.saveAs) {
+            this.saveAs.save(data);
+            this.close();
+            return;
+        }
         const original = this.originalBlockText;
         const oldBody = original ? blockBody(original) : null;
         // Plain `tikz` blocks render JSON only.

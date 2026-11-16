@@ -126,6 +126,16 @@ export interface PluginData {
     blockFormat: 'text' | 'json';
     /** Charts in notes glide to new values and new objects pop in when the block changes. */
     animateCharts: boolean;
+    /** Rest the pointer on a formula in a note to see its chart (5.0). */
+    formulaHover: boolean;
+    /** A dotted line under the formulas of a note that have a chart (5.0). */
+    formulaMarks: boolean;
+    /** A slider for each letter of the formula in its chart (5.0). */
+    formulaSliders: boolean;
+    /** The default chart for formulas, set up in the editor: its look is every formula chart's (5.0). */
+    formulaDefault: Record<string, unknown> | null;
+    /** Setting "Chart language": new charts in words with LaTeX math in $...$ (default) or in Full LaTeX (src/text/full.ts, 5.0). */
+    chartLanguage: 'words' | 'full';
     /** In Live Preview, a block being edited shows its chart under its lines (src/live.ts). */
     liveChart: boolean;
     /** Their own words for the pieces of the chart language (src/text/words.ts). */
@@ -134,6 +144,8 @@ export interface PluginData {
     chartColours: 'theme' | 'export';
     /** Copy PNG and Copy SVG: no background and the theme's colours, or white with the light theme's colours. */
     imageBackground: 'transparent' | 'white';
+    /** Every chart also as an SVG file in the attachment folder, white background (5.0). */
+    svgFiles: boolean;
     /** Setting "Interface language": Obsidian's (auto, default) or one the plugin has (src/i18n). */
     interfaceLanguage: LanguageSetting;
 }
@@ -150,9 +162,15 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     aiToken: '',
     blockFormat: 'text',
     animateCharts: true,
+    formulaHover: true,
+    formulaMarks: true,
+    formulaSliders: true,
+    formulaDefault: null,
+    chartLanguage: 'words',
     liveChart: true,
     chartWords: { words: {}, bundles: [], write: 'yours' },
     chartColours: 'theme',
     imageBackground: 'transparent',
+    svgFiles: false,
     interfaceLanguage: 'auto',
 };

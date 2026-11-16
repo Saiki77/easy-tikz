@@ -214,6 +214,12 @@ export const problems = {
         'this line is not a chart object. Lines start with show, plot, draw, shade, mark, write, slider, title, xlabel, ylabel, axes, size or set, or are formulas (f(x) = x^2, 2x + 3y = 12, x + y <= 4)',
     'problems.text.needsPair': '{name}(t) needs a pair: {name}(t) = (cos(t), sin(t))',
     'problems.text.whichVariable': '{head}: functions use x, parametric curves t and polar curves theta',
+    // Full LaTeX blocks (src/text/full.ts): \begin{chart}, one command per line, \end{chart}.
+    'problems.text.fullUnclosed': '"{open}" is not closed: add "{close}"',
+    'problems.text.fullAxisOption':
+        'unknown option "{option}" of \\axis; it takes xmin=0, xmax=5 (and ymin to zmax), axis lines=left, middle, box or none, hide axis, grid=major, minor or both, grid opacity=0.3, xtick distance=1, xtick={1, 2} or xtick=\\empty (and ytick, ztick), title={...}, xlabel={...}, width=12cm, height=6cm, axis equal, polar, 3d, cube, snippet, variables={q, p}, or a field such as displayWidth=480',
+    'problems.text.fullNotAChartLine':
+        'this line is not a chart object. Between \\begin{chart} and \\end{chart} the lines are \\axis, \\slider, \\plot, \\shade, \\draw, \\mark, \\node, \\set or \\raw, each with its options in [ ] and its argument in { }, such as \\plot[blue]{f(x) = x^2}',
 
     // Built-in function templates (src/templates.ts): menu items.
     'problems.template.parabola': 'Parabola',

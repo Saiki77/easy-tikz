@@ -25,6 +25,12 @@ export interface Parameter {
     min: number;
     max: number;
     step: number;
+    /**
+     * Connect with others (5.0): in a note, moving this slider moves the
+     * sliders of the same name in the other charts of the note that are
+     * connected too. Text: `slider a from 0 to 2, connected`.
+     */
+    connected?: boolean;
 }
 
 export interface FunctionParameters {
@@ -262,7 +268,163 @@ export interface PlaneTool extends ToolBase {
     fillOpacity: number;
 }
 
-export type Tool = RegionTool | CurveTool | PointsTool | SegmentTool | PlaneTool;
+// ---------------------------------------------------------------------------
+// Beyond functions (5.0): data, probability, Riemann sums and slope fields.
+// Each draws with the scene's primitives (src/beyond/scene.ts), 2D only.
+// ---------------------------------------------------------------------------
+
+/**
+ * A data set: points from the nearest Markdown table above the chart block
+ * (read where the chart renders, src/beyond/table.ts, never written into the
+ * block) or typed in the chart. Draws nothing itself: data plots draw it.
+ * Publishes D1_n and its points (D1_x, D1_y, D1_x2, ...).
+ */
+export interface DataTool extends ToolBase {
+    type: 'data';
+    source: 'table' | 'list';
+    /** List source: `(1, 52); (2, 55); (3, 61)` (formulas allowed). */
+    points: string;
+    /** Table source: the columns by header name; empty: the first two numeric columns. */
+    xColumn: string;
+    yColumn: string;
+}
+
+export type DataPlotStyle = 'points' | 'bars' | 'line' | 'regression';
+
+/** A data set drawn: its points, bars from the x-axis, a line through it, or its least-squares line. */
+export interface DataPlotTool extends ToolBase {
+    type: 'dataPlot';
+    /** Name of the data tool. */
+    data: string;
+    style: DataPlotStyle;
+    /** Points: marker size. */
+    size: MarkerSize;
+    /** Line, regression line and the bars' outlines. */
+    thickness: string;
+    dashed: boolean;
+    /** Bars. */
+    fillOpacity: number;
+    /**
+     * Template. Points and bars: per point, locals x, y, i (`;` gives each
+     * its own). Regression line: locals m, b, r2, n. '' = none.
+     */
+    label: string;
+    /**
+     * The values as labels (when `label` is empty): each point's coordinates,
+     * each bar's value, the regression line's equation and R².
+     */
+    valueLabel: boolean;
+}
+
+/**
+ * A probability distribution: the density curve of a normal distribution,
+ * or the bars of a binomial one at k = 0..n. Its fields are formulas, so
+ * sliders work.
+ */
+export interface DistributionTool extends ToolBase {
+    type: 'distribution';
+    kind: 'normal' | 'binomial';
+    /** Normal: mean and standard deviation (more than 0). */
+    mean: string;
+    sd: string;
+    /** Binomial: number of trials (a whole number, 0 to 1000) and the probability of a success (0 to 1). */
+    n: string;
+    p: string;
+    /** The density curve. */
+    thickness: string;
+    dashed: boolean;
+    /** The binomial bars. */
+    fillOpacity: number;
+}
+
+/**
+ * A probability shaded: the area under a normal density between the bounds
+ * of the event, or the binomial bars in range. Publishes PR1_val (the
+ * probability).
+ */
+export interface ProbabilityTool extends ToolBase {
+    type: 'probability';
+    /** Name of the distribution tool. */
+    distribution: string;
+    /**
+     * The event inside P(...), as written (plain or LaTeX): `-1 <= X <= 1`,
+     * `X \le b`, `X > a`, `X = 3`. Its letter stands for the distribution.
+     */
+    event: string;
+    fillOpacity: number;
+    fillPattern: FillPattern;
+    /** Template; local p (the probability). '' = none. */
+    label: string;
+    /** The event and its probability as the label (when `label` is empty): $P(-1 \le X \le 1) = 0.683$. */
+    valueLabel: boolean;
+}
+
+export type RiemannMethod = 'left' | 'right' | 'middle' | 'trapezoid';
+
+/**
+ * A Riemann sum (left, right or middle rectangles) or the trapezoid rule of
+ * a function y = f(x) of the chart over [from, to] with `parts` equal parts.
+ * The bounds and the number of parts are formulas (a slider n is the usual
+ * one). Publishes RS1_val (the sum).
+ */
+export interface RiemannTool extends ToolBase {
+    type: 'riemann';
+    /** Name of the function (a cartesian function of the chart). */
+    function: string;
+    method: RiemannMethod;
+    from: string;
+    to: string;
+    parts: string;
+    /** The outlines of the parts. */
+    thickness: string;
+    fillOpacity: number;
+    /** Template; locals sum, exact (the integral) and n. '' = none. */
+    label: string;
+    /** The sum and the integral as the label (when `label` is empty): $L_{6} = 1.921$, $\int_{0}^{2} f(x)\,dx = 2.667$. */
+    valueLabel: boolean;
+}
+
+/**
+ * The slope field of y' = f(x, y): short segments on a grid over the view,
+ * each with the slope f(x, y) at its middle, all the same length on screen.
+ */
+export interface SlopeFieldTool extends ToolBase {
+    type: 'slopeField';
+    /** f(x, y), the right side of y' = f(x, y). */
+    expression: string;
+    /** About this many segments across the longer side of the plot (4 to 60). */
+    density: number;
+    thickness: string;
+}
+
+/**
+ * The solutions of a slope field's equation through points (RK4, forwards
+ * and backwards until they leave the view or blow up). A point is a points
+ * tool's name, so dragging the point moves the solution.
+ */
+export interface SolutionTool extends ToolBase {
+    type: 'solution';
+    /** Name of the slope field. */
+    field: string;
+    /** Where the solutions go through, separated by `;`: points tools (`P`) and points (`(1, 2)`). */
+    through: string;
+    thickness: string;
+    dashed: boolean;
+}
+
+export type Tool =
+    | RegionTool
+    | CurveTool
+    | PointsTool
+    | SegmentTool
+    | PlaneTool
+    | DataTool
+    | DataPlotTool
+    | DistributionTool
+    | ProbabilityTool
+    | RiemannTool
+    | SlopeFieldTool
+    | SolutionTool;
 
 export type ToolType = Tool['type'];
 

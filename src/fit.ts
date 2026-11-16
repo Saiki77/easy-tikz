@@ -22,6 +22,7 @@ import type { Pt, View } from './geometry';
 import type { Scene2D, SceneItem2D } from './scene';
 import type { SettingsManager } from './settings';
 import { computeScene2D, computeScene3D } from './scene';
+import { beyondFitShapes, fitBeyondTool } from './beyond/fit';
 
 // ------------------------------------------------------------------ rules
 
@@ -418,7 +419,7 @@ function fitTools(tools: Tool[]): Tool[] {
         if (t.type === 'region') return { ...t, fill: true, outline: 'none', constraintLines: false, label: '', conditionLabels: [] };
         if (t.type === 'points') return { ...t, label: '', dropLines: false };
         if (t.type === 'curve' || t.type === 'segment') return { ...t, label: '' };
-        return t;
+        return fitBeyondTool(t);
     });
 }
 
@@ -541,6 +542,14 @@ function fit2D(input: FitInput): FitResult {
         for (const item of scene.items) {
             const tool = item.kind === 'tool' ? original.get(item.key) : undefined;
             if (item.kind === 'tool' && !tool) continue;
+            // Data, probability, Riemann sums and slope fields (5.0): what they hold, or nothing when they cover the view.
+            const beyond = tool ? beyondFitShapes(tool, item, math) : null;
+            if (beyond) {
+                for (const p of beyond.points) c.point(p);
+                for (const l of beyond.lines) c.line(l.pts, l.closed);
+                if (beyond.unbounded) unbounded = true;
+                continue;
+            }
             const shapes = windowShapes(item, tool);
             if (shapes && shapes.lines.length) {
                 if (!reachesEdge(shapes.lines, near)) for (const l of shapes.lines) c.line(l, shapes.closed);

@@ -15,7 +15,7 @@ npm run media:brand    # the brand kit: its tests, the brand sheet and proofs of
 npm run media:film -- overview --out /tmp/film   # a film of scripts/media/cinema/scenes: MP4, GIF loop, poster, contact sheets
 ```
 
-`styles.css` in the repository root is generated: `scripts/build-css.mjs` concatenates `src/styles.css` and every `src/ui/*.css`, so edit those. Tests live in `tests/*.test.ts` and cover the pure modules (no `obsidian` import); `scripts/run-tests.mjs` bundles each file with esbuild and runs it in node. There are 31 test files with 834 tests (67 of them are the pdflatex compiles); after them `npm test` runs the three test files of the media pipelines (`scripts/media/brand/kit.test.mjs` and `math.test.mjs`, `scripts/media/cinema/timeline.test.mjs`) with plain node, since they need no Obsidian, browser or TeX fonts. `dom-classes` scans the sources for class names that only real Obsidian rejects (a space in a class given to `createSvg` or `addClass` throws there), since no node test can run Obsidian's DOM helpers. The eight `drag-*` files (264 tests) cover drag to edit: `drag-golden` is a table of real drags with the exact text each one must produce, and `drag-fuzz` rewrites 2300 random expressions and checks that the new text computes the same values. `guides` loads every chart of every guide (the finished chart and each step) and fails on any problem, and checks ids, links between guides, step titles and that each "type" row is accepted by the field it names. `whatsnew` covers who sees the What's new popup (an update, with or without stored data, never a new install), its text, and its live chart along the whole slider; it also checks that the number of guides the popup names matches the guide list, the pages in `docs/guides` and the README. `fit` covers the auto-fit: the rules for one axis (round ends, 0 and symmetry taken in when near, asymptotes cut) and what each kind of chart gets, with fitting twice changing nothing. `box3d` ties the preview's depth to the export's camera (far is painted first) and checks which box edges show, where the tick numbers go and that the grid lies on the back faces. `colormaps` checks the colour stops against the ones pgfplots prints, what the export writes for each map, and that a surface without a map exports as before. `labels` takes the charts where labels used to be struck, stacked or clipped and fails when a label box meets a stroke, a function curve or another label, or leaves the plot frame. The LaTeX test compiles every example, the finished chart of every guide, the chart of the What's new popup, a 3.x block of every legacy tool type and stress cases with pdflatex (30 s per file; set `ETZ_LATEX_KEEP=<dir>` to keep the `.tex`, `.pdf` and `.log` files).
+`styles.css` in the repository root is generated: `scripts/build-css.mjs` concatenates `src/styles.css` and every `src/ui/*.css`, so edit those. Tests live in `tests/*.test.ts` and cover the pure modules (no `obsidian` import); `scripts/run-tests.mjs` bundles each file with esbuild and runs it in node. There are 38 test files with 931 tests (74 of them are the pdflatex compiles); after them `npm test` runs the three test files of the media pipelines (`scripts/media/brand/kit.test.mjs` and `math.test.mjs`, `scripts/media/cinema/timeline.test.mjs`) with plain node, since they need no Obsidian, browser or TeX fonts. `dom-classes` scans the sources for class names that only real Obsidian rejects (a space in a class given to `createSvg` or `addClass` throws there), since no node test can run Obsidian's DOM helpers. The eight `drag-*` files (264 tests) cover drag to edit: `drag-golden` is a table of real drags with the exact text each one must produce, and `drag-fuzz` rewrites 2300 random expressions and checks that the new text computes the same values. `guides` loads every chart of every guide (the finished chart and each step) and fails on any problem, and checks ids, links between guides, step titles and that each "type" row is accepted by the field it names. `whatsnew` covers who sees the What's new popup (an update, with or without stored data, never a new install), its text, and its live chart along the whole slider; it also checks that the number of guides the popup names matches the guide list, the pages in `docs/guides` and the README. `fit` covers the auto-fit: the rules for one axis (round ends, 0 and symmetry taken in when near, asymptotes cut) and what each kind of chart gets, with fitting twice changing nothing. `box3d` ties the preview's depth to the export's camera (far is painted first) and checks which box edges show, where the tick numbers go and that the grid lies on the back faces. `colormaps` checks the colour stops against the ones pgfplots prints, what the export writes for each map, and that a surface without a map exports as before. `labels` takes the charts where labels used to be struck, stacked or clipped and fails when a label box meets a stroke, a function curve or another label, or leaves the plot frame. The LaTeX test compiles every example, the finished chart of every guide, the chart of the What's new popup, a 3.x block of every legacy tool type and stress cases with pdflatex (30 s per file; set `ETZ_LATEX_KEEP=<dir>` to keep the `.tex`, `.pdf` and `.log` files).
 
 **Guides.** `src/guides` is the single source of the guides: the Help tab draws them with live charts, and `npm run media:guides` writes `docs/guides/<id>.md` with a screenshot for every step that has something to show in the app. The files in `docs/guides` are generated, so edit `src/guides/*.ts` and run the script again.
 
@@ -37,6 +37,7 @@ src/
     print.ts         # a chart as lines in words; writeChartText keeps the lines of objects that did not change
     fences.ts        # the chart blocks of a note, from its lines (for the chart under the block)
     words.ts         # chart words: a person's own words for the pieces of the language, read and written
+    full.ts          # Full LaTeX: the language as \begin{chart}, \plot[blue]{x^2}, ...: to words line by line (problems keep their line and column) and back, the Chart language setting
     reword.ts        # after words changed: the charts of a note that used them, written in the new words
   ai/                # AI access: the local server, MCP tools, the vault host, connection lines
   modal.ts           # editor modal: layout, preview, render loop, drag to edit and undo wiring, autosave draft, click-to-edit save
@@ -50,10 +51,20 @@ src/
     codePanel.ts     # Code tab
     helpPanel.ts     # Help tab: guides browser and reader, search, the reference with Open example buttons
     whatsNewModal.ts # the What's new popup with its live chart
+    formulaHover.ts  # every formula is a chart: the card next to a formula in a note, Insert chart, Open in the editor
     wordsModal.ts    # Chart words: the pieces of the language with your words, bundles, sharing
     slidersDock.ts   # Sliders dock under the preview
     dragLayer.ts     # drag overlay over the chart (halo, ghost, pivot mark, snap ring) and the hint chip
     *.css            # per-panel styles
+  beyond/            # beyond functions (5.0): data, probability, Riemann sums, slope fields (all pure but cards.ts)
+    table.ts         # the nearest Markdown table above a block, its numbers and columns (a side input on the MathContext)
+    note.ts          # a block in its note: whether its chart reads the table, and the table for it after the note changed
+    maths.ts         # least squares, normal and binomial distributions, Riemann sums, integrals, RK4, how labels print numbers
+    event.ts         # the event of a shaded probability, P(-1 <= X <= 1): sides, variable, bounds, label
+    scene.ts         # the new tools as scene primitives (fills cut to the view), 2D only
+    fit.ts           # what the auto-fit holds of them
+    tools.ts         # their fields for the editor's rename
+    cards.ts         # their Build tab cards (registered with layerCards.ts)
   drag/              # drag to edit engine (pure: no DOM, no Obsidian)
     types.ts         # shared types of the engine, the overlay and the modal
     hits.ts          # hit index: which drawn part the pointer is over
@@ -75,6 +86,8 @@ src/
     dynamic.ts       # live calculations and sliders: play, secant to tangent, a growing area, computed points
     ja.ts            # the Japanese text of every guide, laid over the English one in the Help tab
   expr.ts            # expression parser, closure compiler, pgfmath and LaTeX printers
+  latex.ts           # LaTeX math in formulas (5.0): LaTeX to the plain syntax, the $...$ of chart lines
+  formula.ts         # a formula of a note as a chart (5.0): where formulas are, what kind, the chart lines, the default look (pure)
   mathcontext.ts     # MathContext: names, sliders, computed values, validation, quick fixes, templates
   geometry.ts        # regions from inequalities, contours, crossings, optimisation, integer points
   scene.ts           # tools and function decorations as drawing primitives, shared by preview and export
@@ -87,6 +100,7 @@ src/
   migrate.ts         # 3.x to v4 migration, defaults, + Add recipes, examples
   issues.ts          # problem text for the status chip and the line under inline charts
   whatsnew.ts        # the What's new popup: who sees it, what it says, its live chart
+  svgFiles.ts        # charts as SVG files (5.0): one file per chart in the attachment folder, written when the picture changed
   mathlabel.ts       # MathJax labels in the preview
   math.ts            # MathHelper: compatibility wrapper over the expression engine
   colors.ts          # palette and its \definecolor names

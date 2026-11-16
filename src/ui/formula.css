@@ -1,0 +1,133 @@
+/* The chart of a formula (src/ui/formulaHover.ts): a card next to the
+   formula under the pointer. The formula on top with what it is and close,
+   the chart, the sliders of its letters, and the two buttons. Theme colours
+   only; a short fade in, none with reduced motion. */
+.etz-formula-pop {
+    position: fixed;
+    z-index: var(--layer-popover);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(380px, calc(100vw - 16px));
+    padding: 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-l);
+    background-color: var(--background-primary);
+    box-shadow: var(--shadow-l);
+    animation: etz-formula-in 140ms ease-out;
+}
+
+.etz-formula-pop.is-above {
+    animation-name: etz-formula-in-above;
+}
+
+@keyframes etz-formula-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+}
+
+@keyframes etz-formula-in-above {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .etz-formula-pop,
+    .etz-formula-pop.is-above {
+        animation: none;
+    }
+}
+
+.etz-formula-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.etz-formula-tex {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    color: var(--text-normal);
+    font-size: 1.05em;
+}
+
+.etz-formula-kind {
+    flex: 0 0 auto;
+    padding: 2px 8px;
+    border-radius: var(--radius-s);
+    background-color: var(--background-modifier-hover);
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.etz-formula-close {
+    flex: 0 0 auto;
+}
+
+.etz-formula-chart {
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+}
+
+.etz-formula-chart svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.etz-formula-chart .tikz-3d-root {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+}
+
+.etz-formula-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.etz-formula-slider {
+    display: grid;
+    grid-template-columns: 1.8em minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    font-size: var(--font-ui-smaller);
+}
+
+.etz-formula-name {
+    color: var(--text-normal);
+    font-family: var(--font-text);
+    font-size: var(--font-ui-small);
+    font-style: italic;
+    text-align: center;
+}
+
+.etz-formula-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+/* Formulas with a chart in notes (setting Highlight formulas in notes, a
+   class on the body): a dotted line under the inline ones, and a tint under
+   the pointer and while their card is open. */
+/* Inline: .math-inline in Reading view, a bare span.math in Live Preview. */
+body.etz-formula-marks .math:not(.math-block)[data-etz-mark='1'] {
+    border-bottom: 1.5px dotted color-mix(in srgb, var(--interactive-accent) 70%, transparent);
+}
+
+body.etz-formula-marks .math[data-etz-mark='1']:hover,
+body.etz-formula-marks .math.etz-formula-open {
+    border-radius: var(--radius-s);
+    background-color: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+}

@@ -22,6 +22,9 @@ import { RESERVED_NAMES } from '../migrate';
 import { isColormap } from '../colormaps';
 import { ChartWords, chartWords, hasWords, readWords, shadowed, typedColumn } from './words';
 import { MessageKey, t as msg } from '../i18n';
+import { stripMathDollars } from '../latex';
+import { FULL_OPTION_HELP, isFullText, mapFull, readFull } from './full';
+import { eventNames } from '../beyond/event';
 
 type Data = Record<string, unknown>;
 
@@ -60,6 +63,8 @@ export const KEYWORDS = new Set([
     'integer', 'arrow', 'segment', 'polygon', 'brace', 'text', 'plane', 'raw',
     // the English verbs and openings
     'show', 'plot', 'draw', 'mark', 'write', 'with', 'no', 'double',
+    // beyond functions (5.0)
+    'use', 'data',
 ]);
 
 export const COLORS = new Set(['black', 'gray', 'red', 'orange', 'brown', 'green', 'teal', 'blue', 'purple', 'magenta']);
@@ -68,7 +73,7 @@ export const THICKNESSES = ['very thin', 'very thick', 'thin', 'thick'];
 export const PATTERNS = new Set(['solid', 'horizontal', 'vertical', 'crosshatch', 'dots', 'north-east', 'north-west']);
 export const ANCHORS = new Set(['center', 'above', 'below', 'left', 'right']);
 const AXIS_STYLES: Record<string, string> = { middle: 'middle', centre: 'middle', center: 'middle', box: 'box', edges: 'axes', edge: 'axes', axes: 'axes' };
-export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL' };
+export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y' };
 const NAME = '[A-Za-z][A-Za-z0-9_]*';
 /** A name the block can spell: letters, digits and _. */
 export const NAME_RE = new RegExp(`^${NAME}$`);
@@ -81,8 +86,9 @@ interface Piece {
     at: number;
 }
 
-/** A block is text unless it is a JSON object (which may start with line or block comments). */
+/** A block is text (in words or Full LaTeX) unless it is a JSON object (which may start with line or block comments). */
 export function isChartText(body: string): boolean {
+    if (isFullText(body)) return true;
     let t = body.trimStart();
     for (;;) {
         if (t.startsWith('//')) {
@@ -269,6 +275,8 @@ function plainOption(o: string): string {
 const OPTION_WORDS = new Set([
     'hidden', 'dashed', 'numbered', 'extrema', 'legend', 'fill', 'outline', 'dashed outline', 'no fill', 'constraint lines',
     'coordinates', 'drop lines', 'small', 'large', 'normal', 'wireframe', 'backwards', 'above', 'below', 'left', 'right', 'center',
+    // 5.0: labelled with the value it computes (a regression line's equation, a probability, a sum)
+    'labelled', 'labeled',
 ]);
 
 /** Is this piece an option, in either form (`red`, `in red`, `with its tangent at a`, `numbered`, `key=value`)? */
@@ -378,6 +386,12 @@ class Builder {
     is3D = false;
     /** Tools that point at "the region": the one region of the chart, known once every line is read. */
     readonly theRegion: Array<{ tool: Data; line: number; at: number }> = [];
+    /**
+     * 5.0: tools that point at "the data" (and later "the distribution", "the
+     * slope field"): the nearest one above the line, else the first below,
+     * known once every line is read. `field` is the tool's field that names it.
+     */
+    readonly nearest: Array<{ tool: Data; type: string; field: string; line: number; at: number; missing: MessageKey; candidates?: string[] }> = [];
 
     problem(at: number, message: string) {
         this.problems.push({ line: this.line, column: at + 1, message });
@@ -459,6 +473,13 @@ const OPTION_HELP: Record<string, string> = {
     surface:
         'in a colour, in a colour map (viridis, heat, cool, diverging, rainbow, greyscale), for x from a to b and y from c to d, opacity 0.7, mesh 0.4, 40 samples, wireframe, hidden',
     plane: 'in a colour, opacity 0.25, hidden',
+    data: 'hidden',
+    dataPlot: 'in a colour, small, large, thin, thick, dashed, opacity 0.35, with coordinates, labelled, labelled "text", hidden',
+    distribution: 'in a colour, thin, thick, dashed, opacity 0.35, hidden',
+    probability: 'in a colour, opacity 0.5, pattern dots, labelled, labelled "text", hidden',
+    riemann: 'in a colour, thin, thick, opacity 0.35, labelled, labelled "text", hidden',
+    slopeField: 'in a colour, thin, thick, hidden',
+    solution: 'in a colour, thin, thick, dashed, hidden',
 };
 
 /** Each kind of object in words, for messages. */
@@ -471,6 +492,13 @@ const KIND_WORDS: Record<keyof typeof OPTION_HELP, MessageKey> = {
     text: 'problems.text.kindText',
     surface: 'problems.text.kindSurface',
     plane: 'problems.text.kindPlane',
+    data: 'beyond.text.kindData',
+    dataPlot: 'beyond.text.kindDataPlot',
+    distribution: 'beyond.text.kindDistribution',
+    probability: 'beyond.text.kindProbability',
+    riemann: 'beyond.text.kindRiemann',
+    slopeField: 'beyond.text.kindSlopeField',
+    solution: 'beyond.text.kindSolution',
 };
 
 /** A kind of object in the reader's words, for messages. */
@@ -496,7 +524,7 @@ function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, 
             continue;
         }
         const thick = THICKNESSES.find((t) => lower === t);
-        if (thick && kind !== 'text' && kind !== 'points' && kind !== 'surface' && kind !== 'plane') {
+        if (thick && kind !== 'text' && kind !== 'points' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'probability') {
             target.thickness = thick;
             continue;
         }
@@ -509,12 +537,12 @@ function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, 
             target[raw[1]] = rawValue(raw[2]);
             continue;
         }
-        if (/^label\s/i.test(o) && kind !== 'text' && kind !== 'surface' && kind !== 'plane') {
+        if (/^label\s/i.test(o) && kind !== 'text' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'distribution' && kind !== 'slopeField' && kind !== 'solution') {
             target.label = textValue(o.slice(5));
             continue;
         }
         if (applyKindOption(b, kind, target, opt)) continue;
-        b.problem(opt.at, msg('problems.text.unknownOption', { option: o, kind: kindWord(kind), options: OPTION_HELP[kind] }));
+        b.problem(opt.at, msg('problems.text.unknownOption', { option: o, kind: kindWord(kind), options: (fullNow ? FULL_OPTION_HELP : OPTION_HELP)[kind] }));
     }
 }
 
@@ -614,7 +642,7 @@ function applyKindOption(b: Builder, kind: string, target: Data, opt: Piece): bo
         if (m) return numberOption(b, opt, target, 'fillOpacity', m[1]);
         return false;
     }
-    return false;
+    return beyondOption(b, kind, target, opt);
 }
 
 function set(target: Data, key: string, value: unknown): true {
@@ -736,6 +764,7 @@ function addTool(b: Builder, type: string, name: string | null, fields: Data, op
  * it was typed.
  */
 export function parseChartText(text: string, opts: { trace?: boolean; words?: ChartWords } = {}): TextChart {
+    if (isFullText(text)) return parseFull(text, opts);
     const words = opts.words ?? chartWords();
     if (!hasWords(words)) return parseBuiltin(text, opts);
     let read = readWords(text, words);
@@ -748,6 +777,25 @@ export function parseChartText(text: string, opts: { trace?: boolean; words?: Ch
     }
     for (const p of out.problems) p.column = typedColumn(read.maps, p.line, p.column);
     return out;
+}
+
+/** A Full LaTeX block is being read: messages name its options (src/text/full.ts). */
+let fullNow = false;
+
+/**
+ * A Full LaTeX block (src/text/full.ts): read in the built-in words, line
+ * by line, its problems and lines put back on the block's own lines and
+ * columns. A person's own chart words do not apply to it.
+ */
+function parseFull(text: string, opts: { trace?: boolean }): TextChart {
+    const read = readFull(text);
+    const outside = fullNow;
+    fullNow = true;
+    try {
+        return mapFull(read, parseBuiltin(read.text, { trace: opts.trace }), text.split(LINE_BREAK).length, !!opts.trace);
+    } finally {
+        fullNow = outside;
+    }
 }
 
 /** The names a chart defines (sliders, functions, surfaces, shapes), lowercase. */
@@ -776,7 +824,8 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
         }
         const def = new RegExp(`^(${NAME})\\s*\\(\\s*[A-Za-zθ]+\\s*(?:,\\s*[A-Za-z]+\\s*)?\\)\\s*=(?!=)`).exec(body);
         const slider = new RegExp(`^slider\\s+(${NAME})\\b`).exec(t);
-        const explicit = named?.[1] ?? def?.[1] ?? slider?.[1] ?? rawName(t);
+        const markAt = new RegExp(`^mark\\s+(${NAME})\\s+at\\s+\\(`).exec(body);
+        const explicit = named?.[1] ?? def?.[1] ?? slider?.[1] ?? markAt?.[1] ?? rawName(t);
         if (explicit) b.explicit.add(explicit);
     });
     const traces: LineTrace[] = [];
@@ -803,6 +852,7 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
             b.problems.push({ line: ref.line, column: ref.at + 1, message });
         }
     }
+    resolveNearest(b);
     b.problems.sort((p, q) => p.line - q.line || p.column - q.column);
     if (b.is3D) b.chart.dimension = true;
     const out: TextChart = { data: b.data(), problems: b.problems };
@@ -833,6 +883,8 @@ function statement(b: Builder, line: string) {
         else b.chart[`axis_label_${key[0]}`] = value;
         return;
     }
+    // LaTeX formulas (5.0) sit in $...$ as in a note; the dollars go, labels in quotes keep theirs.
+    line = stripMathDollars(line);
     // Axis numbers keep the rest of the line as written (commas included): `x numbers every pi/2`,
     // `x numbers at a "a", b "b"`, `x numbers off`.
     const numbers = /^(\s*)([xyz])\s+numbers\b\s*(every|at|off)?\b\s*(.*)$/i.exec(line);
@@ -870,7 +922,7 @@ function statement(b: Builder, line: string) {
     const restAt = kw ? body.at + t.length - kw[2].length : body.at;
     const rest: Piece = { text: kw ? kw[2] : '', at: restAt };
     // A formula that starts with a name like a word of the syntax (`mark + x = 3`, a slider called mark) is a formula.
-    if (/^(show|no|with|plot|draw|mark|write|double)$/.test(word) && /^(?:[*/^=<>!]|[-+]\s)/.test(rest.text)) return formulaLine(b, name, body, options);
+    if (/^(show|no|with|plot|draw|mark|write|double|use|data)$/.test(word) && /^(?:[*/^=<>!]|[-+]\s)/.test(rest.text)) return formulaLine(b, name, body, options);
 
     switch (word) {
         case 'view':
@@ -946,6 +998,7 @@ function statement(b: Builder, line: string) {
         case 'text':
             return textLine(b, word, rest, options);
         case 'shade':
+            if (shadeProbability(b, name, rest, options)) return;
             addTool(b, 'region', name, conditionFields(b, rest), options, 'region');
             return;
         case 'line':
@@ -981,6 +1034,10 @@ function statement(b: Builder, line: string) {
             return segment(b, word, name, rest, options);
         case 'plane':
             return plane(b, name, rest, options);
+        case 'use':
+            return useTable(b, name, rest, options);
+        case 'data':
+            return dataList(b, name, rest, options);
         default:
             return formulaLine(b, name, body, options);
     }
@@ -1031,7 +1088,8 @@ function setLine(b: Builder, rest: Piece) {
 }
 
 /** The parts of a slider line after its name, in any order: `= 6`, `from 0 to 15`, `in 0..15`, `starting at 6`, `in steps of 0.5`, `step 0.5`. */
-const SLIDER_PARTS: Array<{ re: RegExp; part: 'value' | 'range' | 'step' }> = [
+const SLIDER_PARTS: Array<{ re: RegExp; part: 'value' | 'range' | 'step' | 'connected' }> = [
+    { re: /^(connected)\b/i, part: 'connected' },
     { re: /^=\s*([^\s,]+)/, part: 'value' },
     { re: /^(?:in\s+)?steps?\s+(?:of\s+)?([^\s,]+)/i, part: 'step' },
     { re: /^(?:from|in|between)\s+([^\s,]+?)\s*(?:\.\.|\bto\b|\band\b)\s*([^\s,]+)/i, part: 'range' },
@@ -1042,7 +1100,7 @@ function slider(b: Builder, rest: Piece) {
     const text = rest.text.trim();
     const head = new RegExp(`^(${NAME})(?![A-Za-z0-9_])\\s*(.*)$`).exec(text);
     if (!head) return b.problem(rest.at, msg('problems.text.sliderTakes'));
-    const got: { value?: string; lo?: string; hi?: string; step?: string } = {};
+    const got: { value?: string; lo?: string; hi?: string; step?: string; connected?: string } = {};
     let tail = head[2];
     for (;;) {
         tail = tail.replace(/^[\s,]+/, '');
@@ -1075,7 +1133,7 @@ function slider(b: Builder, rest: Piece) {
         b.problem(rest.at, msg('problems.text.sliderStep', { name: head[1] }));
         step = 0.1;
     }
-    if (name) b.parameters.push({ name, value, min, max, step });
+    if (name) b.parameters.push(got.connected !== undefined ? { name, value, min, max, step, connected: true } : { name, value, min, max, step });
 }
 
 function conditionFields(b: Builder, rest: Piece): Data {
@@ -1121,6 +1179,20 @@ function mark(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
     if (m) return regionPoints(b, name, 'lattice', m[1] ?? '', p, {}, options);
     m = /^integer\s+(maximum|minimum|max|min)\s+(?:of\s+)?(.+?)\s+(?:in|over|on)\s+(the\s+region|\S+)$/i.exec(t);
     if (m) return regionPoints(b, name, 'lattice', m[3], p, { objective: m[2].trim(), sense: m[1].slice(0, 3).toLowerCase() }, options);
+    // 5.0: mark P at (1, 2), a point with its name.
+    m = new RegExp(`^(${NAME})\\s+at\\s+(\\(.*\\))$`).exec(t);
+    if (m && !RESERVED_NAMES.has(m[1])) {
+        const own = name ?? b.claim(m[1], p.at);
+        const point = trimPiece(m[2], p.at + t.length - m[2].length);
+        addTool(b, 'points', own, { dim: dims(b, [point]), source: 'list', points: point.text }, options, 'points');
+        return;
+    }
+    // 5.0: mark the data (of D2); options the words did not catch are named.
+    if (/^the\s+data\b/i.test(rest.text.trim())) {
+        const f = formulaOptions(p, options);
+        m = new RegExp(`^data(?:\\s+of\\s+(${NAME}))?$`, 'i').exec(f.formula.text);
+        if (m) return dataPlot(b, name, 'points', m[1], rest, f.options);
+    }
     const hints: Array<[RegExp, MessageKey]> = [
         [/^(maximum|minimum|max|min)\b/i, 'problems.text.markOptimumHint'],
         [/^corners\b/i, 'problems.text.markCornersHint'],
@@ -1137,6 +1209,7 @@ function mark(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
 function plot(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
     const t = rest.text.trim();
     if (!t) return b.problem(rest.at, msg('problems.text.plotTakes'));
+    if (distribution(b, name, rest, options)) return;
     if (/[=<>]/.test(t)) return formulaLine(b, name, rest, options);
     fn(b, name ?? b.nextName('f'), 'x', t, rest, options);
 }
@@ -1149,6 +1222,7 @@ function draw(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
     const t = rest.text.trim();
     if (!t) return b.problem(rest.at, msg('problems.text.drawTakes'));
     if (DEFINITION.test(t)) return formulaLine(b, name, rest, options);
+    if (drawBeyond(b, name, rest, options)) return;
     const m = DRAW_NOUN.exec(t);
     if (m) {
         const noun = m[1].toLowerCase().replace(/\s+/g, ' ');
@@ -1325,7 +1399,7 @@ function formulaLine(b: Builder, name: string | null, body: Piece, options: Piec
         return;
     }
     if (/=/.test(relations)) return curve(b, name, body, options);
-    b.problem(body.at, msg('problems.text.notAChartLine'));
+    b.problem(body.at, msg(fullNow ? 'problems.text.fullNotAChartLine' : 'problems.text.notAChartLine'));
 }
 
 function fn(b: Builder, name: string, v: string, rhs: string, body: Piece, options: Piece[]) {
@@ -1359,4 +1433,279 @@ export function niceStep(raw: number): number {
     const p = Math.pow(10, Math.floor(Math.log10(raw)));
     for (const k of [1, 2, 5, 10]) if (k * p >= raw - 1e-12) return Number((k * p).toPrecision(12));
     return 10 * p;
+}
+
+// ---------------------------------------------------- beyond functions (5.0)
+
+/** Kinds of the tools beyond functions, whose options beyondOption reads. */
+function beyondOption(b: Builder, kind: string, target: Data, opt: Piece): boolean {
+    const o = opt.text;
+    const lower = o.toLowerCase();
+    if (kind === 'dataPlot') {
+        if (lower === 'dashed') return set(target, 'dashed', true);
+        if (lower === 'small' || lower === 'large' || lower === 'normal') return set(target, 'size', lower);
+        if (lower === 'coordinates') return set(target, 'label', '({x:2}, {y:2})');
+        if (lower === 'labelled' || lower === 'labeled') return set(target, 'valueLabel', true);
+        let m = /^labels\s+(.+)$/i.exec(o);
+        if (m) return set(target, 'label', textValue(m[1]));
+        m = /^opacity\s+(.+)$/i.exec(o);
+        if (m) return numberOption(b, opt, target, 'fillOpacity', m[1]);
+        return false;
+    }
+    if (kind === 'distribution') {
+        if (lower === 'dashed') return set(target, 'dashed', true);
+        const m = /^opacity\s+(.+)$/i.exec(o);
+        if (m) return numberOption(b, opt, target, 'fillOpacity', m[1]);
+        return false;
+    }
+    if (kind === 'solution') {
+        if (lower === 'dashed') return set(target, 'dashed', true);
+        return false;
+    }
+    if (kind === 'riemann') {
+        if (lower === 'labelled' || lower === 'labeled') return set(target, 'valueLabel', true);
+        const m = /^opacity\s+(.+)$/i.exec(o);
+        if (m) return numberOption(b, opt, target, 'fillOpacity', m[1]);
+        return false;
+    }
+    if (kind === 'probability') {
+        if (lower === 'labelled' || lower === 'labeled') return set(target, 'valueLabel', true);
+        let m = /^opacity\s+(.+)$/i.exec(o);
+        if (m) return numberOption(b, opt, target, 'fillOpacity', m[1]);
+        m = /^pattern\s+(.+)$/i.exec(o);
+        if (m) return patternOption(b, opt, target, m[1]);
+        return false;
+    }
+    return false;
+}
+
+/**
+ * A line that points at the nearest tool of `type` ("the data"): the field
+ * is filled in once every line is read (resolveNearest), unless the line
+ * names it (`of D2`).
+ */
+function pointAtNearest(b: Builder, tool: Data, type: string, field: string, named: string | undefined, at: number, missing: MessageKey, candidates?: string[]) {
+    if (named) tool[field] = named;
+    else b.nearest.push({ tool, type, field, line: b.line, at, missing, candidates });
+}
+
+/** "the data" and the like: the nearest tool of the type above the line, else the first one below. */
+function resolveNearest(b: Builder) {
+    for (const ref of b.nearest) {
+        const at = b.tools.indexOf(ref.tool);
+        const candidates = b.tools.map((t, i) => ({ t, i })).filter((c) => c.t.type === ref.type);
+        // A name the line holds (P(X2 <= 1)) picks that one.
+        const byName = (ref.candidates ?? []).map((n) => candidates.find((c) => c.t.name === n)).find((c) => c);
+        if (byName) {
+            ref.tool[ref.field] = byName.t.name;
+            continue;
+        }
+        const above = candidates.filter((c) => c.i < at);
+        const pick = above.length ? above[above.length - 1] : candidates.find((c) => c.i > at);
+        if (pick) ref.tool[ref.field] = pick.t.name;
+        else b.problems.push({ line: ref.line, column: ref.at + 1, message: msg(ref.missing) });
+    }
+}
+
+/** Column names after `columns`: `hours and score`, `"hours studied", score`. */
+function columnNames(text: string): string[] | null {
+    const names = splitTop(text, ',')
+        .flatMap((p) => splitTop(p.text, ' and '))
+        .map((p) => textValue(p.text))
+        .filter((n) => n.length > 0);
+    return names.length >= 1 && names.length <= 2 ? names : null;
+}
+
+/** `use the table above` and `use the table above, columns hours and score`: a data set from the note's table. */
+function useTable(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
+    const m = /^the\s+table\s+above\b\s*,?\s*(.*)$/i.exec(rest.text.trim());
+    if (!m) return b.problem(rest.at, msg('beyond.text.useTakes'));
+    const fields: Data = { source: 'table' };
+    const tail = m[1].trim();
+    if (tail) {
+        const c = /^(?:with\s+(?:the\s+)?)?columns?\s+(.+)$/i.exec(tail);
+        const names = c ? columnNames(c[1]) : null;
+        if (!names) return b.problem(rest.at + rest.text.length - tail.length, msg('beyond.text.useTakes'));
+        fields.xColumn = names[0];
+        if (names[1]) fields.yColumn = names[1];
+    }
+    addTool(b, 'data', name, fields, options, 'data');
+}
+
+/** `data (1, 52), (2, 55) and (3, 61)`: a data set typed in the chart. */
+function dataList(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
+    const parts = splitTop(rest.text, ',', rest.at)
+        .flatMap((p) => splitTop(p.text, ' and ', p.at))
+        .filter((p) => p.text);
+    if (!parts.length || !parts.every((p) => /^\(.*\)$/.test(p.text))) return b.problem(rest.at, msg('beyond.text.dataTakes'));
+    addTool(b, 'data', name, { source: 'list', points: pathOf(parts) }, options, 'data');
+}
+
+/** A data plot of "the data" (or of a named data set). */
+function dataPlot(b: Builder, name: string | null, style: string, of: string | undefined, rest: Piece, options: Piece[]) {
+    const tool = addTool(b, 'dataPlot', name, { style }, options, 'dataPlot');
+    pointAtNearest(b, tool, 'data', 'data', of, rest.at, 'beyond.text.theDataMissing');
+}
+
+/** The draw lines of 5.0: the data as bars or a line, its regression line. True when the line was one of them. */
+function drawBeyond(b: Builder, name: string | null, rest: Piece, all: Piece[]): boolean {
+    // Options the words did not catch (`..., sparkly`) are named, not read as part of the line.
+    const { formula, options } = /^(?:the\s+data|its|the\s+regression|the\s+\S+\s+riemann\s+sum|the\s+trapezoid)\b/i.test(rest.text.trim())
+        ? formulaOptions(rest, all)
+        : { formula: rest, options: all };
+    const t = formula.text.trim();
+    if (riemann(b, name, formula, options)) return true;
+    if (slopeField(b, name, rest, all)) return true;
+    if (solution(b, name, rest, all)) return true;
+    let m = new RegExp(`^the\\s+data(?:\\s+of\\s+(${NAME}))?\\s+as\\s+(bars|a\\s+line|points|dots)$`, 'i').exec(t);
+    if (m) {
+        const how = m[2].toLowerCase().replace(/\s+/g, ' ');
+        dataPlot(b, name, how === 'bars' ? 'bars' : how === 'a line' ? 'line' : 'points', m[1], rest, options);
+        return true;
+    }
+    m = new RegExp(`^(?:its|the)\\s+regression\\s+line(?:\\s+of\\s+(${NAME}))?$`, 'i').exec(t);
+    if (m) {
+        dataPlot(b, name, 'regression', m[1], rest, options);
+        return true;
+    }
+    if (/^the\s+data\b/i.test(t)) {
+        b.problem(rest.at, msg('beyond.text.drawDataTakes'));
+        return true;
+    }
+    return false;
+}
+
+/** The parts of `with mean 0 and sd 1` / `with n = 10 and p = 0.4`, by name; null when one does not read. */
+function distributionParts(text: string): Record<string, string> | null {
+    const out: Record<string, string> = {};
+    const t = text.trim().replace(/^with\s+/i, '');
+    if (!t) return out;
+    for (const part of splitTop(t, ' and ')) {
+        const m =
+            /^(mean|mu|\\mu|μ)\s*(?:=|\s)\s*(.+)$/i.exec(part.text) ??
+            /^(sd|standard\s+deviation|sigma|\\sigma|σ)\s*(?:=|\s)\s*(.+)$/i.exec(part.text) ??
+            /^(n|p)\s*(?:=|\s)\s*(.+)$/.exec(part.text);
+        if (!m) return null;
+        const key = m[1].toLowerCase();
+        const field = key === 'n' || key === 'p' ? key : /^(mean|mu|\\mu|μ)$/i.test(key) ? 'mean' : 'sd';
+        out[field] = m[2].trim();
+    }
+    return out;
+}
+
+/** `plot the normal distribution with mean 0 and sd 1`, `plot the binomial distribution with n = 10 and p = 0.4`. True when the line was one. */
+function distribution(b: Builder, name: string | null, rest: Piece, all: Piece[]): boolean {
+    if (!/^the\s+(standard\s+)?(normal|binomial)\s+distribution\b/i.test(rest.text.trim())) return false;
+    // Options the words did not catch (`..., sparkly`) are named, not read as a parameter.
+    const { formula, options } = formulaOptions(rest, all);
+    const m = /^the\s+(standard\s+)?(normal|binomial)\s+distribution\b\s*(.*)$/i.exec(formula.text.trim());
+    if (!m) return false;
+    const kind = m[2].toLowerCase();
+    const parts = distributionParts(m[3]);
+    const fields: Data = { kind };
+    const allowed = kind === 'normal' ? ['mean', 'sd'] : ['n', 'p'];
+    if (!parts || Object.keys(parts).some((k) => !allowed.includes(k)) || (m[1] && kind !== 'normal')) {
+        b.problem(rest.at, msg(parts ? 'beyond.text.distributionPart' : 'beyond.text.distributionTakes'));
+        return true;
+    }
+    Object.assign(fields, parts);
+    addTool(b, 'distribution', name, fields, options, 'distribution');
+    return true;
+}
+
+/** `shade P(-1 <= X <= 1)`, `shade P(X <= 2) of X2`: a probability shaded under a distribution. True when the line was one. */
+function shadeProbability(b: Builder, name: string | null, rest: Piece, all: Piece[]): boolean {
+    if (!/^(?:P|\\Pr)\s*\(/.test(rest.text.trim())) return false;
+    const { formula, options } = formulaOptions(rest, all);
+    const m = new RegExp(`^(?:P|\\\\Pr)\\s*\\((.*)\\)(?:\\s+of\\s+(${NAME}))?$`).exec(formula.text.trim());
+    // Its brackets in pairs: `P(x) >= max(0, y)` (a function called P) is a region.
+    if (!m || !bracketsPair(m[1])) return false;
+    const event = m[1].trim();
+    if (!event) {
+        b.problem(rest.at, msg('beyond.text.probabilityTakes'));
+        return true;
+    }
+    const tool = addTool(b, 'probability', name, { event }, options, 'probability');
+    pointAtNearest(b, tool, 'distribution', 'distribution', m[2], rest.at, 'beyond.text.theDistributionMissing', eventNames(event));
+    return true;
+}
+
+/**
+ * `draw the left Riemann sum of f from 0 to 2 with 6 parts` (left, right,
+ * middle, midpoint) and `draw the trapezoid rule of f from 0 to 2 with n
+ * parts`. True when the line was one.
+ */
+function riemann(b: Builder, name: string | null, rest: Piece, options: Piece[]): boolean {
+    const t = rest.text.trim();
+    const head = /^the\s+(?:(left|right|middle|midpoint)\s+riemann\s+sum|(trapezoid(?:al)?)\s+rule)\s+of\s+/i.exec(t);
+    if (!head) return false;
+    const method = head[2] ? 'trapezoid' : head[1].toLowerCase() === 'midpoint' ? 'middle' : head[1].toLowerCase();
+    const m = new RegExp(`^(${NAME})\\s+from\\s+(.+?)\\s+to\\s+(.+)\\s+with\\s+(.+?)\\s+parts?$`, 'i').exec(t.slice(head[0].length));
+    if (!m) {
+        b.problem(rest.at, msg('beyond.text.riemannTakes'));
+        return true;
+    }
+    addTool(b, 'riemann', name, { function: m[1], method, from: m[2].trim(), to: m[3].trim(), parts: m[4].trim() }, options, 'riemann');
+    return true;
+}
+
+/** The right side of y' = f(x, y), dy/dx = ..., \frac{dy}{dx} = ...; the formula itself when it has no left side. */
+function slopeOf(text: string): string {
+    const m = /^(?:y\s*'|\\[dt]?frac\s*\{\s*dy\s*\}\s*\{\s*dx\s*\}|dy\s*\/\s*dx)\s*=(?!=)\s*(.*)$/i.exec(text.trim());
+    return (m ? m[1] : text).trim();
+}
+
+/** `draw the slope field of $y' = x - y$`. True when the line was one. */
+function slopeField(b: Builder, name: string | null, rest: Piece, options: Piece[]): boolean {
+    const m = /^the\s+slope\s+field\b\s*(?:of\s+)?(.*)$/i.exec(rest.text.trim());
+    if (!m) return false;
+    const expression = slopeOf(m[1]);
+    if (!expression) {
+        b.problem(rest.at, msg('beyond.text.slopeFieldTakes'));
+        return true;
+    }
+    const f = formulaOptions({ text: expression, at: rest.at + rest.text.length - expression.length }, options);
+    addTool(b, 'slopeField', name, { expression: f.formula.text }, f.options, 'slopeField');
+    return true;
+}
+
+/** `draw the solution through P`, `draw the solutions through P and (0, -1)`, `draw the solution of SF2 through P`. True when the line was one. */
+function solution(b: Builder, name: string | null, rest: Piece, options: Piece[]): boolean {
+    const t = rest.text.trim();
+    const head = new RegExp(`^the\\s+solutions?(?:\\s+of\\s+(${NAME}))?\\s+through\\s+`, 'i').exec(t);
+    if (!head) {
+        if (/^the\s+solutions?\b/i.test(t)) {
+            b.problem(rest.at, msg('beyond.text.solutionTakes'));
+            return true;
+        }
+        return false;
+    }
+    const list = trimPiece(t.slice(head[0].length), rest.at + head[0].length);
+    const pieces = splitTop(list.text, ',', list.at).filter((p) => p.text);
+    // The points (and points tools) come first; a piece after them that is neither is an option the words did not catch.
+    const isPoint = (p: Piece) => /^\(.*\)$/.test(p.text) || NAME_RE.test(p.text);
+    const parts: Piece[] = [];
+    let k = 0;
+    for (; k < pieces.length; k++) {
+        const own = splitTop(pieces[k].text, ' and ', pieces[k].at).filter((p) => p.text);
+        if (!own.every(isPoint)) break;
+        parts.push(...own);
+    }
+    if (!parts.length) {
+        b.problem(rest.at, msg('beyond.text.solutionTakes'));
+        return true;
+    }
+    const tool = addTool(b, 'solution', name, { through: pathOf(parts) }, [...pieces.slice(k), ...options], 'solution');
+    pointAtNearest(b, tool, 'slopeField', 'field', head[1], rest.at, 'beyond.text.theFieldMissing');
+    return true;
+}
+
+/** Round brackets in pairs, none closed before it opens. */
+function bracketsPair(s: string): boolean {
+    let depth = 0;
+    for (const c of s) {
+        if (c === '(') depth++;
+        else if (c === ')' && --depth < 0) return false;
+    }
+    return depth === 0;
 }

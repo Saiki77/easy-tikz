@@ -11,7 +11,7 @@
  * the modal to call after every commit.
  */
 import { Menu } from 'obsidian';
-import { Annotation, Function3DParameters, FunctionParameters, Tool } from '../types';
+import { Annotation, Function3DParameters, FunctionParameters, Parameter, Tool } from '../types';
 import { ValidateResult, fmtNum } from '../mathcontext';
 import { ChartExample, EXAMPLES, Recipe, RecipeContext, newId, nextFunctionName, nextToolName, recipes } from '../migrate';
 import { BUILT_IN_2D, BUILT_IN_3D } from '../templates';
@@ -22,6 +22,8 @@ import type { SceneIssue } from '../scene';
 import { PanelHost } from './host';
 import { cloneData } from '../util';
 import { LayerCardActions, LayerCardHandle, createLayerCard } from './layerCards';
+// The cards of data, probability, Riemann sums and slope fields register themselves with the layer cards (5.0).
+import '../beyond/cards';
 import { CardUiState, FunctionCardHandle, createFunctionCard, createSurfaceCard } from './functionCards';
 import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, menuFromButton, openMenu, textButton } from './kit';
 import { t } from '../i18n';
@@ -105,6 +107,9 @@ const SECTION_ICONS: Record<string, string> = {
     Labels: 'type',
     Sliders: 'sliders-horizontal',
     '3D': 'box',
+    Data: 'table',
+    Probability: 'bar-chart-2',
+    Calculus: 'sigma',
 };
 
 /** Menu heading per recipe section (Functions reads Surfaces in 3D charts). */
@@ -117,6 +122,9 @@ const SECTION_TITLES: Record<string, MessageKey> = {
     Labels: 'build.section.labels',
     Sliders: 'build.section.sliders',
     '3D': 'build.section.shapesInSpace',
+    Data: 'beyond.section.data',
+    Probability: 'beyond.section.probability',
+    Calculus: 'beyond.section.calculus',
 };
 
 /** One-click links under the starter examples: [text key, recipe id]. */
@@ -761,6 +769,17 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
                 tools().push(result.tool);
                 addItem(result.tool);
                 return;
+            case 'items': {
+                if (result.parameters && result.parameters.length) {
+                    const params = host.settings.getValue<Parameter[] | undefined>('parameters');
+                    host.settings.setValue('parameters', [...(Array.isArray(params) ? params : []), ...result.parameters]);
+                }
+                for (const fn of result.functions ?? []) functions().push(fn);
+                for (const tool of result.tools) tools().push(tool);
+                const shown = result.tools[result.reveal ?? 0] ?? result.tools[0] ?? (result.functions ?? [])[0];
+                if (shown) addItem(shown);
+                return;
+            }
             case 'label': {
                 const c = viewCenter();
                 const label: Annotation = {

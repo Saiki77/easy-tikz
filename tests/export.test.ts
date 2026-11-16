@@ -7,6 +7,7 @@ import { test, assert, near } from './_lib';
 import { RANGE_DEFAULTS, SettingsManager } from '../src/settings';
 import { EXAMPLES } from '../src/migrate';
 import { Function3DParameters, FunctionParameters, RendererConfig, Tool } from '../src/types';
+import { stableSvgIds } from '../src/svgExport';
 
 // ----------------------------------------------------------------- helpers
 
@@ -921,4 +922,12 @@ test('3D: the mesh lines of a filled surface follow its mesh opacity; the fill k
     assert.ok(surf({ wireframe: true, meshOpacity: 0 }).startsWith('\\addplot3[mesh, colormap={etSurface1}{color=(etBlue) color=(etBlue)}, domain='));
     // Stored values outside 0..1 are clamped by the migration.
     assert.equal(surf({ meshOpacity: 3 }), surf({ meshOpacity: 1 }));
+});
+
+test('svg files: ids numbered per drawing become the same for the same chart (5.0)', () => {
+    const a = '<svg><defs><clipPath id="etz-21-clip"><rect/></clipPath></defs><g clip-path="url(#etz-21-clip)" fill="#ffffff"><use href="#etz-21-clip"/></g></svg>';
+    const b = a.replace(/etz-21-clip/g, 'etz-305-clip');
+    assert.equal(stableSvgIds(a), stableSvgIds(b));
+    assert.equal(stableSvgIds(a), '<svg><defs><clipPath id="etz-1"><rect/></clipPath></defs><g clip-path="url(#etz-1)" fill="#ffffff"><use href="#etz-1"/></g></svg>');
+    assert.equal(stableSvgIds('<svg><rect fill="#abcdef"/></svg>'), '<svg><rect fill="#abcdef"/></svg>');
 });

@@ -71,3 +71,14 @@ export function chartFences(count: number, lineAt: (n: number) => string, tags: 
     }
     return out;
 }
+
+/** The bodies of a note's chart blocks, in order (the SVG files of 5.0 are numbered by it). */
+export function noteChartBodies(text: string, tags: ReadonlySet<string>): string[] {
+    const lines = text.split('\n');
+    return chartFences(lines.length, (n) => lines[n - 1] ?? '', tags).map((f) => f.body);
+}
+
+/** The SVG file of chart `index` (0-based) of a note (5.0): `Week 3 · chart 1.svg`. */
+export function svgFileName(noteBasename: string, index: number): string {
+    return `${noteBasename} · chart ${index + 1}.svg`;
+}

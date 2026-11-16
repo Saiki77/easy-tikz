@@ -45,6 +45,7 @@ import {
 import { findExtrema1D } from './math';
 import { errorText } from './util';
 import { language, t as msg } from './i18n';
+import { BEYOND_TYPES, BeyondOutput, beyondSources, computeBeyond } from './beyond/scene';
 
 export type ArrowHeads = 'forward' | 'backward' | 'both';
 
@@ -232,6 +233,13 @@ export interface SceneInput2D {
      * the PDF.
      */
     keepLabels?: boolean;
+    /**
+     * Optional (5.0): the chart has the same unit on both axes (equal scale;
+     * polar charts always do). Slope fields use it to draw their segments
+     * the same length on screen; without it the plot's shape comes from
+     * `labelMetrics`.
+     */
+    equalScale?: boolean;
 }
 
 /** Plot size and font sizes for label placement, in pt. */
@@ -386,6 +394,8 @@ interface Output {
     points3?: Point3Spec[];
     segments3?: Scene3D['segments'];
     planes3?: Scene3D['planes'];
+    /** What the tools beyond functions hand their readers (src/beyond/scene.ts): a distribution, a slope field. */
+    beyond?: BeyondOutput;
 }
 
 /** A function's decorations or a tool, as a node of the dependency graph. */
@@ -416,6 +426,9 @@ interface Ctx {
     toolsByName: Map<string, Tool>;
     /** The chart's functions (FunctionInfo.index points into it); empty in 3D. */
     functions: FunctionParameters[];
+    /** Plot size the label placer measures with (pt), and whether both axes have the same unit (5.0, slope fields). */
+    metrics?: LabelMetrics;
+    equalScale?: boolean;
 }
 
 interface CacheState {
@@ -811,6 +824,8 @@ function toolNode(t: Tool, math: MathContext): SceneNode {
         case 'plane3D':
             scan(t.value, 'value');
             break;
+        default:
+            beyondSources(t, scan, refs);
     }
     return { id: `tool:${t.id}`, name: str(t.name) || str(t.id), tool: t, refs, sources, base: toolBase(t) };
 }
@@ -2084,7 +2099,18 @@ function scene2D(input: SceneInput2D): Scene2D {
         state.labels.clear();
     }
     const axisStyle: AxisStyle = input.axisStyle || 'box';
-    const ctx: Ctx = { math, view, grid, axisStyle, dim: 2, outputs: new Map(), toolsByName: toolMap(tools), functions: params };
+    const ctx: Ctx = {
+        math,
+        view,
+        grid,
+        axisStyle,
+        dim: 2,
+        outputs: new Map(),
+        toolsByName: toolMap(tools),
+        functions: params,
+        metrics: validMetrics(input.labelMetrics),
+        equalScale: !!input.equalScale || !!input.polar,
+    };
 
     const nodes: SceneNode[] = [];
     for (const info of math.functions()) {
@@ -2102,7 +2128,8 @@ function scene2D(input: SceneInput2D): Scene2D {
 
     forgetOnRemoval(state, new Set([...Array.from(ctx.toolsByName.keys()), ...math.functions().map((f) => f.name)]));
     // The language too: a cached output keeps its problem messages.
-    const frameKey = `${view.xmin},${view.xmax},${view.ymin},${view.ymax}|${grid.nx}x${grid.ny}|${axisStyle}|${language()}`;
+    const m = ctx.metrics;
+    const frameKey = `${view.xmin},${view.xmax},${view.ymin},${view.ymax}|${grid.nx}x${grid.ny}|${axisStyle}|${language()}|${m ? `${m.w}x${m.h}` : ''}|${ctx.equalScale ? 'eq' : ''}`;
     const seen = new Set<string>();
     const outs = runNodes(nodes, ctx, state, frameKey, (node) => compute2D(node, ctx), seen);
     prune(state, seen);
@@ -2240,7 +2267,7 @@ function compute2D(node: SceneNode, ctx: Ctx): Output {
         case 'segment':
             return computeSegmentTool(t, ctx);
         default:
-            return newOutput();
+            return computeBeyond(t, ctx) ?? newOutput();
     }
 }
 
@@ -3462,6 +3489,12 @@ function labelFormatter(node: SceneNode, math: MathContext, issues: SceneIssue[]
     };
 }
 
+// ------------------------------------------------- for src/beyond/scene.ts
+
+/** Scene internals the tools beyond functions are computed with (5.0). */
+export type { Output as SceneOutput, Ctx as SceneCtx, TextSpec as SceneTextSpec };
+export { newOutput, addIssue, fail, publish, labelSpot, towardCenter, midSpot, UP_RIGHT };
+
 // --------------------------------------------------------------- 3D scene
 
 /**
@@ -3649,9 +3682,13 @@ function scene3D(input: SceneInput3D): Scene3D {
     for (const t of tools) {
         if (t.type === 'plane3D' || ((t.type === 'points' || t.type === 'segment') && t.dim === 3)) nodes.push(toolNode(t, math));
     }
+    // Data, probability, Riemann sums and slope fields are drawn in 2D charts only (5.0).
+    const only2D: SceneIssue[] = tools
+        .filter((t) => BEYOND_TYPES.has(t.type) && !t.hidden)
+        .map((t) => ({ source: str(t.name), message: msg('beyond.problem.only2D', { name: str(t.name) }), severity: 'error' as const }));
     if (!nodes.length) {
         math.setDerived({});
-        return empty;
+        return only2D.length ? { ...empty, issues: only2D } : empty;
     }
     // 3D tools are cheap: no cross-frame memo, a fresh state per call.
     const state: CacheState = { math, memo: new Map(), good: new Map(), names: null, curves: new Map(), labels: new Map() };
@@ -3669,7 +3706,7 @@ function scene3D(input: SceneInput3D): Scene3D {
         },
         new Set()
     );
-    const scene: Scene3D = { points: [], segments: [], planes: [], issues: [], derived: {} };
+    const scene: Scene3D = { points: [], segments: [], planes: [], issues: [...only2D], derived: {} };
     for (const out of outs) Object.assign(scene.derived, out.derived);
     math.setDerived(scene.derived);
     const read = readNames(nodes, math);

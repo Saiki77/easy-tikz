@@ -4,6 +4,33 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.0.0] - 2026-11-16
+
+Every formula in your notes is a chart, and LaTeX is the language you write charts in. Sliders connect across the charts of a note, charts can live as SVG files, and four new kinds of pictures join functions and regions: data with a regression line, probability, Riemann sums and slope fields.
+
+### Added
+
+- **Every formula is a chart** (`src/formula.ts`, `src/ui/formulaHover.ts`). Rest the pointer on a `$...$` or `$$...$$` formula in Reading view or Live Preview (also in lists, callouts and tables; on a phone, tap it): a card opens with the formula, what it is (function, surface, polar curve, curve, region), its chart and a slider for each letter. **Insert chart** writes the block under the paragraph, **Open in the editor** opens it first. The command **Plot the formula at the cursor** and the right-click item **Plot this formula** do the same in the editor. Only formulas that have a chart open it: those that use x, y, z, r or θ and read as a chart.
+- **Settings for formula charts:** **Charts for formulas**, **Highlight formulas in notes** (a dotted line under each formula that has a chart, a tint under the pointer), **Sliders in formula charts**, and **Default chart for formulas**: **Edit** opens the editor on a sample chart whose button **Save as default** stores its look (axes, grid, numbers, size, line, 3D view) for every formula card and inserted chart; **Reset** goes back.
+- **LaTeX math in charts** (`src/latex.ts`). Formulas can be written in dollars, as in a note: `plot $f(x) = \frac{1}{2}x^2 - 2$ in blue`, `shade where $x + y \le 4$ and $x \ge 0$`, `plot $r(\theta) = 1 + \cos\theta$`. The plugin writes LaTeX formulas back in dollars and plain formulas as they are; charts from 4.x read and print as before. Drag to edit changes the numbers of plain formulas.
+- **Full LaTeX** (`src/text/full.ts`, setting **Chart language**). New charts can be written as pgfplots-style commands inside `\begin{chart} ... \end{chart}`: `\axis[xmin=0, xmax=5]`, `\slider[min=0, max=15, start=6]{c}`, `\plot[blue, thick]{f(x) = x^2}`, `\shade[numbered]{x + y \le 4, x \ge 0}`, `\node[at={(3, 1.2)}]{optimum}`. Both forms are always read; a block keeps the form it has. Problems point at the line and column of the block.
+- **Connected sliders.** `slider a from 0 to 2, connected` in two charts of a note: moving `a` in one moves it in the other. The link button at the end of a slider row in the note switches it (shown when another chart of the note has a slider of that name); in the editor it is **Connect with others** in the slider's options. The note never changes when a slider moves.
+- **Charts as SVG files** (`src/svgFiles.ts`, setting **Charts as SVG files**, off by default). Every chart of a note also lives as an SVG file in the attachment folder (`Week 3 · chart 1.svg`), white with the light theme's colours, rewritten only when its picture changed. Obsidian Publish and GitHub show it where the plugin does not run: embed it with `![[Week 3 · chart 1.svg]]`. The command **Save the charts of this note as SVG files** writes them at once.
+- **Data and a regression line** (`src/beyond`). `use the table above` reads the Markdown table above the block (the first two numeric columns, or `columns hours and score`), and the chart follows when the table changes; `data (1, 52), (2, 55)` writes the points in the chart. `mark the data`, `draw the data as bars`, `draw the data as a line`, `draw its regression line, labelled` (y = mx + b and R²).
+- **Probability.** `plot the normal distribution with mean 0 and sd 1`, `plot the binomial distribution with n = 10 and p = 0.4`, and `shade $P(-1 \le X \le 1)$, labelled` (also `P(X \le b)`, `P(X \ge a)`, `X = k`), with the probability in the label.
+- **Riemann sums.** `draw the left Riemann sum of f from 0 to 2 with n parts, labelled` (left, right, middle) and `draw the trapezoid rule of f ...`, with the sum and the integral in the label; the parts can be a slider.
+- **Slope fields.** `draw the slope field of $y' = x - y$` and `draw the solution through P`, which follows when P moves.
+- Each new picture has its card and recipes in **+ Add**, chart words, auto-fit and a pgfplots export that compiles.
+- **What's new** is a slideshow: one feature per slide, each with a live chart, Back and Next, and a last slide with version 4.
+
+### Fixed
+
+- A slider used in a LaTeX formula is a dependency of that formula (its extrema, fills and labels follow the slider), and renaming the slider renames it in the formula.
+
+### Changed
+
+- The README shows the 5.0 features one at a time, each with a picture.
+
 ## [4.10.0] - 2026-11-10
 
 Axis numbers your way, and copied images on white, as asked for in issue #5.

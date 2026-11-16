@@ -29,6 +29,7 @@ import { t } from '../i18n';
 import {
     NumberInputHandle,
     PopoverHandle,
+    chip,
     field,
     formatDecimals,
     iconButton,
@@ -309,6 +310,17 @@ export function createSlidersDock(parent: HTMLElement, host: PanelHost): Sliders
         host.requestUpdate();
     };
 
+    /** Connect with others on or off (5.0): only the stored chart changes, the picture stays. */
+    const setConnected = (index: number, on: boolean) => {
+        const list = params();
+        const p = list[index];
+        if (!p) return;
+        if (on) p.connected = true;
+        else delete p.connected;
+        host.settings.setValue('parameters', list);
+        host.requestUpdate();
+    };
+
     /**
      * Undo / redo of one history entry: move slider `name` from `from` to
      * `to`, only while it still holds `from` (a later change wins; the entry
@@ -573,6 +585,13 @@ export function createSlidersDock(parent: HTMLElement, host: PanelHost): Sliders
                 bound('min', t('common.min'));
                 bound('max', t('common.max'));
                 bound('step', t('panels.sliders.step'));
+                const linkRow = pop.createDiv({ cls: 'etz-dock-connect' });
+                chip(linkRow, {
+                    label: t('panels.sliders.connect'),
+                    value: params()[index]?.connected === true,
+                    onChange: (on) => setConnected(index, on),
+                });
+                linkRow.createDiv({ cls: 'etz-dock-connect-desc', text: t('panels.sliders.connectDesc') });
                 textButton(pop, {
                     text: t('panels.sliders.delete'),
                     icon: 'trash-2',

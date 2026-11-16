@@ -12,11 +12,18 @@
  * changed objects get a new line in place, new ones are added next to their
  * kind. If the result would not read back as the same chart, the whole
  * chart is printed instead.
+ *
+ * Both forms of the language (5.0): new charts are printed in the form the
+ * setting "Chart language" says (src/text/full.ts: words, or Full LaTeX);
+ * a block someone wrote keeps its form.
  */
 import { Data, canonicalData, minimize, stableJson } from '../chartdata';
 import { ANCHORS, COLORS, NAME_RE, ObjectList, PATTERNS, THICKNESSES, TOOL_PREFIX, definedNames, isSignCondition, niceStep, parseChartText, splitStatement, splitTop } from './parse';
-import { chartWords, hasWords, writeWords } from './words';
+import { NO_WORDS, chartWords, hasWords, writeWords } from './words';
+import { FULL_END, axisLines, chartLanguage, exactFull, fullLine, isFullText, withName, wordsToFull } from './full';
 import { isColormap } from '../colormaps';
+import { looksLikeLatex } from '../latex';
+import { eventNames } from '../beyond/event';
 
 // ---------------------------------------------------------------- values
 
@@ -187,15 +194,24 @@ interface Ctx {
     shown: Set<string>;
     /** The name of the chart's only region, which lines call "the region"; null when there are none or several. */
     region: string | null;
+    /** 5.0: the chart's tools and the position of the one being printed, for lines that point at the nearest tool of a type ("the data"). */
+    tools: Data[];
+    index: number;
 }
 
-/** `slider c from 0 to 15, starting at 6`: the start left out when it is the low end, the step when it is the usual one. */
+/** `slider c from 0 to 15, starting at 6, connected`: the start left out when it is the low end, the step when it is the usual one. */
 function sliderLine(p: Data): string {
     const parts = [`slider ${str(p.name)} from ${str(p.min)} to ${str(p.max)}`];
     const [value, min, max, step] = [p.value, p.min, p.max, p.step].map(Number);
     if (value !== min) parts.push(`starting at ${str(p.value)}`);
     if (step !== niceStep((max - min) / 100)) parts.push(`in steps of ${str(p.step)}`);
+    if (p.connected === true) parts.push('connected');
     return parts.join(', ');
+}
+
+/** A formula as the chart text writes it: LaTeX (5.0) in $...$, the plain syntax as it is. `probe` says which. */
+function mathText(text: string, probe: string = text): string {
+    return looksLikeLatex(probe) ? `$${text}$` : text;
 }
 
 function functionLine(min: Data, full: Data, ctx: Ctx): string {
@@ -203,9 +219,12 @@ function functionLine(min: Data, full: Data, ctx: Ctx): string {
     const expr = str(full.expression);
     const exprY = str(full.expressionY);
     const parametric = full.parametric === true;
-    if (!NAME_RE.test(name) || !expr.trim() || hasBar(expr) || (parametric && (!exprY.trim() || hasBar(exprY)))) return raw('function', min);
+    // A LaTeX formula (5.0) is written in $...$, where a bar is an absolute value, not the option bar.
+    const latex = looksLikeLatex(expr) || (parametric && looksLikeLatex(exprY));
+    if (!NAME_RE.test(name) || !expr.trim() || (!latex && hasBar(expr)) || (parametric && (!exprY.trim() || (!latex && hasBar(exprY))))) return raw('function', min);
     const variable = parametric ? 't' : ctx.polar ? 'theta' : 'x';
-    const head = parametric ? `plot ${name}(t) = (${expr}, ${exprY})` : `plot ${name}(${variable}) = ${expr}`;
+    const body = parametric ? `${name}(t) = (${expr}, ${exprY})` : `${name}(${variable}) = ${expr}`;
+    const head = `plot ${latex ? `$${body}$` : body}`;
     // A y(t) kept from a parametric past stays as an option.
     const o = new Options(min, parametric ? ['expression', 'expressionY', 'parametric'] : ['expression', 'parametric']);
     o.take('domain', (v) => {
@@ -251,7 +270,7 @@ function surfaceLine(min: Data, full: Data, ctx: Ctx): string {
     o.take('meshOpacity', (v) => (fraction(v) ? `mesh ${v}` : null));
     o.take('samples', (v) => (typeof v === 'number' && Number.isFinite(v) ? `with ${v} samples` : null));
     o.take('wireframe', (v) => (v === true ? 'wireframe' : null));
-    return withOptions(`plot ${name}(x, y) = ${expr}`, o.finish());
+    return withOptions(`plot ${mathText(`${name}(x, y) = ${expr}`, expr)}`, o.finish());
 }
 
 /** Labels that `numbered` writes: (1), (2), ... for every condition but the plain sign ones. */
@@ -273,7 +292,7 @@ function regionHead(full: Data, o: Options): string | null {
     // A label on an empty condition has nothing to stand behind: the labels go in as an option.
     const labelsApart = !numbered && conditions.some((c, i) => c === '' && !!labels[i]);
     const own = (i: number) => (!numbered && !labelsApart ? labels[i] ?? '' : '');
-    const entry = (c: string, i: number) => (own(i) ? `${c} ${JSON.stringify(own(i))}` : c);
+    const entry = (c: string, i: number) => (own(i) ? `${mathText(c)} ${JSON.stringify(own(i))}` : mathText(c));
     o.mark('conditions');
     if (!labelsApart) o.mark('conditionLabels');
     if (numbered) o.out.push('numbered');
@@ -339,12 +358,12 @@ function pointsHead(full: Data, o: Options, ctx: Ctx): string | null {
     }
     const objective = str(full.objective).trim();
     const sense = str(full.sense) === 'min' ? 'minimum' : 'maximum';
-    if (objective && (hasBar(objective) || /\s(over|on|in)\s/i.test(objective))) return null;
+    if (objective && ((!looksLikeLatex(objective) && hasBar(objective)) || /\s(over|on|in)\s/i.test(objective))) return null;
     if (source === 'region') {
         if (!token(full.regionName)) return null;
         o.mark('source', 'regionName', 'objective');
         if (objective) o.mark('sense');
-        return objective ? `mark the ${sense} of ${objective} in ${region(full.regionName)}` : `mark the corners of ${region(full.regionName)}`;
+        return objective ? `mark the ${sense} of ${mathText(objective)} in ${region(full.regionName)}` : `mark the corners of ${region(full.regionName)}`;
     }
     if (source === 'lattice') {
         const name = str(full.regionName);
@@ -389,12 +408,12 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
     else if (type === 'curve') {
         const eq = str(full.equation).trim();
         const levels = str(full.levels).trim();
-        if (eq && !hasBar(eq) && !hasBar(levels)) {
+        if (eq && (looksLikeLatex(eq) || !hasBar(eq)) && !hasBar(levels)) {
             if (levels && !/\sat\s/i.test(eq)) {
                 const items = parts(levels, ',');
                 const list = items.length > 1 && items.join(', ') === levels && items.every((v) => cleanPiece(v, [' and '])) ? andList(items) : levels;
-                head = `draw the level curves of ${eq} at ${list}`;
-            } else if (!levels && drawable(eq)) head = `draw ${eq}`;
+                head = `draw the level curves of ${mathText(eq)} at ${list}`;
+            } else if (!levels && drawable(eq)) head = `draw ${mathText(eq)}`;
             if (head) o.mark('equation', 'levels');
         }
     } else if (type === 'points') head = pointsHead(full, o, ctx);
@@ -406,7 +425,7 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
             head = `draw the plane ${axis} = ${value}`;
             o.mark('axis', 'value');
         }
-    }
+    } else if (BEYOND_HEADS[type]) head = BEYOND_HEADS[type](full, o, ctx);
     // `title: ...` would read as a title line, so such a name only fits a raw line.
     if (!head || !NAME_RE.test(name) || /^(title|xlabel|ylabel|zlabel)$/i.test(name)) return raw('tool', min);
     if (type === 'region') {
@@ -424,6 +443,8 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
     } else if (type === 'plane3D') {
         o.colour();
         o.take('fillOpacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
+    } else if (BEYOND_HEADS[type]) {
+        beyondOptions(type, o);
     } else {
         o.common();
         o.label();
@@ -595,8 +616,14 @@ function shownNames(full: Data, rawTools: Set<number>, region: string | null): S
     const base = new Set<string>();
     for (const key of ['parameters', 'functions', 'functions3D'] as const) for (const item of list(full[key])) base.add(str(item.name));
     const show = new Set<number>(rawTools);
-    // A line that points at the only region calls it "the region": that needs no name.
-    const pointing = tools.map((t, j) => (region !== null && t.regionName === region && !rawTools.has(j) ? { ...t, regionName: '' } : t));
+    // A line that points at the only region calls it "the region": that needs no name. So does "the data" (5.0).
+    const pointing = tools.map((t, j) => {
+        if (rawTools.has(j)) return t;
+        let out = region !== null && t.regionName === region ? { ...t, regionName: '' } : t;
+        const ref = BEYOND_REFS[str(t.type)];
+        if (ref && str(out[ref.field]) && bareRef(tools, j, ref) === str(out[ref.field])) out = { ...out, [ref.field]: '' };
+        return out;
+    });
     tools.forEach((t, i) => {
         const name = str(t.name);
         if (!TOOL_PREFIX[str(t.type)] || !NAME_RE.test(name)) show.add(i);
@@ -645,15 +672,15 @@ interface Printed {
     say: (line: string) => string;
 }
 
-/** Lines in a person's own words, when they set some and want them written (src/text/words.ts). */
-function sayer(full: Data): (line: string) => string {
-    const words = chartWords();
+/** Lines in a person's own words, when they set some and want them written (src/text/words.ts); `builtin`: the built-in words. */
+function sayer(full: Data, builtin = false): (line: string) => string {
+    const words = builtin ? NO_WORDS : chartWords();
     if (!hasWords(words) || words.write !== 'yours') return (line) => line;
     const names = definedNames(full);
     return (line) => writeWords(line, words, names);
 }
 
-function printParts(data: Data): Printed {
+function printParts(data: Data, builtin = false): Printed {
     const min = minimize(data);
     const full = canonicalData(data);
     const is3D = full.dimension === true;
@@ -661,21 +688,22 @@ function printParts(data: Data): Printed {
     const tools = pairs(min, full, 'tools');
     const regions = list(full.tools).filter((t) => t.type === 'region');
     const region = regions.length === 1 && NAME_RE.test(str(regions[0].name)) ? str(regions[0].name) : null;
+    const all = list(full.tools);
     // Tools no line form fits are written raw; their names count as explicit.
-    const probe: Ctx = { is3D, polar, shown: new Set(), region };
+    const probe: Ctx = { is3D, polar, shown: new Set(), region, tools: all, index: -1 };
     const rawTools = new Set<number>();
     tools.forEach((t, i) => {
-        if (toolLine(t.min, t.full, probe).startsWith('raw ')) rawTools.add(i);
+        if (toolLine(t.min, t.full, { ...probe, index: i }).startsWith('raw ')) rawTools.add(i);
     });
-    const ctx: Ctx = { is3D, polar, shown: shownNames(full, rawTools, region), region };
-    const say = sayer(full);
+    const ctx: Ctx = { is3D, polar, shown: shownNames(full, rawTools, region), region, tools: all, index: -1 };
+    const say = sayer(full, builtin);
     return {
         chart: chartLines(min, full, null).map(say),
         objects: {
             parameters: list(full.parameters).map(sliderLine).map(say),
             functions: pairs(min, full, 'functions').map((p) => say(functionLine(p.min, p.full, ctx))),
             functions3D: pairs(min, full, 'functions3D').map((p) => say(surfaceLine(p.min, p.full, ctx))),
-            tools: tools.map((p) => say(toolLine(p.min, p.full, ctx))),
+            tools: tools.map((p, i) => say(toolLine(p.min, p.full, { ...ctx, index: i }))),
             annotations: pairs(min, full, 'annotations').map((p) => say(labelLine(p.min, p.full))),
         },
         say,
@@ -695,28 +723,45 @@ function rawLine(key: ObjectList, item: Data): string {
 
 const join = (p: Printed) => [...p.chart, ...LIST_NAMES.flatMap((k) => p.objects[k])].join('\n');
 
-/** The chart a text reads as, in a form that compares equal whatever order the keys came in. */
-function readAs(text: string): string {
-    return stableJson(canonicalData(parseChartText(text).data));
+/** The chart a text reads as, in a form that compares equal whatever order the keys came in; `builtin`: only the built-in words. */
+function readAs(text: string, builtin = false): string {
+    return stableJson(canonicalData(parseChartText(text, builtin ? { words: NO_WORDS } : {}).data));
+}
+
+/** The whole chart as text, in the form the setting "Chart language" says: words (the default) or Full LaTeX. */
+export function printChartText(data: Data): string {
+    return chartLanguage() === 'full' ? printFullText(data) : printWordsText(data);
 }
 
 /**
- * The whole chart as text. It reads back as the same chart: an object the
- * words got wrong is written as a raw line instead, a chart field as a set
- * line, and as a last resort every object is raw.
+ * The whole chart as lines in Full LaTeX (src/text/full.ts): the printed
+ * words (the built-in ones) written as commands. It reads back as the same
+ * chart; as a last resort every field is set and every object raw.
  */
-export function printChartText(data: Data): string {
+export function printFullText(data: Data): string {
+    const target = stableJson(canonicalData(data));
+    const text = wordsToFull(printWordsText(data, true), { builtin: true });
+    return readAs(text) === target ? text : exactFull(data);
+}
+
+/**
+ * The whole chart as lines in words. It reads back as the same chart: an
+ * object the words got wrong is written as a raw line instead, a chart
+ * field as a set line, and as a last resort every object is raw.
+ * `builtin`: in the built-in words, whatever words the person set.
+ */
+export function printWordsText(data: Data, builtin = false): string {
     const full = canonicalData(data);
     const target = stableJson(full);
-    const p = printParts(data);
+    const p = printParts(data, builtin);
     const min = minimize(data);
     // No printed line may end the code block.
     for (const key of LIST_NAMES) {
         p.objects[key] = p.objects[key].map((line, i) => (FENCE.test(line) ? rawLine(key, pairs(min, full, key)[i]?.min ?? {}) : line));
     }
     let text = join(p);
-    if (readAs(text) === target) return text;
-    const back = canonicalData(parseChartText(text).data);
+    if (readAs(text, builtin) === target) return text;
+    const back = canonicalData(parseChartText(text, builtin ? { words: NO_WORDS } : {}).data);
     for (const key of LIST_NAMES) {
         const got = list(back[key]);
         pairs(min, full, key).forEach((pair, i) => {
@@ -728,7 +773,7 @@ export function printChartText(data: Data): string {
         if (stableJson(full[k]) !== stableJson(back[k])) p.chart.push(`set ${k} = ${JSON.stringify(full[k])}`);
     }
     text = join(p);
-    if (readAs(text) === target) return text;
+    if (readAs(text, builtin) === target) return text;
     const chart = Object.keys(min)
         .filter((k) => k !== 'v' && !(LIST_NAMES as readonly string[]).includes(k))
         .map((k) => `set ${k} = ${JSON.stringify(min[k])}`);
@@ -748,19 +793,41 @@ const withoutId = (item: Data): string => {
 
 /**
  * The block text for `data`, starting from `oldText` (what the note holds):
- * unchanged objects keep their lines, comments and blank lines stay.
+ * unchanged objects keep their lines, comments and blank lines stay. The
+ * block keeps its form: a block in Full LaTeX stays Full LaTeX, one in
+ * words stays in words, whatever the setting says for new charts.
  */
 export function writeChartText(oldText: string, data: Data): string {
     const target = stableJson(canonicalData(data));
+    const full = isFullText(oldText);
     let result: string | null = null;
     try {
-        result = rewrite(oldText, data);
+        result = rewrite(oldText, data, full ? FULL_FORM : wordsForm(printParts(data)));
     } catch {
         result = null;
     }
     if (result !== null && readAs(result) === target) return result;
-    return printChartText(data);
+    return full ? printFullText(data) : printWordsText(data);
 }
+
+/** How a block writes its lines: in words (the person's own, when they set some) or in Full LaTeX. */
+interface Form {
+    full: boolean;
+    /** The printed lines (built-in words for Full LaTeX). */
+    printed(data: Data): Printed;
+    /** A printed object line in this form. */
+    object(line: string): string;
+    /** Printed chart lines in this form (Full LaTeX: one \axis line). */
+    chart(lines: string[]): string[];
+    /** A line with its object's name spelled out. */
+    named(line: string, name: string): string;
+}
+
+function wordsForm(p: Printed): Form {
+    return { full: false, printed: () => p, object: (l) => l, chart: (lines) => lines.map(p.say), named: (l, name) => `${name}: ${l}` };
+}
+
+const FULL_FORM: Form = { full: true, printed: (data) => printParts(data, true), object: fullLine, chart: axisLines, named: withName };
 
 /** One line of the result; an object line knows the key of its object in the new chart. */
 interface OutLine {
@@ -778,12 +845,12 @@ interface Fresh {
     item: Data;
 }
 
-function rewrite(oldText: string, data: Data): string {
+function rewrite(oldText: string, data: Data, form: Form): string {
     const old = parseChartText(oldText, { trace: true });
     const oldFull = canonicalData(old.data);
     const newFull = canonicalData(data);
     const newMin = minimize(data);
-    const printed = printParts(data);
+    const printed = form.printed(data);
     const lines = oldText.split(/\r\n?|\n/);
     const traces = old.lines ?? [];
 
@@ -794,7 +861,7 @@ function rewrite(oldText: string, data: Data): string {
         order[key] = [];
         list(newFull[key]).forEach((item, i) => {
             const k = itemKey(key, item, i);
-            fresh.set(k, { list: key, line: printed.objects[key][i], item });
+            fresh.set(k, { list: key, line: form.object(printed.objects[key][i]), item });
             order[key].push(k);
         });
     }
@@ -844,7 +911,7 @@ function rewrite(oldText: string, data: Data): string {
             if (!f || placed.has(k)) continue;
             placed.add(k);
             const was = before.get(t.line);
-            out.push({ text: was && withoutId(was) === withoutId(f.item) ? source : indent + f.line, list: f.list, key: k });
+            out.push({ text: was && withoutId(was) === withoutId(f.item) ? source : indent + keepForm(source, f.line), list: f.list, key: k });
             continue;
         }
         if (t.chart.length) {
@@ -853,15 +920,23 @@ function rewrite(oldText: string, data: Data): string {
                 out.push({ text: source, list: null, chart: true });
                 continue;
             }
-            for (const g of groups) {
-                if (written.has(g)) continue;
-                written.add(g);
-                for (const l of chartLines(newMin, newFull, new Set(g.split(' ')))) out.push({ text: indent + printed.say(l), list: null, chart: true });
-            }
+            // The line again with everything it set (a Full LaTeX \axis line sets many fields at once), each field once.
+            const todo = groups.filter((g) => !written.has(g));
+            for (const g of todo) written.add(g);
+            const keys = (g: string[]) => new Set(g.flatMap((x) => x.split(' ')));
+            const made = form.full ? form.chart(chartLines(newMin, newFull, keys(todo))) : todo.flatMap((g) => form.chart(chartLines(newMin, newFull, keys([g]))));
+            for (const l of made) out.push({ text: indent + l, list: null, chart: true });
             continue;
         }
-        out.push({ text: source, list: null }); // comments, blank lines, lines with problems
+        out.push({ text: source, list: null }); // comments, blank lines, lines with problems, \begin{chart} and \end{chart}
     }
+
+    /** The end of the block's lines: before \end{chart} in Full LaTeX. */
+    const end = () => {
+        if (!form.full) return out.length;
+        for (let i = out.length - 1; i >= 0; i--) if (out[i].list === null && out[i].text.trim() === FULL_END) return i;
+        return out.length;
+    };
 
     // Changed chart fields no line set: after the last chart line, else before the first object.
     const rest = [...dirty].filter((g) => !written.has(g));
@@ -875,9 +950,9 @@ function rewrite(oldText: string, data: Data): string {
         }
         if (at < 0) {
             const first = out.findIndex((l) => l.list !== null);
-            at = first < 0 ? out.length : first;
+            at = first < 0 ? end() : first;
         }
-        out.splice(at, 0, ...chartLines(newMin, newFull, new Set(rest.flatMap((g) => g.split(' ')))).map((t) => ({ text: printed.say(t), list: null, chart: true })));
+        out.splice(at, 0, ...form.chart(chartLines(newMin, newFull, new Set(rest.flatMap((g) => g.split(' '))))).map((t) => ({ text: t, list: null, chart: true })));
     }
 
     // New objects: after the last line of their kind, else before the first line of a later kind, else at the end.
@@ -896,7 +971,7 @@ function rewrite(oldText: string, data: Data): string {
             if (at < 0) {
                 const later = LIST_NAMES.slice(LIST_NAMES.indexOf(key) + 1);
                 const i = out.findIndex((l) => l.list !== null && later.includes(l.list));
-                at = i < 0 ? out.length : i;
+                at = i < 0 ? end() : i;
             }
             out.splice(at, 0, { text: f.line, list: key, key: k });
             placed.add(k);
@@ -911,7 +986,7 @@ function rewrite(oldText: string, data: Data): string {
         if (wanted.length === slots.length) slots.forEach((slot, j) => (out[slot] = wanted[j]));
     }
 
-    keepNames(out, fresh);
+    keepNames(out, fresh, form);
     return out.map((l) => l.text).join('\n');
 }
 
@@ -923,7 +998,7 @@ function rewrite(oldText: string, data: Data): string {
  * line says what it means: a tool only renamed gets `R2: ` in front, any
  * other line its printed form.
  */
-function keepNames(out: OutLine[], fresh: Map<string, Fresh>) {
+function keepNames(out: OutLine[], fresh: Map<string, Fresh>, form: Form) {
     for (let round = 0; round < 3; round++) {
         const parsed = parseChartText(out.map((l) => l.text).join('\n'), { trace: true });
         const read = canonicalData(parsed.data);
@@ -936,11 +1011,205 @@ function keepNames(out: OutLine[], fresh: Map<string, Fresh>) {
             if (!item || withoutId(item) === withoutId(f.item)) return;
             const indent = /^\s*/.exec(entry.text)?.[0] ?? '';
             const renamed = f.list === 'tools' && withoutId({ ...item, name: f.item.name }) === withoutId(f.item);
-            const line = renamed ? `${indent}${str(f.item.name)}: ${entry.text.trimStart()}` : indent + f.line;
+            const line = renamed ? indent + form.named(entry.text.trimStart(), str(f.item.name)) : indent + f.line;
             if (line === entry.text) return;
             entry.text = line;
             fixed = true;
         });
         if (!fixed) return;
     }
+}
+
+// ---------------------------------------------------- beyond functions (5.0)
+
+/**
+ * Fields that name a tool a line may point at without its name ("the data"),
+ * by the type of the pointing tool; `names` are names in the line itself that
+ * pick one (P(X2 <= 1)).
+ */
+const BEYOND_REFS: Record<string, { field: string; type: string; names?: (t: Data) => string[] }> = {
+    dataPlot: { field: 'data', type: 'data' },
+    solution: { field: 'field', type: 'slopeField' },
+    probability: { field: 'distribution', type: 'distribution', names: (t) => eventNames(str(t.event)) },
+};
+
+/** The tool of `ref.type` the parser gives tool `index` when its line names none: one its line names, else the nearest above, else the first below. */
+function bareRef(tools: Data[], index: number, ref: { type: string; names?: (t: Data) => string[] }): string {
+    const of = tools.map((t, i) => ({ t, i })).filter((c) => c.t.type === ref.type);
+    const own = tools[index];
+    for (const n of own && ref.names ? ref.names(own) : []) if (of.some((c) => str(c.t.name) === n)) return n;
+    const above = of.filter((c) => c.i < index);
+    const pick = above.length ? above[above.length - 1] : of.find((c) => c.i > index);
+    return pick ? str(pick.t.name) : '';
+}
+
+/** ` of D2`, or '' when the line points at it without its name (the nearest above); null when no line form says it. */
+function refPhrase(full: Data, ctx: Ctx, field: string): string | null {
+    const name = str(full[field]);
+    const ref = BEYOND_REFS[str(full.type)];
+    if (name && ref && ctx.index >= 0 && bareRef(ctx.tools, ctx.index, ref) === name) return '';
+    return NAME_RE.test(name) ? ` of ${name}` : null;
+}
+
+/** Round brackets in pairs, none closed before it opens. */
+function balanced(s: string): boolean {
+    let depth = 0;
+    for (const c of s) {
+        if (c === '(') depth++;
+        else if (c === ')' && --depth < 0) return false;
+    }
+    return depth === 0;
+}
+
+/** A formula of a line: in $...$ when it is LaTeX, and only when no separator of the line can cut it. */
+function part(v: unknown): string | null {
+    const s = str(v).trim();
+    return s && bound(s) ? mathText(s) : null;
+}
+
+/** A column name as `columns ...` reads it back: bare when it is a plain name, else in quotes. */
+function columnName(name: string): string {
+    return name === name.trim() && /^[^",|]+$/.test(name) && splitTop(name, ' and ').length === 1 && !/^(?:and|with)\b/i.test(name) ? name : JSON.stringify(name);
+}
+
+/** The statement of each type of tool beyond functions (null: no line form fits, the tool is written raw). */
+const BEYOND_HEADS: Record<string, (full: Data, o: Options, ctx: Ctx) => string | null> = {
+    data: (full, o) => {
+        if (str(full.source) === 'list') {
+            const pieces = parts(str(full.points), ';');
+            if (!pieces.length || !pieces.every((p) => cleanPiece(p, [',', ' and ']) && /^\(.*\)$/.test(p))) return null;
+            o.mark('source', 'points');
+            return `data ${pieces.join(', ')}`;
+        }
+        o.mark('source');
+        const x = str(full.xColumn);
+        const y = str(full.yColumn);
+        if (!x || hasControl(x) || hasControl(y)) return 'use the table above';
+        o.mark('xColumn');
+        if (y) o.mark('yColumn');
+        return `use the table above, columns ${columnName(x)}${y ? ` and ${columnName(y)}` : ''}`;
+    },
+    dataPlot: (full, o, ctx) => {
+        const of = refPhrase(full, ctx, 'data');
+        if (of === null) return null;
+        o.mark('data', 'style');
+        switch (str(full.style)) {
+            case 'bars':
+                return `draw the data${of} as bars`;
+            case 'line':
+                return `draw the data${of} as a line`;
+            case 'regression':
+                return of ? `draw the regression line${of}` : 'draw its regression line';
+            default:
+                return `mark the data${of}`;
+        }
+    },
+    distribution: (full, o) => {
+        if (str(full.kind) === 'binomial') {
+            const n = part(full.n);
+            const p = part(full.p);
+            if (n === null || p === null) return null;
+            o.mark('kind', 'n', 'p');
+            return `plot the binomial distribution with n = ${n} and p = ${p}`;
+        }
+        const mean = part(full.mean);
+        const sd = part(full.sd);
+        if (mean === null || sd === null) return null;
+        o.mark('kind', 'mean', 'sd');
+        return `plot the normal distribution with mean ${mean} and sd ${sd}`;
+    },
+    slopeField: (full, o) => {
+        const expr = str(full.expression).trim();
+        const latex = looksLikeLatex(expr);
+        if (!expr || hasControl(expr) || (!latex && hasBar(expr)) || parts(expr, ',').length !== 1) return null;
+        o.mark('expression');
+        return `draw the slope field of ${mathText(`y' = ${expr}`, expr)}`;
+    },
+    solution: (full, o, ctx) => {
+        const pieces = parts(str(full.through), ';');
+        if (!pieces.length || !pieces.every((p) => cleanPiece(p, [',', ' and ']) && (/^\(.*\)$/.test(p) || NAME_RE.test(p)))) return null;
+        const of = refPhrase(full, ctx, 'field');
+        if (of === null) return null;
+        o.mark('field', 'through');
+        return `draw the ${pieces.length > 1 ? 'solutions' : 'solution'}${of} through ${andList(pieces)}`;
+    },
+    riemann: (full, o) => {
+        const fn = str(full.function);
+        const from = part(full.from);
+        const to = part(full.to);
+        const parts = part(full.parts);
+        if (!NAME_RE.test(fn) || from === null || to === null || parts === null || /\swith\s/i.test(to)) return null;
+        o.mark('function', 'method', 'from', 'to', 'parts');
+        const method = str(full.method);
+        const what = method === 'trapezoid' ? 'the trapezoid rule' : `the ${method === 'right' || method === 'middle' ? method : 'left'} Riemann sum`;
+        return `draw ${what} of ${fn} from ${from} to ${to} with ${parts} ${parts === '1' ? 'part' : 'parts'}`;
+    },
+    probability: (full, o, ctx) => {
+        const event = str(full.event).trim();
+        // The event stands in brackets: no bar, no line break, and its brackets in pairs.
+        if (!event || hasControl(event) || (!looksLikeLatex(event) && hasBar(event)) || !balanced(event)) return null;
+        const of = refPhrase(full, ctx, 'distribution');
+        if (of === null) return null;
+        o.mark('event', 'distribution');
+        return `shade ${mathText(`P(${event})`, event)}${of}`;
+    },
+};
+
+/** The options of a tool beyond functions, in words where they have some. */
+function beyondOptions(type: string, o: Options) {
+    o.colour();
+    if (type === 'distribution') {
+        o.take('thickness', (v) => (typeof v === 'string' && THICKNESSES.includes(v) ? v : null));
+        o.take('dashed', (v) => (v === true ? 'dashed' : null));
+        o.take('fillOpacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
+    }
+    if (type === 'slopeField' || type === 'solution') {
+        o.take('thickness', (v) => (typeof v === 'string' && THICKNESSES.includes(v) ? v : null));
+        o.take('dashed', (v) => (v === true ? 'dashed' : null));
+    }
+    if (type === 'riemann') {
+        o.take('thickness', (v) => (typeof v === 'string' && THICKNESSES.includes(v) ? v : null));
+        o.take('fillOpacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
+        o.take('label', (v) => (typeof v === 'string' ? `labelled ${JSON.stringify(v)}` : null));
+        o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
+    }
+    if (type === 'probability') {
+        o.fillLook();
+        o.take('label', (v) => (typeof v === 'string' ? `labelled ${JSON.stringify(v)}` : null));
+        o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
+    }
+    if (type === 'dataPlot') {
+        o.take('size', (v) => (v === 'small' || v === 'large' || v === 'normal' ? v : null));
+        o.take('thickness', (v) => (typeof v === 'string' && THICKNESSES.includes(v) ? v : null));
+        o.take('dashed', (v) => (v === true ? 'dashed' : null));
+        o.take('fillOpacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
+        o.take('label', (v) => (v === '({x:2}, {y:2})' ? 'with coordinates' : typeof v === 'string' ? `labelled ${JSON.stringify(v)}` : null));
+        o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
+    }
+}
+
+/**
+ * A changed line keeps the form it was written in where the printer has
+ * another one for it (5.0): `mark P at (1, 2)` stays so when P moves, where
+ * a whole print writes `P: mark (1, 2.5)`. Anything else is the printed line.
+ */
+function keepForm(source: string, printed: string): string {
+    const old = /^\s*mark\s+([A-Za-z][A-Za-z0-9_]*)\s+at\s+\(/i.exec(source);
+    if (!old) return printed;
+    const head = `${old[1]}: mark (`;
+    if (!printed.startsWith(head)) return printed;
+    // The point's closing bracket, then nothing but options after a comma or a phrase.
+    let depth = 0;
+    let end = -1;
+    for (let i = head.length - 1; i < printed.length; i++) {
+        if (printed[i] === '(') depth++;
+        else if (printed[i] === ')' && --depth === 0) {
+            end = i;
+            break;
+        }
+    }
+    if (end < 0) return printed;
+    const rest = printed.slice(end + 1);
+    if (/^\s*(?:and\b|,\s*\()/.test(rest)) return printed;
+    return `mark ${old[1]} at ${printed.slice(head.length - 1, end + 1)}${rest}`;
 }
