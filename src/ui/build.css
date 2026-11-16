@@ -186,6 +186,14 @@ button.etz-build-example:focus-visible {
     -webkit-line-clamp: 2;
 }
 
+/* The texts of a tile wrap by themselves: a theme that keeps button text on one line must not push them out of the tile. */
+button.etz-build-example .etz-build-example-title,
+button.etz-build-example .etz-build-example-desc {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+
 .etz-build-empty-links {
     display: flex;
     flex-wrap: wrap;

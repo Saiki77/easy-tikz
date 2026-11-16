@@ -179,7 +179,7 @@ const GL_LEVELS = 'draw the level curves of x^2 + 2y^2 at 1, 2, 4 and 8 in purpl
 const GL_SLIDER = 'slider s from 0 to 6.28, starting at 0.8, in steps of 0.01';
 const GL_POINT = 'P: mark (1.6cos(s), 1.1sin(s)), large';
 const GL_THROUGH = 'draw the level curves of x^2 + 2y^2 at P_x^2 + 2*P_y^2 in red, dashed';
-const GL_ARROW = 'draw an arrow from P to (1.4*P_x, 1.8*P_y) in red, very thick, labelled "$\\\\nabla f$"';
+const GL_ARROW = 'draw an arrow from P to (1.4*P_x, 1.8*P_y) in red, very thick, labelled "$\\nabla f$"';
 
 const GRADIENT_LEVELS: Guide = {
     id: 'gradient-levels',

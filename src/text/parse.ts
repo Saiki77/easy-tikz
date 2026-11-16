@@ -19,6 +19,7 @@
  * words do not cover.
  */
 import { RESERVED_NAMES } from '../migrate';
+import { unquote } from './quote';
 import { isColormap } from '../colormaps';
 import { ChartWords, chartWords, hasWords, readWords, shadowed, typedColumn } from './words';
 import { MessageKey, t as msg } from '../i18n';
@@ -319,7 +320,7 @@ function isEnglish(line: string): boolean {
     return !lead || !CHART_WORDS.has(lead[1].toLowerCase());
 }
 
-/** A "quoted" string at the start of `s` (JSON escapes), and what follows it. */
+/** A "quoted" string at the start of `s` (JSON escapes, LaTeX commands in math as written: see quote.ts), and what follows it. */
 function takeQuoted(s: string): { text: string; rest: string } | null {
     const t = s.trimStart();
     if (!t.startsWith('"')) return null;
@@ -328,13 +329,7 @@ function takeQuoted(s: string): { text: string; rest: string } | null {
             i++;
             continue;
         }
-        if (t[i] === '"') {
-            try {
-                return { text: JSON.parse(t.slice(0, i + 1)) as string, rest: t.slice(i + 1).trim() };
-            } catch {
-                return null;
-            }
-        }
+        if (t[i] === '"') return { text: unquote(t.slice(1, i)), rest: t.slice(i + 1).trim() };
     }
     return null;
 }
@@ -705,11 +700,7 @@ function conditionsOf(b: Builder, body: Piece): { conditions: string[]; labels: 
         let label = '';
         const q = /"((?:[^"\\]|\\.)*)"\s*$/.exec(t);
         if (q && q.index > 0) {
-            try {
-                label = JSON.parse(`"${q[1]}"`) as string;
-            } catch {
-                label = q[1];
-            }
+            label = unquote(q[1]);
             t = t.slice(0, q.index).trim();
         }
         const between = /^between\s+(\S+)\s+and\s+(\S+)$/i.exec(t);

@@ -25,6 +25,7 @@
  * Pure: no DOM, no Obsidian.
  */
 import { t as msg } from '../i18n';
+import { quote, unquote } from './quote';
 import { isColormap } from '../colormaps';
 import { canonicalData, minimize, stableJson } from '../chartdata';
 import { looksLikeLatex, stripMathDollars } from '../latex';
@@ -210,32 +211,32 @@ function bareOk(v: string): boolean {
 function encValue(v: string): string {
     if (bareOk(v)) return v;
     if (bracedOk(v)) return `{${v}}`;
-    return JSON.stringify(v);
+    return quote(v);
 }
 
 /** A text (a label, a title, an axis name) as an option value: one word bare, else {text} as pgfplots writes it, else a JSON string. */
 function encText(v: string): string {
     if (/^[\p{L}\p{N}_.*+-]+$/u.test(v)) return v;
-    return bracedOk(v) ? `{${v}}` : JSON.stringify(v);
+    return bracedOk(v) ? `{${v}}` : quote(v);
 }
 
 /** One end of a range a:b: like a value, and braced when it holds a colon of its own. */
 function encBound(v: string): string {
-    return bareOk(v) && !v.includes(':') ? v : bracedOk(v) ? `{${v}}` : JSON.stringify(v);
+    return bareOk(v) && !v.includes(':') ? v : bracedOk(v) ? `{${v}}` : quote(v);
 }
 
 /** A field's value (JSON text, read back as written): bare, a "string" as it is, else braced. */
 function encJson(v: string): string {
     if (bareOk(v)) return v;
     if (v.startsWith('"') && quoteEnd(v, 0) === v.length - 1) return v;
-    return bracedOk(v) ? `{${v}}` : JSON.stringify(v);
+    return bracedOk(v) ? `{${v}}` : quote(v);
 }
 
 /** An item of a list option (labels={...}): empty, bare, braced or a JSON string. */
 function encItem(v: string): string {
     if (!v) return '';
     if (bareOk(v)) return v;
-    return bracedOk(v) && v === v.trim() ? `{${v}}` : JSON.stringify(v);
+    return bracedOk(v) && v === v.trim() ? `{${v}}` : quote(v);
 }
 
 /** Is `v` one {group}, whole? */
@@ -251,14 +252,7 @@ function inner(v: string, at: number): Piece {
 /** A text value: {text} as written, "text" as JSON, otherwise as written. */
 function textOf(v: string): string {
     if (braced(v)) return v.slice(1, -1);
-    if (v.startsWith('"') && quoteEnd(v, 0) === v.length - 1) {
-        try {
-            const s = JSON.parse(v) as unknown;
-            if (typeof s === 'string') return s;
-        } catch {
-            // as written
-        }
-    }
+    if (v.startsWith('"') && quoteEnd(v, 0) === v.length - 1) return unquote(v.slice(1, -1));
     return v;
 }
 
@@ -477,7 +471,7 @@ function optionWords(o: Opt, kind: Kind, variable: string): Mapped {
             return m.copy(v.text, v.at);
         case 'label':
         case 'legend':
-            return m.put(`${o.key} `, o.at).put(JSON.stringify(textOf(o.value)), o.valueAt);
+            return m.put(`${o.key} `, o.at).put(quote(textOf(o.value)), o.valueAt);
         case 'tangent':
         case 'tangent at':
             return m.put('tangent at ', o.at).copy(v.text, v.at);
@@ -577,7 +571,7 @@ function shadeWords(cmd: Command): Mapped {
         entries.forEach((e, i) => {
             if (i) m.put(', ', e.at);
             mathInto(m, e.text, e.at);
-            if (labels[i] && labelsOpt) m.put(` ${JSON.stringify(labels[i])}`, labelsOpt.valueAt);
+            if (labels[i] && labelsOpt) m.put(` ${quote(labels[i])}`, labelsOpt.valueAt);
         });
     }
     barInto(m, cmd.options, 'region', 'x', new Set(['name', 'labels']));
@@ -710,7 +704,7 @@ function nodeWords(cmd: Command): Mapped {
     namedInto(m, opts);
     const textOpt = valueOf(opts, 'text');
     const arg = argOf(cmd);
-    m.put('write ', cmd.at).put(JSON.stringify(textOpt ? textOf(textOpt.value ?? '') : arg.text), textOpt ? textOpt.valueAt : arg.at);
+    m.put('write ', cmd.at).put(quote(textOpt ? textOf(textOpt.value ?? '') : arg.text), textOpt ? textOpt.valueAt : arg.at);
     const atOpt = valueOf(opts, 'at');
     const pos = atOpt ? inner(atOpt.value ?? '', atOpt.valueAt) : cmd.position;
     if (pos) {
@@ -795,7 +789,7 @@ const boundOk = (b: string) => !!b.trim() && [',', '..', ' to ', ' and '].every(
 /** Text a title line holds bare when it reads back the same, else "quoted" (the printer's text()). */
 function titleText(s: string): string {
     const plain = s && s === s.trim() && !s.startsWith('"') && !s.startsWith(':') && !s.includes('|') && !hasControlChar(s, true);
-    return plain ? s : JSON.stringify(s);
+    return plain ? s : quote(s);
 }
 
 /** A size in cm: 12, 12cm, 120mm, 4in, 300pt. */
@@ -1031,17 +1025,13 @@ const FLAGS = new Set([
 ]);
 const COLOUR_ALIASES = new Set(['grey', 'violet', 'pink', 'cyan', 'auto']);
 
-/** A "quoted" string at the start of `s` (JSON escapes), and what follows it. */
+/** A "quoted" string at the start of `s` (JSON escapes, LaTeX commands in math as written: see quote.ts), and what follows it. */
 function takeQuoted(s: string): { text: string; rest: string } | null {
     const t = s.trimStart();
     if (!t.startsWith('"')) return null;
     const end = quoteEnd(t, 0);
     if (end < 0) return null;
-    try {
-        return { text: JSON.parse(t.slice(0, end + 1)) as string, rest: t.slice(end + 1).trim() };
-    } catch {
-        return null;
-    }
+    return { text: unquote(t.slice(1, end)), rest: t.slice(end + 1).trim() };
 }
 
 /** A text option's value as the words write it: "quoted" (JSON) or bare. */
@@ -1094,7 +1084,7 @@ function optionFull(o: string, kind: Kind): string {
     if (r) return `${r.y ? 'y domain' : 'domain'}=${encBound(r.range[0])}:${encBound(r.range[1])}`;
     m = /^([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.+)$/.exec(t);
     if (m) return `${m[1]}=${encJson(m[2].trim())}`;
-    return bareOk(t) || /^<?->?$/.test(t) ? t : bracedOk(t) ? `{${t}}` : JSON.stringify(t);
+    return bareOk(t) || /^<?->?$/.test(t) ? t : bracedOk(t) ? `{${t}}` : quote(t);
 }
 
 /** \command[options]{argument} (null when the argument cannot stand in braces). */
@@ -1210,11 +1200,7 @@ function shadeFull(own: string, rest: string, options: string[]): string | null 
         let label = '';
         const q = /"((?:[^"\\]|\\.)*)"\s*$/.exec(c);
         if (q && q.index > 0) {
-            try {
-                label = JSON.parse(`"${q[1]}"`) as string;
-            } catch {
-                label = q[1];
-            }
+            label = unquote(q[1]);
             c = c.slice(0, q.index).trim();
         }
         conditions.push(c);
@@ -1232,7 +1218,7 @@ function nodeFull(own: string, rest: string, options: string[]): string | null {
     if (!q || !at) return null;
     const opts = [`at=${encValue(at[1])}`];
     const plain = q.text === q.text.trim() && bracedOk(q.text);
-    if (!plain) opts.push(`text=${JSON.stringify(q.text)}`);
+    if (!plain) opts.push(`text=${quote(q.text)}`);
     return command('node', own, [...opts, ...options.map((o) => optionFull(o, 'text'))], plain ? q.text : null);
 }
 
@@ -1268,7 +1254,7 @@ function sliderFull(line: string): string | null {
     if (hi !== undefined) opts.push(`max=${encValue(hi)}`);
     if (start !== undefined) opts.push(`start=${encValue(start)}`);
     if (step !== undefined) opts.push(`step=${encValue(step)}`);
-    for (const e of extra) opts.push(bareOk(e) ? e : bracedOk(e) ? `{${e}}` : JSON.stringify(e));
+    for (const e of extra) opts.push(bareOk(e) ? e : bracedOk(e) ? `{${e}}` : quote(e));
     return command('slider', '', opts, head[1]);
 }
 
@@ -1420,7 +1406,7 @@ function axisFull(fields: string[], chart: Data): string[] {
             opts.push(`${a}tick distance=${encValue(chart[step].trim())}`);
             usedStep = true;
         } else if (has(mode) && v === 'at' && filled(chart[at])) {
-            opts.push(`${a}tick=${bracedOk(chart[at].trim()) ? `{${chart[at].trim()}}` : JSON.stringify(chart[at])}`);
+            opts.push(`${a}tick=${bracedOk(chart[at].trim()) ? `{${chart[at].trim()}}` : quote(chart[at])}`);
             usedAt = true;
         } else if (has(mode)) generic(mode);
         if (!usedStep && has(step)) generic(step);

@@ -258,10 +258,19 @@ export function stripMathDollars(line: string, names?: ReadonlySet<string>): str
     if (!line.includes('$')) return line;
     let out = '';
     let quoted = false;
+    let escaped = false;
     let math = false;
     let formula = '';
     for (const c of line) {
-        if (c === '"' && !math) quoted = !quoted;
+        // A "quoted" text (a label, a title) stays exactly as written, \" included.
+        if (quoted) {
+            out += c;
+            if (escaped) escaped = false;
+            else if (c === '\\') escaped = true;
+            else if (c === '"') quoted = false;
+            continue;
+        }
+        if (c === '"' && !math) quoted = true;
         if (c === '$' && !quoted) {
             // Inside $...$ letters side by side multiply, as in LaTeX (`$ax^2 + bx$` is a x^2 + b x);
             // the chart's own names (a slider called speed) stay whole. Without `names` the formula stays as written.
@@ -275,6 +284,7 @@ export function stripMathDollars(line: string, names?: ReadonlySet<string>): str
         else out += c;
     }
     if (math) out += formula;
-    // r(\theta) heads a polar curve as r(theta) does (not inside a command run such as \cos\theta).
-    return out.replace(/(?<![A-Za-z])\\theta\b/g, 'theta');
+    // r(\theta) heads a polar curve as r(theta) does (not inside a command run such as \cos\theta), outside
+    // quoted text: a label "$\theta$" keeps its LaTeX (5.2.1).
+    return out.replace(/("(?:[^"\\]|\\.)*")|[^"]+/g, (part: string, q?: string) => (q ? part : part.replace(/(?<![A-Za-z])\\theta\b/g, 'theta')));
 }

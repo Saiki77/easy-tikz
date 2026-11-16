@@ -62,7 +62,7 @@ The gradient of `x^2 + 2y^2` is (2x, 4y). Its arrow stands at right angles to th
 The chart gets these lines:
 
 ```easy-tikz
-draw an arrow from P to (1.4*P_x, 1.8*P_y) in red, very thick, labelled "$\\nabla f$"
+draw an arrow from P to (1.4*P_x, 1.8*P_y) in red, very thick, labelled "$\nabla f$"
 ```
 
 ![Add the gradient arrow](img/gradient-levels-4.png)
@@ -83,7 +83,7 @@ slider s from 0 to 6.28, starting at 0.8, in steps of 0.01
 draw the level curves of x^2 + 2y^2 at 1, 2, 4 and 8 in purple, labelled "{level}"
 P: mark (1.6cos(s), 1.1sin(s)), large
 draw the level curves of x^2 + 2y^2 at P_x^2 + 2*P_y^2 in red, dashed
-draw an arrow from P to (1.4*P_x, 1.8*P_y) in red, very thick, labelled "$\\nabla f$"
+draw an arrow from P to (1.4*P_x, 1.8*P_y) in red, very thick, labelled "$\nabla f$"
 ```
 
 </details>

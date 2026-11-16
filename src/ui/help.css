@@ -889,7 +889,9 @@ button.etz-help-tile:hover {
 
 /* The texts of a card wrap by themselves: a theme that keeps button text on one line must not push them out of the card. */
 .etz-help button.etz-help-start > span,
-.etz-help button.etz-help-tile span {
+.etz-help button.etz-help-tile span,
+.etz-help button.etz-help-topic > span,
+.etz-help button.etz-help-card span {
     min-width: 0;
     white-space: normal;
     overflow-wrap: break-word;

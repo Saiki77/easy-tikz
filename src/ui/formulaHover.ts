@@ -106,21 +106,28 @@ export class FormulaHover {
         return ViewPlugin.fromClass(
             class {
                 private frame = 0;
+                /** Check every formula at the next frame, also the marked ones. */
+                private all = false;
                 constructor(private readonly view: EditorView) {
-                    this.schedule();
+                    // A new editor, or the plugin loaded again in an open note (an update): the marks an earlier
+                    // version left are checked anew, so a changed rule shows without reopening the note (5.2.1).
+                    this.schedule(true);
                 }
                 update(u: ViewUpdate) {
-                    if (u.docChanged || u.viewportChanged || u.selectionSet || u.geometryChanged) this.schedule();
+                    if (u.docChanged || u.viewportChanged || u.selectionSet || u.geometryChanged) this.schedule(false);
                 }
                 destroy() {
                     if (this.frame) window.cancelAnimationFrame(this.frame);
                 }
-                private schedule() {
+                private schedule(all: boolean) {
+                    this.all = this.all || all;
                     if (this.frame) return;
                     this.frame = window.requestAnimationFrame(() => {
                         this.frame = 0;
+                        const all = this.all;
+                        this.all = false;
                         for (const math of Array.from(this.view.contentDOM.querySelectorAll<HTMLElement>('.math'))) {
-                            if (math.dataset.etzMark !== undefined && math.dataset.etzSeen === drawnAs(math)) continue;
+                            if (!all && math.dataset.etzMark !== undefined && math.dataset.etzSeen === drawnAs(math)) continue;
                             const found = formulaInEditor(this.view, math);
                             markMath(math, found ? found.tex : null);
                         }

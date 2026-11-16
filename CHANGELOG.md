@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.2.1] - 2026-11-16
+
+### Fixed
+
+- **LaTeX in quoted labels keeps its backslash:** a label, title or legend typed in the chart text as `"$\theta$"`, `"$\frac{1}{2}$"` or `"\textbf{A}"` now reads as written. Quoted text used JSON escapes, so `\t`, `\f`, `\n`, `\b` and `\r` turned into control characters. A backslash before two or more letters now starts a LaTeX command, and the chart text writes such labels with one backslash. Labels written earlier with two backslashes (`"$\\theta$"`) read the same (`src/text/quote.ts`).
+- **The underline under formulas follows an update at once:** after an update, or after the plugin is turned off and on, notes open in Live Preview check their formulas again. Before, the old underline stayed until the note was opened again or Obsidian restarted. Windows that were open before the plugin loaded also get the underline.
+- **Help and Build cards wrap their text with any theme:** the reference topics of the Help (Quick start, Sliders, Regions and others) and the example tiles of an empty chart stay inside their cards with a theme that keeps button text on one line.
+- A `\theta` inside a quoted label stays `\theta` (the rule that reads `r(\theta)` as `r(theta)` now applies only outside quotes).
+
 ## [5.2.0] - 2026-11-16
 
 Charts whose parts follow each other: a slider moves a point, a tangent, a region or a label, and everything that depends on it moves along.

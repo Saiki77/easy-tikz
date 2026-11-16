@@ -386,6 +386,8 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         // The highlight under formulas with a chart: a class on the body of each window.
         this.applyFormulaMarks(activeDocument);
         this.registerEvent(this.app.workspace.on('window-open', (_w, win) => this.applyFormulaMarks(win.document)));
+        // Windows that were open before the plugin loaded (turned on or updated with a window of notes open).
+        this.app.workspace.onLayoutReady(() => this.app.workspace.iterateAllLeaves((leaf) => this.applyFormulaMarks(leaf.view.containerEl.ownerDocument)));
         this.register(() => {
             for (const doc of this.markDocs) doc.body.removeClass('etz-formula-marks');
         });

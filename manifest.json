@@ -1,7 +1,7 @@
 {
 	"id": "easy-tikz",
 	"name": "Easy Graphs Charts and TikZ",
-	"version": "5.2.0",
+	"version": "5.2.1",
 	"minAppVersion": "1.13.0",
 	"description": "Every formula in your notes is a chart. Write math charts in LaTeX, move them with sliders and by dragging, in 2D and 3D, and export them as pgfplots LaTeX that compiles.",
 	"author": "Saiki77",

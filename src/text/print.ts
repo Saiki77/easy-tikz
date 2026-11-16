@@ -18,6 +18,7 @@
  * a block someone wrote keeps its form.
  */
 import { Data, canonicalData, minimize, stableJson } from '../chartdata';
+import { quote } from './quote';
 import { ANCHORS, COLORS, NAME_RE, ObjectList, PATTERNS, THICKNESSES, TOOL_PREFIX, definedNames, isSignCondition, niceStep, parseChartText, splitStatement, splitTop } from './parse';
 import { NO_WORDS, chartWords, hasWords, writeWords } from './words';
 import { FULL_END, axisLines, chartLanguage, exactFull, fullLine, isFullText, withName, wordsToFull } from './full';
@@ -47,7 +48,7 @@ function hasControl(s: string): boolean {
 
 /** Text a line holds bare when it reads back the same, else "quoted". */
 function text(s: string): string {
-    return s && s === s.trim() && !s.startsWith('"') && !s.startsWith(':') && !s.includes('|') && !hasControl(s) ? s : JSON.stringify(s);
+    return s && s === s.trim() && !s.startsWith('"') && !s.startsWith(':') && !s.includes('|') && !hasControl(s) ? s : quote(s);
 }
 
 /** Text a line cannot hold bare: a `|` that would end the statement (`||` is "or"), or a line break. */
@@ -128,7 +129,7 @@ class Options {
     }
 
     label() {
-        this.take('label', (v) => (typeof v === 'string' ? `labelled ${JSON.stringify(v)}` : null));
+        this.take('label', (v) => (typeof v === 'string' ? `labelled ${quote(v)}` : null));
     }
 
     fillLook() {
@@ -239,7 +240,7 @@ function functionLine(min: Data, full: Data, ctx: Ctx): string {
         const label = str(full.legendLabel);
         o.mark('showLegend');
         if (label) o.mark('legendLabel');
-        o.out.push(label ? `with the legend ${JSON.stringify(label)}` : 'with a legend');
+        o.out.push(label ? `with the legend ${quote(label)}` : 'with a legend');
     }
     const point = str(full.tangentPoint).trim();
     if (o.has('tangent') && min.tangent === true && point && cleanPiece(point, [',', ' and '])) {
@@ -292,7 +293,7 @@ function regionHead(full: Data, o: Options): string | null {
     // A label on an empty condition has nothing to stand behind: the labels go in as an option.
     const labelsApart = !numbered && conditions.some((c, i) => c === '' && !!labels[i]);
     const own = (i: number) => (!numbered && !labelsApart ? labels[i] ?? '' : '');
-    const entry = (c: string, i: number) => (own(i) ? `${mathText(c)} ${JSON.stringify(own(i))}` : mathText(c));
+    const entry = (c: string, i: number) => (own(i) ? `${mathText(c)} ${quote(own(i))}` : mathText(c));
     o.mark('conditions');
     if (!labelsApart) o.mark('conditionLabels');
     if (numbered) o.out.push('numbered');
@@ -439,7 +440,7 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
         o.colour();
         o.take('size', (v) => (v === 'small' || v === 'large' || v === 'normal' ? v : null));
         o.take('dropLines', (v) => (v === true ? 'with lines to the axes' : null));
-        o.take('label', (v) => (v === '({x:2}, {y:2})' ? 'with coordinates' : typeof v === 'string' ? `labelled ${JSON.stringify(v)}` : null));
+        o.take('label', (v) => (v === '({x:2}, {y:2})' ? 'with coordinates' : typeof v === 'string' ? `labelled ${quote(v)}` : null));
     } else if (type === 'plane3D') {
         o.colour();
         o.take('fillOpacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
@@ -463,7 +464,7 @@ function labelLine(min: Data, full: Data): string {
     o.colour();
     o.take('anchor', (v) => (typeof v === 'string' && ANCHORS.has(v) ? v : null));
     o.take('size', (v) => (v === 'small' || v === 'large' || v === 'normal' ? v : null));
-    return withOptions(`write ${JSON.stringify(str(full.text))} at (${coords.join(', ')})`, o.finish());
+    return withOptions(`write ${quote(str(full.text))} at (${coords.join(', ')})`, o.finish());
 }
 
 // ----------------------------------------------------------------- chart
@@ -1069,7 +1070,7 @@ function part(v: unknown): string | null {
 
 /** A column name as `columns ...` reads it back: bare when it is a plain name, else in quotes. */
 function columnName(name: string): string {
-    return name === name.trim() && /^[^",|]+$/.test(name) && splitTop(name, ' and ').length === 1 && !/^(?:and|with)\b/i.test(name) ? name : JSON.stringify(name);
+    return name === name.trim() && /^[^",|]+$/.test(name) && splitTop(name, ' and ').length === 1 && !/^(?:and|with)\b/i.test(name) ? name : quote(name);
 }
 
 /** The statement of each type of tool beyond functions (null: no line form fits, the tool is written raw). */
@@ -1170,12 +1171,12 @@ function beyondOptions(type: string, o: Options) {
     if (type === 'riemann') {
         o.take('thickness', (v) => (typeof v === 'string' && THICKNESSES.includes(v) ? v : null));
         o.take('fillOpacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
-        o.take('label', (v) => (typeof v === 'string' ? `labelled ${JSON.stringify(v)}` : null));
+        o.take('label', (v) => (typeof v === 'string' ? `labelled ${quote(v)}` : null));
         o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
     }
     if (type === 'probability') {
         o.fillLook();
-        o.take('label', (v) => (typeof v === 'string' ? `labelled ${JSON.stringify(v)}` : null));
+        o.take('label', (v) => (typeof v === 'string' ? `labelled ${quote(v)}` : null));
         o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
     }
     if (type === 'dataPlot') {
@@ -1183,7 +1184,7 @@ function beyondOptions(type: string, o: Options) {
         o.take('thickness', (v) => (typeof v === 'string' && THICKNESSES.includes(v) ? v : null));
         o.take('dashed', (v) => (v === true ? 'dashed' : null));
         o.take('fillOpacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
-        o.take('label', (v) => (v === '({x:2}, {y:2})' ? 'with coordinates' : typeof v === 'string' ? `labelled ${JSON.stringify(v)}` : null));
+        o.take('label', (v) => (v === '({x:2}, {y:2})' ? 'with coordinates' : typeof v === 'string' ? `labelled ${quote(v)}` : null));
         o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
     }
 }
