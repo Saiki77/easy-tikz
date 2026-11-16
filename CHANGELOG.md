@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.0.1] - 2026-11-16
+
+### Fixed
+
+- **A letter before a function in a LaTeX formula multiplies it** (`src/latex.ts`). `a\sin(bx)` drew the arcsine (`asin`), and `a\cos\theta`, `x\ln x` or `k\sqrt{x}` gave an unknown name; the chart of such a formula in a note also left out the slider of that letter. They now read as a·sin(bx), a·cos θ, x·ln x and k·√x, as in LaTeX. The same holds for `\frac` and text commands after a letter.
+- **The link button of a slider in a note** showed when one chart was drawn twice (Reading view and Live Preview of the same note). It now shows only when another chart of the note has a slider of that name.
+
 ## [5.0.0] - 2026-11-16
 
 Every formula in your notes is a chart, and LaTeX is the language you write charts in. Sliders connect across the charts of a note, charts can live as SVG files, and four new kinds of pictures join functions and regions: data with a regression line, probability, Riemann sums and slope fields.

@@ -1,15 +1,21 @@
 # Reddit: r/ObsidianMD
 
-Read the subreddit rules in the sidebar before posting and pick the flair it offers for plugins.
+A personal post: your story first, the plugin as the thing you built. Read the subreddit rules in the sidebar before posting and pick the flair it offers for plugins.
 
-**Attach:** [`overview.mp4`](../media/overview.mp4) (40 s, 1920 x 1080, 7.8 MB, captions burnt in, no sound). Put it at the top of the post. If the post editor takes pictures only, use [`hero.png`](../media/hero.png), [`card-drag.png`](../media/card-drag.png), [`card-sliders.png`](../media/card-sliders.png) and [`card-regions.png`](../media/card-regions.png) as a gallery and link the video on GitHub.
+**Attach:** [`post-5.0.mp4`](../media/post-5.0.mp4) (33 s, 1800 x 1200, 3:2, 2 MB, no sound, no captions) at the top of the post. It is two clean takes joined: [`post-5.0-formula.mp4`](../media/post-5.0-formula.mp4) (15 s: rest the pointer on a formula, its chart opens, a slider moves it, Insert chart, the chart in the note keeps its sliders) and [`post-5.0-editor.mp4`](../media/post-5.0-editor.mp4) (18 s: drag the tangent point and the area follows, play, then a 3D surface turned by dragging). Poster: [`post-5.0-poster.png`](../media/post-5.0-poster.png).
 
 ## Title
 
 **Limit:** 300 characters.
 
 ```text
-Easy TikZ 4: draw TikZ / pgfplots charts in Obsidian with live sliders and drag to edit (free, open source)
+I spent two years building a plugin that turns the formulas in my notes into interactive charts. Easy TikZ 5 is out
+```
+
+Or:
+
+```text
+Long-time lurker: over two years I built Easy TikZ, a super easy editor for interactive math charts in Obsidian. Version 5 is out
 ```
 
 ## Text
@@ -17,25 +23,15 @@ Easy TikZ 4: draw TikZ / pgfplots charts in Obsidian with live sliders and drag 
 **Limit:** 40000 characters.
 
 ````markdown
-I maintain Easy TikZ, a plugin for drawing function plots, shaded regions and optimisation diagrams in a visual editor instead of writing TikZ. The chart renders in your note with no TeX install, and when you need the figure in a paper, the Code tab holds pgfplots code that compiles with pdflatex.
+Hi r/ObsidianMD, long-time lurker here.
 
-Version 4 is a redesign. The video (40 seconds) shows two things: a line dragged and turned in the preview, whose formula follows, and one slider that moves a tangent and the area between it and the curve. What changed:
+When I started my degree, I wanted to plot a function in my notes without fighting LaTeX, so I wrote a small plugin for it. Then my courses moved on: tangents, areas between curves, feasible regions, an objective line that moves. My little plugin couldn't draw any of that, so I kept rebuilding it, and two years later I just released version 5 of **Easy TikZ**.
 
-- **Sliders that move the picture.** A slider is a named number you can use in any formula, domain, condition or label. The preview redraws while you drag it, and play sweeps it.
-- **Drag to edit.** Grab a line, curve, point or label in the preview and the plugin rewrites the numbers in its formula so it stays under the pointer. Shift-drag turns a line around a pivot: the constraint `x + 3y <= 6` becomes `x + 2y <= 5`. Before you drag, a tip shows which numbers will change. Every drag is one undo step.
-- **Five general tools instead of eleven special ones.** A region is a list of inequalities, one per row (`f2 <= y <= f1`, `x + y <= 4`). A curve is any equation in x and y. A points tool marks intersections, corners, integer points, or the optimum of an objective. The + Add menu lists 23 recipes in plain words, so you rarely pick a tool yourself.
-- **Optimisation diagrams.** Feasible region, labelled constraint lines, objective line on a slider, the optimum and the corner points. Drag a constraint and the optimum follows.
-- **Charts in notes keep their sliders.** Moving a slider in a note redraws the chart and never edits the note. Click the chart to open it in the editor again.
-- **An export that compiles.** A complete standalone document. The PDF shows the picture the preview shows, because both are drawn from the same scene.
-- **Guides.** 20 step-by-step guides, in the editor's Help tab with live charts, and on GitHub with 137 screenshots: https://github.com/Saiki77/easy-tikz/blob/main/docs/guides/README.md
+The goal has always been a super easy chart editor where charts are alive. You write a chart in a few lines or click it together, it draws right in your note, and everything in it is connected: move a slider and the tangent, the area and the numbers in the labels follow. You never have to fiddle with code or camera angles, you just drag things in the preview.
 
-If you used 3.x: your charts keep working. They are converted when they render or open, and a note is only rewritten when you press Save changes. Blocks saved with version 4 cannot be read by 3.x, and a drag that starts on a shape now edits it instead of panning (drag empty space, or switch the feature off in the preview). The guide "Coming from 3.x" shows where the eight old tabs went.
+The video shows the two parts I use most. First, my favourite new thing: every formula in my notes is now a chart. I rest the pointer on it, its graph opens with a slider for each letter, and one click puts it in the note. Then the editor: I drag the tangent point and the area follows, press play, and turn a 3D surface.
 
-**Install:** Settings > Community plugins > Browse, search "Easy TikZ". Or BRAT with `Saiki77/easy-tikz`. It needs Obsidian 1.13 or newer and runs on desktop only.
+It's free and open source, and nothing leaves your computer. Search "Easy TikZ" in Community plugins, or have a look at the code: https://github.com/Saiki77/easy-tikz
 
-**Repository:** https://github.com/Saiki77/easy-tikz
-
-MIT licensed, no network access, no telemetry.
-
-I would like to hear two things: which pictures you tried to draw and could not, and where dragging a shape changed a number you did not expect.
+I'd love to hear what you would draw with it and what's still missing. Geometry is next on my list.
 ````

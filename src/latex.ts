@@ -95,7 +95,8 @@ function convert(s: string): string {
         if (name === 'frac' || name === 'dfrac' || name === 'tfrac') {
             const a = arg();
             const b = arg();
-            return `((${a})/(${b}))`;
+            // A new word: `a\frac{1}{2}` is a times a half (the spaces go at the end).
+            return ` ((${a})/(${b}))`;
         }
         if (name === 'sqrt') {
             spaces();
@@ -106,7 +107,7 @@ function convert(s: string): string {
                 i = end < 0 ? s.length : end + 1;
             }
             const a = arg();
-            return n ? `((${a})^(1/(${n})))` : `sqrt(${a})`;
+            return n ? ` ((${a})^(1/(${n})))` : ` sqrt(${a})`;
         }
         if (name === 'left' || name === 'right' || name === 'bigl' || name === 'bigr' || name === 'Bigl' || name === 'Bigr') {
             spaces();
@@ -117,16 +118,17 @@ function convert(s: string): string {
             if (s[i] === '\\') return command();
             return s[i++] ?? '';
         }
-        if (TEXT_COMMANDS.has(name)) return arg().replace(/\s+/g, '');
+        if (TEXT_COMMANDS.has(name)) return ` ${arg().replace(/\s+/g, '')}`;
         if (FUNCTIONS.has(name)) {
             spaces();
             // `\sin^2 x` is (sin x)^2.
             if (s[i] === '^') {
                 i++;
                 const power = arg();
-                return `${name}${fnArg() || ''}^(${power})`;
+                return ` ${name}${fnArg() || ''}^(${power})`;
             }
-            return name + fnArg();
+            // A new word: `a\sin x` is a times sin x, never asin (the arcsine).
+            return ` ${name}${fnArg()}`;
         }
         if (name in SYMBOLS) return SYMBOLS[name];
         // Greek letters and other names: \alpha is alpha, \pi is pi, \theta is theta.

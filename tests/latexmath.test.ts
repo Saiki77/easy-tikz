@@ -50,7 +50,7 @@ test('latex: fractions, roots, powers and functions have the same values', () =>
 test('latex: relations, Greek letters and subscripts', () => {
     assert.equal(latexToPlain('x + y \\le 4').replace(/\s+/g, ' '), 'x + y <= 4');
     assert.equal(latexToPlain('x \\geq 0').replace(/\s+/g, ' '), 'x >= 0');
-    assert.match(latexToPlain('2\\cos(\\theta)'), /^2cos\(\s*theta\s*\)$/);
+    assert.match(latexToPlain('2\\cos(\\theta)'), /^2\s*cos\(\s*theta\s*\)$/);
     assert.equal(latexToPlain('x_{1} + a_{max}'), 'x_1 + a_max');
     assert.equal(latexToPlain('\\operatorname{sgn}(x)'), 'sgn(x)');
 });
@@ -82,4 +82,20 @@ test('latex: a slider in a LaTeX formula is a dependency, and a rename reaches i
     assert.equal(renameIdentifier('\\sqrt{a}\\,e^{-a x}', 'a', 'k'), '\\sqrt{k}\\,e^{-k x}');
     assert.equal(renameIdentifier('\\sin(\\theta) + a', 'theta', 'phi'), '\\sin(\\theta) + a');
     assert.equal(renameIdentifier('a x^2', 'a', 'k'), 'k x^2');
+});
+
+test('latex: a letter before a function or a fraction multiplies it (a\\sin x is never asin)', () => {
+    const cases: Array<[string, (x: number) => number]> = [
+        ['x\\sin x', (x) => x * Math.sin(x)],
+        ['x\\cos(2x)', (x) => x * Math.cos(2 * x)],
+        ['x\\ln x', (x) => x * Math.log(x)],
+        ['x\\sqrt{x}', (x) => x * Math.sqrt(x)],
+        ['x\\frac{1}{2}', (x) => x / 2],
+        ['3x\\sin^2 x', (x) => 3 * x * Math.sin(x) ** 2],
+    ];
+    for (const [src, f] of cases) for (const x of [0.5, 1.3, 2.2]) assert.ok(close(at(src, x), f(x)), `${src} at ${x}: ${at(src, x)} vs ${f(x)}`);
+    assert.equal(latexToPlain('a\\sin(b x)'), 'a sin(b x)');
+    assert.equal(latexToPlain('a\\cos\\theta'), 'a cos(theta)');
+    // x_{\\text{max}} stays one name.
+    assert.equal(latexToPlain('x_{\\text{max}}'), 'x_max');
 });
