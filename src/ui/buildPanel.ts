@@ -67,9 +67,10 @@ export interface BuildPanelOptions {
     /** A card started or stopped showing an inline error: re-check hasErrors() for the tab dot. */
     onErrorsChange?: () => void;
     /**
-     * The empty state's formula field just created the chart's first
-     * function or surface. The host may fit the view to it (the default
-     * ranges cut off most first formulas, a polar cardioid for one).
+     * A function, surface, template or shape was just added (the empty
+     * state's formula field, or + Add). The host may fit the view to it while
+     * the ranges are still the defaults (they cut off most first formulas, a
+     * polar cardioid for one).
      */
     onStartAdded?: () => void;
     /**
@@ -799,10 +800,12 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
         switch (result.kind) {
             case 'function':
                 addRecipeResult(result.fn, result.surface);
+                options.onStartAdded?.();
                 return;
             case 'tool':
                 tools().push(result.tool);
                 addItem(result.tool);
+                options.onStartAdded?.();
                 return;
             case 'items': {
                 if (result.parameters && result.parameters.length) {
@@ -813,6 +816,7 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
                 for (const tool of result.tools) tools().push(tool);
                 const shown = result.tools[result.reveal ?? 0] ?? result.tools[0] ?? (result.functions ?? [])[0];
                 if (shown) addItem(shown);
+                options.onStartAdded?.();
                 return;
             }
             case 'label': {
@@ -859,6 +863,7 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
             if (template.color) result.surface.color = template.color;
         }
         addRecipeResult(result.fn, result.surface);
+        options.onStartAdded?.();
     }
 
     /**

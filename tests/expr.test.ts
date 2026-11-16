@@ -305,9 +305,9 @@ test('current built-in templates compile, domains resolve', () => {
     const ctx = plain();
     for (const t of BUILT_IN_2D) {
         assert.ok(ctx.validate(t.expression, 'fn1').ok, t.expression);
-        const [lo, hi] = ctx.domain(t.domain);
-        assert.ok(lo < hi, t.domain);
-        assert.ok(Number.isFinite(ctx.fn1(t.expression)((lo + hi) / 2 + 0.01)) || t.expression === 'tan(x)');
+        // 5.1.3: the built-in curves fill the view, with no range of their own.
+        assert.equal(t.domain, '', t.expression);
+        assert.ok(Number.isFinite(ctx.fn1(t.expression)(0.51)), t.expression);
     }
     for (const t of BUILT_IN_3D) {
         assert.ok(ctx.validate(t.expression, 'fn2').ok, t.expression);

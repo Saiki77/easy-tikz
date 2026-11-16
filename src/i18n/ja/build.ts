@@ -208,6 +208,8 @@ export const build: Messages<typeof en> = {
     'build.fn.empty': '空の関数：式を入力してください',
     'build.fn.expression': '式',
     'build.fn.domain': '定義域',
+    'build.fn.fillView': '表示範囲いっぱい',
+    'build.fn.ownRange': '範囲を指定',
     'build.fn.options': 'オプション',
     'build.fn.type': '関数の種類',
     'build.fn.legend': '凡例',

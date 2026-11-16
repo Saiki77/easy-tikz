@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.1.3] - 2026-11-16
+
+### Added
+
+- **Fill the view** (`src/ui/functionCards.ts`). The Domain of a function y = f(x) is a switch: **Fill the view** (the curve runs over the whole visible range, also after you pan or zoom) or **Own range** (the field, filled with the range shown now). Before, an empty field meant the visible range, and nothing on the card said so.
+
+### Changed
+
+- **+ Add fits the view.** A function, template or shape added to a chart whose ranges you have not set yet fits the view to what it draws, as the first formula you type already did.
+- **The built-in curves fill the view**: the templates (parabola, sine, damped wave, ...) no longer set a range of their own.
+
 ## [5.1.2] - 2026-11-16
 
 ### Fixed

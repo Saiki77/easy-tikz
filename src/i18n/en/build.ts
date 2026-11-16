@@ -206,6 +206,8 @@ export const build = {
     'build.fn.empty': 'Empty function: type a formula',
     'build.fn.expression': 'Expression',
     'build.fn.domain': 'Domain',
+    'build.fn.fillView': 'Fill the view',
+    'build.fn.ownRange': 'Own range',
     'build.fn.options': 'Options',
     'build.fn.type': 'Function type',
     'build.fn.legend': 'Legend',

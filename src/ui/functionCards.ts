@@ -529,9 +529,20 @@ export function createFunctionCard(
     const yRow = exprRow(body, 'y(t) =', 'etz-fn-row mod-expr', (c) => exprInput(c, exprOptions('expressionY', 'y(t)')));
     fields.add('expressionY', yRow.input);
 
-    // ---- domain
-    const domainRow = exprRow(body, '', 'etz-fn-row', (c) =>
-        exprInput(c, {
+    // ---- domain (5.1): a curve y = f(x) fills the view, wherever it goes, or keeps to a range of its own
+    const domainMode: { seg: SegmentedHandle<'fill' | 'range'> | null; range: boolean; kept: string } = { seg: null, range: !!fn.domain.trim(), kept: '' };
+    const domainRow = exprRow(body, '', 'etz-fn-row', (c) => {
+        domainMode.seg = segmented<'fill' | 'range'>(c, {
+            label: t('build.fn.domain'),
+            value: domainMode.range ? 'range' : 'fill',
+            options: [
+                { value: 'fill', text: t('build.fn.fillView') },
+                { value: 'range', text: t('build.fn.ownRange') },
+            ],
+            cls: 'etz-fn-domain-mode',
+            onChange: (mode) => setDomainMode(mode),
+        });
+        return exprInput(c, {
             value: fn.domain,
             label: t('build.fn.domain'),
             validate: (src) => (src.trim() ? host.math().validate(src, 'domain') : OK),
@@ -545,9 +556,40 @@ export function createFunctionCard(
                 host.addParameter(name);
             },
             onErrorChange: () => fields.syncError(),
-        }),
-    );
+        });
+    });
     fields.add('domain', domainRow.input);
+
+    /** Fill the view: no domain, so the curve runs over the visible range after any pan or zoom. A range: the field, at the range it had or the one shown now. */
+    function setDomainMode(mode: 'fill' | 'range'): void {
+        domainMode.range = mode === 'range';
+        if (mode === 'fill') {
+            if (fn.domain.trim()) domainMode.kept = fn.domain;
+            fn.domain = '';
+        } else if (!fn.domain.trim()) {
+            fn.domain = domainMode.kept || `${String(host.settings.getValue('xmin') ?? '0')}:${String(host.settings.getValue('xmax') ?? '10')}`;
+        }
+        domainRow.input.setValue(fn.domain);
+        syncDomain();
+        updateSummary();
+        host.requestUpdate();
+        host.commit();
+        if (mode === 'range') domainRow.input.focus();
+    }
+
+    /** The switch shows for curves y = f(x), the field with a range of their own; parametric and polar curves always show their range field. */
+    function syncDomain(): void {
+        const k = kind();
+        const graph = k !== 'parametric' && k !== 'polar';
+        // An undo or a drag may set or clear the range: the switch follows, unless the field is being edited.
+        if (activeDocument.activeElement !== domainRow.input.input) domainMode.range = !!fn.domain.trim();
+        if (domainMode.seg) {
+            setShown(domainMode.seg.el, graph);
+            const want = domainMode.range ? 'range' : 'fill';
+            if (domainMode.seg.getValue() !== want) domainMode.seg.setValue(want);
+        }
+        setShown(domainRow.input.el, !graph || domainMode.range);
+    }
 
     // ---- options: header row with pills for the options that are on
     const options: DisclosureHandle = disclosure(body, {
@@ -759,6 +801,7 @@ export function createFunctionCard(
             domainRow.input.input.placeholder = t('build.fn.autoDomain');
         }
         setShown(yRow.row.el, k === 'parametric');
+        syncDomain();
     }
 
     function sync(): void {

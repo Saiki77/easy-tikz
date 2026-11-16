@@ -27,17 +27,18 @@ function builtIn<T extends { name: string }>(key: MessageKey, rest: Omit<T, 'nam
     return Object.defineProperty({ ...rest }, 'name', { get: () => t(key), enumerable: true }) as T;
 }
 
+/** The built-in curves fill the view (5.1): no range of their own, so they follow any pan or zoom. */
 export const BUILT_IN_2D: Template2D[] = [
-    builtIn<Template2D>('problems.template.parabola', { expression: 'x^2', domain: '-3:3', color: 'black' }),
-    builtIn<Template2D>('problems.template.cubic', { expression: 'x^3 - 3x', domain: '-2:2', color: 'blue' }),
-    builtIn<Template2D>('problems.template.sine', { expression: 'sin(x)', domain: '0:2*pi', color: 'blue' }),
-    builtIn<Template2D>('problems.template.cosine', { expression: 'cos(x)', domain: '0:2*pi', color: 'teal' }),
-    builtIn<Template2D>('problems.template.damped', { expression: 'sin(x) * exp(-x/5)', domain: '0:20', color: 'purple' }),
-    builtIn<Template2D>('problems.template.gaussian', { expression: 'exp(-x^2)', domain: '-3:3', color: 'green' }),
-    builtIn<Template2D>('problems.template.logistic', { expression: '1 / (1 + exp(-x))', domain: '-6:6', color: 'teal' }),
-    builtIn<Template2D>('problems.template.hyperbola', { expression: '1 / x', domain: '0.1:5', color: 'orange' }),
-    builtIn<Template2D>('problems.template.tangent', { expression: 'tan(x)', domain: '-1.5:1.5', color: 'red' }),
-    builtIn<Template2D>('problems.template.halfCircle', { expression: 'sqrt(1 - x^2)', domain: '-1:1', color: 'teal' }),
+    builtIn<Template2D>('problems.template.parabola', { expression: 'x^2', domain: '', color: 'black' }),
+    builtIn<Template2D>('problems.template.cubic', { expression: 'x^3 - 3x', domain: '', color: 'blue' }),
+    builtIn<Template2D>('problems.template.sine', { expression: 'sin(x)', domain: '', color: 'blue' }),
+    builtIn<Template2D>('problems.template.cosine', { expression: 'cos(x)', domain: '', color: 'teal' }),
+    builtIn<Template2D>('problems.template.damped', { expression: 'sin(x) * exp(-x/5)', domain: '', color: 'purple' }),
+    builtIn<Template2D>('problems.template.gaussian', { expression: 'exp(-x^2)', domain: '', color: 'green' }),
+    builtIn<Template2D>('problems.template.logistic', { expression: '1 / (1 + exp(-x))', domain: '', color: 'teal' }),
+    builtIn<Template2D>('problems.template.hyperbola', { expression: '1 / x', domain: '', color: 'orange' }),
+    builtIn<Template2D>('problems.template.tangent', { expression: 'tan(x)', domain: '', color: 'red' }),
+    builtIn<Template2D>('problems.template.halfCircle', { expression: 'sqrt(1 - x^2)', domain: '', color: 'teal' }),
 ];
 
 export const BUILT_IN_3D: Template3D[] = [
