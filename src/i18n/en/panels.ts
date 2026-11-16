@@ -101,14 +101,14 @@ export const panels = {
 
     // AI tab (src/ui/aiPanel.ts)
     'panels.ai.title': 'Make charts with AI',
-    'panels.ai.lead': 'Describe a chart to an AI and it builds it here, checked by Easy Graphs, Charts & TikZ the way the editor checks it. Pick how you use AI.',
+    'panels.ai.lead': 'Describe a chart to an AI and it builds it here, checked by Easy Graphs Charts and TikZ the way the editor checks it. Pick how you use AI.',
     'panels.ai.copyFailed': 'Could not copy',
     'panels.ai.example':
         'In this note, add a chart of the feasible region x + y <= 4, x + 3y <= 6, x >= 0, y >= 0, with the line 2x + 3y = c on a slider and the point where 2x + 3y is largest.',
     'panels.ai.clipboardEmpty': 'The clipboard is empty.',
     'panels.ai.notJson': 'The chart on the clipboard is not valid JSON: {message}',
     'panels.ai.notObject': 'The chart on the clipboard is not a JSON object.',
-    'panels.ai.noChart': 'The clipboard holds no Easy Graphs, Charts & TikZ chart. Copy the whole block the AI wrote, from ```easy-tikz to the closing ```.',
+    'panels.ai.noChart': 'The clipboard holds no Easy Graphs Charts and TikZ chart. Copy the whole block the AI wrote, from ```easy-tikz to the closing ```.',
     'panels.ai.problems': 'The chart on the clipboard has {count, plural, one {a problem} other {# problems}}. Line {line}, column {column}: {message}',
     'panels.ai.empty': 'The chart on the clipboard is empty.',
     'panels.ai.apps.title': 'AI apps on this computer',
@@ -120,7 +120,7 @@ export const panels = {
     'panels.ai.apps.toggle': 'Let AI apps make charts',
     'panels.ai.apps.unavailable': 'Not available here: open the editor from Obsidian.',
     'panels.ai.apps.off':
-        'Off. Nothing listens until you switch it on. It answers only on this computer, needs a token, and only adds Easy Graphs, Charts & TikZ charts to notes or replaces them; a notice shows each change.',
+        'Off. Nothing listens until you switch it on. It answers only on this computer, needs a token, and only adds Easy Graphs Charts and TikZ charts to notes or replaces them; a notice shows each change.',
     'panels.ai.apps.running': 'Running at {url}.',
     'panels.ai.apps.notRunning': 'Not running: {message}',
     'panels.ai.apps.starting': 'starting...',
@@ -140,7 +140,7 @@ export const panels = {
     'panels.ai.chats.unreadable': 'The clipboard could not be read. Paste the block into a note instead: it renders there, and clicking it opens the editor.',
     'panels.ai.agents.title': 'AI agents in this vault',
     'panels.ai.agents.lead':
-        'Agents that work in your vault folder (Claude Code, Codex, Cursor, Copilot) read AGENTS.md and CLAUDE.md on their own. A short Easy Graphs, Charts & TikZ section there tells them how to make charts here.',
+        'Agents that work in your vault folder (Claude Code, Codex, Cursor, Copilot) read AGENTS.md and CLAUDE.md on their own. A short Easy Graphs Charts and TikZ section there tells them how to make charts here.',
     'panels.ai.agents.add': 'Add the section',
     'panels.ai.agents.added': 'Added to {files} at the top of the vault.',
     'panels.ai.agents.and': '{first} and {second}',
@@ -361,7 +361,7 @@ export const panels = {
     'panels.whatsNew.recipe': 'Insert chart writes',
     'panels.whatsNew.openAi': 'Open the AI tab',
     'panels.whatsNew.moreTitle': 'Earlier in version 4',
-    'panels.whatsNew.hint': 'To see this again: the command "Show what\'s new in Easy Graphs, Charts & TikZ 5", or the Help tab.',
+    'panels.whatsNew.hint': 'To see this again: the command "Show what\'s new in Easy Graphs Charts and TikZ 5", or the Help tab.',
     'panels.whatsNew.openGuides': 'Open the guides',
     'panels.whatsNew.tryExample': 'Try an example',
     'panels.whatsNew.guide': 'Guide',

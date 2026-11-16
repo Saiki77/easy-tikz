@@ -1,4 +1,4 @@
-# What's new in Easy Graphs, Charts & TikZ
+# What's new in Easy Graphs Charts and TikZ
 
 [Overview](../README.md) · [Guides](guides/README.md) · [Reference](reference.md) · [Changelog](../CHANGELOG.md)
 
@@ -62,8 +62,8 @@ plot z = x^2 - y^2 for x from -5 to 5 and y from -5 to 5 in viridis, opacity 0.9
 
 ## 4.7: the interface in your language
 
-- **Japanese.** When Obsidian is set to Japanese, so is Easy Graphs, Charts & TikZ: every menu, button, setting, notice, dialog and problem message (about 1,400 texts), and the 24 guides in the Help tab. It was asked for in [issue #4](https://github.com/Saiki77/easy-tikz/issues/4) by a reader who offered to check it; corrections are welcome there.
-- **Follows Obsidian.** Settings, **Interface language**: Follow Obsidian (default), English or 日本語. A language Easy Graphs, Charts & TikZ does not have yet shows in English.
+- **Japanese.** When Obsidian is set to Japanese, so is Easy Graphs Charts and TikZ: every menu, button, setting, notice, dialog and problem message (about 1,400 texts), and the 24 guides in the Help tab. It was asked for in [issue #4](https://github.com/Saiki77/easy-tikz/issues/4) by a reader who offered to check it; corrections are welcome there.
+- **Follows Obsidian.** Settings, **Interface language**: Follow Obsidian (default), English or 日本語. A language Easy Graphs Charts and TikZ does not have yet shows in English.
 - **What stays as it is.** Formulas, the chart language (`show`, `plot`, ...: give its pieces your own words in Settings, Chart words, Japanese included), the exported TikZ, what the AI tools answer to AI apps, and the guide pages on GitHub.
 - **More languages.** Every text has a key; [`src/i18n/README.md`](../src/i18n/README.md) explains how a language is added, with the Japanese style and a glossary.
 
@@ -113,7 +113,7 @@ mark the maximum of 2x + 3y in the region, large, with coordinates
 
 ## 4.2: What's new popup and four guides
 
-- **A "What's new" popup.** After you update, Easy Graphs, Charts & TikZ shows once what is new, with a live chart whose slider you can drag or play. A new install never shows it. Open it again with the command **Show what's new in version 4** or the link in the Help tab, or switch it off with the setting **Show what's new after updates**.
+- **A "What's new" popup.** After you update, Easy Graphs Charts and TikZ shows once what is new, with a live chart whose slider you can drag or play. A new install never shows it. Open it again with the command **Show what's new in version 4** or the link in the Help tab, or switch it off with the setting **Show what's new after updates**.
 - **Four guides on live calculations and sliders:** [Animate a chart with play](guides/animate-play.md), [From secant to tangent](guides/secant-tangent.md), [An area that grows with a slider](guides/area-accumulation.md) and [Calculate with computed points](guides/computed-values.md).
 
 ## 4.0: drag to edit, live sliders, a new editor
@@ -125,7 +125,7 @@ mark the maximum of 2x + 3y in the region, large, with coordinates
 </p>
 
 <p align="center">
-  <a href="media/clip-drag.mp4"><img src="media/clip-drag.webp" alt="A 19 second film on graph paper. It opens on the page Drag to edit with the Linear program example at c = 5, then moves into the editor. The dashed objective line 2x + 3y = c is dragged up through the feasible region and slider c follows from 5 to 9. With Shift held the line turns about the optimum (3, 1), marked as the pivot, and the tip at the pointer reads C1: 2.5x + 3y = c, c = 10.5, slope -5/6. The card then shows the new equation 2.5x + 3y = c, and the optimum card now reads Max of 2.5x + 3y over R1. The end card shows the install path: Settings, Community plugins, Easy Graphs, Charts & TikZ." width="100%"></a>
+  <a href="media/clip-drag.mp4"><img src="media/clip-drag.webp" alt="A 19 second film on graph paper. It opens on the page Drag to edit with the Linear program example at c = 5, then moves into the editor. The dashed objective line 2x + 3y = c is dragged up through the feasible region and slider c follows from 5 to 9. With Shift held the line turns about the optimum (3, 1), marked as the pivot, and the tip at the pointer reads C1: 2.5x + 3y = c, c = 10.5, slope -5/6. The card then shows the new equation 2.5x + 3y = c, and the optimum card now reads Max of 2.5x + 3y over R1. The end card shows the install path: Settings, Community plugins, Easy Graphs Charts and TikZ." width="100%"></a>
 </p>
 <p align="center">Drag the line and slider c follows. Hold Shift and it turns about the optimum, and its formula follows: 2x + 3y = c becomes 2.5x + 3y = c. <a href="media/clip-drag.mp4">Watch the MP4</a> (19 s).</p>
 

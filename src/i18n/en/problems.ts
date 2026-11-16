@@ -240,14 +240,14 @@ export const problems = {
     'problems.template.pringle': 'Pringle',
 
     // What a person reads of the AI server (src/ai/): notices, the port, where each app's lines go. Its answers to AI apps stay English.
-    'problems.ai.notice': 'Easy Graphs, Charts & TikZ: {message}.',
+    'problems.ai.notice': 'Easy Graphs Charts and TikZ: {message}.',
     'problems.ai.addedChart': 'An AI app added a chart to {path}',
     'problems.ai.madeNote': 'An AI app made a new note with a chart to {path}',
     'problems.ai.changedChart': 'An AI app changed chart {index} to {path}',
-    'problems.ai.undone': 'Easy Graphs, Charts & TikZ: undone in {path}.',
-    'problems.ai.notUndone': 'Easy Graphs, Charts & TikZ: {path} has changed since, so nothing was undone.',
+    'problems.ai.undone': 'Easy Graphs Charts and TikZ: undone in {path}.',
+    'problems.ai.notUndone': 'Easy Graphs Charts and TikZ: {path} has changed since, so nothing was undone.',
     'problems.ai.portInUse': 'Port {port} is already in use. Choose another one in the settings.',
-    'problems.ai.whereClaudeCode': 'Run once in a terminal. Claude Code then has the Easy Graphs, Charts & TikZ tools in every project.',
+    'problems.ai.whereClaudeCode': 'Run once in a terminal. Claude Code then has the Easy Graphs Charts and TikZ tools in every project.',
     'problems.ai.whereCodex': 'Run the first line once in a terminal; put the second line in your shell profile so Codex finds the token.',
     'problems.ai.whereGemini': 'Run once in a terminal.',
     'problems.ai.whereCursor': 'Add to ~/.cursor/mcp.json (merge with the servers already there).',

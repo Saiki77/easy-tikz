@@ -16,7 +16,7 @@ Open the editor, plot two formulas, give them colours, a legend and a grid, and 
 
 ## 1. Type a formula and press Enter
 
-Put the cursor in a note where the chart goes. Run `Easy Graphs, Charts & TikZ: Open editor` from the command palette or the ribbon, type `2 + \sin(x)` under Start a chart and press Enter.
+Put the cursor in a note where the chart goes. Run `Easy Graphs Charts and TikZ: Open editor` from the command palette or the ribbon, type `2 + \sin(x)` under Start a chart and press Enter.
 
 The chart in words:
 

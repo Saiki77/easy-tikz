@@ -244,7 +244,7 @@ async function answerReplace(text) {
 const started = await check('Obsidian starts and the plugin loads', async () => {
     obs = await launch({ port, workDir, plugin: args.root ? 'root' : 'source', width: 1440, height: 900, theme: 'light' });
     const v = await obs.versions();
-    return `Obsidian ${v.obsidian}, Easy Graphs, Charts & TikZ ${v.plugin}, ${args.root ? 'repository root build' : 'built from source'}`;
+    return `Obsidian ${v.obsidian}, Easy Graphs Charts and TikZ ${v.plugin}, ${args.root ? 'repository root build' : 'built from source'}`;
 });
 
 if (started) {
@@ -848,7 +848,7 @@ if (started) {
             await obs.waitFor(async () => (await whatsNewState()).count > 0, { timeout: 5000, message: 'the popup to open after the plugin loaded' });
             const state = await whatsNewState();
             assert(state.count === 1, `${state.count} popups are open`);
-            assert(state.title === 'Easy Graphs, Charts & TikZ 5', `the title is "${state.title}"`);
+            assert(state.title === 'Easy Graphs Charts and TikZ 5', `the title is "${state.title}"`);
             // A slideshow: one dot per slide, the first one shown.
             assert(state.slides === WHATS_NEW.WHATS_NEW_SLIDES.length && state.current === 0, `${state.slides} slides, slide ${state.current} shown`);
             assert(state.blankIcons === 0, `${state.blankIcons} icons are blank (an icon id Obsidian does not know)`);
@@ -918,7 +918,7 @@ if (started) {
             await reloadPlugin();
             await obs.waitFor(async () => (await whatsNewState()).count > 0, { timeout: 8000, message: 'the popup to open after the vault check' });
             const state = await whatsNewState();
-            assert(state.count === 1 && state.title === 'Easy Graphs, Charts & TikZ 5', `${state.count} popups, title "${state.title}"`);
+            assert(state.count === 1 && state.title === 'Easy Graphs Charts and TikZ 5', `${state.count} popups, title "${state.title}"`);
             await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 3000, message: 'data.json to record the popup' });
             await clickWhatsNewButton('Close');
             await reloadPlugin();
@@ -1071,7 +1071,7 @@ if (started) {
             const page = await ai('/guide', { headers: { Authorization: `Bearer ${aiToken}`, Origin: 'https://example.com' } });
             assert(page.status === 403, `a request with an Origin header got ${page.status}`);
             const guide = await ai('/guide', { headers: { Authorization: `Bearer ${aiToken}` } });
-            assert(guide.status === 200 && (await guide.text()).startsWith('# Easy Graphs, Charts & TikZ: guide for AI assistants'), 'the guide did not come back');
+            assert(guide.status === 200 && (await guide.text()).startsWith('# Easy Graphs Charts and TikZ: guide for AI assistants'), 'the guide did not come back');
         });
 
         await check('AI access: MCP initialize and tools/list', async () => {

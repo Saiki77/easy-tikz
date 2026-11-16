@@ -10,7 +10,7 @@ export const help: Messages<typeof en> = {
     'help.search.guides': 'ガイド {count} 件',
     'help.search.sections': 'リファレンスの項目 {count} 件',
     'help.search.both': 'ガイド {guides} 件、リファレンスの項目 {sections} 件',
-    'help.whatsNew': 'Easy Graphs, Charts & TikZ 5 の新機能',
+    'help.whatsNew': 'Easy Graphs Charts and TikZ 5 の新機能',
     'help.categories': 'カテゴリ',
     'help.referenceSections': 'リファレンスの項目',
     'help.category.gettingStarted': 'はじめに',
@@ -68,7 +68,7 @@ export const help: Messages<typeof en> = {
     'help.copyFailed': 'クリップボードにコピーできませんでした。',
 
     // ------------------------------------------------------- the reference
-    'help.reference.title': 'Easy Graphs, Charts & TikZ リファレンス',
+    'help.reference.title': 'Easy Graphs Charts and TikZ リファレンス',
     'help.reference.intro': '式の書き方、領域・点・スライダーの作り方、LaTeX 出力の中身をまとめています。',
     'help.reference.contents': '目次',
     'help.example.open': 'サンプルを開く',
@@ -124,7 +124,7 @@ export const help: Messages<typeof en> = {
     // Drag to edit
     'help.ref.drag.title': 'ドラッグで編集',
     'help.ref.drag.about': 'プレビューで図形を移動、回転、伸縮します。',
-    'help.ref.drag.p1': 'プレビューで直線、曲線、点、ラベルをドラッグします。Easy Graphs, Charts & TikZ がその式の数値を（スライダーを優先して）書き換え、つかんだ部分がポインタについてきます。',
+    'help.ref.drag.p1': 'プレビューで直線、曲線、点、ラベルをドラッグします。Easy Graphs Charts and TikZ がその式の数値を（スライダーを優先して）書き換え、つかんだ部分がポインタについてきます。',
     'help.ref.drag.l1': 'Shift+ドラッグでは、⊕ 印を中心に直線が回転し、曲線が伸縮します。点はまっすぐ（水平、垂直、斜め）に動きます。',
     'help.ref.drag.l2': 'まずポインタを重ねてみます。隅のヒントに、どの数値が変わるかと、ずらし・定数・係数を新たに加える必要があるかどうかが表示されます。',
     'help.ref.drag.l3': '計算された点（最適解、頂点、交点）はドラッグできません。それらを決めている直線をドラッグします。',

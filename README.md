@@ -4,11 +4,11 @@
 
 <h3 align="center">Every formula in your notes is a chart.</h3>
 
-<p align="center">Easy Graphs, Charts & TikZ is an Obsidian plugin for math charts. Rest the pointer on a formula, or write a chart in LaTeX. It draws on phones too, and exports pgfplots code that compiles with pdflatex.</p>
+<p align="center">Easy Graphs Charts and TikZ is an Obsidian plugin for math charts. Rest the pointer on a formula, or write a chart in LaTeX. It draws on phones too, and exports pgfplots code that compiles with pdflatex.</p>
 
 ### A complete editor
 
-<img src="docs/media/readme/editor.png" alt="The Easy Graphs, Charts & TikZ editor on the area between the cubic f(x) = x³ − 3x and its tangent at a. On the left, cards for the function, the hidden tangent and the shaded region; on the right, the live preview with the tangent, the orange area labelled A = 2.76 and the title slope at x = 0.8: −1.08, and under it the slider a. The tabs Build, Chart, Code, Help and AI are at the top." width="100%">
+<img src="docs/media/readme/editor.png" alt="The Easy Graphs Charts and TikZ editor on the area between the cubic f(x) = x³ − 3x and its tangent at a. On the left, cards for the function, the hidden tangent and the shaded region; on the right, the live preview with the tangent, the orange area labelled A = 2.76 and the title slope at x = 0.8: −1.08, and under it the slider a. The tabs Build, Chart, Code, Help and AI are at the top." width="100%">
 
 Click any chart to open it. Everything is connected: drag a line, a point or a label in the preview and its formula follows, drag a 3D chart to turn it, scroll to zoom. No fiddling with code or camera angles. A card for each object, sliders with play, and the pgfplots code ready to copy.
 
@@ -58,4 +58,4 @@ The Help tab is a gallery of 31 short guides. Each step shows its chart live wit
 
 **Privacy:** nothing goes to the internet, and there is no telemetry. AI access (off by default) answers on `127.0.0.1` only, with your token. [All details](docs/reference.md#privacy-and-permissions)
 
-[MIT](LICENSE.md) · [Developing Easy Graphs, Charts & TikZ](docs/development.md)
+[MIT](LICENSE.md) · [Developing Easy Graphs Charts and TikZ](docs/development.md)

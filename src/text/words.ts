@@ -530,7 +530,7 @@ export function guideWithWords(guide: string, w: ChartWords = current): string {
  * of`), bundles with `:=` (`objective := in red, dashed`).
  */
 export function wordsToText(w: ChartWords): string {
-    const lines = ['# Easy Graphs, Charts & TikZ chart words: built-in = your words (the first is the one written); bundles: word := options'];
+    const lines = ['# Easy Graphs Charts and TikZ chart words: built-in = your words (the first is the one written); bundles: word := options'];
     for (const p of PIECES) {
         const list = w.words[p.id];
         if (list && list.length) lines.push(`${p.builtin} = ${list.join(', ')}`);

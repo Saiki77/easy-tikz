@@ -7,7 +7,7 @@ export const help = {
     'help.search.guides': '{count, plural, one {# guide} other {# guides}}',
     'help.search.sections': '{count, plural, one {# reference section} other {# reference sections}}',
     'help.search.both': '{guides, plural, one {# guide} other {# guides}}, {sections, plural, one {# reference section} other {# reference sections}}',
-    'help.whatsNew': "What's new in Easy Graphs, Charts & TikZ 5",
+    'help.whatsNew': "What's new in Easy Graphs Charts and TikZ 5",
     'help.categories': 'Categories',
     'help.referenceSections': 'Reference sections',
     // Guide categories and levels (the data keeps the English names as identifiers: src/guides/index.ts).
@@ -72,7 +72,7 @@ export const help = {
     'help.copyFailed': 'Could not copy to the clipboard.',
 
     // ------------------------------------------------------- the reference
-    'help.reference.title': 'Easy Graphs, Charts & TikZ reference',
+    'help.reference.title': 'Easy Graphs Charts and TikZ reference',
     'help.reference.intro': 'How to write formulas, build regions, points and sliders, and what the LaTeX export contains.',
     'help.reference.contents': 'Contents',
     'help.example.open': 'Open example',
@@ -130,7 +130,7 @@ export const help = {
     // Drag to edit
     'help.ref.drag.title': 'Drag to edit',
     'help.ref.drag.about': 'Move, turn and stretch shapes in the preview.',
-    'help.ref.drag.p1': 'Drag a line, curve, point or label in the preview. Easy Graphs, Charts & TikZ changes the numbers in its formula (sliders first) so the part you grabbed follows the pointer.',
+    'help.ref.drag.p1': 'Drag a line, curve, point or label in the preview. Easy Graphs Charts and TikZ changes the numbers in its formula (sliders first) so the part you grabbed follows the pointer.',
     'help.ref.drag.l1': 'Shift-drag turns straight lines and stretches curves around the ⊕ mark. Points move straight: horizontal, vertical or diagonal.',
     'help.ref.drag.l2': 'Hover first: the tip in the corner shows which numbers will change, and when a shift, an offset or a factor has to be added.',
     'help.ref.drag.l3': 'Computed points (optimum, corners, intersections) cannot be dragged. Drag the lines that define them.',

@@ -229,7 +229,7 @@ async function startObsidian() {
     }
     if (!view.light) throw new Error('the capture window is not in the light theme');
     const v = await obs.versions();
-    say(`Obsidian ${v.obsidian}, Easy Graphs, Charts & TikZ ${v.plugin}, ${view.w} x ${view.h} at ${view.dpr}x, light theme`);
+    say(`Obsidian ${v.obsidian}, Easy Graphs Charts and TikZ ${v.plugin}, ${view.w} x ${view.h} at ${view.dpr}x, light theme`);
 }
 
 async function stopObsidian() {
@@ -905,10 +905,10 @@ function guidePage(guide) {
 
 /** docs/guides/README.md: the index, grouped by category in display order. */
 function indexPage() {
-    const out = [`<!-- ${HEADER} -->`, '', '# Easy Graphs, Charts & TikZ guides', ''];
+    const out = [`<!-- ${HEADER} -->`, '', '# Easy Graphs Charts and TikZ guides', ''];
     const stepCount = ALL_GUIDES.reduce((n, g) => n + stepsOf(g).length, 0);
     out.push(
-        `${ALL_GUIDES.length} step-by-step guides (${stepCount} steps) for Easy Graphs, Charts & TikZ. Every picture is a screenshot of the plugin running in Obsidian, every step shows the lines it adds to the chart, and every guide ends with its finished chart as a block you can paste into a note.`,
+        `${ALL_GUIDES.length} step-by-step guides (${stepCount} steps) for Easy Graphs Charts and TikZ. Every picture is a screenshot of the plugin running in Obsidian, every step shows the lines it adds to the chart, and every guide ends with its finished chart as a block you can paste into a note.`,
         '',
         'The same guides are in the editor: open the Help tab. There each step shows a live chart with its sliders, the chart in words, and a button that loads the step into the editor.',
         ''

@@ -1,5 +1,5 @@
 /*
- * Easy Graphs, Charts & TikZ charts as text: one line per object, written the way the math
+ * Easy Graphs Charts and TikZ charts as text: one line per object, written the way the math
  * reads, instead of one JSON object. Lines read like English:
  *
  *   show x from -3 to 3 and y from -4 to 4

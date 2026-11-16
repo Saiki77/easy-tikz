@@ -1,7 +1,7 @@
 /* The editor's shell: header and tabs, the chart type and examples menus, the preview and its tools, undo and redo, copy, insert and save, drafts, templates; the drag tips and hover hints. Owner: src/modal.ts, src/ui/kit.ts, src/ui/host.ts, src/ui/dragLayer.ts, src/drag/. */
 export const editor = {
     // The editor window and its header (src/modal.ts).
-    'editor.shell.title': 'Easy Graphs, Charts & TikZ editor',
+    'editor.shell.title': 'Easy Graphs Charts and TikZ editor',
     'editor.header.chartType': 'Chart type',
     'editor.header.coordinates': 'Coordinates',
     'editor.header.cartesian': 'Cartesian',

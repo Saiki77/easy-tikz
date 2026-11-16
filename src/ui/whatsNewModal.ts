@@ -3,7 +3,7 @@
  * src/whatsnew.ts; what it says: src/whatsnew.ts). A slideshow: one feature
  * of 5.0 per slide, shown big with live charts, then version 4 in a list.
  *
- *   header      "Easy Graphs, Charts & TikZ 5" and one line
+ *   header      "Easy Graphs Charts and TikZ 5" and one line
  *   slide       icon, title and a sentence, then the feature: a note with
  *               the formula card open on a formula; a chart beside its text;
  *               two charts whose connected sliders move together; the vault

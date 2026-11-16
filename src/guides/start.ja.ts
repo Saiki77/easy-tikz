@@ -12,7 +12,7 @@ export const START_JA: Readonly<Record<string, GuideText>> = {
         steps: [
             {
                 title: '式を入力して Enter キーを押す',
-                body: 'ノートの、グラフを入れたい位置にカーソルを置きます。コマンドパレットでコマンド「Easy Graphs, Charts & TikZ: エディタを開く」（英語表示では `Easy Graphs, Charts & TikZ: Open editor`）を実行するか、リボンのアイコンをクリックし、「グラフを作成」の下に `2 + \\sin(x)` と入力して Enter キーを押します。',
+                body: 'ノートの、グラフを入れたい位置にカーソルを置きます。コマンドパレットでコマンド「Easy Graphs Charts and TikZ: エディタを開く」（英語表示では `Easy Graphs Charts and TikZ: Open editor`）を実行するか、リボンのアイコンをクリックし、「グラフを作成」の下に `2 + \\sin(x)` と入力して Enter キーを押します。',
                 tip: '式の入力欄には、ノートと同じ LaTeX も、`2 + sin(x)` のような通常の書き方も使えます。',
             },
             {

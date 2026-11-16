@@ -26,7 +26,7 @@ const FIRST_CHART: Guide = {
     steps: [
         {
             title: 'Type a formula and press Enter',
-            body: 'Put the cursor in a note where the chart goes. Run `Easy Graphs, Charts & TikZ: Open editor` from the command palette or the ribbon, type `2 + \\sin(x)` under Start a chart and press Enter.',
+            body: 'Put the cursor in a note where the chart goes. Run `Easy Graphs Charts and TikZ: Open editor` from the command palette or the ribbon, type `2 + \\sin(x)` under Start a chart and press Enter.',
             chart: chart(...FIRST_VIEW, SINE),
             tip: 'Formula fields take LaTeX as in your notes, or the plain form `2 + sin(x)`.',
         },

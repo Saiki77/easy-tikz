@@ -358,7 +358,7 @@ function wheelZoomSteps(e: WheelEvent): number {
 
 /** Real failures inside the editor that have no better place to go (a panel that failed to rebuild). */
 function logError(e: unknown): void {
-    console.error('Easy Graphs, Charts & TikZ:', e);
+    console.error('Easy Graphs Charts and TikZ:', e);
 }
 
 function num(v: unknown, fallback: number): number {

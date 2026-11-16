@@ -1,4 +1,4 @@
-# Easy Graphs, Charts & TikZ reference
+# Easy Graphs Charts and TikZ reference
 
 [Overview](../README.md) · [What's new](whats-new.md) · [Guides](guides/README.md) · [AI guide](ai.md) · [Changelog](../CHANGELOG.md)
 
@@ -6,7 +6,7 @@ Everything the plugin does, by topic. The [guides](guides/README.md) show it ste
 
 ## The editor
 
-1. Click the function icon in the ribbon (or run *Easy Graphs, Charts & TikZ: Open editor* from the command palette).
+1. Click the function icon in the ribbon (or run *Easy Graphs Charts and TikZ: Open editor* from the command palette).
 2. The **Build** tab opens on "Start a chart". Type a formula such as `x^2 - 2x` and press Enter, or pick one of the six examples below the field.
 3. Use **+ Add** for everything else: more functions, shaded regions, lines and curves, points, arrows, braces, text labels and sliders. The preview redraws as you type.
 4. Adjust by hand: drag a line, curve, point or label in the preview and its numbers change so it follows the pointer; Shift-drag turns lines and stretches curves (see [Drag to edit](#drag-to-edit)). Drag empty space to pan, scroll to zoom.
@@ -82,11 +82,11 @@ Problem messages under a chart use the built-in words, and their columns point a
 
 ## Make charts with AI
 
-Describe the chart and let an AI build it. Easy Graphs, Charts & TikZ hands the AI everything it needs, checks every chart with the plugin's own code, and the chart lands in your note, ready to drag and slide. Open the **AI** tab in the editor; it has three ways in:
+Describe the chart and let an AI build it. Easy Graphs Charts and TikZ hands the AI everything it needs, checks every chart with the plugin's own code, and the chart lands in your note, ready to drag and slide. Open the **AI** tab in the editor; it has three ways in:
 
 - **AI apps on this computer** (Claude Code, Codex, Cursor, VS Code, Gemini CLI, Claude Desktop, LM Studio). Switch on **Let AI apps make charts** and copy the one line your app needs. The app then reads the chart guide, checks charts, looks at a picture of them and adds them to your notes by itself, through a small server that answers only on this computer ([how it works](ai.md#the-local-ai-server)).
 - **AI chats** (ChatGPT, Claude, Gemini in the browser). **Copy the guide** into the chat, describe your chart, then **Paste the chart** the AI writes: it opens in the editor, checked. Blocks pasted straight into a note work too, also with the comments and trailing commas AI chats like to write.
-- **AI agents in your vault folder.** **Add the section** puts a short Easy Graphs, Charts & TikZ part into `AGENTS.md` and `CLAUDE.md`, which agents read on their own.
+- **AI agents in your vault folder.** **Add the section** puts a short Easy Graphs Charts and TikZ part into `AGENTS.md` and `CLAUDE.md`, which agents read on their own.
 
 The guide the AI gets is [ai.md](ai.md); AIs write the text form, which reads like the math and is hard to get wrong. Then ask, for example: *"In this note, add a chart of the feasible region x + y <= 4, x + 3y <= 6, x >= 0, y >= 0, with the line 2x + 3y = c on a slider and the point where 2x + 3y is largest."*
 
@@ -186,7 +186,7 @@ Guides: [Sliders that move the picture](guides/sliders.md), [Animate a chart wit
 
 ## Drag to edit
 
-In the editor's 2D preview, drag a line, curve, point or text label, and Easy Graphs, Charts & TikZ rewrites the numbers in its formula so that the part you grabbed follows the pointer. Only numbers and their signs are rewritten (your spacing, `*` and `≤` stay as typed), and the card and the Sliders dock update while you drag. The film in [What's new](whats-new.md#40-drag-to-edit-live-sliders-a-new-editor) shows a drag and a Shift-turn on the Linear program example.
+In the editor's 2D preview, drag a line, curve, point or text label, and Easy Graphs Charts and TikZ rewrites the numbers in its formula so that the part you grabbed follows the pointer. Only numbers and their signs are rewritten (your spacing, `*` and `≤` stay as typed), and the card and the Sliders dock update while you drag. The film in [What's new](whats-new.md#40-drag-to-edit-live-sliders-a-new-editor) shows a drag and a Shift-turn on the Linear program example.
 
 | Gesture                   | What it does                                                                                                         |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -273,9 +273,9 @@ Guide: [Export to LaTeX](guides/export-latex.md) (standalone document or snippet
 
 ## Plugin settings
 
-Settings → Community plugins → **Easy Graphs, Charts & TikZ**:
+Settings → Community plugins → **Easy Graphs Charts and TikZ**:
 
-- **Interface language.** Follow Obsidian (default), English or 日本語: menus, buttons, settings, messages and the guides in the Help tab. A language Easy Graphs, Charts & TikZ does not have yet shows in English. Formulas, the chart language and the exported code stay as they are; command names change after Obsidian restarts.
+- **Interface language.** Follow Obsidian (default), English or 日本語: menus, buttons, settings, messages and the guides in the Help tab. A language Easy Graphs Charts and TikZ does not have yet shows in English. Formulas, the chart language and the exported code stay as they are; command names change after Obsidian restarts.
 - **Write new charts as.** Text (default, one line per object in words) or JSON. A chart you edit keeps the form its block has.
 - **Chart colours.** From your theme (default: native colours that follow light and dark mode) or As in the LaTeX export (the fixed colours of the PDF). CSS snippets can set `--etz-red`, `--etz-blue`, ... directly.
 - **Chart under the block while you edit.** On by default: in Live Preview, a block you are editing shows its chart right under its lines, changing as you type.
@@ -286,7 +286,7 @@ Settings → Community plugins → **Easy Graphs, Charts & TikZ**:
 - **Also render plain `tikz` blocks.** Off by default; on if you want one tag for everything (conflicts with obsidian-tikzjax).
 - **Charts for formulas**, **Highlight formulas in notes**, **Sliders in formula charts** and **Default chart for formulas**: see [Every formula is a chart](#every-formula-is-a-chart).
 - **Charts as SVG files.** Off by default: see [Export](#export).
-- **Show what's new after updates.** On by default. After an update that brings something new, a short popup shows what changed, once. The command **Show what's new in Easy Graphs, Charts & TikZ 5** and the link in the Help tab open it at any time.
+- **Show what's new after updates.** On by default. After an update that brings something new, a short popup shows what changed, once. The command **Show what's new in Easy Graphs Charts and TikZ 5** and the link in the Help tab open it at any time.
 - **AI access** (on a computer; phones and tablets show only the guide and the agents' section). **Let AI apps make charts** (off by default) starts the local AI server; below it: its status, the **Port** (default 27150), the **Token** with **Copy** and **New token**, **Connect an AI app** with the line each app needs, **Tell AI agents in this vault** and **Copy the guide for AI chats**. The editor's **AI** tab has the same switch.
 
 ## Live rendering, briefly
@@ -304,6 +304,6 @@ A typical 3D surface (samples=40, 1,600 quads) sits at ~60 fps; the slider's upp
 - **Notes with charts, after you change your chart words:** the plugin looks through the notes that hold `easy-tikz` blocks for charts that used a word you changed. Only when you agree (**Rewrite N charts**) does it rewrite those lines in your new words, each chart only when it stays exactly the same chart.
 - **Your notes, read only:** when the plugin starts without any stored data and What's new is switched on, it looks through your notes for an `easy-tikz` block and stops at the first one. A 3.x user who never changed a setting has charts but no stored data, and this tells such an update from a new install. It runs once, since its answer is stored, and it never writes to a note.
 - **Network:** nothing goes to the internet. The guides in the Help tab are part of the plugin and their charts are drawn locally; each guide has a link to its page on GitHub, which opens in your browser only when you click it. With **Let AI apps make charts** switched on (off by default), the plugin answers HTTP on `127.0.0.1` at the port you choose, which only programs on this computer can reach. Every request needs the token from the settings, and a POST must carry JSON; requests from web pages (with an `Origin` header) and for other host names are refused. It serves the AI guide, checks and draws charts one at a time (charts over its size limits are refused before anything is computed), and adds `easy-tikz` blocks to Markdown notes (at the end, below a heading, or in place of a placeholder line) or replaces them, nothing else: never in hidden folders and never in instruction files for AI agents such as `AGENTS.md` or `CLAUDE.md`. A new note is only made when the AI asks for it. Each change shows a notice, with **Undo** when an existing note changed.
-- **Vault root, on request:** **Tell AI agents in this vault** adds or updates a marked Easy Graphs, Charts & TikZ section in `AGENTS.md` and `CLAUDE.md` at the top of the vault (creating them if needed). It never touches the rest of those files.
+- **Vault root, on request:** **Tell AI agents in this vault** adds or updates a marked Easy Graphs Charts and TikZ section in `AGENTS.md` and `CLAUDE.md` at the top of the vault (creating them if needed). It never touches the rest of those files.
 - **Telemetry:** none.
 - **Math evaluation:** user expressions are parsed by a built-in parser and compiled into closures; no dynamically generated code runs. Nothing is persisted or transmitted.

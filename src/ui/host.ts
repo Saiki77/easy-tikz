@@ -45,7 +45,7 @@ export interface PluginHost {
     setAiServer?(on: boolean): Promise<void>;
     /** Optional: a new token for the AI server; running servers restart with it. */
     newAiToken?(): Promise<void>;
-    /** Optional: add the Easy Graphs, Charts & TikZ section to AGENTS.md and CLAUDE.md; returns the files written. */
+    /** Optional: add the Easy Graphs Charts and TikZ section to AGENTS.md and CLAUDE.md; returns the files written. */
     writeAgentFiles?(): Promise<string[]>;
     /** Optional: the guide for AI assistants (docs/ai.md). */
     aiGuideText?(): string;

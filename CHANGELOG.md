@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.1.1] - 2026-11-16
+
+### Changed
+
+- **The name is Easy Graphs Charts and TikZ.** The Obsidian community directory allows no comma and no `&` in a plugin name, so 5.1.0's name hid the plugin there. The id `easy-tikz`, your notes and your settings stay the same.
+
 ## [5.1.0] - 2026-11-16
 
 The plugin is now called **Easy Graphs, Charts & TikZ**. The Help is new: a gallery of real charts, and guides that go one step at a time, each with a live chart and the chart in words. **+ Add** has a search field and groups.

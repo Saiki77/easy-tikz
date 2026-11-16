@@ -168,7 +168,7 @@ test('whats new: every line is short, plain and free of em dashes', () => {
         assert.ok(/[.]$/.test(item.text), `a sentence ends with a full stop: ${item.text}`);
         assert.equal((item.text.match(/`/g) || []).length % 2, 0, `unbalanced backticks: ${item.text}`);
     }
-    assert.equal(WHATS_NEW_TITLE, 'Easy Graphs, Charts & TikZ 5');
+    assert.equal(WHATS_NEW_TITLE, 'Easy Graphs Charts and TikZ 5');
 });
 
 test('whats new: it covers the highlights of version 4, with sliders, calculations and AI among them', () => {

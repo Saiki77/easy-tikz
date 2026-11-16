@@ -1,4 +1,4 @@
-# Developing Easy Graphs, Charts & TikZ
+# Developing Easy Graphs Charts and TikZ
 
 [Overview](../README.md) · [Reference](reference.md) · [Changelog](../CHANGELOG.md)
 

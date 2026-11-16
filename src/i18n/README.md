@@ -1,6 +1,6 @@
 # Translations
 
-Every text Easy Graphs, Charts & TikZ shows has a key. `t(key, values)` (`src/i18n/index.ts`) returns it in the reader's
+Every text Easy Graphs Charts and TikZ shows has a key. `t(key, values)` (`src/i18n/index.ts`) returns it in the reader's
 language: Obsidian's (`getLanguage()`, read in `main.ts`) unless the setting **Interface language** fixes
 one. English (`src/i18n/en/`) is the source of every text and the fallback; each other language
 (`src/i18n/ja/`) has the same keys, one file per part of the plugin. The guides of the Help tab have their
@@ -50,7 +50,7 @@ screen. Add a term here before using a new one in several places.
 
 | English | 日本語 |
 | --- | --- |
-| Easy Graphs, Charts & TikZ, Obsidian, TikZ, pgfplots, LaTeX, SVG, PNG, JSON, MCP | (as they are) |
+| Easy Graphs Charts and TikZ, Obsidian, TikZ, pgfplots, LaTeX, SVG, PNG, JSON, MCP | (as they are) |
 | note | ノート |
 | vault | 保管庫 |
 | Live Preview / Reading view / Source mode | ライブプレビュー / 閲覧ビュー / ソースモード |
