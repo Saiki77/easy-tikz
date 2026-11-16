@@ -10,7 +10,7 @@
 
 <img src="docs/media/readme/editor.png" alt="The Easy TikZ editor on the area between the cubic f(x) = x³ − 3x and its tangent at a. On the left, cards for the function, the hidden tangent and the shaded region; on the right, the live preview with the tangent, the orange area labelled A = 2.76 and the title slope at x = 0.8: −1.08, and under it the slider a. The tabs Build, Chart, Code, Help and AI are at the top." width="100%">
 
-Click any chart to open it: a card for each object, sliders with play, lines and points you drag while their formulas follow, and pgfplots code to copy.
+Click any chart to open it. Everything is connected: drag a line, a point or a label in the preview and its formula follows, drag a 3D chart to turn it, scroll to zoom. No fiddling with code or camera angles. A card for each object, sliders with play, and the pgfplots code ready to copy.
 
 ### Write charts in LaTeX
 
