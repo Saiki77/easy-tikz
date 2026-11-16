@@ -19,6 +19,7 @@ export const help = {
     'help.category.notesExport': 'Notes and export',
     'help.category.reference': 'Reference',
     'help.category.chartLanguage': 'Chart language',
+    'help.category.showcase': 'Showcase',
     'help.category.calculus': 'Calculus',
     'help.category.dataProbability': 'Data and probability',
     'help.level.start': 'Start here',

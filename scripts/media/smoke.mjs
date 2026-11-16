@@ -265,7 +265,9 @@ if (started) {
             assert(!state.banner, `a banner shows: "${state.banner}"`);
             assert((await obs.statusChip()) === null, 'the status chip is visible on an empty chart');
             const tiles = await obs.call(() => document.querySelectorAll('.modal.tikz-modal .etz-build-example').length);
-            assert(tiles === EXAMPLES.length, `${tiles} example tiles for ${EXAMPLES.length} examples`);
+            // The examples and the Showcase guides (5.2), both open from the empty chart.
+            const shown = EXAMPLES.length + GUIDES.filter((g) => g.category === 'Showcase').length;
+            assert(tiles === shown, `${tiles} example tiles for ${shown} examples and Showcase charts`);
         });
 
         // Math labels, before any chart is drawn in this run: the figure of a guide step in Help is drawn once,

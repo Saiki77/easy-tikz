@@ -13,6 +13,7 @@ import { MessageKey, t, tIn } from '../i18n';
 import { ChartData, Guide, GuideCategory, GuideLevel } from './types';
 import { START_GUIDES } from './start';
 import { LANGUAGE_GUIDES } from './language';
+import { SHOWCASE_GUIDES } from './showcase';
 import { FUNCTIONS_GUIDES } from './functions';
 import { CALCULUS_GUIDES } from './calculus';
 import { OPTIMISATION_GUIDES } from './optimisation';
@@ -27,6 +28,7 @@ import { localGuide } from './ja';
 export const GUIDE_CATEGORIES: readonly GuideCategory[] = [
     'Getting started',
     'Chart language',
+    'Showcase',
     'Functions and sliders',
     'Calculus',
     'Regions and optimisation',
@@ -41,6 +43,7 @@ export const GUIDE_CATEGORIES: readonly GuideCategory[] = [
 const CATEGORY_KEYS: Readonly<Record<GuideCategory, MessageKey>> = {
     'Getting started': 'help.category.gettingStarted',
     'Chart language': 'help.category.chartLanguage',
+    Showcase: 'help.category.showcase',
     'Functions and sliders': 'help.category.functionsSliders',
     Calculus: 'help.category.calculus',
     'Regions and optimisation': 'help.category.regionsOptimisation',
@@ -90,6 +93,7 @@ function categoryRank(category: string): number {
 export const GUIDES: Guide[] = [
     ...START_GUIDES,
     ...LANGUAGE_GUIDES,
+    ...SHOWCASE_GUIDES,
     ...FUNCTIONS_GUIDES,
     ...CALCULUS_GUIDES,
     ...OPTIMISATION_GUIDES,
@@ -108,6 +112,17 @@ export function guideById(id: string): Guide | undefined {
 }
 
 export { localGuide };
+
+/**
+ * The finished charts of the Showcase guides as examples for the editor
+ * (5.2): the empty Build tab and the editor's menu offer them, with the
+ * guide's title and summary in the reader's language.
+ */
+export function showcaseExamples(): Array<{ id: string; title: string; description: string; is3D: boolean; data: ChartData }> {
+    return guidesIn('Showcase')
+        .map(localGuide)
+        .map((g) => ({ id: `showcase-${g.id}`, title: g.title, description: g.summary, is3D: g.chart.dimension === true, data: g.chart }));
+}
 
 /** Every guide in the reader's language, in display order (see localGuide). */
 export function localGuides(): Guide[] {

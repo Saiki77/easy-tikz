@@ -37,6 +37,7 @@ import { marchingGrid } from '../src/util';
 
 import { START_GUIDES } from '../src/guides/start';
 import { LANGUAGE_GUIDES } from '../src/guides/language';
+import { SHOWCASE_GUIDES } from '../src/guides/showcase';
 import { FUNCTIONS_GUIDES } from '../src/guides/functions';
 import { CALCULUS_GUIDES } from '../src/guides/calculus';
 import { OPTIMISATION_GUIDES } from '../src/guides/optimisation';
@@ -50,6 +51,7 @@ import { REFERENCE_GUIDES } from '../src/guides/reference';
 const DOCUMENTED: Record<string, string[]> = {
     start: ['first-chart', 'notes-formulas', 'drag-to-edit'],
     language: ['chart-language', 'formulas'],
+    showcase: ['tangent-triangle', 'largest-rectangle', 'mean-value', 'taylor-sine', 'gradient-levels', 'crossing-lines', 'sliding-ladder', 'throw-angle'],
     functions: ['sliders', 'parametric-polar', 'animate-play'],
     calculus: ['tangents-extrema', 'secant-tangent', 'area-accumulation', 'riemann-sums', 'slope-fields'],
     optimisation: ['regions', 'areas-between', 'tangent-area', 'linear-program', 'integer-program', 'level-curves', 'supply-demand'],
@@ -62,6 +64,7 @@ const DOCUMENTED: Record<string, string[]> = {
 const FILES: Record<string, Guide[]> = {
     start: START_GUIDES,
     language: LANGUAGE_GUIDES,
+    showcase: SHOWCASE_GUIDES,
     functions: FUNCTIONS_GUIDES,
     calculus: CALCULUS_GUIDES,
     optimisation: OPTIMISATION_GUIDES,

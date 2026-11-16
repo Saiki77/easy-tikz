@@ -13,6 +13,7 @@
 import { Annotation, Function3DParameters, FunctionParameters, Parameter, Tool } from '../types';
 import { ValidateResult, fmtNum } from '../mathcontext';
 import { ChartExample, EXAMPLES, Recipe, RecipeContext, newId, nextFunctionName, nextToolName, recipes } from '../migrate';
+import { showcaseExamples } from '../guides';
 import { BUILT_IN_2D, BUILT_IN_3D } from '../templates';
 import { RANGE_DEFAULTS, RangeKey, SettingsManager } from '../settings';
 import { SVGRenderer } from '../renderer';
@@ -649,7 +650,9 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
         emptyEl.createDiv({ cls: 'etz-build-empty-sub', text: t('build.empty.examples') });
         const grid = emptyEl.createDiv({ cls: 'etz-build-examples' });
         // Examples of the current mode first; the others switch the chart to their mode.
-        const examples = [...EXAMPLES.filter((e) => e.is3D === is3D), ...EXAMPLES.filter((e) => e.is3D !== is3D)];
+        // The Showcase charts (5.2) first: parts that follow each other.
+        const all: ChartExample[] = [...showcaseExamples(), ...EXAMPLES];
+        const examples = [...all.filter((e) => e.is3D === is3D), ...all.filter((e) => e.is3D !== is3D)];
         const thumbs: Array<[HTMLElement, ChartExample]> = [];
         for (const example of examples) {
             const tile = grid.createEl('button', { cls: 'etz-build-example', attr: { type: 'button' } });

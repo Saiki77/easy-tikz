@@ -271,7 +271,7 @@ test('categories and levels: English names as identifiers, shown in the reader\'
     inJapanese(() => {
         assert.deepEqual(
             GUIDE_CATEGORIES.map(guideCategoryLabel),
-            ['はじめに', 'グラフの言語', '関数とスライダー', '微分積分', '領域と最適化', 'データと確率', '点・線・ラベル', '3D', 'ノートと出力', 'リファレンス']
+            ['はじめに', 'グラフの言語', 'ショーケース', '関数とスライダー', '微分積分', '領域と最適化', 'データと確率', '点・線・ラベル', '3D', 'ノートと出力', 'リファレンス']
         );
         assert.deepEqual(
             (['start', 'core', 'advanced'] as const).map(guideLevelLabel),
@@ -288,7 +288,8 @@ test('search in Japanese: every guide by its own title, Japanese words and categ
             const hits = searchGuides(g.title, local);
             assert.ok(hits.some((h) => h.guide === g), `${g.id}: not found by its title '${g.title}'`);
         }
-        assert.equal(searchGuides('接線', local)[0].guide.id, 'tangents-extrema');
+        // 接線 (tangent): the tangent guide is among the first hits (5.2: Shade under a tangent may come first).
+        assert.ok(searchGuides('接線', local).slice(0, 3).some((h) => h.guide.id === 'tangents-extrema'), 'the tangent guide near the top');
         assert.ok(searchGuides('最適化', local).some((h) => h.guide.category === 'Regions and optimisation'), 'the Japanese category name is searched');
         // A full-width query, as an input method types it, finds the same as a half-width one.
         assert.deepEqual(

@@ -1,0 +1,345 @@
+/*
+ * Guides of the category Showcase (5.2): charts whose parts follow each
+ * other. A slider moves a point, a tangent, a region or a label, and what
+ * depends on it moves along. The editor offers their finished charts as
+ * examples too (src/ui/buildPanel.ts, src/modal.ts).
+ */
+import type { Guide } from './types';
+import { chart } from './chart';
+
+// ------------------------------------------------------------------ shade under a tangent
+const TT_WINDOW = ['size 12 x 8', 'show x from 0 to 6 and y from 0 to 4.5', 'axes on the edges', 'with a grid'];
+const TT_CURVE = 'plot $f(x) = \\frac{1}{x}$ in blue, very thick';
+const TT_SLIDER = 'slider a from 0.5 to 3, starting at 1, in steps of 0.05';
+const TT_TANGENT = 'plot $f(x) = \\frac{1}{x}$ in blue, very thick, with its tangent at a';
+const TT_POINT = 'P: mark (a, f(a)), large, labelled "P"';
+const TT_LINE = 'plot $g(x) = \\frac{2}{a} - \\frac{x}{a^2}$, hidden';
+const TT_SHADE = 'shade under g from x = 0 to 2a in orange';
+const TT_LABELLED = 'shade under g from x = 0 to 2a in orange, labelled "A = {(2*a)*(2/a)/2:2}"';
+
+const TANGENT_TRIANGLE: Guide = {
+    id: 'tangent-triangle',
+    title: 'Shade under a tangent',
+    summary: 'The tangent to 1/x cuts a triangle from the corner of the axes; drag the point and its area stays 2.',
+    category: 'Showcase',
+    level: 'core',
+    minutes: 2,
+    outcomes: ['Put a tangent on a slider', 'Shade under a line that moves', 'Print a value that follows the slider'],
+    next: ['largest-rectangle', 'tangent-area'],
+    chart: chart(...TT_WINDOW, TT_SLIDER, TT_TANGENT, TT_POINT, TT_LINE, TT_LABELLED),
+    steps: [
+        {
+            title: 'Plot the hyperbola',
+            body: 'Start with `f(x) = 1/x` in the first quadrant.',
+            chart: chart(...TT_WINDOW, TT_CURVE),
+        },
+        {
+            title: 'Put a tangent on a slider',
+            body: '`with its tangent at a` draws the tangent at the point P over `a`. Drag `a` and both move.',
+            chart: chart(...TT_WINDOW, TT_SLIDER, TT_TANGENT, TT_POINT),
+        },
+        {
+            title: 'Shade under the tangent',
+            body: 'The tangent is the hidden line `g`. `shade under g` fills the triangle it cuts from the axes, from 0 to `2a`.',
+            chart: chart(...TT_WINDOW, TT_SLIDER, TT_TANGENT, TT_POINT, TT_LINE, TT_SHADE),
+        },
+        {
+            title: 'Print the area',
+            body: 'The label works out the area while you drag. The triangle changes shape, but its area stays 2.',
+            chart: chart(...TT_WINDOW, TT_SLIDER, TT_TANGENT, TT_POINT, TT_LINE, TT_LABELLED),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ the largest rectangle under a parabola
+const LR_WINDOW = ['size 12 x 8', 'show x from -2.5 to 2.5 and y from -0.5 to 4.5', 'axes in the middle', 'with a grid'];
+const LR_CURVE = 'plot $f(x) = 4 - x^2$ in blue, very thick';
+const LR_SLIDER = 'slider a from 0 to 2, starting at 0.8, in steps of 0.01';
+const LR_CORNERS = 'mark (a, f(a)) and (-a, f(a)), labelled "P; Q"';
+const LR_SHADE = 'shade where $-a \\le x \\le a$ and $0 \\le y \\le f(a)$ in purple';
+const LR_TITLE = 'title area {2*a*(4 - a^2):2}, the largest is {32/(3*sqrt(3)):2} at a = {2/sqrt(3):2}';
+
+const LARGEST_RECTANGLE: Guide = {
+    id: 'largest-rectangle',
+    title: 'The largest rectangle under a parabola',
+    summary: 'A rectangle whose corners sit on the parabola: drag its corner and find where its area is largest.',
+    category: 'Showcase',
+    level: 'core',
+    minutes: 2,
+    outcomes: ['Shade a region that follows a slider', 'Mark points that depend on a slider', 'Read an optimum off a live title'],
+    next: ['mean-value'],
+    chart: chart(...LR_WINDOW, LR_TITLE, LR_SLIDER, LR_CURVE, LR_SHADE, LR_CORNERS),
+    steps: [
+        {
+            title: 'Plot the parabola',
+            body: 'The rectangle will stand under `f(x) = 4 - x^2`.',
+            chart: chart(...LR_WINDOW, LR_CURVE),
+        },
+        {
+            title: 'Put the corners on a slider',
+            body: 'P and Q sit on the curve at `a` and `-a`. Drag `a` and they slide along it.',
+            chart: chart(...LR_WINDOW, LR_SLIDER, LR_CURVE, LR_CORNERS),
+        },
+        {
+            title: 'Shade the rectangle',
+            body: 'The conditions use `a` and `f(a)`, so the rectangle follows the corners.',
+            chart: chart(...LR_WINDOW, LR_SLIDER, LR_CURVE, LR_SHADE, LR_CORNERS),
+        },
+        {
+            title: 'Find the largest area',
+            body: 'The title prints the area for the `a` shown. Drag `a` until it reaches its largest value, at about 1.15.',
+            chart: chart(...LR_WINDOW, LR_TITLE, LR_SLIDER, LR_CURVE, LR_SHADE, LR_CORNERS),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ the mean value theorem
+const MV_WINDOW = ['size 12 x 8', 'show x from -0.3 to 2.4 and y from -0.5 to 9', 'axes on the edges', 'with a grid'];
+const MV_CURVE = 'plot $f(x) = x^3$ in blue, very thick';
+const MV_SLIDER = 'slider b from 0.3 to 2.2, starting at 2, in steps of 0.01';
+const MV_SECANT = 'plot $s(x) = b^2 x$ in red, thick';
+const MV_AB = 'mark (0, 0) and (b, f(b)), labelled "A; B"';
+const MV_TANGENT = 'plot $f(x) = x^3$ in blue, very thick, with its tangent at b/sqrt(3)';
+const MV_ABC = 'mark (0, 0), (b, f(b)) and (b/sqrt(3), f(b/sqrt(3))), labelled "A; B; C"';
+const MV_TITLE = "title secant slope {b^2:2} = f'(c) at c = {b/sqrt(3):2}";
+
+const MEAN_VALUE: Guide = {
+    id: 'mean-value',
+    title: 'The mean value theorem',
+    summary: 'Between A and B a tangent runs parallel to the secant; drag B and the point C follows.',
+    category: 'Showcase',
+    level: 'advanced',
+    minutes: 3,
+    outcomes: ['Draw a secant through two points of a curve', 'Put a tangent at a point worked out from a slider', 'Print slopes in the title'],
+    next: ['secant-tangent'],
+    chart: chart(...MV_WINDOW, MV_TITLE, MV_SLIDER, MV_TANGENT, MV_SECANT, MV_ABC),
+    steps: [
+        {
+            title: 'Plot the cubic',
+            body: 'Start with `f(x) = x^3`.',
+            chart: chart(...MV_WINDOW, MV_CURVE),
+        },
+        {
+            title: 'Draw the secant from A to B',
+            body: 'B sits on the curve over the slider `b`. The secant through A and B has the slope `b^2`.',
+            chart: chart(...MV_WINDOW, MV_SLIDER, MV_CURVE, MV_SECANT, MV_AB),
+        },
+        {
+            title: 'Find the parallel tangent',
+            body: 'At C, over `b/sqrt(3)`, the tangent has the same slope as the secant. The tangent point is a formula of `b`.',
+            chart: chart(...MV_WINDOW, MV_SLIDER, MV_TANGENT, MV_SECANT, MV_ABC),
+        },
+        {
+            title: 'Print both slopes',
+            body: 'The title shows the slope and where C sits. Drag `b`: the tangent stays parallel to the secant.',
+            chart: chart(...MV_WINDOW, MV_TITLE, MV_SLIDER, MV_TANGENT, MV_SECANT, MV_ABC),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ Taylor polynomials of sin(x)
+const TS_WINDOW = ['size 12 x 8', 'show x from -7 to 7 and y from -2.5 to 2.5', 'axes in the middle', 'with a grid'];
+const TS_SINE = 'plot $f(x) = \\sin(x)$ in blue, very thick';
+const TS_POLY = 'plot p(x) = x - (n >= 3 ? x^3/6 : 0) + (n >= 5 ? x^5/120 : 0) - (n >= 7 ? x^7/5040 : 0) + (n >= 9 ? x^9/362880 : 0) in red, thick';
+const tsSlider = (start: number) => `slider n from 1 to 9, starting at ${start}, in steps of 2`;
+const TS_TITLE = 'title Taylor polynomial of degree {n}';
+
+const TAYLOR_SINE: Guide = {
+    id: 'taylor-sine',
+    title: 'Taylor polynomials of sin(x)',
+    summary: 'Raise the degree with a slider and watch the polynomial hug the sine over a wider and wider range.',
+    category: 'Showcase',
+    level: 'advanced',
+    minutes: 2,
+    outcomes: ['Switch the terms of a formula on and off with a slider', 'Compare a function with its approximation'],
+    next: ['riemann-sums'],
+    chart: chart(...TS_WINDOW, TS_TITLE, tsSlider(7), TS_SINE, TS_POLY),
+    steps: [
+        {
+            title: 'Plot the sine',
+            body: 'Start with `f(x) = \\sin(x)`.',
+            chart: chart(...TS_WINDOW, TS_SINE),
+        },
+        {
+            title: 'Add the polynomial with a slider',
+            body: 'Each term counts only from its degree on: `n >= 3 ? x^3/6 : 0` is the cube term when `n` is 3 or more, else 0.',
+            chart: chart(...TS_WINDOW, tsSlider(3), TS_SINE, TS_POLY),
+        },
+        {
+            title: 'Raise the degree',
+            body: 'Drag `n` up, or press play. Each new term holds the curve to the sine a little further out.',
+            chart: chart(...TS_WINDOW, TS_TITLE, tsSlider(7), TS_SINE, TS_POLY),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ a gradient on level curves
+const GL_WINDOW = ['size 12 x 8', 'equal scale', 'show x from -3.2 to 3.2 and y from -2.2 to 2.2', 'axes in the middle'];
+const GL_LEVELS = 'draw the level curves of x^2 + 2y^2 at 1, 2, 4 and 8 in purple, labelled "{level}"';
+const GL_SLIDER = 'slider s from 0 to 6.28, starting at 0.8, in steps of 0.01';
+const GL_POINT = 'P: mark (1.6cos(s), 1.1sin(s)), large';
+const GL_THROUGH = 'draw the level curves of x^2 + 2y^2 at P_x^2 + 2*P_y^2 in red, dashed';
+const GL_ARROW = 'draw an arrow from P to (1.4*P_x, 1.8*P_y) in red, very thick, labelled "$\\\\nabla f$"';
+
+const GRADIENT_LEVELS: Guide = {
+    id: 'gradient-levels',
+    title: 'A gradient on level curves',
+    summary: 'A point moves around the level curves; the level through it and its gradient arrow move along.',
+    category: 'Showcase',
+    level: 'advanced',
+    minutes: 3,
+    outcomes: ['Draw level curves of a function of x and y', 'Use the coordinates of a point in other objects', 'Draw a gradient arrow'],
+    next: ['level-curves'],
+    chart: chart(...GL_WINDOW, GL_SLIDER, GL_LEVELS, GL_POINT, GL_THROUGH, GL_ARROW),
+    steps: [
+        {
+            title: 'Draw the level curves',
+            body: 'The ellipses are where `x^2 + 2y^2` takes the values 1, 2, 4 and 8.',
+            chart: chart(...GL_WINDOW, GL_LEVELS),
+        },
+        {
+            title: 'Move a point with a slider',
+            body: 'P runs around an ellipse as `s` goes from 0 to 6.28.',
+            chart: chart(...GL_WINDOW, GL_SLIDER, GL_LEVELS, GL_POINT),
+        },
+        {
+            title: 'Draw the level through P',
+            body: '`P_x` and `P_y` are the coordinates of P. The dashed level curve uses them, so it always passes through P.',
+            chart: chart(...GL_WINDOW, GL_SLIDER, GL_LEVELS, GL_POINT, GL_THROUGH),
+        },
+        {
+            title: 'Add the gradient arrow',
+            body: 'The gradient of `x^2 + 2y^2` is (2x, 4y). Its arrow stands at right angles to the dashed level, wherever P goes.',
+            chart: chart(...GL_WINDOW, GL_SLIDER, GL_LEVELS, GL_POINT, GL_THROUGH, GL_ARROW),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ two lines and their crossing
+const CL_WINDOW = ['size 12 x 8', 'show x from -4 to 4 and y from -3 to 3', 'axes in the middle', 'with a grid'];
+const CL_G = 'plot $g(x) = 0.5x + 1$ in blue, very thick';
+const CL_SLIDER = 'slider m from -3 to 3, starting at 1.5, in steps of 0.05';
+const CL_H = 'plot $h(x) = mx - 1$ in red, very thick';
+const CL_CROSS = 'P: mark where g and h cross, large, with coordinates';
+const CL_TITLE = 'title they cross at an angle of {atan(abs((m - 0.5)/(1 + 0.5*m)))*180/pi:1} degrees';
+
+const CROSSING_LINES: Guide = {
+    id: 'crossing-lines',
+    title: 'Two lines and their crossing',
+    summary: 'Turn one line with a slider; the crossing point and the angle between the lines follow.',
+    category: 'Showcase',
+    level: 'start',
+    minutes: 2,
+    outcomes: ['Turn a line with a slope slider', 'Mark where two lines cross', 'Print the angle between them'],
+    next: ['sliders'],
+    chart: chart(...CL_WINDOW, CL_TITLE, CL_SLIDER, CL_G, CL_H, CL_CROSS),
+    steps: [
+        {
+            title: 'Plot a line',
+            body: 'Start with the line `g(x) = 0.5x + 1`.',
+            chart: chart(...CL_WINDOW, CL_G),
+        },
+        {
+            title: 'Turn a second line',
+            body: 'The slope of `h` is the slider `m`. Drag it and the red line turns about (0, -1).',
+            chart: chart(...CL_WINDOW, CL_SLIDER, CL_G, CL_H),
+        },
+        {
+            title: 'Mark the crossing',
+            body: '`mark where g and h cross` finds the point and prints its coordinates. At `m = 0.5` the lines are parallel and the point goes.',
+            chart: chart(...CL_WINDOW, CL_SLIDER, CL_G, CL_H, CL_CROSS),
+        },
+        {
+            title: 'Print the angle',
+            body: 'The title works out the angle between the lines from both slopes.',
+            chart: chart(...CL_WINDOW, CL_TITLE, CL_SLIDER, CL_G, CL_H, CL_CROSS),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ a ladder sliding down a wall
+const SL_WINDOW = ['size 12 x 8', 'equal scale', 'show x from -0.5 to 5.5 and y from -0.5 to 5.5', 'axes on the edges', 'with a grid'];
+const SL_SLIDER = 'slider w from 0.05 to 1.52, starting at 0.7, in steps of 0.01';
+const SL_A = 'A: mark (5cos(w), 0), large, labelled "A"';
+const SL_B = 'B: mark (0, 5sin(w)), large, labelled "B"';
+const SL_LADDER = 'draw a line from A to B in blue, very thick';
+const SL_M = 'M: mark (A_x/2, B_y/2), large, labelled "M"';
+const SL_PATH = 'draw $x^2 + y^2 = 6.25$ in purple, dashed';
+
+const SLIDING_LADDER: Guide = {
+    id: 'sliding-ladder',
+    title: 'A ladder sliding down a wall',
+    summary: 'The foot of a ladder slides away from the wall; its middle point moves on a quarter circle.',
+    category: 'Showcase',
+    level: 'core',
+    minutes: 2,
+    outcomes: ['Name points and use their coordinates', 'Draw a line between named points', 'Find the path a point follows'],
+    next: ['points-labels'],
+    chart: chart(...SL_WINDOW, SL_SLIDER, SL_A, SL_B, SL_LADDER, SL_M, SL_PATH),
+    steps: [
+        {
+            title: 'Put the foot on the floor',
+            body: 'The ladder is 5 long. Its foot A sits at `5cos(w)` on the floor; the slider `w` is its angle.',
+            chart: chart(...SL_WINDOW, SL_SLIDER, SL_A),
+        },
+        {
+            title: 'Lean the top on the wall',
+            body: 'B sits at `5sin(w)` on the wall. `draw a line from A to B` joins the named points.',
+            chart: chart(...SL_WINDOW, SL_SLIDER, SL_A, SL_B, SL_LADDER),
+        },
+        {
+            title: 'Mark the middle',
+            body: 'M takes the coordinates of A and B: `A_x/2` and `B_y/2`.',
+            chart: chart(...SL_WINDOW, SL_SLIDER, SL_A, SL_B, SL_LADDER, SL_M),
+        },
+        {
+            title: 'Draw the path of the middle',
+            body: 'Drag `w` or press play. M stays on the dashed circle of radius 2.5 round the corner.',
+            chart: chart(...SL_WINDOW, SL_SLIDER, SL_A, SL_B, SL_LADDER, SL_M, SL_PATH),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ a throw at an angle
+const PR_WINDOW = ['size 12 x 7', 'show x from 0 to 11 and y from 0 to 6', 'axes on the edges', 'with a grid', 'xlabel distance in m', 'ylabel height in m'];
+const PR_SLIDER = 'slider w from 10 to 80, starting at 30, in steps of 1';
+const PR_PATH = 'plot c(t) = (10*cos(w*pi/180)*t, 10*sin(w*pi/180)*t - 4.9*t^2) from t = 0 to 20*sin(w*pi/180)/9.81 in blue, very thick';
+const PR_LAND = 'mark (100*sin(2*w*pi/180)/9.81, 0), large, labelled "lands"';
+const PR_TOP = 'mark (50*sin(2*w*pi/180)/9.81, 5.0968*sin(w*pi/180)^2), labelled "top"';
+const PR_TITLE = 'title angle {w} degrees: the ball lands at {100*sin(2*w*pi/180)/9.81:2} m';
+
+const THROW: Guide = {
+    id: 'throw-angle',
+    title: 'A throw at an angle',
+    summary: 'Throw a ball at 10 m/s and change the angle: the path, its top and where it lands move together.',
+    category: 'Showcase',
+    level: 'core',
+    minutes: 2,
+    outcomes: ['Plot a path in t with a slider in it', 'Mark points worked out from the slider', 'Find the angle that throws farthest'],
+    next: ['parametric-polar'],
+    chart: chart(...PR_WINDOW, PR_TITLE, PR_SLIDER, PR_PATH, PR_LAND, PR_TOP),
+    steps: [
+        {
+            title: 'Plot the path of the ball',
+            body: 'The path is a curve in the time `t`: x and y of the ball, for the angle `w` on the slider.',
+            chart: chart(...PR_WINDOW, PR_SLIDER, PR_PATH),
+        },
+        {
+            title: 'Mark where it lands',
+            body: 'The landing point is a formula of `w` too, so it follows the path.',
+            chart: chart(...PR_WINDOW, PR_SLIDER, PR_PATH, PR_LAND),
+        },
+        {
+            title: 'Mark the top',
+            body: 'The highest point sits halfway, at a height that grows with the angle.',
+            chart: chart(...PR_WINDOW, PR_SLIDER, PR_PATH, PR_LAND, PR_TOP),
+        },
+        {
+            title: 'Find the farthest throw',
+            body: 'The title prints the distance. Drag `w`: the ball flies farthest at 45 degrees.',
+            chart: chart(...PR_WINDOW, PR_TITLE, PR_SLIDER, PR_PATH, PR_LAND, PR_TOP),
+        },
+    ],
+};
+
+export const SHOWCASE_GUIDES: Guide[] = [TANGENT_TRIANGLE, LARGEST_RECTANGLE, MEAN_VALUE, TAYLOR_SINE, GRADIENT_LEVELS, CROSSING_LINES, SLIDING_LADDER, THROW];

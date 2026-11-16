@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.2.0] - 2026-11-16
+
+Charts whose parts follow each other: a slider moves a point, a tangent, a region or a label, and everything that depends on it moves along.
+
+### Added
+
+- **Showcase: 8 interactive charts** (`src/guides/showcase.ts`), as guides in the Help (a new category, in English and Japanese) and as examples in the editor (the empty Build tab and the editor's menu):
+  - **Shade under a tangent:** the tangent to 1/x cuts a triangle from the axes; drag the point and the area stays 2.
+  - **The largest rectangle under a parabola:** the rectangle follows its corner; the title finds the largest area.
+  - **The mean value theorem:** the secant from A to B and the parallel tangent at C, which follows B.
+  - **Taylor polynomials of sin(x):** a slider raises the degree.
+  - **A gradient on level curves:** a point, the level curve through it and its gradient arrow.
+  - **Two lines and their crossing:** turn a line; the crossing and the angle follow.
+  - **A ladder sliding down a wall:** its middle point stays on a quarter circle.
+  - **A throw at an angle:** the path, its top and where it lands follow the angle.
+
 ## [5.1.3] - 2026-11-16
 
 ### Added

@@ -513,7 +513,9 @@ test('full: random editor edits on every built-in chart keep every comment, the 
         const tools = (data.tools as Data[] | undefined) ?? [];
         const kind = pick(['recolour', 'move tool', 'move function', 'rename tool', 'add function', 'add region', 'delete tool', 'view', 'title', 'width']);
         if (kind === 'recolour' && fns.length + tools.length) pick([...fns, ...tools]).color = 'green';
-        if (kind === 'move tool' && tools.length > 1) tools.reverse();
+        // A shape that reads another one (a probability its distribution, a data plot its data) cannot be moved
+        // above it and keep a line of its own: known, the block is then written anew (5.2).
+        if (kind === 'move tool' && tools.length > 1 && !tools.some((t) => t.distribution !== undefined || t.data !== undefined)) tools.reverse();
         if (kind === 'move function' && fns.length > 1) fns.reverse();
         if (kind === 'rename tool' && tools.length) {
             const old = String(pick(tools).name);

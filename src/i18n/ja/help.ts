@@ -21,6 +21,7 @@ export const help: Messages<typeof en> = {
     'help.category.notesExport': 'ノートと出力',
     'help.category.reference': 'リファレンス',
     'help.category.chartLanguage': 'グラフの言語',
+    'help.category.showcase': 'ショーケース',
     'help.category.calculus': '微分積分',
     'help.category.dataProbability': 'データと確率',
     'help.level.start': 'ここから',

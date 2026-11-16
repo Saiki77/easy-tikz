@@ -22,6 +22,7 @@ export type GuideLevel = 'start' | 'core' | 'advanced';
 export type GuideCategory =
     | 'Getting started'
     | 'Chart language'
+    | 'Showcase'
     | 'Functions and sliders'
     | 'Calculus'
     | 'Regions and optimisation'

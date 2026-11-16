@@ -12,6 +12,7 @@ import { SceneCache, SceneIssue } from './scene';
 import { FitResult, fitSettings } from './fit';
 import { View } from './geometry';
 import { EXAMPLES, defaultParameter } from './migrate';
+import { showcaseExamples } from './guides';
 import { beyondToolReads, renameInBeyondTool } from './beyond/tools';
 import type { NoteTable } from './beyond/table';
 import type { ChartDraft } from './templates';
@@ -1026,7 +1027,7 @@ export class TikzModal extends Modal implements PanelHost {
     private fillMoreMenu(menu: Menu) {
         menu.addItem((item) => item.setTitle(t('editor.menu.examples')).setIsLabel(true));
         // Example names stay as src/migrate.ts writes them (the Build and Help tabs show the same names).
-        for (const example of EXAMPLES) {
+        for (const example of [...showcaseExamples(), ...EXAMPLES]) {
             menu.addItem((item) =>
                 item
                     .setTitle(example.is3D ? `${example.title} (3D)` : example.title)

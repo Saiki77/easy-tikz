@@ -2,7 +2,7 @@
 
 # Easy Graphs Charts and TikZ guides
 
-31 step-by-step guides (141 steps) for Easy Graphs Charts and TikZ. Every picture is a screenshot of the plugin running in Obsidian, every step shows the lines it adds to the chart, and every guide ends with its finished chart as a block you can paste into a note.
+39 step-by-step guides (172 steps) for Easy Graphs Charts and TikZ. Every picture is a screenshot of the plugin running in Obsidian, every step shows the lines it adds to the chart, and every guide ends with its finished chart as a block you can paste into a note.
 
 The same guides are in the editor: open the Help tab. There each step shows a live chart with its sliders, the chart in words, and a button that loads the step into the editor.
 
@@ -20,6 +20,19 @@ The same guides are in the editor: open the Help tab. There each step shows a li
 | --- | --- |
 | <a href="chart-language.md"><img src="img/chart-language-card.png" alt="Finished chart of the guide: Write a chart in words" width="260"></a> | **[Write a chart in words](chart-language.md)**<br>Build a linear program line by line: the window, a region, a slider, a moving line and the best point.<br>Start here · 3 min · 6 steps |
 | <a href="formulas.md"><img src="img/formulas-card.png" alt="Finished chart of the guide: Write formulas as in your notes" width="260"></a> | **[Write formulas as in your notes](formulas.md)**<br>Write LaTeX in dollars, where `ax` is a times x, or plain formulas, and limit a curve with a domain.<br>Start here · 3 min · 4 steps |
+
+## Showcase
+
+| Finished chart | Guide |
+| --- | --- |
+| <a href="tangent-triangle.md"><img src="img/tangent-triangle-card.png" alt="Finished chart of the guide: Shade under a tangent" width="260"></a> | **[Shade under a tangent](tangent-triangle.md)**<br>The tangent to 1/x cuts a triangle from the corner of the axes; drag the point and its area stays 2.<br>Core · 2 min · 4 steps |
+| <a href="largest-rectangle.md"><img src="img/largest-rectangle-card.png" alt="Finished chart of the guide: The largest rectangle under a parabola" width="260"></a> | **[The largest rectangle under a parabola](largest-rectangle.md)**<br>A rectangle whose corners sit on the parabola: drag its corner and find where its area is largest.<br>Core · 2 min · 4 steps |
+| <a href="mean-value.md"><img src="img/mean-value-card.png" alt="Finished chart of the guide: The mean value theorem" width="260"></a> | **[The mean value theorem](mean-value.md)**<br>Between A and B a tangent runs parallel to the secant; drag B and the point C follows.<br>Advanced · 3 min · 4 steps |
+| <a href="taylor-sine.md"><img src="img/taylor-sine-card.png" alt="Finished chart of the guide: Taylor polynomials of sin(x)" width="260"></a> | **[Taylor polynomials of sin(x)](taylor-sine.md)**<br>Raise the degree with a slider and watch the polynomial hug the sine over a wider and wider range.<br>Advanced · 2 min · 3 steps |
+| <a href="gradient-levels.md"><img src="img/gradient-levels-card.png" alt="Finished chart of the guide: A gradient on level curves" width="260"></a> | **[A gradient on level curves](gradient-levels.md)**<br>A point moves around the level curves; the level through it and its gradient arrow move along.<br>Advanced · 3 min · 4 steps |
+| <a href="crossing-lines.md"><img src="img/crossing-lines-card.png" alt="Finished chart of the guide: Two lines and their crossing" width="260"></a> | **[Two lines and their crossing](crossing-lines.md)**<br>Turn one line with a slider; the crossing point and the angle between the lines follow.<br>Start here · 2 min · 4 steps |
+| <a href="sliding-ladder.md"><img src="img/sliding-ladder-card.png" alt="Finished chart of the guide: A ladder sliding down a wall" width="260"></a> | **[A ladder sliding down a wall](sliding-ladder.md)**<br>The foot of a ladder slides away from the wall; its middle point moves on a quarter circle.<br>Core · 2 min · 4 steps |
+| <a href="throw-angle.md"><img src="img/throw-angle-card.png" alt="Finished chart of the guide: A throw at an angle" width="260"></a> | **[A throw at an angle](throw-angle.md)**<br>Throw a ball at 10 m/s and change the angle: the path, its top and where it lands move together.<br>Core · 2 min · 4 steps |
 
 ## Functions and sliders
 

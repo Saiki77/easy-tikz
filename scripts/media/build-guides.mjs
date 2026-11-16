@@ -75,7 +75,7 @@ const CARD = { width: 840, height: 630, pad: 24 };
 const EM_DASH = String.fromCharCode(0x2014);
 const TABS = ['build', 'chart', 'code', 'help'];
 const FRAMES = ['editor', 'preview', 'note', 'none'];
-const CATEGORIES_FALLBACK = ['Getting started', 'Chart language', 'Functions and sliders', 'Calculus', 'Regions and optimisation', 'Data and probability', 'Points, lines and labels', '3D', 'Notes and export', 'Reference'];
+const CATEGORIES_FALLBACK = ['Getting started', 'Chart language', 'Showcase', 'Functions and sliders', 'Calculus', 'Regions and optimisation', 'Data and probability', 'Points, lines and labels', '3D', 'Notes and export', 'Reference'];
 const LEVELS_FALLBACK = { start: 'Start here', core: 'Core', advanced: 'Advanced' };
 
 const say = (text) => process.stderr.write(`[guides] ${text}\n`);

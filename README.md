@@ -50,11 +50,11 @@ Every chart can also be an SVG file in your vault, so Obsidian Publish and GitHu
 
 <img src="docs/media/readme/help.png" alt="The Help tab: the card Write a chart in words, with a chart's lines in English and LaTeX beside the linear program they draw, and below it a gallery of guides with category chips and tiles of their finished charts: a damped wave, a parabola with a slider, a polar rose, the unit circle unrolling into the sine, a tangent, a secant, an accumulated area and a Riemann sum." width="100%">
 
-The Help tab is a gallery of 31 short guides. Each step shows its chart live with its sliders, and the lines it adds to the chart, so you learn the chart language while you build.
+The Help tab is a gallery of 39 short guides. Each step shows its chart live with its sliders, and the lines it adds to the chart, so you learn the chart language while you build.
 
 ---
 
-**31 step-by-step guides** in the Help tab and [on GitHub](docs/guides/README.md) · [What's new in 5.0](docs/whats-new.md) · [Make charts with AI](docs/ai.md) · [Reference](docs/reference.md) · [Changelog](CHANGELOG.md)
+**39 step-by-step guides** in the Help tab and [on GitHub](docs/guides/README.md) · [What's new in 5.0](docs/whats-new.md) · [Make charts with AI](docs/ai.md) · [Reference](docs/reference.md) · [Changelog](CHANGELOG.md)
 
 **Privacy:** nothing goes to the internet, and there is no telemetry. AI access (off by default) answers on `127.0.0.1` only, with your token. [All details](docs/reference.md#privacy-and-permissions)
 

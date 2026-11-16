@@ -18,6 +18,7 @@ import { language } from '../i18n';
 import type { Guide, GuideStep } from './types';
 import { START_JA } from './start.ja';
 import { LANGUAGE_JA } from './language.ja';
+import { SHOWCASE_JA } from './showcase.ja';
 import { FUNCTIONS_JA } from './functions.ja';
 import { CALCULUS_JA } from './calculus.ja';
 import { OPTIMISATION_JA } from './optimisation.ja';
@@ -60,6 +61,7 @@ const merged = new WeakMap<Guide, Guide>();
 export const JA_GUIDES: Readonly<Record<string, GuideText>> = {
     ...START_JA,
     ...LANGUAGE_JA,
+    ...SHOWCASE_JA,
     ...FUNCTIONS_JA,
     ...CALCULUS_JA,
     ...OPTIMISATION_JA,
