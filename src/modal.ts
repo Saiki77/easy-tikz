@@ -1792,6 +1792,8 @@ export class TikzModal extends Modal implements PanelHost {
         this.drag = null;
         this.releaseCapture(e.pointerId);
         this.chartEl?.removeClass('is-dragging');
+        // A turn ends on whole degrees: the chart keeps round numbers (5.2.2).
+        if (drag.kind === 'rotate') this.applyRotation(Math.round(num(this.settings.getValue('rotationZ'), 45)) % 360, Math.round(num(this.settings.getValue('rotationX'), 30)));
         // Released under the threshold: a click selects the object.
         if (drag.kind === 'press' && !cancelled) this.select(drag.target, drag.grab);
         if (e.pointerType !== 'touch' && e.buttons === 0) this.updateHover(e.clientX, e.clientY, null, e.pointerType, true);
@@ -1807,7 +1809,8 @@ export class TikzModal extends Modal implements PanelHost {
         const invert = !!this.plugin?.data?.invertDrag3D;
         const azimuth = (((drag.azimuth + dx * AZIMUTH_DRAG_RATE) % 360) + 360) % 360;
         const elevation = Math.max(0, Math.min(90, drag.elevation + (invert ? dy : -dy) * ELEVATION_DRAG_RATE));
-        this.applyRotation(Math.round(azimuth), Math.round(elevation));
+        // Fractions of a degree while the turn runs, so it is smooth at any speed; whole degrees when it ends (endDrag).
+        this.applyRotation(azimuth, elevation);
     }
 
     private movePan(drag: Extract<DragState, { kind: 'pan' }>, e: PointerEvent) {

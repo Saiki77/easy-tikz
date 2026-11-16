@@ -63,6 +63,7 @@ npm run media:brand -- --out /tmp/brand --only hero
 npm run media:film -- --list             # the scenes of cinema/scenes
 npm run media:film -- overview --out /tmp/film --port 9381   # a film: MP4, GIF loop, poster, contact sheets, stills
 npm run media:film -- overview --out /tmp/film --skip-capture # edit again from the last capture: composite only
+npm run media:tour                       # the 5.2 tour: a frame-exact clean take with a pointer (film/README.md)
 
 node scripts/media/build-promo.mjs       # first-round images: docs/media/card-*.png, social-*.png, square-1080.png
 node scripts/media/build-video.mjs clip-3d   # first-round clips: film what changed, not everything
@@ -196,6 +197,7 @@ One port and one work dir per script, never shared:
 | `build-video.mjs` | 9344 | `<tmp>/easy-tikz-media/port-9344` |
 | `brand/build.mjs` | 9371 | `<tmp>/easy-tikz-media/brand-9371` |
 | `cinema/build.mjs` | 9373 | `<tmp>/easy-tikz-media/port-9373` |
+| `film/tour.mjs` | 9345 | `<tmp>/easy-tikz-media/port-9345` |
 
 `<tmp>` is `os.tmpdir()`. Override with `--port` / `--work` where a script takes them, or with the environment
 variables `ETZ_MEDIA_PORT` and `ETZ_MEDIA_WORK`. `ETZ_MEDIA_PLUGIN=root` makes every script use the build in the

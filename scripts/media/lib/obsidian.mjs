@@ -34,7 +34,7 @@ export { sleep, waitFor };
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 export const PLUGIN_ID = 'easy-tikz';
 /** Port convention: one port per script, so several can run at once. See README.md. */
-export const PORTS = { smoke: 9341, guides: 9342, promo: 9343, video: 9344 };
+export const PORTS = { smoke: 9341, guides: 9342, promo: 9343, video: 9344, film: 9345 };
 
 /**
  * Version of the "What's new" popup in the sources (WHATS_NEW_VERSION in

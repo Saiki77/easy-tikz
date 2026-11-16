@@ -1,6 +1,6 @@
 {
     "name": "easy-tikz",
-    "version": "5.2.1",
+    "version": "5.2.2",
     "description": "Visually design TikZ and pgfplots graphs with a live SVG preview.",
     "main": "main.js",
     "scripts": {
@@ -11,7 +11,8 @@
         "media:smoke": "node scripts/media/smoke.mjs",
         "media:guides": "node scripts/media/build-guides.mjs",
         "media:brand": "node scripts/media/brand/build.mjs",
-        "media:film": "node scripts/media/cinema/build.mjs"
+        "media:film": "node scripts/media/cinema/build.mjs",
+        "media:tour": "node scripts/media/film/tour.mjs"
     },
     "keywords": [
         "obsidian",

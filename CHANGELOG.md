@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.2.2] - 2026-11-17
+
+### Fixed
+
+- **3D charts turn smoothly at any speed:** a drag in the editor's 3D preview, or in the card of a formula in a note, turns the chart by fractions of a degree while the drag runs and ends on whole degrees. Before, each step was rounded to a whole degree, so a slow turn moved in jerks, and in the card a very slow drag did not turn the chart at all.
+
 ## [5.2.1] - 2026-11-16
 
 ### Fixed

@@ -398,9 +398,12 @@ export class FormulaHover {
             { passive: false }
         );
         let last: { x: number; y: number } | null = null;
+        // The angles of a turn, in fractions of a degree while it runs (smooth at any speed, no step lost); whole degrees at the end.
+        let turn: { z: number; x: number } | null = null;
         box.addEventListener('pointerdown', (e) => {
             if (e.button !== 0) return;
             last = { x: e.clientX, y: e.clientY };
+            turn = { z: num(data.rotationZ, 45), x: num(data.rotationX, 30) };
             box.setPointerCapture(e.pointerId);
             e.preventDefault();
         });
@@ -411,9 +414,12 @@ export class FormulaHover {
             last = { x: e.clientX, y: e.clientY };
             if (is3D) {
                 // As in the editor's preview: the same rates, and the setting Invert vertical drag in 3D.
-                data.rotationZ = Math.round((((num(data.rotationZ, 45) + dx * 0.5) % 360) + 360) % 360);
+                turn ??= { z: num(data.rotationZ, 45), x: num(data.rotationX, 30) };
+                turn.z = (((turn.z + dx * 0.5) % 360) + 360) % 360;
                 const tilt = this.host.invertDrag3D() ? dy : -dy;
-                data.rotationX = Math.round(Math.min(90, Math.max(0, num(data.rotationX, 30) + tilt * 0.3)));
+                turn.x = Math.min(90, Math.max(0, turn.x + tilt * 0.3));
+                data.rotationZ = turn.z;
+                data.rotationX = turn.x;
             } else {
                 const r = box.getBoundingClientRect();
                 const ux = (num(data.xmax, 5) - num(data.xmin, -5)) / Math.max(1, r.width);
@@ -430,6 +436,12 @@ export class FormulaHover {
         const end = (e: PointerEvent) => {
             last = null;
             if (box.hasPointerCapture(e.pointerId)) box.releasePointerCapture(e.pointerId);
+            if (is3D && turn) {
+                data.rotationZ = Math.round(turn.z) % 360;
+                data.rotationX = Math.round(turn.x);
+                redraw();
+            }
+            turn = null;
         };
         box.addEventListener('pointerup', end);
         box.addEventListener('pointercancel', end);
