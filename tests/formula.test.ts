@@ -2,7 +2,7 @@
 // what a formula draws, its letters as sliders, the view fitted to it, the
 // formula at the cursor, and the formulas of a section in order.
 import { test, assert } from './_lib';
-import { formulaAt, formulaChart, formulaLines, formulasIn, freeNames, chartable, formulaRows } from '../src/formula';
+import { formulaAt, formulaChart, formulaLines, formulasIn, freeNames, chartable, formulaRows, applyFormulaDefault } from '../src/formula';
 import { parseChartText } from '../src/text/parse';
 
 test('formula: what each kind of formula draws', () => {
@@ -123,4 +123,38 @@ test('formula: Unicode signs, values, inverses, rows of a block and lists of def
     assert.equal(formulaLines('f(x) = 3x^3 + 12x, \\quad g(x) = x^3 - 3x^2 + 2x')?.lines.length, 2);
     // A limit is no chart.
     assert.equal(chartable('\\lim_{x \\to 0} \\frac{1-\\cos x}{x^2} = \\frac{1}{2}'), false);
+});
+
+test('formula: identities, conditions, the imaginary unit, arc functions and rows with gaps', () => {
+    // An identity holds everywhere: its curve would be rounding noise. No chart.
+    const identities = ['\\ln(x \\cdot y) = \\ln(x) + \\ln(y)', '\\cos(x+y) = \\cos(x)\\cos(y) - \\sin(x)\\sin(y)', '\\ln(e^x) = x', 'e^{\\ln x} = x', 'e^x = \\frac{1}{e^{-x}}', '\\frac{1}{\\cos^2(x)} = 1 + \\tan^2(x)'];
+    assert.deepEqual(identities.filter((tex) => chartable(tex)), []);
+    // A curve that is there draws; a point (x^2 + y^2 = 0) does not.
+    assert.equal(chartable('x^2 + y^2 = 4'), true);
+    assert.equal(chartable('x = 3'), true);
+    assert.equal(chartable('x^2 + y^2 = 0'), false);
+    // A condition on x alone is no region; i alone is the imaginary unit.
+    assert.equal(chartable('x > 0'), false);
+    assert.equal(chartable('|x| < 1'), false);
+    assert.equal(chartable('y \\ge x^2'), true);
+    assert.equal(chartable('e^{i(x+y)} = e^{ix} \\cdot e^{iy}'), false);
+    // Arc functions and powers of functions.
+    assert.equal(chartable('\\arcsin(x)'), true);
+    assert.equal(chartable('\\arctan x'), true);
+    assert.equal(chartable('\\cos^2(x)'), true);
+    // Rows: an empty row between keeps its place (MathJax draws it), a last \\ adds none.
+    const block = '\\begin{aligned} f(x) &= x^2 \\\\ \\\\ \\lim_{x \\to 0} x = 0 \\\\ g(x) &= x^3 \\\\ \\end{aligned}';
+    assert.equal(formulaRows(block).length, 4);
+    assert.deepEqual([0, 1, 2, 3].map((r) => chartable(block, r)), [true, false, false, true]);
+});
+
+test('formula: a 2D default chart keeps the cube of surfaces and the colours of further functions', () => {
+    // Save as default stores every setting: the 3D view of a 2D default is untouched (Proportional).
+    const def = { boxAspect: 'true', rotationX: 30, rotationZ: 45, zoom3D: 1, functions: [{ color: 'violet', thickness: 'very thick' }] };
+    const surface = parseChartText((formulaChart('z = x^2 - y^2') ?? []).join('\n')).data;
+    assert.equal(applyFormulaDefault(surface, def).boxAspect, 'equal');
+    assert.equal(applyFormulaDefault(surface, { ...def, dimension: true }).boxAspect, 'true');
+    const two = applyFormulaDefault(parseChartText((formulaChart('f(x) = x^2, \\quad g(x) = x^3') ?? []).join('\n')).data, def);
+    const fns = two.functions as Array<{ color?: string; thickness?: string }>;
+    assert.deepEqual(fns.map((f) => [f.color, f.thickness]), [['violet', 'very thick'], ['red', 'very thick']]);
 });

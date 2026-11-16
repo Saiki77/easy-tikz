@@ -134,7 +134,10 @@ function prepared(part: string): { tex: string; vector: boolean } | null {
     const tex = clean(objective(clean(signs)));
     if (!tex || NOT_A_CHART.test(tex)) return null;
     const axes = axesOf(tex);
-    return axes === null ? null : { tex: splitLetterRuns(axes), vector: axes !== tex };
+    if (axes === null) return null;
+    const split = splitLetterRuns(axes);
+    // i alone is the imaginary unit (e^{ix}): no chart of real numbers.
+    return namesOf(split).has('i') ? null : { tex: split, vector: axes !== tex };
 }
 
 /** Environments whose rows are formulas of their own (aligned, align, gathered, ...); cases and arrays are not. */
@@ -149,10 +152,12 @@ export function formulaRows(tex: string): string[] {
     const env = ROWS.exec(tex);
     if (!env && (!tex.includes('\\\\') || /\\begin\{/.test(tex))) return [tex];
     const body = env ? env[2] : tex;
-    return body
+    const rows = body
         .split(/\\\\(?:\s*\[[^\]]*\])?/)
-        .map((r) => r.replace(/\\(?:tag|label)\s*\{[^}]*\}|\\(?:nonumber|notag)/g, '').replace(/&/g, ' ').trim())
-        .filter((r) => r.length > 0);
+        .map((r) => r.replace(/\\(?:tag|label)\s*\{[^}]*\}|\\(?:nonumber|notag)/g, '').replace(/&/g, ' ').trim());
+    // MathJax drops an empty last row (a \\ before \end) but draws empty rows between: the indexes follow its rows.
+    while (rows.length > 1 && !rows[rows.length - 1]) rows.pop();
+    return rows;
 }
 
 /** A head of a function of x: y, f(x), f'(x), g''(x). Its name, or null. */
@@ -171,7 +176,8 @@ function kindOf(tex: string, vector = false): { kind: FormulaKind; body: string 
     const usesY = names.has('y');
     // A lone variable (x, y) is no chart.
     if (/^[xy]$/.test(tex)) return null;
-    if (/\\(?:le|leq|ge|geq|lt|gt)(?![A-Za-z])|[<>]/.test(tex)) return usesX || usesY ? { kind: 'region', body: tex } : null;
+    // A condition on one variable (x > 0, |x| < 1) is a condition, not a region.
+    if (/\\(?:le|leq|ge|geq|lt|gt)(?![A-Za-z])|[<>]/.test(tex)) return usesX && usesY ? { kind: 'region', body: tex } : null;
     const sides = tex.split('=');
     if (sides.length > 2) return null;
     if (sides.length === 2) {
@@ -208,7 +214,7 @@ const COLOURS = ['blue', 'red', 'green'];
 export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; lines: string[] } | null {
     // The rows of an aligned block: the one under the pointer, or all of them.
     const rows = formulaRows(texIn);
-    const chosen = row !== undefined && rows[row] !== undefined ? [rows[row]] : rows;
+    const chosen = (row !== undefined && rows[row] !== undefined ? [rows[row]] : rows).filter((r) => r.length > 0);
     const parts = chosen
         .flatMap((r) => clean(r).split(/\\(?:iff|Leftrightarrow|Longleftrightarrow|Rightarrow|Longrightarrow|implies|impliedby|Leftarrow|Longleftarrow)(?![A-Za-z])|⟺|⇔|⇒|⟹/))
         // A list of definitions in one line: f(x) = ..., g(x) = ...
@@ -274,7 +280,9 @@ const DEFAULT_CHART_KEYS = [
     'numbers_x', 'numbers_step_x', 'numbers_at_x', 'numbers_y', 'numbers_step_y', 'numbers_at_y', 'numbers_z', 'numbers_step_z', 'numbers_at_z',
     'equalScale', 'size_x_cm', 'size_y_cm', 'boxAspect', 'rotationX', 'rotationZ', 'zoom3D', 'documentSetup', 'showSlidersInNote',
 ];
-/** The style of a line the default's first function gives every function and curve of a formula chart. */
+/** The 3D view of a default chart: it counts only when the default is 3D. */
+const VIEW_3D = ['boxAspect', 'rotationX', 'rotationZ', 'zoom3D'];
+/** The style of a line the default's first function gives the functions and curves of a formula chart (its colour: the first only). */
 const LINE_STYLE = ['color', 'thickness', 'dashed', 'extrema', 'showLegend', 'fill', 'fillOpacity', 'fillPattern'];
 /** The style the default's first surface gives a surface. */
 const SURFACE_STYLE = ['color', 'colormap', 'opacity', 'meshOpacity', 'wireframe', 'samples'];
@@ -291,25 +299,31 @@ const copy = <T>(v: T): T => (v === undefined ? v : (JSON.parse(JSON.stringify(v
 export function applyFormulaDefault(data: Rec, def: Rec | null | undefined): Rec {
     if (!def) return data;
     const out = copy(data);
-    for (const k of DEFAULT_CHART_KEYS) if (k in def) out[k] = copy(def[k]);
+    for (const k of DEFAULT_CHART_KEYS) {
+        // A 2D default holds the 3D view untouched (its stored Proportional box made surfaces thin columns):
+        // only a 3D default sets the box, the turn and the zoom.
+        if (k in def && (def.dimension === true || !VIEW_3D.includes(k))) out[k] = copy(def[k]);
+    }
     const first = (key: string): Rec | null => {
         const list = def[key];
         return Array.isArray(list) && list[0] && typeof list[0] === 'object' ? (list[0] as Rec) : null;
     };
+    // The default's colour goes to the first line only: further functions keep their own, so they stay apart.
+    let drawn = 0;
     const style = (list: unknown, from: Rec | null, keys: readonly string[]) => {
         if (!from || !Array.isArray(list)) return;
-        for (const item of list as Rec[]) for (const k of keys) if (k in from) item[k] = copy(from[k]);
+        for (const item of list as Rec[]) {
+            for (const k of keys) if (k in from && (k !== 'color' || drawn === 0)) item[k] = copy(from[k]);
+            drawn++;
+        }
     };
     const line = first('functions');
     style(out.functions, line, LINE_STYLE);
+    drawn = 0;
     style(out.functions3D, first('functions3D'), SURFACE_STYLE);
-    // A curve (an equation) takes the line's colour, thickness and dashes.
-    if (line && Array.isArray(out.tools)) {
-        for (const tool of out.tools as Rec[]) {
-            if (tool.type !== 'curve') continue;
-            for (const k of ['color', 'thickness', 'dashed']) if (k in line) tool[k] = copy(line[k]);
-        }
-    }
+    // A curve (an equation) takes the line's thickness and dashes, and its colour when it is the first line.
+    drawn = Array.isArray(out.functions) ? out.functions.length : 0;
+    if (line && Array.isArray(out.tools)) style(out.tools.filter((t: Rec) => t.type === 'curve'), line, ['color', 'thickness', 'dashed']);
     return out;
 }
 
@@ -324,6 +338,45 @@ export function formulaBlock(tex: string, def: Rec | null | undefined): string |
 
 const chartableMemo = new Map<string, boolean>();
 
+/**
+ * Does an equation draw a curve? Not when its sides agree everywhere (an
+ * identity: ln(xy) = ln x + ln y, e^x e^{-x} = 1; its curve is rounding
+ * noise) or nowhere (x^2 + y^2 = 0: no sign change in the view).
+ */
+function curveShows(math: ReturnType<SettingsManager['createMathContext']>, equation: string, view: { xmin: number; xmax: number; ymin: number; ymax: number }): boolean {
+    const sides = equation.split('=');
+    if (sides.length !== 2) return true;
+    let left: (x: number, y: number) => number;
+    let right: (x: number, y: number) => number;
+    try {
+        left = math.equation(sides[0]).F;
+        right = math.equation(sides[1]).F;
+    } catch {
+        return true;
+    }
+    const n = 24;
+    let finite = 0;
+    let same = 0;
+    let below = false;
+    let above = false;
+    for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+            // Off the round numbers, where ln 0 or 1/0 sit.
+            const x = view.xmin + ((view.xmax - view.xmin) * (i + 0.37)) / n;
+            const y = view.ymin + ((view.ymax - view.ymin) * (j + 0.61)) / n;
+            const a = left(x, y);
+            const b = right(x, y);
+            if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+            finite++;
+            if (Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b))) same++;
+            else if (a < b) below = true;
+            else above = true;
+        }
+    }
+    if (!finite || same >= finite * 0.9) return false;
+    return (below && above) || same > 0;
+}
+
 /** Do these chart lines draw without an error: every formula known, nothing in the scene a problem? */
 function drawable(lines: string[]): boolean {
     const parsed = parseChartText(lines.join('\n'));
@@ -336,11 +389,13 @@ function drawable(lines: string[]): boolean {
     if (math.parameterIssues().some((i) => i.severity === 'error')) return false;
     if (settings.getValue('dimension') === true) return true;
     const config = settings.toRendererConfig(math);
+    const view = { xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax };
+    for (const tool of config.tools ?? []) if (tool.type === 'curve' && !curveShows(math, tool.equation, view)) return false;
     const scene = computeScene2D({
         functions: config.functions || [],
         tools: config.tools,
         math,
-        view: { xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax },
+        view,
         grid: marchingGrid(config.width * 0.85, config.height * 0.8, 1, 'draft'),
         axisStyle: config.axisStyle,
         polar: false,

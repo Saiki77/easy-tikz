@@ -16,6 +16,9 @@ const FUNCTIONS = new Set([
     'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'arcsin', 'arccos', 'arctan', 'sinh', 'cosh', 'tanh', 'ln', 'log', 'exp', 'min', 'max',
 ]);
 
+/** The arc functions as the formulas name them: `\arcsin x` is asin(x). */
+const ARC: Record<string, string> = { arcsin: 'asin', arccos: 'acos', arctan: 'atan' };
+
 /** Commands that are an operator or a relation. */
 const SYMBOLS: Record<string, string> = {
     cdot: '*', times: '*', div: '/', ast: '*',
@@ -87,6 +90,20 @@ function convert(s: string): string {
         i += atom.length;
         return `(${convert(atom)})`;
     };
+    /** `(...)` after a function with a power (`\cos^2(x)`): its argument, read to the matching bracket. */
+    const parenArg = (): string => {
+        spaces();
+        if (s[i] !== '(') return '';
+        let depth = 0;
+        let j = i;
+        for (; j < s.length; j++) {
+            if (s[j] === '(') depth++;
+            else if (s[j] === ')' && --depth === 0) break;
+        }
+        const inner = s.slice(i + 1, j);
+        i = Math.min(s.length, j + 1);
+        return `(${convert(inner)})`;
+    };
     const command = (): string => {
         i++;
         const m = /^[A-Za-z]+/.exec(s.slice(i));
@@ -121,14 +138,15 @@ function convert(s: string): string {
         if (TEXT_COMMANDS.has(name)) return ` ${arg().replace(/\s+/g, '')}`;
         if (FUNCTIONS.has(name)) {
             spaces();
-            // `\sin^2 x` is (sin x)^2.
+            const fn = ARC[name] ?? name;
+            // `\sin^2 x` and `\cos^2(x)` are (sin x)^2 and (cos x)^2.
             if (s[i] === '^') {
                 i++;
                 const power = arg();
-                return ` ${name}${fnArg() || ''}^(${power})`;
+                return ` ${fn}${fnArg() || parenArg()}^(${power})`;
             }
             // A new word: `a\sin x` is a times sin x, never asin (the arcsine).
-            return ` ${name}${fnArg()}`;
+            return ` ${fn}${fnArg()}`;
         }
         if (name in SYMBOLS) return SYMBOLS[name];
         // Greek letters and other names: \alpha is alpha, \pi is pi, \theta is theta.

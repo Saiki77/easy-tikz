@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.0.4] - 2026-11-16
+
+### Fixed
+
+- **The dotted line runs under the rows that open a chart.** In a block of rows (`aligned` and the like), each row with a chart has its own line, and a row without one has none. Before, the line ran under the whole block (or only its last row). Over the block outside a row, no card opens.
+- **The line goes under the whole formula**, also under the lower part of a fraction (`1/x`), not through it.
+- **No chart for identities and conditions** (`src/formula.ts`). An equation that holds everywhere (`ln(x·y) = ln(x) + ln(y)`, `cos(x+y) = cos(x)cos(y) − sin(x)sin(y)`, `e^x·e^{−x} = 1`) drew noise; it now has no mark. The same holds for an equation true nowhere (`x² + y² = 0`), a condition on one variable (`x > 0`, `|x| < 1`) and a formula with the imaginary unit (`e^{ix}`).
+- **`\arcsin`, `\arccos`, `\arctan` and `\cos^2(x)`** read as functions (`src/latex.ts`); before, they had no chart.
+- **A saved default chart for formulas** (Settings, Default chart for formulas) no longer turns surfaces into thin columns: its 3D view counts only when the default is a 3D chart, so formula surfaces keep the cube box. Its line colour goes to the first function only; further functions keep their own colours.
+
 ## [5.0.3] - 2026-11-16
 
 ### Added

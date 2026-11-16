@@ -59,6 +59,8 @@ export class FormulaHover {
     private target: HTMLElement | null = null;
     /** The row of an aligned block whose chart is open (undefined: the whole formula). */
     private row: number | undefined = undefined;
+    /** What is tinted while the card is open: the formula, or its row. */
+    private lit: HTMLElement | null = null;
     /** The card was used (a drag, a slider, a click in it): it stays open until a click outside, Esc or another formula. */
     private held = false;
     private openTimer: number | null = null;
@@ -82,14 +84,21 @@ export class FormulaHover {
             m.dataset.etzTex = found[i].tex;
             m.dataset.etzLine = String(info.lineEnd);
             m.dataset.etzPath = ctx.sourcePath;
-            m.dataset.etzMark = chartable(found[i].tex) ? '1' : '0';
+            markMath(m, found[i].tex);
         });
+        // MathJax may draw a formula after this (its first load): mark it again then.
+        if (maths.some((m) => !m.querySelector('mjx-math'))) {
+            window.setTimeout(() => {
+                for (const m of maths) if (m.dataset.etzTex !== undefined && m.dataset.etzSeen !== drawnAs(m)) markMath(m, m.dataset.etzTex);
+            }, 1500);
+        }
     }
 
     /**
      * Live Preview: the editor's rendered formulas learn whether they have a
      * chart, after each update of the editor (new formulas, a scroll, the
-     * cursor leaving a formula). A formula is checked once per element.
+     * cursor leaving a formula). A formula is checked again when MathJax
+     * draws it anew (it may draw a block's rows after the mark was set).
      */
     editorMarks(): Extension {
         return ViewPlugin.fromClass(
@@ -108,9 +117,10 @@ export class FormulaHover {
                     if (this.frame) return;
                     this.frame = window.requestAnimationFrame(() => {
                         this.frame = 0;
-                        for (const math of Array.from(this.view.contentDOM.querySelectorAll<HTMLElement>('.math:not([data-etz-mark])'))) {
+                        for (const math of Array.from(this.view.contentDOM.querySelectorAll<HTMLElement>('.math'))) {
+                            if (math.dataset.etzMark !== undefined && math.dataset.etzSeen === drawnAs(math)) continue;
                             const found = formulaInEditor(this.view, math);
-                            math.dataset.etzMark = found && chartable(found.tex) ? '1' : '0';
+                            markMath(math, found ? found.tex : null);
                         }
                     });
                 }
@@ -159,7 +169,8 @@ export class FormulaHover {
     close(): void {
         this.cancelOpen();
         this.cancelClose();
-        this.target?.removeClass('etz-formula-open');
+        this.lit?.removeClass('etz-formula-open');
+        this.lit = null;
         this.pop?.remove();
         this.pop = null;
         this.target = null;
@@ -220,11 +231,16 @@ export class FormulaHover {
     private open(math: HTMLElement, row?: number) {
         this.cancelOpen();
         const found = this.find(math);
-        if (!found) return;
-        // In an aligned block, the row under the pointer; elsewhere the whole formula.
-        const rows = formulaRows(found.tex);
-        const pick = row !== undefined && rows.length > 1 && rows[row] !== undefined ? row : undefined;
-        if (!chartable(found.tex, pick)) return;
+        const rows = found ? formulaRows(found.tex) : [];
+        const drawnRows = rows.length > 1 ? rowsOf(math) : [];
+        const byRow = rows.length > 1 && drawnRows.length === rows.length;
+        // A block of rows opens the chart of the row under the pointer, never all rows at once.
+        const pick = byRow && row !== undefined && rows[row] !== undefined ? row : undefined;
+        if (!found || (byRow && pick === undefined) || !chartable(found.tex, pick)) {
+            // A row without a chart: the card of another row of the block closes.
+            if (this.pop && this.target === math) this.scheduleClose();
+            return;
+        }
         const kind = formulaLines(found.tex, pick)?.kind;
         const lines = formulaChart(found.tex, pick);
         if (!lines || !kind) return;
@@ -233,7 +249,8 @@ export class FormulaHover {
         this.close();
         this.target = math;
         this.row = row;
-        math.addClass('etz-formula-open');
+        this.lit = (pick !== undefined ? drawnRows[pick] : undefined) ?? math;
+        this.lit.addClass('etz-formula-open');
         const doc = math.ownerDocument;
         const pop = doc.body.createDiv({ cls: 'etz-formula-pop etz-tokens', attr: { role: 'dialog', 'aria-label': t('plugin.formula.dialog') } });
         this.pop = pop;
@@ -439,13 +456,48 @@ function formulasOfDoc(doc: Text): Array<{ tex: string; start: number; end: numb
     return found;
 }
 
-/** The row of an aligned block under the pointer (MathJax draws the block as a table), or undefined. */
+/** The rows of an aligned block as MathJax draws them (the rows of its outer table), or none. */
+function rowsOf(math: HTMLElement): HTMLElement[] {
+    const table = math.querySelector('mjx-itable');
+    return table ? Array.from(table.querySelectorAll<HTMLElement>(':scope > mjx-mtr, :scope > mjx-mlabeledtr')) : [];
+}
+
+/** How MathJax has drawn a formula so far (drawn or not, how many rows): a change means mark it again. */
+function drawnAs(math: HTMLElement): string {
+    return math.querySelector('mjx-math') ? `rows ${math.querySelectorAll('mjx-mtr, mjx-mlabeledtr').length}` : 'not drawn';
+}
+
+/** The row of an aligned block under the pointer, or undefined. */
 function rowAt(el: Element | null, math: HTMLElement): number | undefined {
-    const tr = el ? el.closest('mjx-mtr, mjx-mlabeledtr') : null;
-    if (!tr || !math.contains(tr) || !tr.parentElement) return undefined;
-    const rows = Array.from(tr.parentElement.children).filter((c) => c.tagName === 'MJX-MTR' || c.tagName === 'MJX-MLABELEDTR');
-    const i = rows.indexOf(tr);
+    if (!el) return undefined;
+    const i = rowsOf(math).findIndex((r) => r.contains(el));
     return i < 0 ? undefined : i;
+}
+
+/**
+ * Mark a formula that has a chart (data-etz-mark="1"). In a block of rows
+ * that MathJax draws as rows, the rows with a chart are marked instead
+ * ("rows" on the formula), so the line runs only under rows that open one.
+ */
+function markMath(math: HTMLElement, tex: string | null): void {
+    math.dataset.etzSeen = drawnAs(math);
+    if (!tex) {
+        math.dataset.etzMark = '0';
+        return;
+    }
+    const rows = formulaRows(tex);
+    const drawn = rows.length > 1 ? rowsOf(math) : [];
+    if (rows.length > 1 && drawn.length === rows.length) {
+        let any = false;
+        drawn.forEach((tr, i) => {
+            const ok = chartable(tex, i);
+            tr.dataset.etzMark = ok ? '1' : '0';
+            any = any || ok;
+        });
+        math.dataset.etzMark = any ? 'rows' : '0';
+        return;
+    }
+    math.dataset.etzMark = chartable(tex) ? '1' : '0';
 }
 
 /** The formula a rendered formula of the editor shows: its TeX, and the end of the line where it ends. */
