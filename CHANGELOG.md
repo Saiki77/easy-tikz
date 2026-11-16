@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.1.2] - 2026-11-16
+
+### Fixed
+
+- **The cards of the Help home wrap their text** (`src/ui/help.css`, `src/ui/addpicker.css`). With a theme or CSS snippet that keeps button text on one line, the summaries of Start here, the gallery tiles and the group names of + Add ran out of their cards; they now wrap whatever the theme says.
+- **Every gallery tile keeps its chart box at 3 : 2**, so the titles of a row start at the same height; a wide chart made its tile shorter.
+
 ## [5.1.1] - 2026-11-16
 
 ### Changed

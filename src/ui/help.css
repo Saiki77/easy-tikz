@@ -887,6 +887,14 @@ button.etz-help-tile:hover {
     font-weight: 600;
 }
 
+/* The texts of a card wrap by themselves: a theme that keeps button text on one line must not push them out of the card. */
+.etz-help button.etz-help-start > span,
+.etz-help button.etz-help-tile span {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+
 .etz-help-feature {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
@@ -1005,6 +1013,9 @@ button.etz-help-tile:hover {
 
 .etz-help-tile-chart {
     aspect-ratio: 3 / 2;
+    /* The box keeps its ratio whatever the picture's own size: every title of a row starts at the same height. */
+    min-height: 0;
+    overflow: hidden;
     padding: 4px;
     border-bottom: 1px solid var(--background-modifier-border);
 }

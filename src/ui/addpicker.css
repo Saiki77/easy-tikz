@@ -88,6 +88,13 @@ button.etz-picker-group.is-on {
     font-weight: 600;
 }
 
+/* A group's name wraps by itself, whatever a theme says about button text. */
+button.etz-picker-group .etz-picker-group-title {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+
 .etz-picker-count {
     color: var(--text-faint);
     font-size: var(--font-ui-smaller);
