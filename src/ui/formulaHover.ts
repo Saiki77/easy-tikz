@@ -31,6 +31,8 @@ export interface FormulaHoverHost {
     sliders(): boolean;
     /** The default chart for formulas (set up in the editor), or null for the plugin's own. */
     formulaDefault(): Record<string, unknown> | null;
+    /** The setting Invert vertical drag in 3D: a drag in the card turns a surface as the editor's preview does. */
+    invertDrag3D(): boolean;
     /** Open the editor on this chart. */
     openChart(data: Record<string, unknown>, file: TFile | null): void;
 }
@@ -401,8 +403,10 @@ export class FormulaHover {
             const dy = e.clientY - last.y;
             last = { x: e.clientX, y: e.clientY };
             if (is3D) {
-                data.rotationZ = round(num(data.rotationZ, 45) - dx * 0.5);
-                data.rotationX = round(Math.min(90, Math.max(-90, num(data.rotationX, 30) + dy * 0.5)));
+                // As in the editor's preview: the same rates, and the setting Invert vertical drag in 3D.
+                data.rotationZ = Math.round((((num(data.rotationZ, 45) + dx * 0.5) % 360) + 360) % 360);
+                const tilt = this.host.invertDrag3D() ? dy : -dy;
+                data.rotationX = Math.round(Math.min(90, Math.max(0, num(data.rotationX, 30) + tilt * 0.3)));
             } else {
                 const r = box.getBoundingClientRect();
                 const ux = (num(data.xmax, 5) - num(data.xmin, -5)) / Math.max(1, r.width);

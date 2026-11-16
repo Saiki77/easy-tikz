@@ -378,6 +378,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             enabled: () => this.data.formulaHover !== false,
             sliders: () => this.data.formulaSliders !== false,
             formulaDefault: () => this.data.formulaDefault ?? null,
+            invertDrag3D: () => !!this.data.invertDrag3D,
             openChart: (data, file) => new TikzModal(this.app, this, { data, sourceFile: file }).open(),
         });
         this.registerMarkdownPostProcessor((el, ctx) => hover.tag(el, ctx));

@@ -158,3 +158,16 @@ test('formula: a 2D default chart keeps the cube of surfaces and the colours of 
     const fns = two.functions as Array<{ color?: string; thickness?: string }>;
     assert.deepEqual(fns.map((f) => [f.color, f.thickness]), [['violet', 'very thick'], ['red', 'very thick']]);
 });
+
+test('formula: a formula in n, t or k charts against that letter', () => {
+    // A sequence term: n from 0 to 20, the axis named n.
+    const seq = formulaChart('\\frac{2n^2 + n + 1}{3n^2 + 2}') ?? [];
+    assert.equal(seq[0].startsWith('show x from 0 to 20'), true);
+    assert.equal(seq.includes('xlabel n'), true);
+    assert.equal(seq[seq.length - 1], 'plot $f(x) = \\frac{2x^2 + x + 1}{3x^2 + 2}$ in blue, thick');
+    // a_n = ... is a function of n; s(t) = ... of t, with g a slider.
+    assert.equal(chartable('a_n = \\frac{1}{n}'), true);
+    assert.equal(formulaChart('s(t) = \\frac{1}{2} g t^2')?.includes('xlabel t'), true);
+    // A value or a condition in n, and letters without a variable, are no charts.
+    assert.deepEqual(['n = 5', 'n > 0', 'a + b', 'm \\cdot v'].map((tex) => chartable(tex)), [false, false, false, false]);
+});

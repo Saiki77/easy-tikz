@@ -1762,8 +1762,26 @@ class Compiler {
 
     private name(n: NameNode): CNode {
         const res = resolveName(n.name, this.env);
-        if (!res) throw unknownName(n.name, n.s, n.e, this.env, this.src);
+        if (!res) {
+            // LaTeX (5.0): letters side by side multiply, as in LaTeX itself ($a\sin(bx)$ is a sin(b x)).
+            const product = isLatexFormula(this.src) ? this.letterProduct(n) : null;
+            if (product) return product;
+            throw unknownName(n.name, n.s, n.e, this.env, this.src);
+        }
         return this.resolved(res, n.name, n.s);
+    }
+
+    /** `bx` in a LaTeX formula: the product of the names it is made of when each one is known, else null. */
+    private letterProduct(n: NameNode): CNode | null {
+        const fnNames = this.env.fnNames();
+        const isFnPart = (p: string) => own(BUILTINS, p) !== undefined || fnNames.includes(p);
+        const parts = splitName(n.name, this.env.knownNames(), isFnPart, false);
+        if (!parts || parts.length < 2 || parts.some((p) => isFnPart(p) || !resolveName(p, this.env))) return null;
+        const leaf = (name: string): NameNode => ({ t: 'name', name, s: n.s, e: n.e });
+        const product = parts
+            .slice(1)
+            .reduce<Node>((left, p) => ({ t: 'binary', op: '*', left, right: leaf(p), implicit: true, s: n.s, e: n.e }), leaf(parts[0]));
+        return this.node(product);
     }
 
     private resolved(res: Resolution, name: string, pos: number): CNode {

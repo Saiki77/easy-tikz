@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.0.5] - 2026-11-16
+
+### Fixed
+
+- **Formulas in n, t or k have a chart** (`src/formula.ts`). A formula without x and y charts against its own letter, with the axis named after it: `\frac{2n^2 + n + 1}{3n^2 + 2}` and `a_n = \frac{1}{n}` show n from 0 to 20, as sequences do; `s(t) = \frac{1}{2} g t^2` shows t with a slider g. A value or a condition in that letter (`n = 5`, `n > 0`) stays without a chart.
+- **Letters side by side multiply in a LaTeX formula of a chart** (`src/expr.ts`): `$a\sin(bx)$` is a sin(b x) when b and x are known, and the formula follows slider b. Before, it gave "Unknown name 'bx'". A formula without LaTeX commands keeps the plain rule (`ax` is one name, with a quick fix).
+- **The drag in a formula card turns a surface as the editor's preview does**: the same direction and speed, and the setting Invert vertical drag in 3D counts.
+
 ## [5.0.4] - 2026-11-16
 
 ### Fixed

@@ -99,3 +99,17 @@ test('latex: a letter before a function or a fraction multiplies it (a\\sin x is
     // x_{\\text{max}} stays one name.
     assert.equal(latexToPlain('x_{\\text{max}}'), 'x_max');
 });
+
+test('latex: letters side by side multiply when each is known (a\\sin(bx) is a sin(b x)); arc functions and powers', () => {
+    const chart = parseChartText(['slider a from 0.5 to 2.5, starting at 2', 'slider b from 0.5 to 3, starting at 1.5', 'plot $f(x) = a\\sin(bx)$'].join('\n'));
+    const settings = SettingsManager.fromJSON(chart.data);
+    const math = settings.createMathContext({ memo: false });
+    const params = settings.getValue('parameters');
+    math.setParams(Array.isArray(params) ? params : []);
+    assert.deepEqual(math.functions().map((f) => f.error ?? 'ok'), ['ok']);
+    // The formula follows both sliders.
+    assert.deepEqual(math.deps('a\\sin(bx)').params.sort(), ['a', 'b']);
+    // \arcsin is asin, \cos^2(x) is (cos x)^2.
+    assert.ok(Math.abs(at('\\arcsin(x)', 0.5) - Math.asin(0.5)) < 1e-12);
+    assert.ok(Math.abs(at('\\cos^2(x)', 0.7) - Math.cos(0.7) ** 2) < 1e-12);
+});

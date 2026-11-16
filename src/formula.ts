@@ -127,8 +127,24 @@ function plainSigns(tex: string): string | null {
     return /[\u0080-\uFFFF]/.test(out) ? null : out;
 }
 
+/** The variable of a formula without x and y: an index (n, k) or the time (t), before the formula's only letter. */
+const OTHER_VARIABLES = ['n', 't', 'k'];
+/** Index letters: their charts start at 0, as sequences do. */
+const INDEX_VARIABLES = new Set(['n', 'k']);
+
+/**
+ * A formula in another variable written in x, for the chart: the letter where
+ * it stands alone becomes x (never inside a command such as \sin, a longer
+ * name, or a subscript), and a sequence's name on the left (a_n =) becomes a
+ * function head a(x).
+ */
+function inX(tex: string, letter: string): string {
+    const head = new RegExp(`^\\s*([A-Za-z])_\\{?${letter}\\}?\\s*=`);
+    return tex.replace(head, (_m, name: string) => `${name}(x) =`).replace(new RegExp(`(?<![\\\\A-Za-z_]|_\\{)${letter}(?![A-Za-z])`, 'g'), 'x');
+}
+
 /** One formula of a note made ready to chart: its objective, its axes x and y, ax^2 as a x^2. Null: it has no chart. */
-function prepared(part: string): { tex: string; vector: boolean } | null {
+function prepared(part: string): { tex: string; vector: boolean; axis?: string } | null {
     const signs = plainSigns(part);
     if (signs === null) return null;
     const tex = clean(objective(clean(signs)));
@@ -136,8 +152,14 @@ function prepared(part: string): { tex: string; vector: boolean } | null {
     const axes = axesOf(tex);
     if (axes === null) return null;
     const split = splitLetterRuns(axes);
+    const names = namesOf(split);
     // i alone is the imaginary unit (e^{ix}): no chart of real numbers.
-    return namesOf(split).has('i') ? null : { tex: split, vector: axes !== tex };
+    if (names.has('i')) return null;
+    if (names.has('x') || names.has('y') || names.has('theta')) return { tex: split, vector: axes !== tex };
+    // No x and no y (\frac{2n^2 + n + 1}{3n^2 + 2}, s(t) = ...): n, t or k, or the only letter, is the variable.
+    const letters = [...names].filter((n) => /^[A-Za-df-hj-qs-z]$/.test(n));
+    const variable = OTHER_VARIABLES.find((l) => names.has(l)) ?? (letters.length === 1 ? letters[0] : null);
+    return variable ? { tex: inX(split, variable), vector: false, axis: variable } : { tex: split, vector: false };
 }
 
 /** Environments whose rows are formulas of their own (aligned, align, gathered, ...); cases and arrays are not. */
@@ -211,7 +233,7 @@ const COLOURS = ['blue', 'red', 'green'];
  * with a chart decides what is drawn; in 2D the other functions join it,
  * each in its own colour.
  */
-export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; lines: string[] } | null {
+export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; lines: string[]; axis?: string } | null {
     // The rows of an aligned block: the one under the pointer, or all of them.
     const rows = formulaRows(texIn);
     const chosen = (row !== undefined && rows[row] !== undefined ? [rows[row]] : rows).filter((r) => r.length > 0);
@@ -220,10 +242,14 @@ export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; 
         // A list of definitions in one line: f(x) = ..., g(x) = ...
         .flatMap((part) => part.split(/[,;]\s*(?=[A-Za-z][A-Za-z0-9_]*\s*'*\s*\(\s*x(?:_\{?1\}?)?\s*\)\s*=)/))
         .map((part) => prepared(part))
-        .map((p) => (p ? { tex: p.tex, found: kindOf(p.tex, p.vector) } : null))
-        .filter((x): x is { tex: string; found: { kind: FormulaKind; body: string } } => !!x && !!x.found);
+        .map((p) => (p ? { tex: p.tex, axis: p.axis, found: kindOf(p.tex, p.vector) } : null))
+        // n = 5 gives a value, not a curve: an equation in another variable has no chart.
+        .filter((x): x is { tex: string; axis: string | undefined; found: { kind: FormulaKind; body: string } } => !!x && !!x.found && !(x.axis && x.found.kind === 'equation'));
     if (!parts.length) return null;
     const first = parts[0].found;
+    const axis = parts[0].axis;
+    // The axis keeps the formula's own letter.
+    const label = axis ? [`xlabel ${axis}`] : [];
     const kind = first.kind;
     const bodies = kind === 'function' ? parts.filter((p) => p.found.kind === 'function').slice(0, COLOURS.length).map((p) => p.found.body) : [first.body];
     const free = Array.from(new Set(bodies.flatMap((b) => freeNames(b))));
@@ -232,7 +258,7 @@ export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; 
     const body = bodies[0];
     switch (kind) {
         case 'function':
-            return { kind, lines: [...sliders, ...bodies.map((b, i) => `plot $${'fgh'[i]}(x) = ${b}$ in ${COLOURS[i]}, thick`)] };
+            return { kind, axis, lines: [...label, ...sliders, ...bodies.map((b, i) => `plot $${'fgh'[i]}(x) = ${b}$ in ${COLOURS[i]}, thick`)] };
         case 'surface':
             return { kind, lines: ['3d', 'cube', ...sliders, `plot $z = ${body}$ in viridis`] };
         case 'polar':
@@ -249,8 +275,10 @@ export function formulaChart(tex: string, row?: number): string[] | null {
     const found = formulaLines(tex, row);
     if (!found) return null;
     const { kind, lines } = found;
-    // Functions go on forever: x from -5 to 5 (the fit then takes y); equations and regions fit both axes.
-    const view = kind === 'surface' ? 'show x from -3 to 3, y from -3 to 3 and z from -5 to 5' : 'show x from -5 to 5 and y from -5 to 5';
+    // Functions go on forever: x from -5 to 5 (the fit then takes y), a sequence (in n or k) from 0 to 20;
+    // equations and regions fit both axes.
+    const xs = found.axis && INDEX_VARIABLES.has(found.axis) ? ['0', '20'] : ['-5', '5'];
+    const view = kind === 'surface' ? 'show x from -3 to 3, y from -3 to 3 and z from -5 to 5' : `show x from ${xs[0]} to ${xs[1]} and y from -5 to 5`;
     const start = [view, ...lines];
     const parsed = parseChartText(start.join('\n'));
     if (parsed.problems.length) return null;
@@ -261,7 +289,7 @@ export function formulaChart(tex: string, row?: number): string[] | null {
     try {
         const fit = fitSettings(settings, math, { x: true, y: true, z: true });
         if (fit.nothing === 'empty') return null;
-        const x = fit.x ? fit.x.text : kind === 'surface' ? ['-3', '3'] : ['-5', '5'];
+        const x = fit.x ? fit.x.text : kind === 'surface' ? ['-3', '3'] : xs;
         const y = fit.y ? fit.y.text : kind === 'surface' ? ['-3', '3'] : ['-5', '5'];
         if (kind === 'surface') {
             const z = fit.z ? fit.z.text : ['-5', '5'];

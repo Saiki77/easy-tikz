@@ -8,38 +8,7 @@
  * change or remove anything exported here.
  */
 import { FunctionParameters, Parameter } from './types';
-import {
-    AffinePlan,
-    BinaryNode,
-    CmpOp,
-    Compiled,
-    Env,
-    ExprError,
-    FnRef,
-    Lru,
-    Node,
-    Scalar,
-    TupleItem,
-    compile,
-    dollarMath,
-    formatFixed,
-    formatNumber,
-    identifierTokens,
-    identifiers,
-    isReservedName,
-    linearPlan,
-    matchingBrace,
-    parse,
-    parseList,
-    parseTuples,
-    renameIdentifier as renameIdentifierImpl,
-    renameTokens,
-    scanTemplate,
-    toPgf,
-    toTex,
-    tokenize,
-    topLevelColon,
-} from './expr';
+import { AffinePlan, BinaryNode, CmpOp, Compiled, Env, ExprError, FnRef, Lru, Node, Scalar, TupleItem, compile, dollarMath, formatFixed, formatNumber, identifierTokens, identifiers, isReservedName, linearPlan, matchingBrace, parse, parseList, parseTuples, renameIdentifier as renameIdentifierImpl, renameTokens, scanTemplate, toPgf, toTex, tokenize, topLevelColon, isLatexFormula } from './expr';
 import { MessageKey, language, t as msg } from './i18n';
 import { NoteTable, tableKey } from './beyond/table';
 
@@ -1150,6 +1119,9 @@ export class MathContext {
                     if (m) {
                         out.derived.add(name);
                         out.tools.add(m.tool);
+                    } else if (isLatexFormula(text) && /^[A-Za-z]{2,}$/.test(name)) {
+                        // LaTeX: `bx` is b times x, so the formula follows slider b.
+                        for (const letter of name) if (this.paramIndex.has(letter)) out.params.add(letter);
                     }
                 }
             }
