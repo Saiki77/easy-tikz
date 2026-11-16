@@ -390,6 +390,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         });
         const hoverIn = (doc: Document) => {
             this.registerDomEvent(doc, 'mouseover', (e) => hover.over(e));
+            this.registerDomEvent(doc, 'pointerdown', (e) => hover.press(e));
             if (Platform.isMobile) this.registerDomEvent(doc, 'click', (e) => hover.tap(e));
             this.registerDomEvent(doc, 'keydown', (e) => {
                 if (e.key === 'Escape') hover.close();

@@ -2,7 +2,7 @@
 // what a formula draws, its letters as sliders, the view fitted to it, the
 // formula at the cursor, and the formulas of a section in order.
 import { test, assert } from './_lib';
-import { formulaAt, formulaChart, formulaLines, formulasIn, freeNames, chartable } from '../src/formula';
+import { formulaAt, formulaChart, formulaLines, formulasIn, freeNames, chartable, formulaRows } from '../src/formula';
 import { parseChartText } from '../src/text/parse';
 
 test('formula: what each kind of formula draws', () => {
@@ -102,3 +102,25 @@ test('formula: only formulas with a chart are marked, also in x_1, x_2 and in op
     }
 });
 
+test('formula: Unicode signs, values, inverses, rows of a block and lists of definitions', () => {
+    // Σ, a word such as für: no chart. · is a product.
+    assert.equal(chartable('f(x) = Σ a_n·(x-a)^n'), false);
+    assert.equal(chartable('1/(1-x) = Σ x^n für |x| < 1'), false);
+    assert.deepEqual(formulaLines('x · e^{-x}')?.kind, 'function');
+    // f(x) = y names a value; the inverse at y is no chart; f^{-1}(x) = ... defines one.
+    assert.equal(chartable('f(x) = y'), false);
+    assert.equal(chartable('f^{-1}(y) = x'), false);
+    assert.equal(formulaLines('f^{-1}(x) = \\frac{x-3}{2}')?.kind, 'function');
+    // An aligned block: each row, or all rows together.
+    const block = "\\begin{aligned} f(x) &= 3x^3 + 12x, \\\\ f'(x) &= 9x^2 + 12, \\end{aligned}";
+    assert.deepEqual(formulaRows(block), ['f(x)  = 3x^3 + 12x,', "f'(x)  = 9x^2 + 12,"]);
+    assert.deepEqual(formulaLines(block, 1)?.lines, ['plot $f(x) = 9x^2 + 12$ in blue, thick']);
+    assert.equal(formulaLines(block)?.lines.length, 2);
+    // A matrix and cases are no rows of formulas.
+    assert.deepEqual(formulaRows('\\begin{pmatrix} 4x_1 \\\\ 2x_2 - 2 \\end{pmatrix}').length, 1);
+    assert.equal(chartable('\\begin{cases} x^2 & x \\ge 0 \\\\ -x & x < 0 \\end{cases}'), false);
+    // Two definitions in one line: both drawn.
+    assert.equal(formulaLines('f(x) = 3x^3 + 12x, \\quad g(x) = x^3 - 3x^2 + 2x')?.lines.length, 2);
+    // A limit is no chart.
+    assert.equal(chartable('\\lim_{x \\to 0} \\frac{1-\\cos x}{x^2} = \\frac{1}{2}'), false);
+});

@@ -75,6 +75,8 @@
 
 .etz-formula-chart {
     overflow: hidden;
+    cursor: grab;
+    touch-action: none;
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-m);
 }
@@ -126,8 +128,17 @@ body.etz-formula-marks .math:not(.math-block)[data-etz-mark='1'] {
     border-bottom: 1.5px dotted color-mix(in srgb, var(--interactive-accent) 70%, transparent);
 }
 
+/* Display formulas: the line goes under the formula itself, not the whole width. */
+body.etz-formula-marks .math-block[data-etz-mark='1'] mjx-math {
+    border-bottom: 1.5px dotted color-mix(in srgb, var(--interactive-accent) 70%, transparent);
+}
+
 body.etz-formula-marks .math[data-etz-mark='1']:hover,
 body.etz-formula-marks .math.etz-formula-open {
     border-radius: var(--radius-s);
     background-color: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+}
+
+.etz-formula-chart:active {
+    cursor: grabbing;
 }

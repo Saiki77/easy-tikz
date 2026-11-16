@@ -12,8 +12,8 @@
  */
 import { App, MarkdownPostProcessorContext, TFile, finishRenderMath, renderMath, setIcon } from 'obsidian';
 import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
-import type { Extension } from '@codemirror/state';
-import { FormulaKind, applyFormulaDefault, chartable, formulaChart, formulaLines, formulasIn } from '../formula';
+import type { Extension, Text } from '@codemirror/state';
+import { FormulaKind, applyFormulaDefault, chartable, formulaChart, formulaLines, formulaRows, formulasIn } from '../formula';
 import { parseChartText } from '../text/parse';
 import { printChartText } from '../text/print';
 import { SettingsManager } from '../settings';
@@ -57,6 +57,10 @@ const KIND_LABEL: Record<FormulaKind, MessageKey> = {
 export class FormulaHover {
     private pop: HTMLElement | null = null;
     private target: HTMLElement | null = null;
+    /** The row of an aligned block whose chart is open (undefined: the whole formula). */
+    private row: number | undefined = undefined;
+    /** The card was used (a drag, a slider, a click in it): it stays open until a click outside, Esc or another formula. */
+    private held = false;
     private openTimer: number | null = null;
     private closeTimer: number | null = null;
 
@@ -123,8 +127,13 @@ export class FormulaHover {
             return;
         }
         const math = el ? el.closest<HTMLElement>('.math') : null;
+        const row = math ? rowAt(el, math) : undefined;
         if (math && math === this.target && this.pop) {
             this.cancelClose();
+            // Another row of an aligned block: its own chart, after the same rest.
+            if (row === this.row) return;
+            this.cancelOpen();
+            this.openTimer = window.setTimeout(() => this.open(math, row), OPEN_MS);
             return;
         }
         this.cancelOpen();
@@ -132,14 +141,19 @@ export class FormulaHover {
             if (this.pop) this.scheduleClose();
             return;
         }
-        this.openTimer = window.setTimeout(() => this.open(math), OPEN_MS);
+        this.openTimer = window.setTimeout(() => this.open(math, row), OPEN_MS);
     }
 
     /** A tap on a formula (phones, where nothing hovers) opens its chart at once. */
     tap(e: MouseEvent): void {
         if (!this.host.enabled()) return;
         const math = e.target instanceof Element ? e.target.closest<HTMLElement>('.math') : null;
-        if (math && !math.closest('.cm-editor')) this.open(math);
+        if (math && !math.closest('.cm-editor')) this.open(math, rowAt(e.target instanceof Element ? e.target : null, math));
+    }
+
+    /** A press outside the card closes it (also a card that was used). */
+    press(e: PointerEvent): void {
+        if (this.pop && !(e.target instanceof Node && this.pop.contains(e.target))) this.close();
     }
 
     close(): void {
@@ -149,6 +163,8 @@ export class FormulaHover {
         this.pop?.remove();
         this.pop = null;
         this.target = null;
+        this.row = undefined;
+        this.held = false;
     }
 
     private cancelOpen() {
@@ -162,7 +178,7 @@ export class FormulaHover {
     }
 
     private scheduleClose() {
-        if (this.closeTimer !== null) return;
+        if (this.closeTimer !== null || this.held) return;
         this.closeTimer = window.setTimeout(() => this.close(), CLOSE_MS);
     }
 
@@ -183,9 +199,10 @@ export class FormulaHover {
                     }),
             };
         }
-        // A table's cells have editors of their own: the note's editor is the one around the table.
+        // A table's cells have editors of their own: the note's editor is the one around the table. A formula
+        // in a callout is no part of the editor itself: its editor is the one around it.
         const table = math.closest('table');
-        const host = table ? table.closest<HTMLElement>('.cm-editor') : null;
+        const host = (table ?? math).closest<HTMLElement>('.cm-editor');
         const view = host ? EditorView.findFromDOM(host) : EditorView.findFromDOM(math);
         if (!view) return null;
         const found = formulaInEditor(view, math);
@@ -200,22 +217,29 @@ export class FormulaHover {
         return { tex, file, insert: (b) => view.dispatch({ changes: { from: at, insert: `\n\n${b}` } }) };
     }
 
-    private open(math: HTMLElement) {
+    private open(math: HTMLElement, row?: number) {
         this.cancelOpen();
         const found = this.find(math);
-        if (!found || !chartable(found.tex)) return;
-        const kind = formulaLines(found.tex)?.kind;
-        const lines = formulaChart(found.tex);
+        if (!found) return;
+        // In an aligned block, the row under the pointer; elsewhere the whole formula.
+        const rows = formulaRows(found.tex);
+        const pick = row !== undefined && rows.length > 1 && rows[row] !== undefined ? row : undefined;
+        if (!chartable(found.tex, pick)) return;
+        const kind = formulaLines(found.tex, pick)?.kind;
+        const lines = formulaChart(found.tex, pick);
         if (!lines || !kind) return;
         const parsed = parseChartText(lines.join('\n'));
         if (parsed.problems.length) return;
         this.close();
         this.target = math;
+        this.row = row;
         math.addClass('etz-formula-open');
         const doc = math.ownerDocument;
         const pop = doc.body.createDiv({ cls: 'etz-formula-pop etz-tokens', attr: { role: 'dialog', 'aria-label': t('plugin.formula.dialog') } });
         this.pop = pop;
         pop.addEventListener('mouseleave', () => this.scheduleClose());
+        // A drag or a slider often ends outside the card: once used, the card stays open.
+        pop.addEventListener('pointerdown', () => (this.held = true));
         pop.addEventListener('mouseenter', () => this.cancelClose());
 
         // The chart in the look of the default chart for formulas.
@@ -226,11 +250,12 @@ export class FormulaHover {
         // Head: the formula as the note shows it, what it is, and close.
         const head = pop.createDiv({ cls: 'etz-formula-head' });
         const texEl = head.createDiv({ cls: 'etz-formula-tex' });
+        const shown = pick !== undefined ? rows[pick] : found.tex;
         try {
-            texEl.appendChild(renderMath(found.tex, false));
+            texEl.appendChild(renderMath(shown, false));
             void finishRenderMath();
         } catch {
-            texEl.setText(found.tex);
+            texEl.setText(shown);
         }
         head.createSpan({ cls: 'etz-formula-kind', text: t(KIND_LABEL[kind]) });
         const close = head.createEl('button', { cls: 'etz-formula-close clickable-icon', attr: { type: 'button', 'aria-label': t('common.close') } });
@@ -259,6 +284,7 @@ export class FormulaHover {
             }
         };
         draw();
+        this.movable(chartBox, data, is3D, draw);
 
         // A slider for every letter of the formula (the setting may hide them): the chart follows.
         if (params.length && this.host.sliders()) {
@@ -304,6 +330,87 @@ export class FormulaHover {
         this.place(pop, math);
     }
 
+    /**
+     * The chart of the card moves under the pointer: a drag pans it (2D) or
+     * turns it (3D), the wheel zooms (about the pointer in 2D), a double click
+     * goes back to where it started. Insert chart then writes this view.
+     */
+    private movable(box: HTMLElement, data: Record<string, unknown>, is3D: boolean, draw: () => void) {
+        const win = box.ownerDocument.defaultView ?? window;
+        const num = (v: unknown, d: number) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : d;
+        };
+        const round = (v: number) => Math.round(v * 1e4) / 1e4;
+        const home = { xmin: data.xmin, xmax: data.xmax, ymin: data.ymin, ymax: data.ymax, rotationX: data.rotationX, rotationZ: data.rotationZ, zoom3D: data.zoom3D };
+        let frame = 0;
+        const redraw = () => {
+            if (frame) return;
+            frame = win.requestAnimationFrame(() => {
+                frame = 0;
+                if (box.isConnected) draw();
+            });
+        };
+        box.addEventListener(
+            'wheel',
+            (e) => {
+                e.preventDefault();
+                const k = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+                if (is3D) {
+                    data.zoom3D = round(Math.min(4, Math.max(0.3, num(data.zoom3D, 1) / k)));
+                } else {
+                    const r = box.getBoundingClientRect();
+                    const fx = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+                    const fy = Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height));
+                    const [x0, x1, y0, y1] = [num(data.xmin, -5), num(data.xmax, 5), num(data.ymin, -5), num(data.ymax, 5)];
+                    const cx = x0 + fx * (x1 - x0);
+                    const cy = y0 + fy * (y1 - y0);
+                    Object.assign(data, { xmin: round(cx - (cx - x0) * k), xmax: round(cx + (x1 - cx) * k), ymin: round(cy - (cy - y0) * k), ymax: round(cy + (y1 - cy) * k) });
+                }
+                redraw();
+            },
+            { passive: false }
+        );
+        let last: { x: number; y: number } | null = null;
+        box.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            last = { x: e.clientX, y: e.clientY };
+            box.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        });
+        box.addEventListener('pointermove', (e) => {
+            if (!last) return;
+            const dx = e.clientX - last.x;
+            const dy = e.clientY - last.y;
+            last = { x: e.clientX, y: e.clientY };
+            if (is3D) {
+                data.rotationZ = round(num(data.rotationZ, 45) - dx * 0.5);
+                data.rotationX = round(Math.min(90, Math.max(-90, num(data.rotationX, 30) + dy * 0.5)));
+            } else {
+                const r = box.getBoundingClientRect();
+                const ux = (num(data.xmax, 5) - num(data.xmin, -5)) / Math.max(1, r.width);
+                const uy = (num(data.ymax, 5) - num(data.ymin, -5)) / Math.max(1, r.height);
+                Object.assign(data, {
+                    xmin: round(num(data.xmin, -5) - dx * ux),
+                    xmax: round(num(data.xmax, 5) - dx * ux),
+                    ymin: round(num(data.ymin, -5) + dy * uy),
+                    ymax: round(num(data.ymax, 5) + dy * uy),
+                });
+            }
+            redraw();
+        });
+        const end = (e: PointerEvent) => {
+            last = null;
+            if (box.hasPointerCapture(e.pointerId)) box.releasePointerCapture(e.pointerId);
+        };
+        box.addEventListener('pointerup', end);
+        box.addEventListener('pointercancel', end);
+        box.addEventListener('dblclick', () => {
+            Object.assign(data, home);
+            redraw();
+        });
+    }
+
     /** Below the formula, or above it when the window ends; never past its sides. */
     private place(pop: HTMLElement, math: HTMLElement) {
         const win = math.ownerDocument.defaultView ?? window;
@@ -320,25 +427,55 @@ export class FormulaHover {
     }
 }
 
+/** The formulas of a note's text, worked out once per version of the text (the editor's text never changes in place). */
+const docFormulas = new WeakMap<Text, Array<{ tex: string; start: number; end: number }>>();
+
+function formulasOfDoc(doc: Text): Array<{ tex: string; start: number; end: number }> {
+    let found = docFormulas.get(doc);
+    if (!found) {
+        found = formulasIn(doc.toString());
+        docFormulas.set(doc, found);
+    }
+    return found;
+}
+
+/** The row of an aligned block under the pointer (MathJax draws the block as a table), or undefined. */
+function rowAt(el: Element | null, math: HTMLElement): number | undefined {
+    const tr = el ? el.closest('mjx-mtr, mjx-mlabeledtr') : null;
+    if (!tr || !math.contains(tr) || !tr.parentElement) return undefined;
+    const rows = Array.from(tr.parentElement.children).filter((c) => c.tagName === 'MJX-MTR' || c.tagName === 'MJX-MLABELEDTR');
+    const i = rows.indexOf(tr);
+    return i < 0 ? undefined : i;
+}
+
 /** The formula a rendered formula of the editor shows: its TeX, and the end of the line where it ends. */
 function formulaInEditor(view: EditorView, math: HTMLElement): { tex: string; end: number } | null {
-    // Live Preview draws a table as one widget: every place in it is the table's start. The formula is the
-    // one at the same place among the formulas of the table's lines.
+    // Live Preview draws a table or a callout as one widget: every place in it is the widget's start. The
+    // formula is the one at the same place among the formulas of the widget's lines.
     const table = math.closest('table');
-    if (table) {
+    const widget = table ?? math.closest<HTMLElement>('.cm-callout');
+    if (widget) {
         let at: number;
         try {
-            at = view.posAtDOM(table);
+            at = view.posAtDOM(widget);
         } catch {
             return null;
         }
         const doc = view.state.doc;
+        const inside = table ? /^\s*(?:>\s*)*\|/ : /^\s*>/;
         let first = doc.lineAt(Math.min(at, doc.length));
-        while (first.number < doc.lines && !/^\s*(?:>\s*)*\|/.test(first.text)) first = doc.line(first.number + 1);
+        while (first.number < doc.lines && !inside.test(first.text)) first = doc.line(first.number + 1);
+        while (first.number > 1 && inside.test(doc.line(first.number - 1).text)) first = doc.line(first.number - 1);
         let last = first;
-        while (last.number < doc.lines && /^\s*(?:>\s*)*\|/.test(doc.line(last.number + 1).text)) last = doc.line(last.number + 1);
-        const index = Array.from(table.querySelectorAll('.math')).indexOf(math);
-        const found = formulasIn(doc.sliceString(first.from, last.to))[index];
+        while (last.number < doc.lines && inside.test(doc.line(last.number + 1).text)) last = doc.line(last.number + 1);
+        // Without the > of a callout, so a $$ block over its lines reads as one formula.
+        const text = doc
+            .sliceString(first.from, last.to)
+            .split('\n')
+            .map((l) => l.replace(/^\s*(?:>\s?)*/, ''))
+            .join('\n');
+        const index = Array.from(widget.querySelectorAll('.math')).indexOf(math);
+        const found = formulasIn(text)[index];
         return found ? { tex: found.tex, end: last.to } : null;
     }
     let pos: number;
@@ -347,14 +484,11 @@ function formulaInEditor(view: EditorView, math: HTMLElement): { tex: string; en
     } catch {
         return null;
     }
+    // The formula around pos, among the formulas of the whole note: a part of the note could cut a $$ block
+    // in two, and the $$ would then pair up wrong.
     const doc = view.state.doc;
-    const lineAt = doc.lineAt(pos);
-    // The formula around pos: inline on its line, or a $$ block that may span lines.
-    const from = Math.max(0, lineAt.from - 2000);
-    const to = Math.min(doc.length, lineAt.to + 2000);
-    const text = doc.sliceString(from, to);
-    for (const f of formulasIn(text)) {
-        if (from + f.start <= pos && pos <= from + f.end) return { tex: f.tex, end: doc.lineAt(Math.min(doc.length, from + f.end)).to };
+    for (const f of formulasOfDoc(doc)) {
+        if (f.start <= pos && pos <= f.end) return { tex: f.tex, end: doc.lineAt(Math.min(doc.length, f.end)).to };
     }
     return null;
 }

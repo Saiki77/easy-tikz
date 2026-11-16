@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.0.3] - 2026-11-16
+
+### Added
+
+- **The row under the pointer** (`src/ui/formulaHover.ts`). In an aligned block (`aligned`, `align`, `gather`, `split`, or rows split by `\\`), the card charts the row you point at.
+- **Move the chart in the card.** The wheel zooms (a 2D chart about the pointer), a drag pans a 2D chart or turns a 3D surface, and a double click goes back. **Insert chart** writes the view you see. A card you used stays open until you click outside it, press Esc or open another formula.
+
+### Fixed
+
+- **The card shows the right formula** in Live Preview. A `$$` block over several lines could open the card of a later formula, and a formula in a callout had no mark and no card.
+- **Which formulas have a chart** (`src/formula.ts`). Signs typed as Unicode (·, ×, −, ≤, ², Greek letters) read as LaTeX; a sum (Σ) or a word in the formula (für) means no chart. `f(x) = y` and `f^{-1}(y) = x` name a value and have no chart (before: a surface). Two definitions in one line (`f(x) = ..., g(x) = ...`) draw both. A formula is marked only when its chart draws without an error, so every marked formula opens.
+- **The dotted line** also shows under display formulas (`$$...$$`) that have a chart.
+
 ## [5.0.2] - 2026-11-16
 
 ### Fixed

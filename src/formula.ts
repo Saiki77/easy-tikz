@@ -6,6 +6,8 @@
  * Pure: no DOM, no Obsidian; main.ts finds the formula and writes the block.
  */
 import { SettingsManager } from './settings';
+import { computeScene2D, labelMetricsFor } from './scene';
+import { marchingGrid } from './util';
 import type { Parameter } from './types';
 import { fitSettings } from './fit';
 import { parseChartText } from './text/parse';
@@ -69,7 +71,7 @@ export type FormulaKind = 'function' | 'surface' | 'polar' | 'equation' | 'regio
  * factorials, a derivative of order n (f^{(n)}).
  */
 const NOT_A_CHART =
-    /\\(?:begin|nabla|partial|sum|prod|int|iint|oint|lim|top|intercal|mathbf|boldsymbol|vec|mathbb|forall|exists|subset|subseteq|supset|cup|cap|det|to|mapsto|rightarrow|cdots|ldots|dots|vdots|binom|choose|in|notin)(?![A-Za-z])|(?<!\\)!|\^\s*\{?\s*T\s*\}?(?![A-Za-z])|\^\s*\{\s*\(/;
+    /\\(?:begin|end|nabla|partial|sum|prod|int|iint|oint|lim|top|intercal|mathbf|boldsymbol|vec|mathbb|forall|exists|subset|subseteq|supset|cup|cap|det|to|mapsto|rightarrow|cdots|ldots|dots|vdots|binom|choose|in|notin)(?![A-Za-z])|(?<!\\)!|\^\s*\{?\s*T\s*\}?(?![A-Za-z])|\^\s*\{\s*\(/;
 
 /** A braced group, one level of nested braces inside: {x \in R^2}, {x_{1}}. */
 const GROUP = String.raw`\{(?:[^{}]|\{[^{}]*\})*\}`;
@@ -111,23 +113,59 @@ function namesOf(tex: string): Set<string> {
     return new Set(latexToPlain(tex).match(/[A-Za-z][A-Za-z0-9_]*/g) ?? []);
 }
 
+/** Signs typed as Unicode that a formula may use: products, a minus, relations, Greek letters, squares. */
+const UNICODE: Record<string, string> = {
+    '·': ' \\cdot ', '⋅': ' \\cdot ', '∙': ' \\cdot ', '×': ' \\cdot ', '−': '-', '–': '-',
+    '≤': ' \\le ', '≥': ' \\ge ', '²': '^2', '³': '^3',
+    'π': ' \\pi ', 'θ': ' \\theta ', 'α': ' \\alpha ', 'β': ' \\beta ', 'γ': ' \\gamma ', 'δ': ' \\delta ', 'λ': ' \\lambda ', 'μ': ' \\mu ',
+    'σ': ' \\sigma ', 'ω': ' \\omega ', 'φ': ' \\phi ', 'ρ': ' \\rho ', 'τ': ' \\tau ',
+};
+
+/** Unicode signs as LaTeX; null when a sign is left that has no chart (Σ, ∫, ∞, →, ∈, a word such as für). */
+function plainSigns(tex: string): string | null {
+    const out = tex.replace(/[·⋅∙×−–≤≥²³πθαβγδλμσωφρτ]/g, (c) => UNICODE[c] ?? c);
+    return /[\u0080-\uFFFF]/.test(out) ? null : out;
+}
+
 /** One formula of a note made ready to chart: its objective, its axes x and y, ax^2 as a x^2. Null: it has no chart. */
-function prepared(part: string): string | null {
-    const tex = clean(objective(clean(part)));
+function prepared(part: string): { tex: string; vector: boolean } | null {
+    const signs = plainSigns(part);
+    if (signs === null) return null;
+    const tex = clean(objective(clean(signs)));
     if (!tex || NOT_A_CHART.test(tex)) return null;
     const axes = axesOf(tex);
-    return axes === null ? null : splitLetterRuns(axes);
+    return axes === null ? null : { tex: splitLetterRuns(axes), vector: axes !== tex };
+}
+
+/** Environments whose rows are formulas of their own (aligned, align, gathered, ...); cases and arrays are not. */
+const ROWS = /\\begin\{(aligned|align\*?|alignat\*?|gathered|gather\*?|split|eqnarray\*?|multline\*?)\}(?:\{[^}]*\})?([\s\S]*?)\\end\{\1\}/;
+
+/**
+ * The rows of a formula: the lines of an aligned block (or of a formula with
+ * line breaks \\), without the & of the alignment, tags and labels. A formula
+ * of one line is one row. A matrix is no row list (it has no chart).
+ */
+export function formulaRows(tex: string): string[] {
+    const env = ROWS.exec(tex);
+    if (!env && (!tex.includes('\\\\') || /\\begin\{/.test(tex))) return [tex];
+    const body = env ? env[2] : tex;
+    return body
+        .split(/\\\\(?:\s*\[[^\]]*\])?/)
+        .map((r) => r.replace(/\\(?:tag|label)\s*\{[^}]*\}|\\(?:nonumber|notag)/g, '').replace(/&/g, ' ').trim())
+        .filter((r) => r.length > 0);
 }
 
 /** A head of a function of x: y, f(x), f'(x), g''(x). Its name, or null. */
-const FUNCTION_HEAD = /^(?:y|([A-Za-z][A-Za-z0-9_]*)\s*'*\s*\(\s*x\s*\))$/;
+const FUNCTION_HEAD = /^(?:y|([A-Za-z][A-Za-z0-9_]*)\s*(?:\^\s*\{\s*-\s*1\s*\})?\s*'*\s*\(\s*x\s*\))$/;
+/** An inverse function applied: f^{-1}(y). Only as the head f^{-1}(x) = ... it defines a chart. */
+const INVERSE = /[A-Za-z]\s*\^\s*\{\s*-\s*1\s*\}\s*\(/;
 /** A head of a function of x and y: z, f(x, y). */
 const SURFACE_HEAD = /^(?:z|[A-Za-z][A-Za-z0-9_]*\s*'*\s*\(\s*x\s*,\s*y\s*\))$/;
 /** A head of a polar curve: r, r(θ). */
 const POLAR_HEAD = /^r(?:\s*\(\s*\\?theta\s*\))?$/;
 
 /** What one prepared formula draws, with the formula to plot (its right side, or all of it). */
-function kindOf(tex: string): { kind: FormulaKind; body: string } | null {
+function kindOf(tex: string, vector = false): { kind: FormulaKind; body: string } | null {
     const names = namesOf(tex);
     const usesX = names.has('x');
     const usesY = names.has('y');
@@ -139,16 +177,19 @@ function kindOf(tex: string): { kind: FormulaKind; body: string } | null {
     if (sides.length === 2) {
         const left = sides[0].trim();
         const right = sides[1].trim();
+        if (INVERSE.test(right) || (INVERSE.test(left) && !FUNCTION_HEAD.test(left))) return null;
         const rightNames = namesOf(right);
-        if (FUNCTION_HEAD.test(left) || SURFACE_HEAD.test(left)) {
-            // f(x) = x^2 + y^2 with x a vector (x_1, x_2): a surface.
-            if (rightNames.has('y') || SURFACE_HEAD.test(left)) return { kind: 'surface', body: right };
+        if (SURFACE_HEAD.test(left)) return { kind: 'surface', body: right };
+        if (FUNCTION_HEAD.test(left)) {
+            // f(x) = x_1^2 + x_2^2 with x a vector: a surface. f(x) = y names a value: no chart.
+            if (rightNames.has('y')) return vector ? { kind: 'surface', body: right } : null;
             return { kind: 'function', body: right };
         }
         if (/^y$/.test(right) && !namesOf(left).has('y')) return { kind: 'function', body: left };
         if (POLAR_HEAD.test(left)) return { kind: 'polar', body: right };
         return usesX || usesY ? { kind: 'equation', body: tex } : null;
     }
+    if (INVERSE.test(tex)) return null;
     if (usesY) return { kind: 'surface', body: tex };
     return usesX ? { kind: 'function', body: tex } : null;
 }
@@ -164,11 +205,16 @@ const COLOURS = ['blue', 'red', 'green'];
  * with a chart decides what is drawn; in 2D the other functions join it,
  * each in its own colour.
  */
-export function formulaLines(texIn: string): { kind: FormulaKind; lines: string[] } | null {
-    const parts = clean(texIn)
-        .split(/\\(?:iff|Leftrightarrow|Longleftrightarrow|Rightarrow|Longrightarrow|implies|impliedby|Leftarrow|Longleftarrow)(?![A-Za-z])|⟺|⇔|⇒|⟹/)
+export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; lines: string[] } | null {
+    // The rows of an aligned block: the one under the pointer, or all of them.
+    const rows = formulaRows(texIn);
+    const chosen = row !== undefined && rows[row] !== undefined ? [rows[row]] : rows;
+    const parts = chosen
+        .flatMap((r) => clean(r).split(/\\(?:iff|Leftrightarrow|Longleftrightarrow|Rightarrow|Longrightarrow|implies|impliedby|Leftarrow|Longleftarrow)(?![A-Za-z])|⟺|⇔|⇒|⟹/))
+        // A list of definitions in one line: f(x) = ..., g(x) = ...
+        .flatMap((part) => part.split(/[,;]\s*(?=[A-Za-z][A-Za-z0-9_]*\s*'*\s*\(\s*x(?:_\{?1\}?)?\s*\)\s*=)/))
         .map((part) => prepared(part))
-        .map((tex) => (tex ? { tex, found: kindOf(tex) } : null))
+        .map((p) => (p ? { tex: p.tex, found: kindOf(p.tex, p.vector) } : null))
         .filter((x): x is { tex: string; found: { kind: FormulaKind; body: string } } => !!x && !!x.found);
     if (!parts.length) return null;
     const first = parts[0].found;
@@ -193,8 +239,8 @@ export function formulaLines(texIn: string): { kind: FormulaKind; lines: string[
 }
 
 /** A formula as a whole chart: its lines with a view fitted to what they draw, or null when it does not draw. */
-export function formulaChart(tex: string): string[] | null {
-    const found = formulaLines(tex);
+export function formulaChart(tex: string, row?: number): string[] | null {
+    const found = formulaLines(tex, row);
     if (!found) return null;
     const { kind, lines } = found;
     // Functions go on forever: x from -5 to 5 (the fit then takes y); equations and regions fit both axes.
@@ -278,24 +324,50 @@ export function formulaBlock(tex: string, def: Rec | null | undefined): string |
 
 const chartableMemo = new Map<string, boolean>();
 
+/** Do these chart lines draw without an error: every formula known, nothing in the scene a problem? */
+function drawable(lines: string[]): boolean {
+    const parsed = parseChartText(lines.join('\n'));
+    if (parsed.problems.length) return false;
+    const settings = SettingsManager.fromJSON(parsed.data);
+    const math = settings.createMathContext({ memo: false });
+    const params = settings.getValue('parameters');
+    math.setParams(Array.isArray(params) ? (params as Parameter[]) : []);
+    if (math.functions().some((info) => !!info.error)) return false;
+    if (math.parameterIssues().some((i) => i.severity === 'error')) return false;
+    if (settings.getValue('dimension') === true) return true;
+    const config = settings.toRendererConfig(math);
+    const scene = computeScene2D({
+        functions: config.functions || [],
+        tools: config.tools,
+        math,
+        view: { xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax },
+        grid: marchingGrid(config.width * 0.85, config.height * 0.8, 1, 'draft'),
+        axisStyle: config.axisStyle,
+        polar: false,
+        labelMetrics: labelMetricsFor(config.paperWidthCm ?? 10, config.paperHeightCm ?? 10),
+    });
+    return !scene.issues.some((i) => i.severity === 'error');
+}
+
 /**
- * Does a formula of a note have a chart (5.0)? It reads as chart lines
- * without a problem: it uses a variable (x, y, x_1, x_2, z, r, theta) and
- * is no matrix, sum or set. The card opens only for these, and the setting
- * Highlight formulas in notes marks them.
+ * Does a formula of a note have a chart (5.0)? Its chart draws without an
+ * error: it uses a variable (x, y, x_1, x_2, z, r, theta), and it is no
+ * matrix, sum or set. With `row`, that row of an aligned block. The card
+ * opens only for these, and the setting Highlight formulas in notes marks
+ * them, so a marked formula always opens.
  */
-export function chartable(tex: string): boolean {
-    const hit = chartableMemo.get(tex);
+export function chartable(tex: string, row?: number): boolean {
+    const key = row === undefined ? tex : `${row}\u0000${tex}`;
+    const hit = chartableMemo.get(key);
     if (hit !== undefined) return hit;
     let ok = false;
     try {
-        // formulaLines knows the variables (x, y, x_1, x_2, z, r, theta): a formula without one has no lines.
-        const f = formulaLines(tex);
-        ok = !!f && parseChartText(f.lines.join('\n')).problems.length === 0;
+        const lines = formulaChart(tex, row);
+        ok = !!lines && drawable(lines);
     } catch {
         ok = false;
     }
     if (chartableMemo.size > 500) chartableMemo.clear();
-    chartableMemo.set(tex, ok);
+    chartableMemo.set(key, ok);
     return ok;
 }
