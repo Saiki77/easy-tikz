@@ -11,17 +11,26 @@
  */
 import { MessageKey, t, tIn } from '../i18n';
 import { ChartData, Guide, GuideCategory, GuideLevel } from './types';
-import { BASICS_GUIDES } from './basics';
+import { START_GUIDES } from './start';
+import { LANGUAGE_GUIDES } from './language';
+import { FUNCTIONS_GUIDES } from './functions';
+import { CALCULUS_GUIDES } from './calculus';
 import { OPTIMISATION_GUIDES } from './optimisation';
-import { MORE_GUIDES } from './more';
-import { DYNAMIC_GUIDES } from './dynamic';
+import { DATA_GUIDES } from './data';
+import { SHAPES_GUIDES } from './shapes';
+import { SPACE_GUIDES } from './space';
+import { NOTES_GUIDES } from './notes';
+import { REFERENCE_GUIDES } from './reference';
 import { localGuide } from './ja';
 
 /** Categories in display order (the order of the GuideCategory union). */
 export const GUIDE_CATEGORIES: readonly GuideCategory[] = [
     'Getting started',
+    'Chart language',
     'Functions and sliders',
+    'Calculus',
     'Regions and optimisation',
+    'Data and probability',
     'Points, lines and labels',
     '3D',
     'Notes and export',
@@ -31,8 +40,11 @@ export const GUIDE_CATEGORIES: readonly GuideCategory[] = [
 /** The key of each category's name (the categories themselves are identifiers). */
 const CATEGORY_KEYS: Readonly<Record<GuideCategory, MessageKey>> = {
     'Getting started': 'help.category.gettingStarted',
+    'Chart language': 'help.category.chartLanguage',
     'Functions and sliders': 'help.category.functionsSliders',
+    Calculus: 'help.category.calculus',
     'Regions and optimisation': 'help.category.regionsOptimisation',
+    'Data and probability': 'help.category.dataProbability',
     'Points, lines and labels': 'help.category.pointsLinesLabels',
     '3D': 'help.category.threeD',
     'Notes and export': 'help.category.notesExport',
@@ -75,7 +87,18 @@ function categoryRank(category: string): number {
  * Every guide, in display order: by category (GUIDE_CATEGORIES), and inside
  * a category in the order the data files list them.
  */
-export const GUIDES: Guide[] = [...BASICS_GUIDES, ...OPTIMISATION_GUIDES, ...MORE_GUIDES, ...DYNAMIC_GUIDES]
+export const GUIDES: Guide[] = [
+    ...START_GUIDES,
+    ...LANGUAGE_GUIDES,
+    ...FUNCTIONS_GUIDES,
+    ...CALCULUS_GUIDES,
+    ...OPTIMISATION_GUIDES,
+    ...DATA_GUIDES,
+    ...SHAPES_GUIDES,
+    ...SPACE_GUIDES,
+    ...NOTES_GUIDES,
+    ...REFERENCE_GUIDES,
+]
     .map((guide, index) => ({ guide, index }))
     .sort((a, b) => categoryRank(a.guide.category) - categoryRank(b.guide.category) || a.index - b.index)
     .map((entry) => entry.guide);

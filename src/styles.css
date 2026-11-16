@@ -1,4 +1,4 @@
-/* Easy TikZ: base styles. Inline note charts, renderer support and the
+/* Easy Graphs, Charts & TikZ: base styles. Inline note charts, renderer support and the
    design tokens shared by the editor UI. Component styles live in
    src/ui/*.css; scripts/build-css.mjs concatenates everything into the
    styles.css Obsidian loads. */

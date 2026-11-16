@@ -2,121 +2,77 @@
 
 # Tangents and extrema
 
-[All guides](README.md) · Functions and sliders · Core · about 7 minutes
+[All guides](README.md) · Calculus · Core · about 3 minutes
 
-Mark the turning points of a function, add a tangent, slide it along the curve and label its slope.
+Mark the turning points of a curve, roll a tangent along it with a slider and print its slope.
 
 <p align="center"><img src="img/tangents-extrema-card.png" alt="The finished chart of the guide Tangents and extrema" width="480"></p>
 
 **What you can do afterwards**
 
-- Mark local minima and maxima
-- Draw a tangent at a number, at min or max, or at a slider
-- Slide the tangent by dragging its point
-- Label the slope with a live value
+- Mark local maxima and minima
+- Put a tangent on a slider
+- Print a live slope in a label
 
-**Read first:** [Your first chart](first-chart.md), [Sliders that move the picture](sliders.md)
+**Read first:** [Sliders that move the picture](sliders.md)
 
 ## 1. Plot the function
 
-In a new chart, click + Add, choose Function y = f(x) and type the formula: a wave on a slope, with two crests and one trough in view.
+Write the window, then the function in LaTeX between dollars: a wave that climbs, with two crests and a trough in view.
 
-Click the colour swatch on the card and pick Blue. The tangent and the markers will take the colour of their function.
+The chart in words:
 
-| Where | Type |
-| --- | --- |
-| f1, y = | `0.4x + sin(x)` |
+```easy-tikz
+show x from 0 to 10 and y from -1 to 6
+size 12 x 8
+axes on the edges
+with a grid
+plot $f(x) = \frac{x}{2} + \sin(x)$ in purple, very thick
+```
 
-![Screenshot of the editor for step 1: Plot the function](img/tangents-extrema-1.png)
-
-*The function to explore.*
+![Plot the function](img/tangents-extrema-1.png)
 
 ## 2. Mark the extrema
 
-Open Options on the `f1` card and click Extrema. A dot appears at every local maximum and minimum, labelled max or min.
+Add `with its extrema` to the plot line. The chart finds every local maximum and minimum in view and labels it.
 
-The dots are computed from the curve, so they move when you change the formula.
+The chart gets these lines:
 
-![Screenshot of the editor for step 2: Mark the extrema](img/tangents-extrema-2.png)
+```easy-tikz
+plot $f(x) = \frac{x}{2} + \sin(x)$ in purple, very thick, with its extrema
+```
 
-*Extrema on: two maxima and one minimum are marked.*
+![Mark the extrema](img/tangents-extrema-2.png)
 
-> **Tip:** Extrema are searched in the visible x range, or in the Domain when the function has one.
+## 3. Put a tangent on a slider
 
-## 3. Add a tangent
+`with its tangent at a` draws the tangent where x is the slider `a`. Press play: the tangent rolls along the curve and lies flat at each extremum.
 
-In the same Options, click Tangent. A field At x appears, filled in with the middle of the view, and a dashed tangent is drawn with a dot where it touches the curve.
+The chart gets these lines:
 
-Type `0.5` into At x. The tangent now touches the first rise of the curve.
+```easy-tikz
+slider a from 0 to 9, starting at 6
+plot $f(x) = \frac{x}{2} + \sin(x)$ in purple, very thick, with its tangent at a and its extrema
+```
 
-| Where | Type |
-| --- | --- |
-| f1, At x | `0.5` |
+![Put a tangent on a slider](img/tangents-extrema-3.png)
 
-![Screenshot of the editor for step 3: Add a tangent](img/tangents-extrema-3.png)
+> **Tip:** `with its tangent at max2` puts it on the second maximum instead.
 
-*A tangent at x = 0.5. The field At x sits in the Options of the card.*
+## 4. Print the slope
 
-## 4. Snap it to an extremum
+The slope of f at `a` is `0.5 + cos(a)`. A line one unit across and that far up draws the slope triangle, and the label prints the value.
 
-Replace the number with `max2`. The tangent jumps to the second maximum and lies flat. `max` and `min` mean the first local maximum or minimum from the left, `max2` the second maximum, and so on.
+The chart gets these lines:
 
-These keywords stay live: change the formula and the tangent follows the new extremum.
+```easy-tikz
+draw a line from (a, f(a)) to (a + 1, f(a)) to (a + 1, f(a) + 0.5 + cos(a)) in orange, thick
+write "slope {0.5 + cos(a):2}" at (a + 1, f(a) + (0.5 + cos(a))/2) in orange, right
+```
 
-| Where | Type |
-| --- | --- |
-| f1, At x | `max2` |
+![Print the slope](img/tangents-extrema-4.png)
 
-![Screenshot of the editor for step 4: Snap it to an extremum](img/tangents-extrema-4.png)
-
-*At x = max2: a horizontal tangent at the second maximum.*
-
-> **Tip:** If the curve has fewer extrema than the keyword asks for, the status chip at the top left of the preview says so, for example that f1 has only 2 local maxima.
-
-## 5. Put the tangent on a slider
-
-Type `a` into At x and click Add slider a. The point of contact is now the value of the slider, 1 at first.
-
-Click the small number at the left end of the slider and type `0`. The slider now runs from 0 to 10, which is the part of the curve in view. Drag it and the tangent rolls along the curve.
-
-| Where | Type |
-| --- | --- |
-| f1, At x | `a` |
-| Sliders, a: minimum | `0` |
-
-![Screenshot of the editor for step 5: Put the tangent on a slider](img/tangents-extrema-5.png)
-
-*At x = a: the slider moves the tangent.*
-
-## 6. Drag the tangent along the curve
-
-You do not need the dock. Grab the dot of the tangent in the preview and drag it along the curve to x = 6. The slider `a` follows, and the tip shows its live value.
-
-This works whenever At x is a number or a slider. A tangent at `min` or `max` is computed, so it cannot be dragged.
-
-![Screenshot of the editor for step 6: Drag the tangent along the curve](img/tangents-extrema-6.png)
-
-*The tangent dragged to x = 6. Resting on its dot, the tip says Drag along the curve.*
-
-> **Tip:** A dragged slider stays on its step and inside its range, so this tangent stops at 0 and at 10.
-
-## 7. Label the slope
-
-Click + Add and choose Text label. In the new card, type the text and the two positions. The label prints the slope with two decimals and sits next to the point of contact.
-
-`f1(a)` is the height of the curve at the slider value, so the label travels with the tangent.
-
-| Where | Type |
-| --- | --- |
-| Label 1, Text | `slope {0.4 + cos(a):2}` |
-| Label 1, Position x | `a - 1` |
-| Label 1, Position y | `f1(a) + 0.6` |
-
-![Screenshot of the editor for step 7: Label the slope](img/tangents-extrema-7.png)
-
-*A label that follows the tangent and prints its slope.*
-
-> **Tip:** The slope formula is typed by hand. For another function, replace `0.4 + cos(a)` with its derivative at `a`.
+> **Tip:** The chart does not differentiate: for another function, type its derivative yourself.
 
 ## The finished chart
 
@@ -126,18 +82,21 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-slider a from 0 to 10, starting at 6
-plot f1(x) = 0.4x + sin(x) in blue, with its tangent at a and its extrema
-write "slope {0.4 + cos(a):2}" at (a - 1, f1(a) + 0.6), center
+show x from 0 to 10 and y from -1 to 6
+size 12 x 8
+axes on the edges
+with a grid
+slider a from 0 to 9, starting at 6
+plot $f(x) = \frac{x}{2} + \sin(x)$ in purple, very thick, with its tangent at a and its extrema
+draw a line from (a, f(a)) to (a + 1, f(a)) to (a + 1, f(a) + 0.5 + cos(a)) in orange, thick
+write "slope {0.5 + cos(a):2}" at (a + 1, f(a) + (0.5 + cos(a))/2) in orange, right
 ```
 
 </details>
 
 ## Next guides
 
-- [From secant to tangent](secant-tangent.md): Draw the secant through two points of a curve, shrink their distance h with a slider and watch its slope approach the slope of the tangent.
-- [Shade between a curve and its tangent](tangent-area.md): Write the tangent at a slider point as a function, shade the area it encloses with the curve, and make it work for any curve.
-- [Points, intersections and live labels](points-labels.md): Mark points from a list, find where two curves cross, and print values that update when a slider moves.
-- [Drag shapes to edit them](drag-to-edit.md): Grab a line or a curve in the preview and its numbers follow: move, turn, stretch, undo.
+- [From secant to tangent](secant-tangent.md): Shrink the gap h between two points of a curve and watch the secant through them turn into the tangent.
+- [An area that grows with a slider](area-accumulation.md): Shade the area under a curve up to a slider and draw the function that adds it up.
 
 [All guides](README.md)

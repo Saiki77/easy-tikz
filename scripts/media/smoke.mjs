@@ -155,13 +155,13 @@ const whatsNewState = () =>
         const svg = m.querySelector('.etz-whatsnew-chart svg');
         const texts = svg ? Array.from(svg.querySelectorAll('text, foreignObject')).map((t) => (t.textContent || '').trim()) : [];
         const input = m.querySelector('.etz-whatsnew-strip input[type=range]');
-        const play = m.querySelector('.etz-whatsnew-play');
+        const play = m.querySelector('.etz-live-play');
         return {
             count: modals.length,
             title: (m.querySelector('.etz-whatsnew-title') || { textContent: '' }).textContent.trim(),
             slides: m.querySelectorAll('.etz-whatsnew-dot').length,
             current: Array.from(m.querySelectorAll('.etz-whatsnew-dot')).findIndex((d) => d.getAttribute('aria-current') === 'step'),
-            blankIcons: Array.from(m.querySelectorAll('.etz-whatsnew-icon, .etz-btn-icon, .etz-whatsnew-play')).filter((el) => !el.querySelector('svg')).length,
+            blankIcons: Array.from(m.querySelectorAll('.etz-whatsnew-icon, .etz-btn-icon, .etz-live-play')).filter((el) => !el.querySelector('svg')).length,
             extrema: texts.filter((t) => t === 'max' || t === 'min').sort().join(','),
             value: input ? Number(input.value) : null,
             playing: play ? play.getAttribute('aria-pressed') === 'true' : null,
@@ -244,7 +244,7 @@ async function answerReplace(text) {
 const started = await check('Obsidian starts and the plugin loads', async () => {
     obs = await launch({ port, workDir, plugin: args.root ? 'root' : 'source', width: 1440, height: 900, theme: 'light' });
     const v = await obs.versions();
-    return `Obsidian ${v.obsidian}, Easy TikZ ${v.plugin}, ${args.root ? 'repository root build' : 'built from source'}`;
+    return `Obsidian ${v.obsidian}, Easy Graphs, Charts & TikZ ${v.plugin}, ${args.root ? 'repository root build' : 'built from source'}`;
 });
 
 if (started) {
@@ -280,50 +280,84 @@ if (started) {
         })();
         if (!mathStep) skip('Help: math labels in a guide figure', 'no guide step has a $...$ label');
         else {
-            await check('Help: a guide figure draws new $...$ labels with their real box', async () => {
+            await check('Help: a guide step draws new $...$ labels with their real box', async () => {
                 await obs.showTab('help');
+                // The Help (5.1) opens a guide from its search result, one step per screen.
                 const opened = await obs.call((title) => {
-                    const cards = Array.from(document.querySelectorAll('.modal.tikz-modal .etz-help-home .etz-help-browse .etz-help-card'));
-                    const card = cards.find((c) => {
-                        const t = c.querySelector('.etz-help-card-title');
+                    const input = document.querySelector('.modal.tikz-modal .etz-help-search-input');
+                    if (!input) return false;
+                    input.value = title;
+                    input.dispatchEvent(new Event('input'));
+                    const tiles = Array.from(document.querySelectorAll('.modal.tikz-modal .etz-help-results .etz-help-tile'));
+                    const tile = tiles.find((c) => {
+                        const t = c.querySelector('.etz-help-tile-title');
                         return t && t.firstChild && t.firstChild.textContent === title;
                     });
-                    if (card) card.click();
-                    return !!card;
+                    if (tile) tile.click();
+                    return !!tile;
                 }, mathStep.guide.title);
-                assert(opened, `the Help home has no card for the guide "${mathStep.guide.title}"`);
-                // Scrolls the step's figure into view (it draws when it gets there) and measures its MathJax labels.
+                assert(opened, `the Help search finds no tile for the guide "${mathStep.guide.title}"`);
+                for (let i = 0; i < mathStep.at; i++) {
+                    await obs.call(() => {
+                        const next = document.querySelector('.modal.tikz-modal .etz-help-page.mod-guide .etz-help-nav button.mod-cta');
+                        if (next) next.click();
+                    });
+                    await obs.sleep(120);
+                }
+                // Measures the MathJax labels of the step's live chart.
                 const measure = () =>
-                    obs.call((n) => {
-                        const step = document.querySelectorAll('.modal.tikz-modal .etz-help-page.mod-guide .etz-help-step')[n];
-                        const box = step ? step.querySelector('.etz-help-figure') : null;
+                    obs.call(() => {
+                        const box = document.querySelector('.modal.tikz-modal .etz-help-page.mod-guide .etz-help-live');
                         if (!box) return null;
-                        const scroller = document.querySelector('.modal.tikz-modal .etz-tabpanel.mod-help');
-                        scroller.scrollTop += box.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 80;
                         const px = (el) => Math.round(el.getBoundingClientRect().width * 10) / 10;
                         return Array.from(box.querySelectorAll('svg foreignObject')).map((f) => ({ text: f.getAttribute('data-export-text'), box: px(f), content: px(f.firstElementChild) }));
-                    }, mathStep.at);
+                    });
                 const fits = (l) => l.content > 4 && Math.abs(l.box - l.content) <= 1.5;
                 await obs.waitFor(async () => {
                     const list = await measure();
                     return Array.isArray(list) && list.length > 0;
-                }, { timeout: 4000, interval: 100, message: 'the figure to draw' }).catch(() => {});
+                }, { timeout: 4000, interval: 100, message: 'the step chart to draw' }).catch(() => {});
                 // Right after the first drawing box and label still agree (both unstyled). Judge the settled picture:
-                // MathJax's rules and fonts arrive within a few frames, and the figure then draws again.
+                // MathJax's rules and fonts arrive within a few frames, and the chart then draws again.
                 await obs.sleep(1500);
                 const labels = await measure();
-                assert(Array.isArray(labels) && labels.length > 0, 'the figure shows no MathJax label (did it draw, is MathJax loaded?)');
+                assert(Array.isArray(labels) && labels.length > 0, 'the step chart shows no MathJax label (did it draw, is MathJax loaded?)');
                 const bad = labels.filter((l) => !fits(l));
                 assert(!bad.length, bad.map((l) => `${l.text} is ${l.content} px wide but its box is ${l.box} px`).join('; '));
-                // Leave Help as it was found: the home view, and the Build tab in front.
+                // Leave Help as it was found: the home view without a query, and the Build tab in front.
                 await obs.call(() => {
                     const back = document.querySelector('.modal.tikz-modal .etz-help-page.mod-guide .etz-help-back');
                     if (back) back.click();
+                    const input = document.querySelector('.modal.tikz-modal .etz-help-search-input');
+                    if (input) {
+                        input.value = '';
+                        input.dispatchEvent(new Event('input'));
+                    }
                 });
                 await obs.showTab('build');
                 return `${labels.length} labels in step ${mathStep.at + 1} of ${mathStep.guide.id}`;
             });
         }
+
+        // The + Add picker (5.1): a search finds an item by another word, Enter adds it and closes the picker.
+        await check('Build: + Add searches (vector finds Arrow) and Enter adds it', async () => {
+            await obs.showTab('build');
+            const before = await obs.call(() => document.querySelectorAll('.modal.tikz-modal .etz-card').length);
+            await obs.call(() => document.querySelector('.modal.tikz-modal .etz-build-add').click());
+            await obs.waitFor(async () => obs.call(() => !!document.querySelector('.etz-picker .etz-picker-input')), { timeout: 2000, interval: 50, message: 'the picker to open' });
+            const found = await obs.call(() => {
+                const input = document.querySelector('.etz-picker .etz-picker-input');
+                input.value = 'vector';
+                input.dispatchEvent(new Event('input'));
+                return Array.from(document.querySelectorAll('.etz-picker .etz-picker-item .etz-picker-label')).map((e) => e.textContent);
+            });
+            assert(found.length === 1 && found[0] === 'Arrow', `vector finds ${JSON.stringify(found)}`);
+            await obs.key('Enter');
+            await obs.sleep(300);
+            const after = await obs.call(() => ({ cards: document.querySelectorAll('.modal.tikz-modal .etz-card').length, open: !!document.querySelector('.etz-picker') }));
+            assert(!after.open && after.cards === before + 1, `after Enter: ${JSON.stringify(after)}, ${before} cards before`);
+            return `${before} -> ${after.cards} cards`;
+        });
 
         // Every example, through the modal's loadChart (the second load also answers the Replace dialog).
         for (const example of EXAMPLES) {
@@ -814,7 +848,7 @@ if (started) {
             await obs.waitFor(async () => (await whatsNewState()).count > 0, { timeout: 5000, message: 'the popup to open after the plugin loaded' });
             const state = await whatsNewState();
             assert(state.count === 1, `${state.count} popups are open`);
-            assert(state.title === 'Easy TikZ 5', `the title is "${state.title}"`);
+            assert(state.title === 'Easy Graphs, Charts & TikZ 5', `the title is "${state.title}"`);
             // A slideshow: one dot per slide, the first one shown.
             assert(state.slides === WHATS_NEW.WHATS_NEW_SLIDES.length && state.current === 0, `${state.slides} slides, slide ${state.current} shown`);
             assert(state.blankIcons === 0, `${state.blankIcons} icons are blank (an icon id Obsidian does not know)`);
@@ -843,12 +877,12 @@ if (started) {
             await obs.sleep(250);
             state = await whatsNewState();
             assert(state.extrema === 'max,min', `at a = 1.5 the chart shows the extrema "${state.extrema}"`);
-            await obs.mouse.click('.modal.etz-whatsnew .etz-whatsnew-play');
+            await obs.mouse.click('.modal.etz-whatsnew .etz-live-play');
             await obs.sleep(600);
             state = await whatsNewState();
             assert(state.playing === true, 'play is not pressed');
             assert(state.value !== 1.5, 'playing did not move the slider');
-            await obs.mouse.click('.modal.etz-whatsnew .etz-whatsnew-play');
+            await obs.mouse.click('.modal.etz-whatsnew .etz-live-play');
             await obs.sleep(250);
             state = await whatsNewState();
             const a = state.value;
@@ -884,7 +918,7 @@ if (started) {
             await reloadPlugin();
             await obs.waitFor(async () => (await whatsNewState()).count > 0, { timeout: 8000, message: 'the popup to open after the vault check' });
             const state = await whatsNewState();
-            assert(state.count === 1 && state.title === 'Easy TikZ 5', `${state.count} popups, title "${state.title}"`);
+            assert(state.count === 1 && state.title === 'Easy Graphs, Charts & TikZ 5', `${state.count} popups, title "${state.title}"`);
             await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 3000, message: 'data.json to record the popup' });
             await clickWhatsNewButton('Close');
             await reloadPlugin();
@@ -955,7 +989,7 @@ if (started) {
             await obs.call((id) => app.commands.executeCommandById(`${id}:show-whats-new`), PLUGIN_ID);
             await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the command' });
             for (const icon of await drawnIcons('.modal.etz-whatsnew')) seen.add(icon);
-            await obs.mouse.click('.modal.etz-whatsnew .etz-whatsnew-play');
+            await obs.mouse.click('.modal.etz-whatsnew .etz-live-play');
             await obs.sleep(150);
             for (const icon of await drawnIcons('.modal.etz-whatsnew')) seen.add(icon);
             // Every slide, with Next: a slide is built when it is first shown.
@@ -1037,7 +1071,7 @@ if (started) {
             const page = await ai('/guide', { headers: { Authorization: `Bearer ${aiToken}`, Origin: 'https://example.com' } });
             assert(page.status === 403, `a request with an Origin header got ${page.status}`);
             const guide = await ai('/guide', { headers: { Authorization: `Bearer ${aiToken}` } });
-            assert(guide.status === 200 && (await guide.text()).startsWith('# Easy TikZ: guide for AI assistants'), 'the guide did not come back');
+            assert(guide.status === 200 && (await guide.text()).startsWith('# Easy Graphs, Charts & TikZ: guide for AI assistants'), 'the guide did not come back');
         });
 
         await check('AI access: MCP initialize and tools/list', async () => {

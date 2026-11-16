@@ -1,0 +1,29 @@
+/* A live chart (src/ui/liveChart.ts): What's new slides and Help steps. The
+   box keeps the chart's own proportions; the picture fills it. The slider
+   strip is the strip of a chart in a note (.etz-inline-strip). */
+.etz-live-chart {
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-m);
+    aspect-ratio: var(--etz-live-aspect, 1.25);
+}
+
+.etz-live-chart > svg.etz-live-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+}
+
+.etz-inline-strip.etz-live-strip {
+    margin-top: 0;
+}
+
+button.etz-icon-btn.etz-live-play {
+    margin-top: 1px;
+}
+
+button.etz-icon-btn.etz-live-play[aria-pressed='true'] {
+    color: var(--interactive-accent);
+}

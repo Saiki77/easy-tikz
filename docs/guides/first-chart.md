@@ -2,125 +2,79 @@
 
 # Your first chart
 
-[All guides](README.md) · Getting started · Start here · about 5 minutes
+[All guides](README.md) · Getting started · Start here · about 3 minutes
 
-From an empty editor to a chart in your note: type a formula, style it, set the ranges and insert it.
+Open the editor, plot two formulas, give them colours, a legend and a grid, and insert the chart.
 
 <p align="center"><img src="img/first-chart-card.png" alt="The finished chart of the guide Your first chart" width="480"></p>
 
 **What you can do afterwards**
 
 - Open the editor and plot a formula
-- Style a curve and add a second one
-- Set the ranges, add a legend and switch on the grid
-- Insert the chart into a note and edit it again later
+- Style curves with colours, a legend and a grid
+- Insert the chart into a note and edit it again
 
-## 1. Open the editor
+## 1. Type a formula and press Enter
 
-Open a note and put the cursor where the chart should go.
+Put the cursor in a note where the chart goes. Run `Easy Graphs, Charts & TikZ: Open editor` from the command palette or the ribbon, type `2 + \sin(x)` under Start a chart and press Enter.
 
-Click the Easy TikZ icon in the ribbon on the left, or run `Easy TikZ: Open editor` from the command palette. The editor opens on the Build tab with the heading Start a chart. The preview on the right is still empty.
+The chart in words:
 
-![Screenshot of the editor for step 1: Open the editor](img/first-chart-1.png)
+```easy-tikz
+show x from 0 to 2pi and y from 0 to 4
+size 12 x 8
+plot $f(x) = 2 + \sin(x)$
+```
 
-*A new chart: the Build tab on the left, the empty preview on the right.*
+![Type a formula and press Enter](img/first-chart-1.png)
 
-> **Tip:** Insert into note writes the chart at the cursor, so place the cursor before you open the editor.
+> **Tip:** Formula fields take LaTeX as in your notes, or the plain form `2 + sin(x)`.
 
-## 2. Type a formula and press Enter
+## 2. Pick a colour and a thick line
 
-Type the formula into the field under Start a chart and press Enter.
+Click the colour swatch at the left of the card and pick Blue. Under Options, pick Very Thick in the Line row.
 
-A card named `f1` appears with the summary `y = 2 + sin(x)`, and the curve is drawn. Because the ranges were still the defaults, the editor fits the y range to the curve once. From now on the preview redraws while you type.
+The chart gets these lines:
 
-| Where | Type |
-| --- | --- |
-| Start a chart | `2 + sin(x)` |
+```easy-tikz
+plot $f(x) = 2 + \sin(x)$ in blue, very thick
+```
 
-![Screenshot of the editor for step 2: Type a formula and press Enter](img/first-chart-2.png)
+![Pick a colour and a thick line](img/first-chart-2.png)
 
-*The first function card and its curve. The y range was fitted to the curve.*
+## 3. Add a second function
 
-> **Tip:** Functions need brackets: write `sin(x)`, not `sin x`. If you forget them, the message under the field offers the button Use sin(x).
+Click + Add, choose Function y = f(x) and type `2 + \cos(x)`. Give it Orange and Very Thick the same way.
 
-## 3. Pick a colour and a thicker line
+The chart gets these lines:
 
-Click the colour swatch at the left end of the `f1` card and pick Blue from the grid.
+```easy-tikz
+plot $g(x) = 2 + \cos(x)$ in orange, very thick
+```
 
-Then click Options on the card and choose the third sample in the Line row. The curve is now blue and thick. When you close Options again, a small Thick pill stays on the card, so you see what is switched on without opening it.
+![Add a second function](img/first-chart-3.png)
 
-![Screenshot of the editor for step 3: Pick a colour and a thicker line](img/first-chart-3.png)
+## 4. Show a legend and a grid
 
-*The curve in blue with a thick line.*
+Click Legend under Options on each card: a box names the curves. The Major grid button at the bottom right of the preview adds the grid.
 
-> **Tip:** The first colour in the grid is Auto: it follows the text colour of your theme on screen and exports as black.
+The chart gets these lines:
 
-## 4. Add a second function
+```easy-tikz
+with a grid
+plot $f(x) = 2 + \sin(x)$ in blue, very thick, with a legend
+plot $g(x) = 2 + \cos(x)$ in orange, very thick, with a legend
+```
 
-Click + Add at the top of the Build tab and choose Function y = f(x). A new card `f2` appears with the cursor in its formula field.
+![Show a legend and a grid](img/first-chart-4.png)
 
-Type the formula. The second curve appears while you type.
+## 5. Insert it into your note
 
-| Where | Type |
-| --- | --- |
-| f2, y = | `2 + cos(x)` |
+Click Insert into note or press Cmd+Enter (Ctrl+Enter on Windows and Linux). The note keeps these lines in an `easy-tikz` block, and a click on the chart edits it again.
 
-![Screenshot of the editor for step 4: Add a second function](img/first-chart-4.png)
+![Insert it into your note](img/first-chart-5.png)
 
-*The + Add menu lists everything you can draw. Function y = f(x) is its first entry.*
-
-> **Tip:** Everything else starts at + Add as well: regions, lines, points, arrows, text labels and sliders.
-
-## 5. Set the ranges
-
-The automatic fit kept x from -0.5 to 10 and set y from 0.8 to 3.2. To show one period, open the Chart tab and type your own under Ranges: x from `0` to `2pi`, y from `0` to `4`.
-
-The preview now shows exactly one period, with room above the curves. Ranges accept formulas, so `2pi` works as typed.
-
-| Where | Type |
-| --- | --- |
-| Chart \> Ranges, x from | `0` |
-| Chart \> Ranges, x to | `2pi` |
-| Chart \> Ranges, y from | `0` |
-| Chart \> Ranges, y to | `4` |
-
-![Screenshot of the editor for step 5: Set the ranges](img/first-chart-5.png)
-
-*The Chart tab holds ranges, axes, grid and export size.*
-
-> **Tip:** An axis whose bound is a formula stays fixed when you pan or zoom the preview. Bounds that are plain numbers move.
-
-## 6. Show a legend
-
-Back in the Build tab, open Options on the `f1` card and click Legend. Do the same on the `f2` card.
-
-A legend box appears at the top right of the plot and shows each formula. To print your own words instead, type them into the Legend field that appears below the chips.
-
-![Screenshot of the editor for step 6: Show a legend](img/first-chart-6.png)
-
-*Legend switched on for both functions.*
-
-## 7. Switch on the grid
-
-Click the grid button in the small toolbar at the bottom right of the preview. Grid lines appear behind the curves.
-
-The same switch is called Major grid in the Chart tab, under Grid, next to the minor grid and the number of divisions.
-
-![Screenshot of the chart preview for step 7: Switch on the grid](img/first-chart-7.png)
-
-*The finished chart: two curves, a legend and the major grid.*
-
-## 8. Insert it into your note
-
-Click Insert into note at the bottom right, or press Cmd+Enter (Ctrl+Enter on Windows and Linux). The editor closes and the chart is drawn in your note. It is stored there as an `easy-tikz` code block.
-
-To change it later, click the chart in the note. The editor opens with every setting filled in, and the button now reads Save changes.
-
-![Screenshot of the note for step 8: Insert it into your note](img/first-chart-8.png)
-
-*The chart in the note. Click it to edit it again.*
-
-> **Tip:** Closed the editor by accident? Nothing is lost. The next time you open it, it offers to restore the unsaved chart.
+> **Tip:** If you close the editor by accident, it offers the unsaved chart the next time it opens.
 
 ## The finished chart
 
@@ -131,17 +85,18 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 
 ```easy-tikz
 show x from 0 to 2pi and y from 0 to 4
+size 12 x 8
 with a grid
-plot f1(x) = 2 + sin(x) in blue, thick, with a legend
-plot f2(x) = 2 + cos(x), with a legend
+plot $f(x) = 2 + \sin(x)$ in blue, very thick, with a legend
+plot $g(x) = 2 + \cos(x)$ in orange, very thick, with a legend
 ```
 
 </details>
 
 ## Next guides
 
-- [Write formulas that work](formulas.md): Leave out the multiplication sign safely, avoid the traps ax and 1/2x, call functions by name and limit them with a domain.
-- [Drag shapes to edit them](drag-to-edit.md): Grab a line or a curve in the preview and its numbers follow: move, turn, stretch, undo.
-- [Sliders that move the picture](sliders.md): Turn a letter in a formula into a slider, set its range, play it and print its value in the chart.
+- [Every formula is a chart](notes-formulas.md): Rest the pointer on a formula in a note: its chart opens in a card, with sliders, ready to insert.
+- [Write a chart in words](chart-language.md): Build a linear program line by line: the window, a region, a slider, a moving line and the best point.
+- [Sliders that move the picture](sliders.md): Turn letters into sliders, set their range and step, press play, and connect them across a note.
 
 [All guides](README.md)

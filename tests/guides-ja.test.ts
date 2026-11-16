@@ -233,8 +233,22 @@ test('localGuide: in Japanese the texts of the overlay, the charts, shots, ids a
 });
 
 test('overlayGuide: a text the overlay lacks keeps its English', () => {
-    const g = GUIDES.find((guide) => guide.steps.length >= 2 && guide.steps.some((s) => s.tip !== undefined && s.type && s.type.length)) as Guide;
-    assert.ok(g, 'a guide with a tip and a type row');
+    // A guide of its own: the guides of 5.1 have no step with both a tip and a type row.
+    const g: Guide = {
+        id: 'overlay-sample',
+        title: 'Sample',
+        summary: 'A sample guide.',
+        category: 'Getting started',
+        level: 'start',
+        minutes: 1,
+        outcomes: ['First outcome', 'Second outcome'],
+        chart: {},
+        steps: [
+            { title: 'First step', body: 'A body.' },
+            { title: 'Second step', body: 'A body.', tip: 'A tip.', type: [{ where: 'A field', text: 'x^2' }] },
+            { title: 'Third step', body: 'A body.' },
+        ],
+    };
     const withTip = g.steps.findIndex((s) => s.tip !== undefined && s.type && s.type.length);
     const steps = g.steps.slice(0, withTip + 1).map((s, i) => (i === withTip ? { title: 'タイトル', body: '本文です。' } : { title: 'ステップ', body: '本文。' }));
     const out = overlayGuide(g, { title: '題', summary: '概要。', outcomes: ['一つ目'], steps });
@@ -245,7 +259,7 @@ test('overlayGuide: a text the overlay lacks keeps its English', () => {
     assert.equal(out.steps[withTip].tip, g.steps[withTip].tip, 'no Japanese tip: the English one');
     assert.deepEqual(out.steps[withTip].type, g.steps[withTip].type, 'no where: the English rows');
     assert.deepEqual(out.steps.slice(withTip + 1), g.steps.slice(withTip + 1), 'steps the overlay lacks stay English');
-    assert.equal(g.title, guideById(g.id)?.title, 'the English guide is not changed');
+    assert.equal(g.title, 'Sample', 'the English guide is not changed');
 });
 
 // ------------------------------------------------------- the Help tab
@@ -257,7 +271,7 @@ test('categories and levels: English names as identifiers, shown in the reader\'
     inJapanese(() => {
         assert.deepEqual(
             GUIDE_CATEGORIES.map(guideCategoryLabel),
-            ['はじめに', '関数とスライダー', '領域と最適化', '点・線・ラベル', '3D', 'ノートと出力', 'リファレンス']
+            ['はじめに', 'グラフの言語', '関数とスライダー', '微分積分', '領域と最適化', 'データと確率', '点・線・ラベル', '3D', 'ノートと出力', 'リファレンス']
         );
         assert.deepEqual(
             (['start', 'core', 'advanced'] as const).map(guideLevelLabel),

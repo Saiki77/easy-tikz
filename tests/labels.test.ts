@@ -382,10 +382,10 @@ test('a label of a line slides along its line to a clear place and stays on it',
     const { scene, c } = sceneOf(guideStep('level-curves', 3));
     const c1 = scene.items.find((i) => i.source === 'C1');
     if (!c1) throw new Error('no C1');
-    assert.deepEqual(c1.texts.map((t) => t.text).sort(), ['2', '4', '8']);
+    assert.deepEqual(c1.texts.map((t) => t.text).sort(), ['1', '16', '4', '9']);
     for (const t of c1.texts) {
         // On its own level curve x y = level ...
-        near(t.x * t.y, Number(t.text), 0.02, `label ${t.text} lies on its curve`);
+        near((t.x - 6) ** 2 + (t.y - 5) ** 2, Number(t.text), 0.02, `label ${t.text} lies on its circle`);
         // ... and well inside the plot.
         const b = textBoxPt(t, c.view, c.metrics);
         assert.ok(b.x0 > 2 && b.y0 > 2 && b.x1 < c.metrics.w - 2 && b.y1 < c.metrics.h - 2, `label ${t.text} inside`);

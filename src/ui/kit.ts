@@ -1,5 +1,5 @@
 /*
- * Easy TikZ UI kit: the small typed building blocks every editor panel uses.
+ * Easy Graphs, Charts & TikZ UI kit: the small typed building blocks every editor panel uses.
  * No framework. Each factory appends its DOM to `parent` and returns a
  * handle whose `el` is the root element. Setters on a handle never call the
  * component's own callbacks (no echo when a panel syncs values from

@@ -19,7 +19,17 @@ export type ChartData = Record<string, unknown>;
 export type GuideLevel = 'start' | 'core' | 'advanced';
 
 /** Groups shown as sections in the Help tab and on docs/guides/README.md, in this order. */
-export type GuideCategory = 'Getting started' | 'Functions and sliders' | 'Regions and optimisation' | 'Points, lines and labels' | '3D' | 'Notes and export' | 'Reference';
+export type GuideCategory =
+    | 'Getting started'
+    | 'Chart language'
+    | 'Functions and sliders'
+    | 'Calculus'
+    | 'Regions and optimisation'
+    | 'Data and probability'
+    | 'Points, lines and labels'
+    | '3D'
+    | 'Notes and export'
+    | 'Reference';
 
 /**
  * What the screenshot of a step should show (GitHub guides only; the Help

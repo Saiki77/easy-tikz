@@ -1,5 +1,5 @@
 /*
- * Easy TikZ charts for AI assistants: read blocks from a note, check them
+ * Easy Graphs, Charts & TikZ charts for AI assistants: read blocks from a note, check them
  * with the plugin's own code (problems, fields the plugin would ignore, and
  * what the chart computes), list the examples, and leave out default fields.
  * The local AI server's tools (src/ai/mcp.ts) are built on it. Pure: no
@@ -129,6 +129,8 @@ function knownKeys(part: string, defaults: Record<string, Data>): Set<string> {
     if (TOOL_TYPES.includes(part as ToolType)) keys.add('type');
     if (part === 'function') keys.add('legendLabel');
     if (part === 'label') keys.add('z');
+    // A slider that moves with the sliders of its name in the note's other charts (5.0).
+    if (part === 'parameter') keys.add('connected');
     // A surface may take a colour map by height instead of its own colour's ramp, and its own mesh line opacity.
     if (part === 'surface') {
         keys.add('colormap');
@@ -182,7 +184,7 @@ function fieldNotes(data: Data, loaded: Loaded, defaults: Record<string, Data>):
     if (data.v !== 4) {
         notes.push(
             impliedV4(data)
-                ? '"v": 4 is missing. Add it as the first field: Easy TikZ guesses version 4 for this block, but a block without it can be read as an old 3.x chart.'
+                ? '"v": 4 is missing. Add it as the first field: Easy Graphs, Charts & TikZ guesses version 4 for this block, but a block without it can be read as an old 3.x chart.'
                 : '"v": 4 is missing: the block is read as a 3.x chart, where text fields are TeX. Add "v": 4 as the first field.'
         );
     }

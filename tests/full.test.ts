@@ -192,7 +192,8 @@ test('full: every built-in chart prints in Full LaTeX, a command on every line, 
         else {
             const exact = text.split('\n').filter((l) => /^\\(raw|set)\b/.test(l));
             if (exact.length) failures.push(`${id}: lines written exactly instead of in commands: ${exact.join(' | ')}`);
-            const other = commands(text).filter((c) => !['axis', 'slider', 'plot', 'shade', 'draw', 'mark', 'node'].includes(c));
+            // \data{(1, 52), (2, 55)}: the points of a chart's data line (5.0).
+            const other = commands(text).filter((c) => !['axis', 'slider', 'plot', 'shade', 'draw', 'mark', 'node', 'data'].includes(c));
             if (other.length) failures.push(`${id}: generic commands ${other.join(', ')}\n${text}`);
         }
     }

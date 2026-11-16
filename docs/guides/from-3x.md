@@ -2,110 +2,74 @@
 
 # Coming from 3.x
 
-[All guides](README.md) · Reference · Core · about 8 minutes
+[All guides](README.md) · Reference · Core · about 2 minutes
 
-What happens to your old charts, where the eight tabs went, and which new tool replaces each old one.
+What happens to your 3.x charts, where the old tabs and tools went, and what sliders add.
 
 <p align="center"><img src="img/from-3x-card.png" alt="The finished chart of the guide Coming from 3.x" width="480"></p>
 
 **What you can do afterwards**
 
-- Open and save 3.x charts without surprises
-- Find every old tab and tool in the new editor
-- Know the breaking changes before you save
+- Open 3.x charts and save them without surprises
+- Find the old tabs and tools in the editor
 
 ## 1. Open an old chart
 
-Click a chart you made with 3.x. It opens in the new editor and looks as it did before. The conversion happens in memory: the note is not touched until you click Save changes.
+Click a chart you made with 3.x: it opens in the editor and draws as before. Nothing in the note changes until you click Save changes.
 
-The chart of this guide is a typical 3.x picture after conversion: two functions with the area between them, their intersections, a vertical and a horizontal line, a circle, a rectangle, an arrow, a brace and a text label.
+The chart in words:
 
-![Screenshot of the editor for step 1: Open an old chart](img/from-3x-1.png)
+```easy-tikz
+show x from -0.5 to 6 and y from -0.5 to 5.5
+size 12 x 8
+title Area between two curves
+plot $f(x) = \frac{x^2}{4}$ from x = 0 to 5 in blue, thick
+plot $g(x) = 2\sqrt{x}$ from x = 0 to 5 in red, thick
+plot h(x) = x in gray, dashed, hidden
+shade between f and g from x = 0 to 4, opacity 0.3
+mark where f and g cross, with coordinates
+```
 
-*A 3.x chart in the version 4 editor. Every old tool is a card in the Build tab.*
+![Open an old chart](img/from-3x-1.png)
 
-> **Tip:** Charts you only look at are never rewritten. A chart saved with version 4 carries `"v": 4`, and 3.19 can no longer draw it.
+## 2. Find the old tabs and tools
 
-## 2. Find your old tabs
+The eight old tabs are now Build, Chart, Code and Help, next to the new AI tab. Each old tool is a card, and + Add names them in plain words, such as Brace with label.
 
-The eight tabs of 3.x are now four: Build, Chart, Code and Help.
+The chart gets these lines:
 
-- Functions, Tools and Annotations are the cards of the Build tab. An annotation is now called a text label.
-- Axis and Grid are groups of the Chart tab: Ranges, Axes and Grid.
-- Graph is split up. Title, width and height, preview size and the 3D angles are in the Chart tab. 3D mode and the coordinate system are the two switches in the header.
-- Code is still Code. The old Use pgfplots switch is now Standalone document in that tab.
-- Reference is now Help.
+```easy-tikz
+draw a brace from (4, 0) to (0, 0), labelled "width 4"
+```
 
-![Screenshot of the editor for step 2: Find your old tabs](img/from-3x-2.png)
+![Find the old tabs and tools](img/from-3x-2.png)
 
-*The Chart tab holds what the Graph, Axis and Grid tabs held in 3.x.*
+## 3. Show the functions 3.x skipped
 
-> **Tip:** Sliders are new and have their own place: the Sliders dock. It appears under the preview as soon as a chart has a slider and stays there in every tab.
+3.x did not draw a function with an empty domain, so such a function opens hidden. Click its eye to show it: here the line `y = x`.
 
-## 3. Read the converted tools
+The chart gets these lines:
 
-Eleven special tools became five general ones. Each old tool is now a card with a formula you can read and change. The rows below are what the tools of this chart turned into.
+```easy-tikz
+plot h(x) = x in gray, dashed
+```
 
-- Area between two curves is a Region. The interval is a second condition.
-- Intersection points is a Points card with Intersections selected.
-- Vertical line and Horizontal line are Curves with the equations `x = c` and `y = c`.
-- Circle is a Curve. A filled circle is a Region with `<=` in place of `=`.
-- Rectangle is a Region with one condition for x and one for y.
-- Line segment and Brace with label are Segments with a Path. In 3D, the point marker is a Points card and the plane is still a Plane.
+![Show the functions 3.x skipped](img/from-3x-3.png)
 
-| Where | Type |
-| --- | --- |
-| R1, condition 1 | `min(f1, f2) <= y <= max(f1, f2)` |
-| R1, condition 2 | `0 <= x <= 4` |
-| C1, Equation | `x = 4` |
-| C3, Equation | `(x - 4)^2 + (y - 4)^2 = 0.4^2` |
-| R2, condition 1 | `0 <= x <= 4` |
-| S1, Path | `(2.6, 4.8); (2.2, 2.4)` |
+## 4. Trade a number for a slider
 
-![Screenshot of the editor for step 3: Read the converted tools](img/from-3x-3.png)
+Sliders are new, and any number can be one. Here the area ends at `x = a`: press play on `a` and it grows and shrinks.
 
-*The old area between two curves is the region R1 with two conditions.*
+The chart gets these lines:
 
-> **Tip:** You rarely pick a tool by name. + Add lists the old tools in plain words (Area between two functions, Vertical line x = c, Circle, Rectangle, Brace with label) and fills in the card for you.
+```easy-tikz
+slider a from 0.5 to 4, starting at 3
+shade between f and g from x = 0 to a, opacity 0.3
+```
 
-## 4. Show the functions 3.x skipped
+![Trade a number for a slider](img/from-3x-4.png)
 
-Version 3 did not draw a function whose Domain was empty. Version 4 reads an empty domain as the visible x range, so such a function would suddenly appear in your picture. To prevent that, it is converted as hidden: the card f3 is dimmed and its eye is crossed out.
-
-Click the eye on f3 to show it. The dashed line y = x appears, the mirror line between the two curves.
-
-![Screenshot of the editor for step 4: Show the functions 3.x skipped](img/from-3x-4.png)
-
-*The function f3 was hidden by the conversion. Its eye button shows it.*
-
-> **Tip:** A hidden function still works by name. Other formulas can use `f3(2)` or `y <= f3` whether it is drawn or not.
-
-## 5. Trade a number for a slider
-
-This is what the general tools are for. On the card R1, change the second condition from `0 <= x <= 4` to the one below, click Add slider a under the field and drag a to 3.
-
-The shaded area now ends at x = a and grows and shrinks with the slider. Any number in any field can become a slider in the same way.
-
-| Where | Type |
-| --- | --- |
-| R1, condition 2 | `0 <= x <= a` |
-
-![Screenshot of the editor for step 5: Trade a number for a slider](img/from-3x-5.png)
-
-*The right end of the area is now the slider a.*
-
-> **Tip:** You can also drag shapes in the preview now. Drag the dashed line at x = 4 and the number in its equation follows.
-
-## 6. Know what Save changes does
-
-Save changes writes the block in the version 4 format. Before you save an old chart, know what is different:
-
-- Version 3 cannot read the saved block. Keep 3.x charts unsaved if you still open the vault with 3.x somewhere.
-- Label text is a template: `{` and `}` mark placeholders such as `{a}`. Converted labels are escaped for you. In new labels type `{{` and `}}` for a LaTeX group.
-- `ax` is one name. Write `a x` or `a*x` for a product. `1/2x` means `(1/2)*x`.
-- The exported LaTeX has a different shape: a complete standalone document, trigonometry in radians, shapes as coordinates and colours named `etBlue`, `etRed` and so on.
-
-> **Tip:** If you post-process exported code with your own scripts or macros, compile one chart again and compare before you rely on it.
+> **Tip:** Save changes writes the format of version 4 and later, which 3.x cannot read.
 
 ## The finished chart
 
@@ -116,28 +80,22 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 
 ```easy-tikz
 show x from -0.5 to 6 and y from -0.5 to 5.5
+size 12 x 8
 title Area between two curves
-slider a from -10 to 10, starting at 3, in steps of 0.1
-plot f1(x) = x^2/4 from x = 0 to 5 in blue, thick
-plot f2(x) = 2*sqrt(x) from x = 0 to 5 in red, thick
-plot f3(x) = x in gray, dashed
-shade between f1 and f2 from x = 0 to a, opacity 0.3
-mark where f1 and f2 cross, with coordinates
-draw x = 4 in gray, dashed
-draw y = 4 in gray, dashed
-draw (x - 4)^2 + (y - 4)^2 = 0.4^2 in orange
-shade where 0 <= x <= 4 and 0 <= y <= 4 in gray, opacity 0.2, outlined, not filled
-draw an arrow from (2.6, 4.8) to (2.2, 2.4)
+slider a from 0.5 to 4, starting at 3
+plot $f(x) = \frac{x^2}{4}$ from x = 0 to 5 in blue, thick
+plot $g(x) = 2\sqrt{x}$ from x = 0 to 5 in red, thick
+plot h(x) = x in gray, dashed
+shade between f and g from x = 0 to a, opacity 0.3
+mark where f and g cross, with coordinates
 draw a brace from (4, 0) to (0, 0), labelled "width 4"
-write "A = 16/3, 33% of the square" at (2.6, 4.8)
 ```
 
 </details>
 
 ## Next guides
 
-- [Your first chart](first-chart.md): From an empty editor to a chart in your note: type a formula, style it, set the ranges and insert it.
-- [Shade a region with inequalities](regions.md): Shade the set where inequalities hold: one condition per row, chains, alternatives with or, and labels for the rows and the region.
-- [Export to LaTeX](export-latex.md): Get pgfplots code that compiles with pdflatex: as a standalone document or as a snippet, at the size you need, in the colours of the preview.
+- [Write a chart in words](chart-language.md): Build a linear program line by line: the window, a region, a slider, a moving line and the best point.
+- [Keyboard shortcuts](shortcuts.md): The keys of the editor: insert, undo, move shapes and the view, and move between tabs.
 
 [All guides](README.md)

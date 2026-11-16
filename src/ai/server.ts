@@ -1,5 +1,5 @@
 /*
- * The local AI server: Easy TikZ's tools (src/ai/mcp.ts) on
+ * The local AI server: Easy Graphs, Charts & TikZ's tools (src/ai/mcp.ts) on
  * http://127.0.0.1:<port>, for AI apps (MCP at /mcp) and agents with a shell
  * (plain HTTP: /guide, /tools, /tools/<name>).
  *
@@ -111,7 +111,7 @@ export function gate(head: RequestHead, token: string, port: number): Gate {
     const inUrl = new URLSearchParams(query).get('token') || '';
     const given = bearer ? bearer[1].trim() : inUrl;
     if (!sameSecret(given, token)) {
-        return { ok: false, status: 401, message: 'Missing or wrong token. Send "Authorization: Bearer <token>" or add ?token=<token>; the token is in the Easy TikZ settings under AI access.' };
+        return { ok: false, status: 401, message: 'Missing or wrong token. Send "Authorization: Bearer <token>" or add ?token=<token>; the token is in the Easy Graphs, Charts & TikZ settings under AI access.' };
     }
     return { ok: true };
 }

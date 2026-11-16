@@ -78,6 +78,13 @@ export const build = {
     'build.menu.builtIn': 'Built-in',
     'build.menu.saved': 'Saved',
     'build.menu.template': '{name}: {expression}',
+    'build.picker.label': 'Add to the chart',
+    'build.picker.search': 'Search: area, arrow, normal, integral',
+    'build.picker.groups': 'Groups',
+    'build.picker.nothing': 'Nothing matches "{query}". Try another word, such as area or arrow.',
+    'build.picker.keys': 'Up and down choose, Enter adds, Tab goes to the next group, Esc closes.',
+    'build.picker.keysSingle': 'Up and down choose, Enter adds, Esc closes.',
+    'build.picker.templates': 'Templates',
 
     // ---- recipes: the items of the + Add menus (src/migrate.ts)
     'build.recipe.function': 'Function y = f(x)',

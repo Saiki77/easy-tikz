@@ -7,7 +7,7 @@ export const help = {
     'help.search.guides': '{count, plural, one {# guide} other {# guides}}',
     'help.search.sections': '{count, plural, one {# reference section} other {# reference sections}}',
     'help.search.both': '{guides, plural, one {# guide} other {# guides}}, {sections, plural, one {# reference section} other {# reference sections}}',
-    'help.whatsNew': "What's new in Easy TikZ 5",
+    'help.whatsNew': "What's new in Easy Graphs, Charts & TikZ 5",
     'help.categories': 'Categories',
     'help.referenceSections': 'Reference sections',
     // Guide categories and levels (the data keeps the English names as identifiers: src/guides/index.ts).
@@ -18,12 +18,41 @@ export const help = {
     'help.category.threeD': '3D',
     'help.category.notesExport': 'Notes and export',
     'help.category.reference': 'Reference',
+    'help.category.chartLanguage': 'Chart language',
+    'help.category.calculus': 'Calculus',
+    'help.category.dataProbability': 'Data and probability',
     'help.level.start': 'Start here',
     'help.level.core': 'Core',
     'help.level.advanced': 'Advanced',
     'help.card.minutes': '{minutes} min',
     /** A step of a guide: the line on a search result card, and the heading of the step (the part before {title} is read only by screen readers). */
     'help.card.step': 'Step {n}: {title}',
+
+    // ------------------------------------------------- home (5.1): start, language, gallery
+    'help.home.start': 'Start here',
+    'help.home.gallery': 'Gallery',
+    'help.home.all': 'All',
+    'help.home.filter': 'Show the guides of a category',
+    'help.home.language.label': 'The chart language',
+    'help.home.language.title': 'Write a chart in words',
+    'help.home.language.text': 'A chart is a few lines of English with your formulas in LaTeX, as in your notes.',
+    'help.home.language.tour': 'Take the tour',
+    'help.home.cheatSheet': 'Cheat sheet',
+
+    // --------------------------------------------- a guide, one step at a time (5.1)
+    'help.step.count': 'Step {n} of {total}',
+    'help.step.back': 'Back',
+    'help.step.next': 'Next',
+    /** The last step's button when another guide follows ({title}: that guide). */
+    'help.step.nextGuide': 'Next: {title}',
+    'help.step.finish': 'Back to the guides',
+    'help.step.words': 'The chart in words',
+    /** The tag of a line this step added to the chart. */
+    'help.step.new': 'new',
+    'help.step.copyChart': 'Copy the chart',
+    'help.step.openEditor': 'Open in the editor',
+    'help.step.keys': 'The arrow keys move between steps.',
+    'help.step.sliders': 'Sliders of this step',
 
     // ----------------------------------------------------------- a guide
     'help.bar.allGuides': 'All guides',
@@ -43,7 +72,7 @@ export const help = {
     'help.copyFailed': 'Could not copy to the clipboard.',
 
     // ------------------------------------------------------- the reference
-    'help.reference.title': 'Easy TikZ reference',
+    'help.reference.title': 'Easy Graphs, Charts & TikZ reference',
     'help.reference.intro': 'How to write formulas, build regions, points and sliders, and what the LaTeX export contains.',
     'help.reference.contents': 'Contents',
     'help.example.open': 'Open example',
@@ -82,7 +111,7 @@ export const help = {
     'help.ref.text.t5': 'Also draw a line from A to B, draw a polygon through A, B and C, and draw a brace from A to B.',
     'help.ref.text.t6': 'A text label; above, below, left or right as an option.',
     'help.ref.text.t7': 'The chart itself. set field = value sets any other field.',
-    'help.ref.text.t8': 'A formula in LaTeX, in dollars as in a note (5.0). Plain formulas work too.',
+    'help.ref.text.t8': 'A formula in LaTeX, in dollars as in a note. Inside dollars letters side by side multiply: `$ax^2$` is a times x squared. Formulas without dollars work too; there `ax` is one name.',
     'help.ref.text.t9': 'A slider that moves with the sliders of the same name in the other charts of the note.',
     'help.ref.text.t10': 'The points of the Markdown table above the chart. Then: mark the data, draw its regression line, labelled. Or: data (1, 2), (2, 3).',
     'help.ref.text.t11': 'A distribution (also: the binomial distribution with n = 10 and p = 0.4). shade P(-1 <= X <= 1), labelled shades a probability.',
@@ -101,7 +130,7 @@ export const help = {
     // Drag to edit
     'help.ref.drag.title': 'Drag to edit',
     'help.ref.drag.about': 'Move, turn and stretch shapes in the preview.',
-    'help.ref.drag.p1': 'Drag a line, curve, point or label in the preview. Easy TikZ changes the numbers in its formula (sliders first) so the part you grabbed follows the pointer.',
+    'help.ref.drag.p1': 'Drag a line, curve, point or label in the preview. Easy Graphs, Charts & TikZ changes the numbers in its formula (sliders first) so the part you grabbed follows the pointer.',
     'help.ref.drag.l1': 'Shift-drag turns straight lines and stretches curves around the ⊕ mark. Points move straight: horizontal, vertical or diagonal.',
     'help.ref.drag.l2': 'Hover first: the tip in the corner shows which numbers will change, and when a shift, an offset or a factor has to be added.',
     'help.ref.drag.l3': 'Computed points (optimum, corners, intersections) cannot be dragged. Drag the lines that define them.',

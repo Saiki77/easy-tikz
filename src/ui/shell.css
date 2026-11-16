@@ -436,6 +436,29 @@ button.etz-status-chip:focus-visible {
     display: none;
 }
 
+/* The Help tab (5.1) takes the whole editor: its steps draw their own live charts. */
+.etz-shell.is-help {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: 'editor';
+}
+
+.etz-shell.is-help > .etz-stage,
+.etz-shell.is-help > .etz-shell-dock,
+.etz-shell.is-help > .etz-actionbar {
+    display: none;
+}
+
+.etz-shell.is-help .etz-editor {
+    border-top: none;
+    border-right: none;
+}
+
+/* Obsidian's close button sits at the top right of the modal: the header's menu keeps clear of it. */
+.etz-shell.is-help .etz-header {
+    padding-right: 48px;
+}
+
 .etz-actionbar {
     grid-area: actions;
     display: flex;

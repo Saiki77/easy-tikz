@@ -3,7 +3,7 @@
  * src/whatsnew.ts; what it says: src/whatsnew.ts). A slideshow: one feature
  * of 5.0 per slide, shown big with live charts, then version 4 in a list.
  *
- *   header      "Easy TikZ 5" and one line
+ *   header      "Easy Graphs, Charts & TikZ 5" and one line
  *   slide       icon, title and a sentence, then the feature: a note with
  *               the formula card open on a formula; a chart beside its text;
  *               two charts whose connected sliders move together; the vault
@@ -19,17 +19,11 @@
  */
 import { App, Modal, finishRenderMath, loadMathJax, renderMath, setIcon } from 'obsidian';
 import { localGuideById } from '../guides';
-import { MathContext } from '../mathcontext';
-import { normalizeParameters } from '../migrate';
-import { SVGRenderer } from '../renderer';
-import { SceneCache } from '../scene';
-import { SettingsManager } from '../settings';
-import { Parameter } from '../types';
-import { cloneData, errorText, fitPixelScale } from '../util';
+import { errorText } from '../util';
 import { chartSvgElement } from '../svgFiles';
 import { parseChartText } from '../text/parse';
 import { ChartLanguage, chartLanguage, wordsToFull } from '../text/full';
-import { NoteTable, tableAbove } from '../beyond/table';
+import { tableAbove } from '../beyond/table';
 import {
     WHATS_NEW_AI,
     WHATS_NEW_CHART_GUIDE,
@@ -43,7 +37,8 @@ import {
     whatsNewText,
     WhatsNewItem,
 } from '../whatsnew';
-import { IconButtonHandle, LiveSliderHandle, TextButtonHandle, formatDecimals, iconButton, liveSlider, segmented, textButton, uniqueId, visuallyHidden } from './kit';
+import { TextButtonHandle, segmented, textButton, uniqueId } from './kit';
+import { LiveChart, LiveChartOptions } from './liveChart';
 import { t } from '../i18n';
 
 /** What the buttons of the popup do; the caller decides (a new editor, or the editor the popup was opened from). */
@@ -64,18 +59,12 @@ export interface WhatsNewOptions {
     onClosed?: () => void;
 }
 
-/** A slider drag draws draft frames, and full quality this long after the last move (as charts in notes do). */
-const FULL_RENDER_DELAY_MS = 150;
-/** Play: one sweep from one end of the slider to the other, as in the Sliders dock. */
-const SWEEP_MS = 4000;
-/** Longest frame step of the play animation (a stalled window does not make it jump). */
-const MAX_FRAME_MS = 50;
 
 export class WhatsNewModal extends Modal {
     private readonly opts: WhatsNewOptions;
     /** The slides built so far (a slide is built when it is first shown), and their live charts. */
     private readonly slideEls = new Map<number, HTMLElement>();
-    private readonly lives = new Map<number, LiveExample[]>();
+    private readonly lives = new Map<number, LiveChart[]>();
     private index = 0;
     private actionsEl: HTMLElement | null = null;
     private dots: HTMLButtonElement[] = [];
@@ -226,7 +215,7 @@ export class WhatsNewModal extends Modal {
         codeText(words.createEl('p', { cls: 'etz-whatsnew-slide-text' }), x.text);
 
         const demo = el.createDiv({ cls: ['etz-whatsnew-demo', `mod-${x.id}`] });
-        const lives: LiveExample[] = [];
+        const lives: LiveChart[] = [];
         this.lives.set(i, lives);
         try {
             if (x.id === 'formulas') this.demoFormula(demo, lives);
@@ -245,7 +234,7 @@ export class WhatsNewModal extends Modal {
     }
 
     /** Every formula is a chart: a note's sentence with the formula under the pointer, the card that opens on it, and what Insert chart writes. */
-    private demoFormula(demo: HTMLElement, lives: LiveExample[]) {
+    private demoFormula(demo: HTMLElement, lives: LiveChart[]) {
         const note = demo.createDiv({ cls: 'etz-whatsnew-hero' });
         note.createDiv({ cls: 'etz-whatsnew-recipe-title', text: t('panels.whatsNew.noteTitle') });
         const sentence = note.createEl('p', { cls: 'etz-whatsnew-note-text' });
@@ -266,7 +255,7 @@ export class WhatsNewModal extends Modal {
         const head = card.createDiv({ cls: 'etz-formula-head' });
         typeset(head.createDiv({ cls: 'etz-formula-tex' }), WHATS_NEW_FORMULA);
         head.createSpan({ cls: 'etz-formula-kind', text: t('plugin.formula.kind.function') });
-        lives.push(new LiveExample(card, whatsNewChart()));
+        lives.push(new LiveChart(card, whatsNewChart(), live()));
 
         // Beside the card: the block Insert chart writes under the paragraph, and how to play with it.
         const side = stage.createDiv({ cls: 'etz-whatsnew-side' });
@@ -298,9 +287,9 @@ export class WhatsNewModal extends Modal {
     }
 
     /** LaTeX is the chart language: a chart, and the text it is written in, in either chart language (the setting Chart language). */
-    private demoLanguage(demo: HTMLElement, x: WhatsNewSlide, lives: LiveExample[]) {
+    private demoLanguage(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
         const frame = demo.createDiv({ cls: 'etz-whatsnew-frame' });
-        lives.push(new LiveExample(frame, parseChartText(x.charts[0]).data));
+        lives.push(new LiveChart(frame, parseChartText(x.charts[0]).data, live()));
         const side = demo.createDiv({ cls: 'etz-whatsnew-side' });
         const forms: Record<ChartLanguage, string> = { words: x.charts[0], full: wordsToFull(x.charts[0]) };
         const block = (lang: ChartLanguage) => ['```easy-tikz', forms[lang], '```'].join('\n');
@@ -319,12 +308,12 @@ export class WhatsNewModal extends Modal {
     }
 
     /** Connected sliders: two charts of a note with a slider a each; moving one moves the other. */
-    private demoConnected(demo: HTMLElement, x: WhatsNewSlide, lives: LiveExample[]) {
+    private demoConnected(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
         const pair = demo.createDiv({ cls: 'etz-whatsnew-pair' });
         const frames = x.charts.map(() => pair.createDiv({ cls: 'etz-whatsnew-frame' }));
-        const partner: { live: LiveExample | null } = { live: null };
-        const left = new LiveExample(frames[0], parseChartText(x.charts[0]).data, { onValue: (v) => partner.live?.follow(v) });
-        const right = new LiveExample(frames[1], parseChartText(x.charts[1]).data, { onValue: (v) => left.follow(v) });
+        const partner: { live: LiveChart | null } = { live: null };
+        const left = new LiveChart(frames[0], parseChartText(x.charts[0]).data, live({ onValue: (v) => partner.live?.follow(v) }));
+        const right = new LiveChart(frames[1], parseChartText(x.charts[1]).data, live({ onValue: (v) => left.follow(v) }));
         partner.live = right;
         lives.push(left, right);
         x.charts.forEach((text, k) => {
@@ -360,7 +349,7 @@ export class WhatsNewModal extends Modal {
     }
 
     /** Data and a regression line: the note's table and the chart that reads it. */
-    private demoData(demo: HTMLElement, x: WhatsNewSlide, lives: LiveExample[]) {
+    private demoData(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
         const rows = x.table ?? [];
         const side = demo.createDiv({ cls: 'etz-whatsnew-side' });
         const note = side.createDiv({ cls: 'etz-whatsnew-recipe' });
@@ -377,13 +366,13 @@ export class WhatsNewModal extends Modal {
         }
         note.createEl('pre', { cls: 'etz-whatsnew-text', text: ['```easy-tikz', ...x.charts[0].split('\n').filter((l) => !/^(size|show|axes|with)\b/.test(l)), '```'].join('\n') });
         const frame = demo.createDiv({ cls: 'etz-whatsnew-frame' });
-        lives.push(new LiveExample(frame, parseChartText(x.charts[0]).data, { table: tableAbove([...rows, '```easy-tikz'], rows.length + 1) }));
+        lives.push(new LiveChart(frame, parseChartText(x.charts[0]).data, live({ table: tableAbove([...rows, '```easy-tikz'], rows.length + 1) })));
     }
 
     /** A new kind of picture: the chart, live with its slider, and the text it is written in. */
-    private demoChart(demo: HTMLElement, x: WhatsNewSlide, lives: LiveExample[]) {
+    private demoChart(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
         const frame = demo.createDiv({ cls: 'etz-whatsnew-frame' });
-        lives.push(new LiveExample(frame, parseChartText(x.charts[0]).data));
+        lives.push(new LiveChart(frame, parseChartText(x.charts[0]).data, live()));
         const side = demo.createDiv({ cls: 'etz-whatsnew-side' });
         this.recipe(side, t('panels.whatsNew.languageWords'), ['```easy-tikz', x.charts[0], '```'].join('\n'));
     }
@@ -438,6 +427,20 @@ export class WhatsNewModal extends Modal {
     }
 }
 
+/** The live chart of a slide: one slider row, the labels and classes of What's new. */
+function live(more: Partial<LiveChartOptions> = {}): LiveChartOptions {
+    return {
+        label: t('panels.whatsNew.chartLabel'),
+        sliders: t('panels.whatsNew.sliderGroup'),
+        play: (name) => t('panels.whatsNew.play', { name }),
+        pause: (name) => t('panels.whatsNew.pause', { name }),
+        boxCls: 'etz-whatsnew-chart',
+        stripCls: 'etz-whatsnew-strip',
+        maxSliders: 1,
+        ...more,
+    };
+}
+
 /** Text with inline `backticks` as code. */
 function codeText(el: HTMLElement, text: string): void {
     text.split('`').forEach((part, i) => {
@@ -447,266 +450,6 @@ function codeText(el: HTMLElement, text: string): void {
     });
 }
 
-/**
- * The live chart: drawn like a chart in a note (main.ts InlineChart, without
- * its click-to-edit and width controls) with the note's slider strip and a
- * play button. Owns a private MathContext and SceneCache.
- */
-class LiveExample {
-    private readonly manager: SettingsManager;
-    private readonly math: MathContext;
-    private readonly cache = new SceneCache();
-    private readonly params: Parameter[];
-    private readonly box: HTMLElement;
-    private chartEl: SVGSVGElement | null = null;
-    private boxSize = { w: 0, h: 0 };
-    private slider: LiveSliderHandle | null = null;
-    private play: IconButtonHandle | null = null;
-
-    private frameRaf: number | null = null;
-    private fullTimer: number | null = null;
-    private playRaf: number | null = null;
-    private playLast = 0;
-    private playDir = 1;
-    private playRaw = 0;
-    private destroyed = false;
-    /** Redraws in a row that a new `$...$` label asked for. */
-    private mathRedraws = 0;
-
-    /** Called when the reader moves the slider (drag, typing, play): a connected chart follows. */
-    private readonly onValue: ((v: number) => void) | null;
-
-    constructor(parent: HTMLElement, data: Record<string, unknown>, opts: { onValue?: (v: number) => void; table?: NoteTable | null } = {}) {
-        this.onValue = opts.onValue ?? null;
-        this.manager = SettingsManager.fromJSON(cloneData(data));
-        // The table above the chart in the note, for a chart that reads it.
-        if (opts.table) this.manager.noteTable = opts.table;
-        // Private: nothing the popup does reaches the memoized contexts of the editor or of notes.
-        this.math = this.manager.createMathContext({ memo: false });
-        this.params = normalizeParameters(this.manager.getValue('parameters'));
-
-        this.box = parent.createDiv({ cls: 'etz-whatsnew-chart' });
-        this.box.setAttr('role', 'img');
-        const name = visuallyHidden(parent, t('panels.whatsNew.chartLabel'));
-        name.id = uniqueId('whatsnew-chart');
-        this.box.setAttr('aria-labelledby', name.id);
-        this.render('full');
-        this.buildStrip(parent);
-    }
-
-    /** The chart as it is now, the slider value back on its step: what "Try an example" opens. */
-    chart(): Record<string, unknown> {
-        const data = this.manager.serialize();
-        data.parameters = this.params.map((p) => ({ ...p, value: onStep(p.value, p) }));
-        return cloneData(data);
-    }
-
-    /** The slider of a connected chart moved: this one takes the value, without passing it back. */
-    follow(v: number): void {
-        const p = this.params[0];
-        if (!p || this.destroyed || Object.is(p.value, v)) return;
-        this.stopPlay(false);
-        this.setValue(v);
-        this.slider?.setValue(v);
-        this.requestFrame();
-    }
-
-    /** The slide went out of view: stop playing. */
-    pause(): void {
-        this.stopPlay(true);
-    }
-
-    /** The slide is in view again: draw at full quality for the size it has now. */
-    redraw(): void {
-        this.safeRender('full');
-    }
-
-    destroy(): void {
-        this.destroyed = true;
-        this.stopPlay(false);
-        if (this.frameRaf !== null) window.cancelAnimationFrame(this.frameRaf);
-        if (this.fullTimer !== null) window.clearTimeout(this.fullTimer);
-        this.frameRaf = this.fullTimer = null;
-        this.slider = null;
-        this.play = null;
-        this.chartEl = null;
-    }
-
-    private render(quality: 'draft' | 'full') {
-        if (this.destroyed) return;
-        if (quality === 'full') {
-            if (this.frameRaf !== null) window.cancelAnimationFrame(this.frameRaf);
-            if (this.fullTimer !== null) window.clearTimeout(this.fullTimer);
-            this.frameRaf = this.fullTimer = null;
-        }
-        this.math.setParams(this.params);
-        const config = this.manager.toRendererConfig(this.math);
-        config.parameters = this.params;
-        const aspect = config.width > 0 && config.height > 0 ? config.width / config.height : 1.25;
-        this.box.setCssProps({ '--etz-whatsnew-aspect': String(aspect) });
-        // Grid cells in on-screen px: measured on full renders only, never per drag frame.
-        if ((quality === 'full' || !this.boxSize.w) && this.box.isConnected) {
-            this.boxSize = { w: this.box.clientWidth, h: this.box.clientHeight };
-        }
-        const renderer = new SVGRenderer(config, {
-            math: this.math,
-            cache: this.cache,
-            quality,
-            pixelScale: fitPixelScale(this.boxSize.w, this.boxSize.h, config.width, config.height),
-        });
-        const svg = renderer.render() as SVGSVGElement;
-        svg.addClass('etz-whatsnew-svg');
-        if (this.chartEl && this.chartEl.parentElement === this.box) this.chartEl.replaceWith(svg);
-        else this.box.prepend(svg);
-        this.chartEl = svg;
-        // A new `$...$` label is measured before MathJax has styled it: draw once more when it has (as charts in notes do).
-        void renderer.mathSettled?.then((redraw) => {
-            if (!redraw) this.mathRedraws = 0;
-            else if (this.chartEl === svg && svg.isConnected && !this.destroyed && this.mathRedraws < 3) {
-                this.mathRedraws++;
-                this.safeRender('full');
-            }
-        });
-    }
-
-    /** A frame for the latest value: draft on the next animation frame, full quality after a pause. */
-    private requestFrame() {
-        if (this.destroyed) return;
-        if (this.frameRaf === null) {
-            this.frameRaf = window.requestAnimationFrame(() => {
-                this.frameRaf = null;
-                this.safeRender('draft');
-            });
-        }
-        if (this.fullTimer !== null) window.clearTimeout(this.fullTimer);
-        this.fullTimer = window.setTimeout(() => {
-            this.fullTimer = null;
-            this.safeRender('full');
-        }, FULL_RENDER_DELAY_MS);
-    }
-
-    /** Later frames keep the last drawing when one fails (the first one, in the constructor, throws). */
-    private safeRender(quality: 'draft' | 'full') {
-        try {
-            this.render(quality);
-        } catch {
-            // The picture of the previous value stays.
-        }
-    }
-
-    /** The slider strip of a chart in a note (same classes, so it looks the same), plus play. */
-    private buildStrip(parent: HTMLElement) {
-        const p = this.params[0];
-        if (!p) return;
-        const strip = parent.createDiv({ cls: ['etz-inline-strip', 'etz-whatsnew-strip'] });
-        const name = visuallyHidden(strip, t('panels.whatsNew.sliderGroup'));
-        name.id = uniqueId('whatsnew-sliders');
-        strip.setAttr('role', 'group');
-        strip.setAttr('aria-labelledby', name.id);
-        const row = strip.createDiv({ cls: 'etz-inline-rows' }).createDiv({ cls: 'etz-inline-row' });
-        row.createSpan({ cls: 'etz-inline-name', text: p.name, attr: { 'aria-hidden': 'true' } });
-        this.slider = liveSlider(row, {
-            min: p.min,
-            max: p.max,
-            step: p.step,
-            value: p.value,
-            label: p.name,
-            readout: 'input',
-            // A typed 5 stays 1.1: outside its range the shading would leave the view.
-            fixedRange: true,
-            onInput: (v) => {
-                this.setValue(v);
-                this.onValue?.(v);
-                this.requestFrame();
-            },
-            onCommit: () => this.safeRender('full'),
-        });
-        // A press on the slider pauses play, as in the Sliders dock.
-        this.slider.input.addEventListener('pointerdown', () => this.stopPlay(true));
-        this.play = iconButton(strip, {
-            icon: 'play',
-            label: t('panels.whatsNew.play', { name: p.name }),
-            size: 'sm',
-            pressed: false,
-            cls: 'etz-whatsnew-play',
-            onClick: () => (this.playRaf === null ? this.startPlay() : this.stopPlay(true)),
-        });
-    }
-
-    private setValue(v: number) {
-        const p = this.params[0];
-        if (!p || !Number.isFinite(v)) return;
-        this.params[0] = { ...p, value: v };
-    }
-
-    private startPlay() {
-        const p = this.params[0];
-        if (!p || !(p.max > p.min) || this.destroyed) return;
-        this.playRaw = p.value;
-        this.playDir = p.value >= p.max ? -1 : 1;
-        this.playLast = 0;
-        this.playRaf = window.requestAnimationFrame((t) => this.tick(t));
-        this.syncPlay();
-    }
-
-    /** Stop playing; `settle` puts the value back on its step and draws it at full quality. */
-    private stopPlay(settle: boolean) {
-        if (this.playRaf === null) return;
-        window.cancelAnimationFrame(this.playRaf);
-        this.playRaf = null;
-        this.playLast = 0;
-        this.syncPlay();
-        const p = this.params[0];
-        if (!settle || !p || this.destroyed) return;
-        const v = onStep(p.value, p);
-        this.setValue(v);
-        this.onValue?.(v);
-        this.slider?.setValue(v);
-        this.safeRender('full');
-    }
-
-    private tick(now: number) {
-        this.playRaf = null;
-        const p = this.params[0];
-        if (this.destroyed || !p || !this.box.isConnected) return;
-        const dt = this.playLast ? Math.min(MAX_FRAME_MS, now - this.playLast) : 0;
-        this.playLast = now;
-        const span = p.max - p.min;
-        let raw = this.playRaw + (this.playDir * span * dt) / SWEEP_MS;
-        // Bounce off the ends.
-        if (raw >= p.max) {
-            raw = 2 * p.max - raw;
-            this.playDir = -1;
-        } else if (raw <= p.min) {
-            raw = 2 * p.min - raw;
-            this.playDir = 1;
-        }
-        this.playRaw = Math.min(p.max, Math.max(p.min, raw));
-        // A tenth of the step while playing, so the chart moves every frame; stopping snaps back.
-        const v = onStep(this.playRaw, { ...p, step: p.step / 10 });
-        if (v !== p.value) {
-            this.setValue(v);
-            this.onValue?.(v);
-            this.slider?.setValue(v);
-            this.safeRender('draft');
-        }
-        this.playRaf = window.requestAnimationFrame((t) => this.tick(t));
-    }
-
-    private syncPlay() {
-        const playing = this.playRaf !== null;
-        const name = this.params[0] ? this.params[0].name : '';
-        this.play?.setPressed(playing);
-        this.play?.setIcon(playing ? 'pause' : 'play');
-        this.play?.setLabel(playing ? t('panels.whatsNew.pause', { name }) : t('panels.whatsNew.play', { name }));
-    }
-}
-
-/** Nearest slider position min + k * step inside [min, max], without float noise. */
-function onStep(v: number, p: Parameter): number {
-    const stepped = p.step > 0 ? p.min + Math.round((v - p.min) / p.step) * p.step : v;
-    return Number(formatDecimals(Math.min(p.max, Math.max(p.min, stepped)), 10));
-}
 
 /**
  * Append `text`, a message whose named places are left unfilled, to `el`:

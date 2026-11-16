@@ -2,95 +2,77 @@
 
 # Charts in your notes
 
-[All guides](README.md) · Notes and export · Start here · about 8 minutes
+[All guides](README.md) · Notes and export · Start here · about 3 minutes
 
-Insert a chart into a note, play with its sliders there, set its width and alignment, and open it again to change it.
+Insert a chart into a note, edit it again, and move its sliders there, also across charts.
 
 <p align="center"><img src="img/charts-in-notes-card.png" alt="The finished chart of the guide Charts in your notes" width="480"></p>
 
 **What you can do afterwards**
 
 - Insert a chart and open it again from the note
-- Use the slider strip under a chart without changing the note
-- Set the width and alignment of a chart in the note
+- Use the sliders under a chart without changing the note
+- Connect sliders of the same name across charts
 
 **Read first:** [Your first chart](first-chart.md)
 
-## 1. Open a chart to insert
+## 1. Insert a chart into a note
 
-Put the cursor in your note where the chart should go. Open the editor from the ribbon icon or with the command `Easy TikZ: Open editor`.
+Put the cursor in a note and open the editor with the ribbon icon. Insert into note, or Cmd+Enter (Ctrl+Enter on Windows), writes the chart there as lines like these.
 
-Any chart works. This guide uses the example Tangent explorer, because it has a slider: click its tile under Or open an example.
+The chart in words:
 
-![Screenshot of the editor for step 1: Open a chart to insert](img/charts-in-notes-1.png)
+```easy-tikz
+show x from -3 to 3 and y from -0.5 to 5
+size 12 x 8
+axes in the middle
+with a grid
+plot $f(x) = e^{x/2}$ in teal, very thick, filled, opacity 0.15
+```
 
-*The Tangent explorer example in the editor, with its slider a in the Sliders dock.*
+![Insert a chart into a note](img/charts-in-notes-1.png)
 
-> **Tip:** Insert into note writes at the cursor of the active note. If no note is open, a notice says "No active note to insert into".
+> **Tip:** A formula in a note has a chart too: rest the pointer on it and click Insert chart.
 
-## 2. Insert it into the note
+## 2. Click the chart to edit it
 
-Click Insert into note at the bottom right, or press Cmd+Enter (Ctrl+Enter on Windows and Linux). The editor closes and the chart appears in the note, with its slider underneath.
+Click the chart in the note, and the editor opens with it. Add a curve and click Save changes: the block in the note gets the new line.
 
-In the file, the chart is a code block with the language `easy-tikz`: a few lines of text, one line per object, in words, such as `plot f1(x) = x^3 - 3x in blue, thick, with its tangent at a`. Put the cursor in the block to see them: the chart then sits right under the lines. Change a number there, and the chart glides to it.
+The chart gets these lines:
 
-![Screenshot of the note for step 2: Insert it into the note](img/charts-in-notes-2.png)
+```easy-tikz
+plot $g(x) = e^{-x/2}$ in orange, very thick, filled, opacity 0.15
+```
 
-*The chart in the note, drawn by the plugin, with the slider strip under it.*
+![Click the chart to edit it](img/charts-in-notes-2.png)
 
-> **Tip:** The picture is drawn by the plugin itself. You need no LaTeX installation to see charts in your notes.
+## 3. Move its slider in the note
 
-## 3. Move the slider in the note
+A slider such as `k` shows under the chart in the note. Dragging it changes the picture, never the note; the round arrow goes back to the saved value.
 
-Drag the slider a under the chart, or type a value into the box next to it. The tangent slides along the curve and the title above the chart shows its slope.
+The chart gets these lines:
 
-This changes the picture for the current session only. Nothing is written to the note. The round arrow at the end of the strip (Reset sliders to the saved values) goes back to what the note stores.
+```easy-tikz
+slider k from 0.1 to 1.5, starting at 0.5
+plot $f(x) = e^{k x}$ in teal, very thick, filled, opacity 0.15
+plot $g(x) = e^{-k x}$ in orange, very thick, filled, opacity 0.15
+```
 
-![Screenshot of the note for step 3: Move the slider in the note](img/charts-in-notes-3.png)
+![Move its slider in the note](img/charts-in-notes-3.png)
 
-*The slider strip under the chart. Moving a slides the tangent along the curve.*
+## 4. Connect sliders across charts
 
-> **Tip:** A chart with more than three sliders shows three rows and a link Show 2 more (or however many are left).
+Add `connected` to a slider here and to the slider of the same name in another chart of the note. Moving one then moves both.
 
-## 4. Resize and align the chart
+The chart gets these lines:
 
-Move the pointer over the chart. Three buttons appear at its left edge (Align left, Center, Align right) and a width slider at the bottom. Drag the width slider to the left to make the chart narrower, then click Align left.
+```easy-tikz
+slider k from 0.1 to 1.5, starting at 0.5, connected
+```
 
-![Screenshot of the note for step 4: Resize and align the chart](img/charts-in-notes-4.png)
+![Connect sliders across charts](img/charts-in-notes-4.png)
 
-*The chart at 420 px, aligned left. The controls show while the pointer is over the chart.*
-
-> **Tip:** Width and alignment are the only things these controls write into the note (as the lines `set displayWidth = 420` and `set displayAlign = "left"` of the block). In a callout or a `~~~` fence the block cannot be found, and a notice says the change was not saved.
-
-## 5. Click the chart to edit it
-
-Click the chart, or move the focus to it and press Enter. The editor opens with every setting filled in, and the button at the bottom right now reads Save changes.
-
-In the Sliders dock, drag a to 1.5 and click Save changes. The block in the note is replaced. From now on 1.5 is the value the chart starts with and the value the reset button returns to.
-
-![Screenshot of the note for step 5: Click the chart to edit it](img/charts-in-notes-5.png)
-
-*After Save changes the note shows the tangent at the new saved value a = 1.5.*
-
-> **Tip:** Closed the editor by accident? The chart is kept as a draft. Open the editor from the same chart again and it offers Unsaved changes with Restore and Discard.
-
-## 6. Choose what the note shows
-
-Open the chart again and go to the Chart tab. In the group In your note, switch off Show sliders in note and click Save changes. The chart stays, the slider strip is gone.
-
-Preview size in the same group sets how large the chart is drawn, as its longest side in pixels. A width you set in the note takes over from it.
-
-![Screenshot of the note for step 6: Choose what the note shows](img/charts-in-notes-6.png)
-
-*The same chart without the slider strip.*
-
-> **Tip:** If part of a chart cannot be drawn, a muted line under it names the problem. The rest of the chart still shows.
-
-## 7. Copy a chart to another note
-
-A chart is its code block and nothing else. In source mode, select the whole block, from the line that opens the `easy-tikz` block to the three backticks that close it, copy it and paste it into any note. Each copy is a chart of its own.
-
-> **Tip:** You can edit the lines by hand. A mistake shows under the chart with its line and column, such as Line 4, column 9: unknown option, and the rest of the chart still draws.
+> **Tip:** In the note, the link button at the end of a slider row switches it; in the editor, Connect with others.
 
 ## The finished chart
 
@@ -100,22 +82,20 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-show x from -3 to 3 and y from -4 to 4
-size 10 x 8
+show x from -3 to 3 and y from -0.5 to 5
+size 12 x 8
 axes in the middle
-title slope at x = {a}: {3a^2 - 3:2}
-set displayWidth = 420
-set displayAlign = "left"
-slider a from -2 to 2, starting at 1.5
-plot f1(x) = x^3 - 3x in blue, thick, with its tangent at a and its extrema
+with a grid
+slider k from 0.1 to 1.5, starting at 0.5, connected
+plot $f(x) = e^{k x}$ in teal, very thick, filled, opacity 0.15
+plot $g(x) = e^{-k x}$ in orange, very thick, filled, opacity 0.15
 ```
 
 </details>
 
 ## Next guides
 
-- [Export to LaTeX](export-latex.md): Get pgfplots code that compiles with pdflatex: as a standalone document or as a snippet, at the size you need, in the colours of the preview.
-- [Sliders that move the picture](sliders.md): Turn a letter in a formula into a slider, set its range, play it and print its value in the chart.
-- [Keyboard, mouse and troubleshooting](shortcuts.md): Every shortcut of the editor, what the mouse does in the preview, and fixes for the usual problems.
+- [Charts as SVG files](svg-files.md): Keep every chart of a note as an SVG file too, for Obsidian Publish, GitHub and other apps.
+- [Export to LaTeX](export-latex.md): Copy a chart as pgfplots code, compile it with pdflatex, or take only the picture for your document.
 
 [All guides](README.md)

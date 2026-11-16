@@ -205,8 +205,8 @@ function absolute(s: string): string {
     return out + ')'.repeat(Math.max(0, open));
 }
 
-/** Letter runs that stay one name in a formula from a note: functions and the names LaTeX spells out. */
-const WORDS = new Set([...FUNCTIONS, 'sqrt', 'abs', 'pi', 'theta', 'alpha', 'beta', 'gamma', 'delta', 'lambda', 'mu', 'sigma', 'omega', 'phi', 'rho', 'tau']);
+/** Letter runs that stay one name in a formula from a note: functions, the names LaTeX spells out, and and/or/not. */
+const WORDS = new Set([...FUNCTIONS, 'sqrt', 'abs', 'pi', 'theta', 'alpha', 'beta', 'gamma', 'delta', 'lambda', 'mu', 'sigma', 'omega', 'phi', 'rho', 'tau', 'and', 'or', 'not']);
 
 /**
  * A formula from a note read as LaTeX reads it: `ax^2 + bx` is a·x² + b·x,
@@ -215,7 +215,7 @@ const WORDS = new Set([...FUNCTIONS, 'sqrt', 'abs', 'pi', 'theta', 'alpha', 'bet
  * (x_1, f1), a known word (sin, theta) and a name right before a bracket
  * (demand(x)) stay as they are.
  */
-export function splitLetterRuns(tex: string): string {
+export function splitLetterRuns(tex: string, keep: ReadonlySet<string> = new Set()): string {
     let out = '';
     let i = 0;
     while (i < tex.length) {
@@ -242,8 +242,8 @@ export function splitLetterRuns(tex: string): string {
         }
         const word = run[0];
         const next = tex[i + word.length];
-        const keep = word.length === 1 || /[0-9_]/.test(word) || WORDS.has(word) || next === '(';
-        out += keep ? word : word.split('').join(' ');
+        const whole = word.length === 1 || /[0-9_]/.test(word) || WORDS.has(word) || keep.has(word) || next === '(';
+        out += whole ? word : word.split('').join(' ');
         i += word.length;
     }
     return out;
@@ -254,20 +254,27 @@ export function splitLetterRuns(tex: string): string {
  * quotes, where labels keep theirs): `plot $f(x) = \frac{1}{2}x^2$ in blue`
  * reads as `plot f(x) = \frac{1}{2}x^2 in blue`.
  */
-export function stripMathDollars(line: string): string {
+export function stripMathDollars(line: string, names?: ReadonlySet<string>): string {
     if (!line.includes('$')) return line;
     let out = '';
     let quoted = false;
     let math = false;
+    let formula = '';
     for (const c of line) {
         if (c === '"' && !math) quoted = !quoted;
         if (c === '$' && !quoted) {
+            // Inside $...$ letters side by side multiply, as in LaTeX (`$ax^2 + bx$` is a x^2 + b x);
+            // the chart's own names (a slider called speed) stay whole. Without `names` the formula stays as written.
+            if (math) out += names ? splitLetterRuns(formula, names) : formula;
+            formula = '';
             math = !math;
             continue;
         }
         // A bar in a formula is an absolute value, never the option bar of the 4.4 short form.
-        out += math && c === '|' ? '\\vert ' : c;
+        if (math) formula += c === '|' ? '\\vert ' : c;
+        else out += c;
     }
+    if (math) out += formula;
     // r(\theta) heads a polar curve as r(theta) does (not inside a command run such as \cos\theta).
     return out.replace(/(?<![A-Za-z])\\theta\b/g, 'theta');
 }

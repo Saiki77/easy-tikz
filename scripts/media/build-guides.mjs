@@ -75,7 +75,7 @@ const CARD = { width: 840, height: 630, pad: 24 };
 const EM_DASH = String.fromCharCode(0x2014);
 const TABS = ['build', 'chart', 'code', 'help'];
 const FRAMES = ['editor', 'preview', 'note', 'none'];
-const CATEGORIES_FALLBACK = ['Getting started', 'Functions and sliders', 'Regions and optimisation', 'Points, lines and labels', '3D', 'Notes and export', 'Reference'];
+const CATEGORIES_FALLBACK = ['Getting started', 'Chart language', 'Functions and sliders', 'Calculus', 'Regions and optimisation', 'Data and probability', 'Points, lines and labels', '3D', 'Notes and export', 'Reference'];
 const LEVELS_FALLBACK = { start: 'Start here', core: 'Core', advanced: 'Advanced' };
 
 const say = (text) => process.stderr.write(`[guides] ${text}\n`);
@@ -133,6 +133,10 @@ const { printChartText } = await importTs('src/text/print.ts');
 const { parseChartText } = await importTs('src/text/parse.ts');
 const { canonical } = await importTs('src/chartdata.ts');
 const textBlock = (chart) => '```easy-tikz\n' + printChartText(chart) + '\n```';
+/** The chart a guide shows at a step (a step without a chart keeps the one before). */
+const stepChartOf = (guide, index) => guidesModule.stepChart(guide, index);
+/** The lines of a chart in words, without empty ones. */
+const chartLines = (chart) => (chart ? printChartText(chart).split('\n').filter((line) => line.trim() !== '') : []);
 
 if (onlyIds) {
     const unknown = onlyIds.filter((id) => !byId.has(id));
@@ -225,7 +229,7 @@ async function startObsidian() {
     }
     if (!view.light) throw new Error('the capture window is not in the light theme');
     const v = await obs.versions();
-    say(`Obsidian ${v.obsidian}, Easy TikZ ${v.plugin}, ${view.w} x ${view.h} at ${view.dpr}x, light theme`);
+    say(`Obsidian ${v.obsidian}, Easy Graphs, Charts & TikZ ${v.plugin}, ${view.w} x ${view.h} at ${view.dpr}x, light theme`);
 }
 
 async function stopObsidian() {
@@ -861,6 +865,12 @@ function guidePage(guide) {
         out.push(`## ${index + 1}. ${inline(step.title || `Step ${index + 1}`)}`, '');
         const body = bodyMarkdown(step.body);
         if (body) out.push(body, '');
+        // The lines this step adds to the chart, as the Help lights them (5.1): the chart language, line by line.
+        if (step.chart) {
+            const before = new Set(index > 0 ? chartLines(stepChartOf(guide, index - 1)) : []);
+            const added = chartLines(step.chart).filter((line) => !before.has(line));
+            if (added.length) out.push(index > 0 ? 'The chart gets these lines:' : 'The chart in words:', '', '```easy-tikz', ...added, '```', '');
+        }
         const rows = (Array.isArray(step.type) ? step.type : []).filter((row) => row && row.text !== undefined);
         if (rows.length) {
             out.push('| Where | Type |', '| --- | --- |');
@@ -895,12 +905,12 @@ function guidePage(guide) {
 
 /** docs/guides/README.md: the index, grouped by category in display order. */
 function indexPage() {
-    const out = [`<!-- ${HEADER} -->`, '', '# Easy TikZ guides', ''];
+    const out = [`<!-- ${HEADER} -->`, '', '# Easy Graphs, Charts & TikZ guides', ''];
     const stepCount = ALL_GUIDES.reduce((n, g) => n + stepsOf(g).length, 0);
     out.push(
-        `${ALL_GUIDES.length} step-by-step guides (${stepCount} steps) for Easy TikZ 4. Every picture is a screenshot of the plugin running in Obsidian, and every guide ends with its finished chart as a block you can paste into a note.`,
+        `${ALL_GUIDES.length} step-by-step guides (${stepCount} steps) for Easy Graphs, Charts & TikZ. Every picture is a screenshot of the plugin running in Obsidian, every step shows the lines it adds to the chart, and every guide ends with its finished chart as a block you can paste into a note.`,
         '',
-        'The same guides are in the editor: open the Help tab. There each step shows a live chart and has a button that loads the step into the editor.',
+        'The same guides are in the editor: open the Help tab. There each step shows a live chart with its sliders, the chart in words, and a button that loads the step into the editor.',
         ''
     );
     const groups = CATEGORIES.map((category) => [category, ALL_GUIDES.filter((g) => g.category === category)]);

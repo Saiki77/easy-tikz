@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.1.0] - 2026-11-16
+
+The plugin is now called **Easy Graphs, Charts & TikZ**. The Help is new: a gallery of real charts, and guides that go one step at a time, each with a live chart and the chart in words. **+ Add** has a search field and groups.
+
+### Added
+
+- **A new Help** (`src/ui/helpPanel.ts`, `src/ui/liveChart.ts`). The home shows Start here, the chart language beside its picture, and a gallery with every guide as a tile of its finished chart, with chips for the categories. A guide goes one step per screen: a live chart with its sliders and play, one or two sentences, and the chart in words with the lines this step added lit. Back, Next and the arrow keys move; **Open in the editor** loads the step on the Build tab. The Help tab uses the whole editor.
+- **31 short guides, 7 of them new** (`src/guides/`). Every guide is written again in the chart language with LaTeX formulas, in English and Japanese, at a third of its old length (5,175 words instead of 15,687), and every step has a chart of its own. New: Write a chart in words (a tour of the chart language), Every formula is a chart, Riemann sums, Slope fields, Data and a regression line, Probability, and Charts as SVG files. New categories: Chart language, Calculus, Data and probability.
+- **+ Add with search and groups** (`src/ui/addPicker.ts`). A search field (it also knows words such as vector, gaussian or integral), the groups on the left, each item with a line about what it does, and the templates as a group. The arrow keys choose, Enter adds, Tab moves to the next group, Esc closes.
+- The guide pages on GitHub show under each step the lines it adds to the chart.
+
+### Changed
+
+- **New name: Easy Graphs, Charts & TikZ.** The plugin id `easy-tikz`, the `easy-tikz` blocks in your notes, your settings and the repository stay the same.
+- **Inside `$...$` letters side by side multiply**, as in LaTeX: `plot $f(x) = ax^2 + bx$` is a x² + b x (`src/text/parse.ts`). Names the chart gives itself (a slider called `speed`) stay whole. Without dollars, `ax` is one name as before.
+- The Cheat sheet of the Help (the reference section Charts as text) writes its formulas in LaTeX.
+
+### Fixed
+
+- **`numbered` numbered the sign conditions** of a region written in LaTeX (`$x \ge 0$`); like `x >= 0`, they now stay without a number.
+- **A Full LaTeX block with data lost its comments** when the editor changed a line: `mark the data` became `\mark{data}`, which reads differently, so the whole block was written anew. It keeps its words now.
+- **The AI chart check** reported the slider word `connected` as an unknown field.
+- **What's new:** the guide link of the slide on formulas opens the new guide Every formula is a chart.
+
 ## [5.0.5] - 2026-11-16
 
 ### Fixed

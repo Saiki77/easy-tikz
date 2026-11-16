@@ -2,133 +2,75 @@
 
 # An area that grows with a slider
 
-[All guides](README.md) · Functions and sliders · Core · about 8 minutes
+[All guides](README.md) · Calculus · Core · about 3 minutes
 
-Shade the area under a curve from 0 to a slider b, print its size, and draw the function that adds it up, so the height of one curve shows the area under the other.
+Shade the area under a curve up to a slider and draw the function that adds it up.
 
 <p align="center"><img src="img/area-accumulation-card.png" alt="The finished chart of the guide An area that grows with a slider" width="480"></p>
 
 **What you can do afterwards**
 
-- End a shaded area at a slider and print its size
-- Draw a function only up to a slider with its domain
-- Mark a point that rides on the end of a curve
-- Play the slider and watch the area and the height grow together
+- Shade an area up to a slider
+- Draw a function only up to a slider
+- See that F(b) is the area under f
 
 **Read first:** [Sliders that move the picture](sliders.md)
 
-## 1. Draw the curve
+## 1. Plot the curve
 
-Start with a new chart. Click + Add, choose Function y = f(x) and type the formula below into the card f1.
+The curve starts at 2 and falls towards 0. The whole area under it, from 0 to infinity, is exactly 4.
 
-The curve starts at a height of 2 and falls towards 0. The area under all of it, from 0 to infinity, is exactly 4.
+The chart in words:
 
-| Where | Type |
-| --- | --- |
-| f1, y = | `2exp(-x/2)` |
+```easy-tikz
+show x from 0 to 10 and y from 0 to 4.5
+size 12 x 7
+axes on the edges
+with a grid
+plot $f(x) = 2e^{-x/2}$ in blue, very thick
+```
 
-![Screenshot of the editor for step 1: Draw the curve](img/area-accumulation-1.png)
-
-*f1 falls from 2 towards 0.*
-
-> **Tip:** `exp(x)` is e to the power x, and `2exp(-x/2)` is 2 times it: no star needed after a number.
+![Plot the curve](img/area-accumulation-1.png)
 
 ## 2. Shade the area from 0 to b
 
-Click + Add and choose Area under a function. The card R1 has two rows. The first, `min(0, f1) <= y <= max(0, f1)`, shades between f1 and the x-axis; the second limits x. Replace the second row with the one below and click Add slider b.
+`shade under f from x = 0 to b` fills the area between f and the x-axis, up to the slider `b`.
 
-Then type 3 into the value of b. The area now runs from x = 0 to x = 3.
+The chart gets these lines:
 
-| Where | Type |
-| --- | --- |
-| R1, condition 2 | `0 <= x <= b` |
-| Sliders, b: value | `3` |
+```easy-tikz
+slider b from 0.1 to 10, starting at 3
+shade under f from x = 0 to b in green
+```
 
-![Screenshot of the editor for step 2: Shade the area from 0 to b](img/area-accumulation-2.png)
+![Shade the area from 0 to b](img/area-accumulation-2.png)
 
-*The area under f1 from 0 to the slider b.*
+## 3. Draw the function that adds it up
 
-> **Tip:** The first row works below the axis too: `min` and `max` put f1 and 0 in the right order wherever f1 is negative.
+F has the slope f and starts at 0, so its height at b is the area up to b. `from x = 0 to b` ends it at the slider.
 
-## 3. Type the function that adds it up
+The chart gets these lines:
 
-Click + Add, choose Function y = f(x) and type the formula below into the card f2. Click its colour swatch and pick Red.
+```easy-tikz
+plot $F(x) = 4 - 4e^{-x/2}$ from x = 0 to b in red, very thick
+```
 
-This is F, the antiderivative of f1 that starts at 0: its slope at every x is f1(x), and F(0) = 0. Easy TikZ shades areas but does not integrate formulas, so F is typed by hand. The red curve rises from 0 towards 4.
+![Draw the function that adds it up](img/area-accumulation-3.png)
 
-| Where | Type |
-| --- | --- |
-| f2, y = | `4 - 4exp(-x/2)` |
+> **Tip:** The chart does not integrate: type F yourself, and check that its derivative is f.
 
-![Screenshot of the editor for step 3: Type the function that adds it up](img/area-accumulation-3.png)
+## 4. Label the area and its height
 
-*F in red: it starts at 0 and climbs towards 4.*
+The area prints `F(b) - F(0)` and the point on F prints its height: the same number. Press play and both grow towards 4.
 
-> **Tip:** Not sure about F? Differentiate it: the derivative of 4 - 4exp(-x/2) is 2exp(-x/2), which is f1.
+The chart gets these lines:
 
-## 4. Print the area in the region
+```easy-tikz
+shade under f from x = 0 to b in green, labelled "A = {F(b) - F(0):2}"
+mark (b, F(b)), with lines to the axes, labelled "F(b) = {y:2}"
+```
 
-Type the label below into the field Label of R1. By the fundamental theorem of calculus, `f2(b) - f2(0)` is the area under f1 from 0 to b. The `:2` keeps up to two decimals.
-
-The label sits in the middle of the shaded area and reads A = 3.11.
-
-| Where | Type |
-| --- | --- |
-| R1, Label | `A = {f2(b) - f2(0):2}` |
-
-![Screenshot of the editor for step 4: Print the area in the region](img/area-accumulation-4.png)
-
-*The region prints its own area, computed from F.*
-
-## 5. Draw F only up to b
-
-Type `0:b` into the Domain field of the card f2. The red curve now ends at x = b, right above the right edge of the shaded area.
-
-A domain with a slider in it grows and shrinks with the slider, so the curve draws itself further when b moves.
-
-| Where | Type |
-| --- | --- |
-| f2, Domain | `0:b` |
-
-![Screenshot of the editor for step 5: Draw F only up to b](img/area-accumulation-5.png)
-
-*With the domain 0:b, F stops where the shaded area stops.*
-
-> **Tip:** A domain needs its end after its start: `0:b` reports an error while b is 0 or less. The last step keeps b above 0.
-
-## 6. Mark the end of the curve
-
-Click + Add and choose Points from a list. Replace the sample points with the point below. Set Label to Custom, type the label below and switch on Drop lines.
-
-The point rides on the end of the red curve. Its height, F(b) = 3.11, is the same number as the area: the height of F at b measures the area under f1 up to b. The drop line carries that height over to the y-axis.
-
-| Where | Type |
-| --- | --- |
-| P1, Points | `(b, f2(b))` |
-| P1, Label text | `F(b) = {y:2}` |
-
-![Screenshot of the editor for step 6: Mark the end of the curve](img/area-accumulation-6.png)
-
-*The height of F at b and the area under f1 up to b: the same number.*
-
-> **Tip:** In a points label, `{x}` and `{y}` are the coordinates of the point itself, so the label always matches its point.
-
-## 7. Play b
-
-Open the menu behind the three dots on the row of b and set Min to 0.1 and Max to 10. Then click the play button.
-
-The shaded area widens, the red curve draws itself behind the point, and the label and the point print the same growing number. Both level off near 4, the area under all of f1, while f1 itself sinks towards 0. Stop near b = 6 to see A = 3.8.
-
-| Where | Type |
-| --- | --- |
-| Sliders, b: Min | `0.1` |
-| Sliders, b: Max | `10` |
-
-![Screenshot of the editor for step 7: Play b](img/area-accumulation-7.png)
-
-*At b = 6 the area is 3.8, close to its limit 4.*
-
-> **Tip:** Try another pair: `1/(1 + x)` for f1 and `ln(1 + x)` for f2. Label and point still agree, and this time they keep growing: the area under 1/(1 + x) has no limit.
+![Label the area and its height](img/area-accumulation-4.png)
 
 ## The finished chart
 
@@ -138,19 +80,22 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-slider b from 0.1 to 10, starting at 6
-plot f1(x) = 2exp(-x/2)
-plot f2(x) = 4 - 4exp(-x/2) from x = 0 to b in red
-shade under f1 from x = 0 to b, labelled "A = {f2(b) - f2(0):2}"
-mark (b, f2(b)), with lines to the axes, labelled "F(b) = {y:2}"
+show x from 0 to 10 and y from 0 to 4.5
+size 12 x 7
+axes on the edges
+with a grid
+slider b from 0.1 to 10, starting at 3
+plot $f(x) = 2e^{-x/2}$ in blue, very thick
+plot $F(x) = 4 - 4e^{-x/2}$ from x = 0 to b in red, very thick
+shade under f from x = 0 to b in green, labelled "A = {F(b) - F(0):2}"
+mark (b, F(b)), with lines to the axes, labelled "F(b) = {y:2}"
 ```
 
 </details>
 
 ## Next guides
 
-- [Shade the areas between two curves](areas-between.md): Two curves, the areas between them in two colours, and their crossing points as the limits of the shading.
-- [Calculate with computed points](computed-values.md): Crossing points publish their coordinates and their count: use them in the title, in a new point and in an area formula, and see what they do while a slider plays.
-- [Export to LaTeX](export-latex.md): Get pgfplots code that compiles with pdflatex: as a standalone document or as a snippet, at the size you need, in the colours of the preview.
+- [Estimate an area with Riemann sums](riemann-sums.md): Fill an area with rectangles, watch their sum approach the integral, then try trapezoids and middle sums.
+- [Shade the areas between two curves](areas-between.md): Two waves, the areas between them split where they cross, each in its own colour and labelled.
 
 [All guides](README.md)

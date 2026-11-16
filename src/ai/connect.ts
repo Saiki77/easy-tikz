@@ -91,7 +91,7 @@ export const AI_APPS: AiApp[] = [
         },
         // A prompt for the agent: it stays English.
         snippet: (url, token) =>
-            `Easy TikZ (an Obsidian plugin) makes charts in my notes. Read its guide first: curl -s "${url.replace(/\/mcp$/, '')}/guide?token=${token}". Then use POST /tools/check_chart and POST /tools/add_chart as the guide describes, with the same ?token=.`,
+            `Easy Graphs, Charts & TikZ (an Obsidian plugin) makes charts in my notes. Read its guide first: curl -s "${url.replace(/\/mcp$/, '')}/guide?token=${token}". Then use POST /tools/check_chart and POST /tools/add_chart as the guide describes, with the same ?token=.`,
     },
 ];
 
@@ -120,9 +120,9 @@ export function agentsSection(configDir: string, port: number, version = 'main')
     const base = `http://127.0.0.1:${port}`;
     return [
         START,
-        '## Charts with Easy TikZ',
+        '## Charts with Easy Graphs, Charts & TikZ',
         '',
-        'This vault uses the Easy TikZ plugin: a chart is an `easy-tikz` code block in a note, a few lines of text with one line per object (or one JSON object), and Obsidian draws it.',
+        'This vault uses the Easy Graphs, Charts & TikZ plugin: a chart is an `easy-tikz` code block in a note, a few lines of text with one line per object (or one JSON object), and Obsidian draws it.',
         '',
         `- While Obsidian runs with AI access switched on, the plugin's AI server answers at ${base}. Every request needs the token: \`?token=<aiToken>\` or the header \`Authorization: Bearer <aiToken>\`, with aiToken from \`${configDir}/plugins/easy-tikz/data.json\`.`,
         `- Read the guide first: \`GET ${base}/guide\`. Then check every chart with \`POST ${base}/tools/check_chart\` and add it with \`POST ${base}/tools/add_chart\` (JSON body \`{"chart": "<the block's lines>", "note": "..."}\`).`,
@@ -132,7 +132,7 @@ export function agentsSection(configDir: string, port: number, version = 'main')
     ].join('\n');
 }
 
-/** A note's text with the Easy TikZ section put in: replaced where it was, otherwise added at the end. */
+/** A note's text with the Easy Graphs, Charts & TikZ section put in: replaced where it was, otherwise added at the end. */
 export function mergeAgentsSection(old: string, section: string): string {
     const a = old.indexOf(START);
     const b = old.indexOf(END);

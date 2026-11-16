@@ -7,7 +7,8 @@
     /* Containing block for the screen-reader-only labels inside: positioned
        against the modal instead, they would give it a scrollable overflow. */
     position: relative;
-    max-width: 720px;
+    max-width: 980px;
+    margin: 0 auto;
     color: var(--text-normal);
     font-size: var(--etz-font);
     line-height: 1.55;
@@ -812,3 +813,383 @@ dl.etz-help-terms.mod-keys dt {
 button.etz-btn.etz-help-example-btn {
     flex: 0 0 auto;
 }
+
+/* ---------------------------------------------------------------- 5.1: home
+   Start here, the chart language beside its picture, a gallery of real
+   charts with category chips, and the reference. */
+.etz-help-home-part {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.etz-help-label {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--etz-font-meta);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.etz-help-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.etz-help-starts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+}
+
+button.etz-help-start {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 2px;
+    height: auto;
+    padding: 10px 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-m);
+    background-color: var(--background-primary);
+    box-shadow: none;
+    text-align: start;
+    white-space: normal;
+    cursor: pointer;
+}
+
+button.etz-help-start:hover,
+button.etz-help-tile:hover {
+    border-color: var(--etz-accent-border);
+}
+
+.etz-help-start-title,
+.etz-help-tile-title {
+    color: var(--text-normal);
+    font-weight: 600;
+}
+
+.etz-help-start-summary,
+.etz-help-tile-summary {
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    line-height: 1.4;
+}
+
+.etz-help-tile-meta {
+    color: var(--text-accent);
+    font-size: var(--etz-font-meta);
+    font-weight: 600;
+}
+
+.etz-help-feature {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-l);
+    background-color: var(--background-secondary);
+}
+
+.etz-help-feature-side {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    padding: 16px;
+}
+
+.etz-help-feature-title {
+    margin: 0;
+    font-size: 1.25em;
+    text-wrap: balance;
+}
+
+.etz-help-feature-side > .etz-help-p {
+    margin: 0;
+    color: var(--text-muted);
+}
+
+.etz-help-feature-chart,
+.etz-help-tile-chart {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    background-color: var(--background-primary);
+}
+
+.etz-help-feature-chart {
+    min-height: 220px;
+    padding: 8px;
+    border-left: 1px solid var(--background-modifier-border);
+}
+
+.etz-help-feature-chart > svg,
+.etz-help-tile-chart > svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+}
+
+.etz-help-gallery-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.etz-help-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+button.etz-help-chip {
+    height: auto;
+    padding: 3px 11px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 999px;
+    background-color: var(--background-primary);
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    cursor: pointer;
+}
+
+button.etz-help-chip:hover {
+    color: var(--text-normal);
+}
+
+button.etz-help-chip.is-on {
+    border-color: var(--etz-accent-border);
+    background-color: var(--etz-accent-tint);
+    color: var(--text-normal);
+    font-weight: 600;
+}
+
+.etz-help-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+}
+
+button.etz-help-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    height: auto;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-m);
+    background-color: var(--background-primary);
+    box-shadow: none;
+    text-align: start;
+    white-space: normal;
+    cursor: pointer;
+    transition: border-color var(--etz-transition), transform var(--etz-transition);
+}
+
+button.etz-help-tile:hover {
+    transform: translateY(-1px);
+}
+
+.etz-help-tile-chart {
+    aspect-ratio: 3 / 2;
+    padding: 4px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.etz-help-tile-chart.is-fallback,
+.etz-help-feature-chart.is-fallback {
+    background-color: var(--background-secondary);
+}
+
+.etz-help-tile-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    button.etz-help-tile,
+    button.etz-help-tile:hover {
+        transition: none;
+        transform: none;
+    }
+}
+
+/* ------------------------------------------------------- the chart in words */
+.etz-help-words {
+    overflow-x: auto;
+    padding: 8px 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-s);
+    background-color: var(--background-primary);
+    font-family: var(--etz-font-mono);
+    font-size: var(--etz-font-small);
+    line-height: 1.65;
+}
+
+.etz-help-words-line {
+    padding: 0 10px;
+    border-left: 3px solid transparent;
+    white-space: pre;
+}
+
+.etz-help-words-line.is-new {
+    border-left-color: var(--interactive-accent);
+    background-color: var(--etz-accent-tint);
+}
+
+.etz-help-words-verb {
+    color: var(--text-accent);
+    font-weight: 600;
+}
+
+.etz-help-words-tex {
+    color: var(--color-blue);
+}
+
+.etz-help-words-str {
+    color: var(--color-green);
+}
+
+.etz-help-words-new {
+    margin-left: 10px;
+    color: var(--text-accent);
+    font-family: var(--font-interface);
+    font-size: 0.8em;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* ------------------------------------------------- a guide, one step at a time */
+.etz-help-step-count {
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    font-variant-numeric: tabular-nums;
+}
+
+.etz-help-progress {
+    display: flex;
+    gap: 4px;
+    margin: 4px 0 14px;
+}
+
+.etz-help-progress > span {
+    flex: 1 1 0;
+    height: 4px;
+    border-radius: 2px;
+    background-color: var(--background-modifier-border);
+}
+
+.etz-help-progress > span.is-done {
+    background-color: var(--interactive-accent);
+}
+
+.etz-help-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+        'chart top'
+        'chart words';
+    gap: 12px 18px;
+    align-items: start;
+}
+
+.etz-help-stage-top,
+.etz-help-stage-chart,
+.etz-help-stage-words {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.etz-help-stage-top {
+    grid-area: top;
+}
+
+.etz-help-stage-chart {
+    grid-area: chart;
+}
+
+.etz-help-stage-words {
+    grid-area: words;
+}
+
+.etz-help-stage-top > .etz-help-step-title {
+    margin: 0;
+    font-size: 1.15em;
+    text-wrap: balance;
+}
+
+.etz-help-stage-top .etz-help-p {
+    margin: 0;
+}
+
+.etz-help-outcomes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+}
+
+.etz-help-nav {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+    padding: 10px 0;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+}
+
+.etz-help-keys {
+    color: var(--text-faint);
+    font-size: var(--etz-font-meta);
+}
+
+@container etz-help (max-width: 620px) {
+    .etz-help-feature {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .etz-help-stage {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto;
+        grid-template-areas:
+            'top'
+            'chart'
+            'words';
+    }
+
+    .etz-help-feature-chart {
+        border-top: 1px solid var(--background-modifier-border);
+        border-left: 0;
+    }
+
+    .etz-help-keys {
+        display: none;
+    }
+}
+

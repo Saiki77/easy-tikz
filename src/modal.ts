@@ -358,7 +358,7 @@ function wheelZoomSteps(e: WheelEvent): number {
 
 /** Real failures inside the editor that have no better place to go (a panel that failed to rebuild). */
 function logError(e: unknown): void {
-    console.error('Easy TikZ:', e);
+    console.error('Easy Graphs, Charts & TikZ:', e);
 }
 
 function num(v: unknown, fallback: number): number {
@@ -852,6 +852,8 @@ export class TikzModal extends Modal implements PanelHost {
             btn.toggleClass('is-active', active);
         });
         this.tabPanels.forEach((panel, id) => panel.toggleClass('tikz-hidden', id !== tab));
+        // Help (5.1) has the whole editor: its steps draw their own charts, the preview would show the chart being built.
+        this.shellEl?.toggleClass('is-help', tab === 'help');
         const panel = this.tabPanels.get(tab);
         if (panel && previous !== tab) panel.scrollTop = this.tabScroll.get(tab) ?? 0;
         if (tab === 'code') this.codePanel?.onShow();

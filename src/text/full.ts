@@ -1180,6 +1180,8 @@ function markFull(own: string, rest: string, options: string[]): string | null {
     if (m) return command('mark', own, opts(['integer', ...(m[1] ? region(m[1]) : ['in={}'])]), null);
     m = /^integer\s+(maximum|minimum|max|min)\s+(?:of\s+)?(.+?)\s+(?:in|over|on)\s+(the\s+region|\S+)$/i.exec(p);
     if (m) return command('mark', own, opts(['integer', m[1].slice(0, 3).toLowerCase(), ...region(m[3])]), m[2].trim());
+    // The points of the chart's data (5.0): `mark the data`, `mark the data of D1` keep their words (never a point named data).
+    if (/^data(?:\s+of\s+\S+)?$/i.test(p)) return command('mark', own, opts([]), rest.trim());
     // A list of points: (1, 2), (3, a) and P1.
     const list = p.replace(/^points?\s+/i, '');
     const pieces = splitTop(list, ',')

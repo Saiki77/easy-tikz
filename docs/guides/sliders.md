@@ -2,115 +2,83 @@
 
 # Sliders that move the picture
 
-[All guides](README.md) · Functions and sliders · Core · about 6 minutes
+[All guides](README.md) · Functions and sliders · Core · about 3 minutes
 
-Turn a letter in a formula into a slider, set its range, play it and print its value in the chart.
+Turn letters into sliders, set their range and step, press play, and connect them across a note.
 
 <p align="center"><img src="img/sliders-card.png" alt="The finished chart of the guide Sliders that move the picture" width="480"></p>
 
 **What you can do afterwards**
 
-- Create a slider from a letter in a formula
-- Set the range of a slider and play it
-- Print a live value in the title
-- Use the sliders under the chart in your note
+- Make sliders from the letters of a formula
+- Set the range and the step of a slider, and play it
+- Connect sliders across the charts of a note
 
 **Read first:** [Your first chart](first-chart.md)
 
-## 1. Type a formula with a new letter
+## 1. Turn letters into sliders
 
-In a new chart, click + Add, choose Function y = f(x) and type the formula.
+Type a formula with letters the chart does not know, such as `a*(x - h)^2 + k`. Click Add slider under the field for each one: each slider starts at 1.
 
-The chart does not know `a` yet. After a short pause the field reports `Unknown name 'a'` and offers a button. Click Add slider a. The Sliders dock appears under the preview with `a = 1`, and the wave is drawn.
+The chart in words:
 
-| Where | Type |
-| --- | --- |
-| f1, y = | `2 + a sin(x)` |
+```easy-tikz
+show x from -5 to 5 and y from -4 to 6
+size 12 x 8
+axes in the middle
+with a grid
+slider a from -10 to 10, starting at 1
+slider h from -10 to 10, starting at 1
+slider k from -10 to 10, starting at 1
+plot f(x) = a*(x - h)^2 + k in purple, very thick
+```
 
-![Screenshot of the editor for step 1: Type a formula with a new letter](img/sliders-1.png)
+![Turn letters into sliders](img/sliders-1.png)
 
-*The letter a became a slider in the dock under the preview.*
+> **Tip:** Keep the star until `a` is a slider: before that, `a(x - h)` reads as a function named `a`.
 
-> **Tip:** Keep a space or a `*` after the letter. `asin(x)` is the arcsine, and `ax` is one name.
+## 2. Set the range and the step
 
-## 2. Drag the slider
+Click the small numbers at the ends of a slider to type its minimum and maximum, then drag it. The step sits in the slider's options: `h` moves in steps of 0.5.
 
-Drag the slider `a` to the right, up to 4. The wave grows while you drag: the preview redraws on every frame, not only when you let go. At 4 it no longer fits, and the crests leave the view.
+The chart gets these lines:
 
-You can also click the value and type a number, or press the arrow keys while the slider has the focus.
+```easy-tikz
+slider a from -2 to 2, starting at 0.5
+slider h from -4 to 4, starting at 1, in steps of 0.5
+slider k from -3 to 3, starting at -2
+```
 
-![Screenshot of the editor for step 2: Drag the slider](img/sliders-2.png)
+![Set the range and the step](img/sliders-2.png)
 
-*a = 4: the wave has outgrown the view.*
+## 3. Press play
 
-## 3. Set the range of the slider
+Click play on the row of `h`: it sweeps from minimum to maximum and back, about four seconds each way, and the shading and the vertex follow. `{h}` in a label prints its value.
 
-The small numbers at the two ends of the slider are its minimum and maximum. Click the right one, type `2` and press Enter. The value is pulled back to 2 and the wave fits the view again. Then click the left one and type `-2`.
+The chart gets these lines:
 
-Now the whole travel of the slider is useful. The step size sits in the menu behind the three dots on the row, next to Delete slider.
+```easy-tikz
+shade where $y \ge f(x)$ in purple
+mark (h, k), large, labelled "({h}, {k})"
+```
 
-| Where | Type |
-| --- | --- |
-| Sliders, a: maximum | `2` |
-| Sliders, a: minimum | `-2` |
+![Press play](img/sliders-3.png)
 
-![Screenshot of the editor for step 3: Set the range of the slider](img/sliders-3.png)
+> **Tip:** Drag a slider while it plays to take over, and it carries on from where you let go.
 
-*The slider now runs from -2 to 2, and the wave stays inside the view.*
+## 4. Connect sliders across a note
 
-> **Tip:** A number typed into the value field may lie outside the range. The range then widens to include it.
+Add `connected` to a slider line. In a note, moving `a` then moves the slider `a` of every other chart whose `a` is connected too.
 
-## 4. Press play
+The chart gets these lines:
 
-Click the play button on the slider row. The value sweeps back and forth between the minimum and the maximum, about four seconds each way, and the wave flips over as `a` passes zero.
+```easy-tikz
+slider a from -2 to 2, starting at 0.5, connected
+```
 
-Click the button again to stop, for example near -1.2. While it plays you can still drag the slider; it carries on from where you let go.
+![Connect sliders across a note](img/sliders-4.png)
 
-![Screenshot of the editor for step 4: Press play](img/sliders-4.png)
-
-*Stopped at a = -1.2: a negative amplitude turns the wave upside down.*
-
-## 5. Show the value in the title
-
-Open the Chart tab and type a title under Axes. Curly brackets print the value of a formula, so the title always says where the slider stands.
-
-`{a}` prints up to three decimals, `{a:1}` rounds to one. The same placeholders work in every label of the chart.
-
-| Where | Type |
-| --- | --- |
-| Chart \> Axes, Title | `Amplitude a = {a}` |
-
-![Screenshot of the editor for step 5: Show the value in the title](img/sliders-5.png)
-
-*The title prints the live value of a.*
-
-> **Tip:** A placeholder that cannot be computed prints a question mark, so a typo is easy to spot.
-
-## 6. Add a second slider
-
-Back in the Build tab, change the formula to `2 + a sin(b x)` and click Add slider b. `b` starts at 1, so nothing moves yet.
-
-Drag `b` to 2: the wave now has twice as many crests. Each slider has its own row. From five sliders on, the dock shows compact pills instead and opens one row at a time.
-
-| Where | Type |
-| --- | --- |
-| f1, y = | `2 + a sin(b x)` |
-
-![Screenshot of the editor for step 6: Add a second slider](img/sliders-6.png)
-
-*Two sliders: a sets the height of the wave, b its frequency.*
-
-> **Tip:** To rename a slider, type a new name into its name field. Every formula and label that uses it follows.
-
-## 7. Take the sliders into your note
-
-Click Insert into note. In the note, a strip with the same sliders sits under the chart.
-
-Moving them there redraws the chart for the current session only. The note itself is never changed. To hide the strip, switch off Show sliders in note in the Chart tab, under In your note.
-
-![Screenshot of the note for step 7: Take the sliders into your note](img/sliders-7.png)
-
-*The chart in a note with its slider strip.*
+> **Tip:** The editor has it as Connect with others in the slider's options, and a note as the link button on the slider row.
 
 ## The finished chart
 
@@ -120,19 +88,24 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-title Amplitude a = {a}
-slider a from -2 to 2, starting at -1.2, in steps of 0.1
-slider b from -10 to 10, starting at 2, in steps of 0.1
-plot f1(x) = 2 + a sin(b x)
+show x from -5 to 5 and y from -4 to 6
+size 12 x 8
+axes in the middle
+with a grid
+slider a from -2 to 2, starting at 0.5
+slider h from -4 to 4, starting at 1, in steps of 0.5
+slider k from -3 to 3, starting at -2
+plot f(x) = a*(x - h)^2 + k in purple, very thick
+shade where $y \ge f(x)$ in purple
+mark (h, k), large, labelled "({h}, {k})"
 ```
 
 </details>
 
 ## Next guides
 
-- [Animate a chart with play](animate-play.md): A point runs around the unit circle while the sine curve draws itself behind it: one slider in points, a domain, a path and the title, then press play.
-- [Tangents and extrema](tangents-extrema.md): Mark the turning points of a function, add a tangent, slide it along the curve and label its slope.
-- [Drag shapes to edit them](drag-to-edit.md): Grab a line or a curve in the preview and its numbers follow: move, turn, stretch, undo.
-- [Charts in your notes](charts-in-notes.md): Insert a chart into a note, play with its sliders there, set its width and alignment, and open it again to change it.
+- [Animate a chart with play](animate-play.md): A point runs around the unit circle while the circle unrolls into the sine curve, all on one slider.
+- [Parametric and polar curves](parametric-polar.md): Trace a curve from x(t) and y(t), then switch to polar and grow a rose whose petals a slider counts.
+- [Tangents and extrema](tangents-extrema.md): Mark the turning points of a curve, roll a tangent along it with a slider and print its slope.
 
 [All guides](README.md)

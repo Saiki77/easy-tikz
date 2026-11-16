@@ -10,7 +10,6 @@
  * only builds cards for new items. That makes refresh() cheap enough for
  * the modal to call after every commit.
  */
-import { Menu } from 'obsidian';
 import { Annotation, Function3DParameters, FunctionParameters, Parameter, Tool } from '../types';
 import { ValidateResult, fmtNum } from '../mathcontext';
 import { ChartExample, EXAMPLES, Recipe, RecipeContext, newId, nextFunctionName, nextToolName, recipes } from '../migrate';
@@ -25,7 +24,8 @@ import { LayerCardActions, LayerCardHandle, createLayerCard } from './layerCards
 // The cards of data, probability, Riemann sums and slope fields register themselves with the layer cards (5.0).
 import '../beyond/cards';
 import { CardUiState, FunctionCardHandle, createFunctionCard, createSurfaceCard } from './functionCards';
-import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, menuFromButton, openMenu, textButton } from './kit';
+import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, textButton, trapEscape } from './kit';
+import { PickerContent, PickerGroup, PickerItem, addPicker } from './addPicker';
 import { t } from '../i18n';
 import type { MessageKey } from '../i18n';
 
@@ -110,6 +110,41 @@ const SECTION_ICONS: Record<string, string> = {
     Data: 'table',
     Probability: 'bar-chart-2',
     Calculus: 'sigma',
+};
+
+/** More words that find a recipe in the + Add picker (English, as people search): vector finds Arrow. */
+const RECIPE_WORDS: Record<string, string> = {
+    function: 'graph plot curve',
+    parametric: 'ellipse spiral path',
+    'area-between': 'integral shade between curves',
+    'area-under': 'integral shade definite',
+    'feasible-region': 'inequality inequalities constraint linear program lp shade',
+    rectangle: 'box',
+    disk: 'circle filled',
+    'vertical-line': 'asymptote',
+    'horizontal-line': 'asymptote',
+    'line-equation': 'objective straight',
+    circle: 'round',
+    'level-curves': 'contour indifference isoline',
+    'points-list': 'mark dot coordinates',
+    intersections: 'cross root zero crossing',
+    'corner-points': 'vertex vertices',
+    optimum: 'maximum minimum best lp objective',
+    lattice: 'integer whole numbers',
+    segment: 'line',
+    arrow: 'vector gradient',
+    polyline: 'polygon triangle path',
+    brace: 'rise run curly',
+    label: 'text annotation',
+    slider: 'parameter animate play',
+    'data-table': 'csv markdown',
+    'data-points': 'scatter',
+    regression: 'fit linear trend least squares',
+    'normal-distribution': 'gaussian bell',
+    'binomial-distribution': 'bernoulli bars',
+    probability: 'p value area shade',
+    'riemann-sum': 'integral rectangles left right midpoint',
+    'slope-field': 'ode differential equation direction',
 };
 
 /** Menu heading per recipe section (Functions reads Surfaces in 3D charts). */
@@ -253,7 +288,7 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
     // ---- toolbar
     const toolbar = el.createDiv({ cls: 'etz-build-toolbar' });
     const addButton = textButton(toolbar, { text: t('common.add'), icon: 'plus', cls: 'etz-build-add' });
-    menuFromButton(addButton.el, (menu) => fillAddMenu(menu, 'all', addButton.el));
+    pickerOn(addButton.el, 'all', 'start');
 
     // ---- empty state
     const emptyEl = el.createDiv({ cls: ['etz-build-empty', 'tikz-hidden'] });
@@ -267,13 +302,13 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
     const fnGroup = group(listEl, t('build.section.functions'), 'etz-build-section');
     const fnTitle = fnGroup.headerEl.querySelector<HTMLElement>('.etz-group-title');
     const fnAdd: IconButtonHandle = iconButton(fnGroup.headerEl, { icon: 'plus', label: t('build.add.function'), size: 'sm' });
-    menuFromButton(fnAdd.el, (menu) => fillAddMenu(menu, 'functions', fnAdd.el), 'end');
+    pickerOn(fnAdd.el, 'functions', 'end');
     const fnEmpty = fnGroup.body.createDiv({ cls: 'etz-build-section-empty' });
     const fnList = fnGroup.body.createDiv({ cls: 'etz-build-cards' });
 
     const layerGroup = group(listEl, t('build.section.shapes'), 'etz-build-section');
     const layerAdd = iconButton(layerGroup.headerEl, { icon: 'plus', label: t('build.add.shape'), size: 'sm' });
-    menuFromButton(layerAdd.el, (menu) => fillAddMenu(menu, 'shapes', layerAdd.el), 'end');
+    pickerOn(layerAdd.el, 'shapes', 'end');
     const layerEmpty = layerGroup.body.createDiv({ cls: 'etz-build-section-empty' });
     const layerHint = layerGroup.body.createDiv({ cls: 'etz-build-hint', text: t('build.panel.fillsBelow') });
     const layerList = layerGroup.body.createDiv({ cls: 'etz-build-cards' });
@@ -954,80 +989,63 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
     // ------------------------------------------------------------- menus
 
     /**
-     * The recipe menu: grouped by section with label headings (Obsidian adds
-     * separators between sections). 'functions' and 'shapes' are the
-     * per-section + buttons; 'all' is the toolbar's Add button.
+     * What the + Add picker offers: the recipes of the chart's dimension by
+     * section, and the templates (built-in and saved) as a group of their own.
+     * 'functions' and 'shapes' are the per-section + buttons; 'all' is the
+     * toolbar's Add button.
      */
-    function fillAddMenu(menu: Menu, scope: AddScope, anchor: HTMLElement): void {
+    function pickerContent(scope: AddScope): PickerContent {
         const is3D = host.is3D();
         const ctx = recipeContext();
-        const groups = new Map<string, Recipe[]>();
-        for (const r of recipes(is3D)) {
-            if (!r.available(ctx)) continue;
-            const isFunction = r.section === 'Functions';
-            if (scope === 'functions' && !isFunction) continue;
-            if (scope === 'shapes' && (isFunction || r.section === 'Sliders')) continue;
-            const list = groups.get(r.section) ?? [];
-            list.push(r);
-            groups.set(r.section, list);
-        }
+        const groups: PickerGroup[] = [];
+        const items: PickerItem[] = [];
         const heading = (section: string) => {
             if (section === 'Functions' && is3D) return t('build.section.surfaces');
             const title = SECTION_TITLES[section];
             return title ? t(title) : section;
         };
-        groups.forEach((list, section) => {
-            const id = `etz-${section.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-            menu.addItem((i) => i.setTitle(heading(section)).setIsLabel(true).setSection(id));
-            for (const r of list) {
-                menu.addItem((i) =>
-                    i
-                        .setTitle(r.label)
-                        .setIcon(SECTION_ICONS[r.section] ?? 'plus')
-                        .setSection(id)
-                        .onClick(() => applyRecipe(r)),
-                );
+        for (const r of recipes(is3D)) {
+            if (!r.available(ctx)) continue;
+            const isFunction = r.section === 'Functions';
+            if (scope === 'functions' && !isFunction) continue;
+            if (scope === 'shapes' && (isFunction || r.section === 'Sliders')) continue;
+            const icon = SECTION_ICONS[r.section] ?? 'plus';
+            if (!groups.some((g) => g.id === r.section)) groups.push({ id: r.section, title: heading(r.section), icon });
+            items.push({ label: r.label, hint: r.hint, icon, group: r.section, words: RECIPE_WORDS[r.id], run: () => applyRecipe(r) });
+        }
+        if (scope !== 'shapes') {
+            const saved = (host.plugin && Array.isArray(host.plugin.data.userTemplates) ? host.plugin.data.userTemplates : []).filter(
+                (template) => !!template.is3D === is3D,
+            );
+            const builtIn = is3D ? BUILT_IN_3D : BUILT_IN_2D;
+            if (builtIn.length || saved.length) groups.push({ id: 'Templates', title: t('build.picker.templates'), icon: 'bookmark' });
+            for (const template of builtIn) {
+                items.push({
+                    label: t('build.menu.template', { name: template.name, expression: template.expression }),
+                    hint: t('build.menu.builtIn'),
+                    icon: is3D ? 'box' : 'line-chart',
+                    group: 'Templates',
+                    words: 'template example',
+                    run: () => applyTemplate(template),
+                });
             }
-            if (section === 'Functions') {
-                menu.addItem((i) =>
-                    i
-                        .setTitle(t('build.menu.fromTemplate'))
-                        .setIcon('bookmark')
-                        .setSection(id)
-                        // Obsidian hides this menu after the click handler: open the next one afterwards.
-                        .onClick(() => window.setTimeout(() => openMenu(anchor, fillTemplateMenu, scope === 'all' ? 'start' : 'end'), 0)),
-                );
+            for (const template of saved) {
+                items.push({
+                    label: t('build.menu.template', { name: template.name, expression: template.expression }),
+                    hint: t('build.menu.saved'),
+                    icon: 'bookmark',
+                    group: 'Templates',
+                    words: 'template saved',
+                    run: () => applyTemplate(template),
+                });
             }
-        });
+        }
+        return { groups, items };
     }
 
-    function fillTemplateMenu(menu: Menu): void {
-        const is3D = host.is3D();
-        menu.addItem((i) => i.setTitle(t('build.menu.builtIn')).setIsLabel(true).setSection('etz-builtin'));
-        for (const template of is3D ? BUILT_IN_3D : BUILT_IN_2D) {
-            const name = template.name;
-            menu.addItem((i) =>
-                i
-                    .setTitle(t('build.menu.template', { name, expression: template.expression }))
-                    .setIcon(is3D ? 'box' : 'line-chart')
-                    .setSection('etz-builtin')
-                    .onClick(() => applyTemplate(template)),
-            );
-        }
-        const saved = (host.plugin && Array.isArray(host.plugin.data.userTemplates) ? host.plugin.data.userTemplates : []).filter(
-            (template) => !!template.is3D === is3D,
-        );
-        if (!saved.length) return;
-        menu.addItem((i) => i.setTitle(t('build.menu.saved')).setIsLabel(true).setSection('etz-saved'));
-        for (const template of saved) {
-            menu.addItem((i) =>
-                i
-                    .setTitle(t('build.menu.template', { name: template.name, expression: template.expression }))
-                    .setIcon('bookmark')
-                    .setSection('etz-saved')
-                    .onClick(() => applyTemplate(template)),
-            );
-        }
+    /** The + Add picker on a button: Escape closes it, not the editor. */
+    function pickerOn(button: HTMLElement, scope: AddScope, align: 'start' | 'end'): void {
+        addPicker(button, () => pickerContent(scope), { trapEscape: (onEscape) => trapEscape(host, onEscape), align });
     }
 
     // ------------------------------------------------------------- handle

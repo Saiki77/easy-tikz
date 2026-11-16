@@ -1,0 +1,189 @@
+/* The + Add picker (src/ui/addPicker.ts): a search field on top, the groups
+   on the left, the items of one group (or every match) on the right, a line
+   with the keys at the bottom. Theme colours only. */
+.etz-picker {
+    position: fixed;
+    z-index: var(--layer-menu);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 16px);
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    background-color: var(--background-primary);
+    box-shadow: var(--shadow-l);
+}
+
+.etz-picker-search {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    color: var(--text-muted);
+}
+
+.etz-picker input.etz-picker-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: auto;
+    padding: 2px 0;
+    border: none;
+    background: none;
+    box-shadow: none;
+    color: var(--text-normal);
+    font-size: var(--font-ui-medium);
+}
+
+.etz-picker-body {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: 190px minmax(0, 1fr);
+    height: min(340px, calc(100vh - 140px));
+    min-height: 0;
+}
+
+.etz-picker-body.is-single {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.etz-picker-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-height: 0;
+    padding: 6px;
+    overflow-y: auto;
+    border-right: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+}
+
+button.etz-picker-group {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    height: auto;
+    padding: 6px 8px;
+    border: none;
+    border-radius: var(--radius-s);
+    background: none;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    text-align: start;
+    white-space: normal;
+    cursor: pointer;
+}
+
+button.etz-picker-group:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+button.etz-picker-group.is-on {
+    background-color: var(--etz-accent-tint);
+    color: var(--text-normal);
+    font-weight: 600;
+}
+
+.etz-picker-count {
+    color: var(--text-faint);
+    font-size: var(--font-ui-smaller);
+    font-variant-numeric: tabular-nums;
+}
+
+.etz-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-height: 0;
+    padding: 6px;
+    overflow-y: auto;
+}
+
+.etz-picker-heading {
+    padding: 8px 8px 2px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.etz-picker-item {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 6px 8px;
+    border-radius: var(--radius-s);
+    cursor: pointer;
+}
+
+.etz-picker-item.is-selected {
+    background-color: var(--background-modifier-hover);
+}
+
+.etz-picker-icon {
+    display: flex;
+    color: var(--text-muted);
+}
+
+.etz-picker-item .etz-picker-icon {
+    margin-top: 2px;
+}
+
+.etz-picker-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.etz-picker-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.etz-picker-label {
+    color: var(--text-normal);
+}
+
+.etz-picker-hint {
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    line-height: 1.35;
+}
+
+.etz-picker-empty {
+    padding: 12px 8px;
+    color: var(--text-muted);
+}
+
+.etz-picker-foot {
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    border-top: 1px solid var(--background-modifier-border);
+    color: var(--text-faint);
+    font-size: var(--font-ui-smaller);
+}
+
+@media (max-width: 520px) {
+    .etz-picker-body {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .etz-picker-rail {
+        flex-direction: row;
+        overflow-x: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--background-modifier-border);
+    }
+
+    button.etz-picker-group {
+        grid-template-columns: 18px auto auto;
+        white-space: nowrap;
+    }
+}

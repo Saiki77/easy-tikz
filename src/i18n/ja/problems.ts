@@ -245,14 +245,14 @@ export const problems: Messages<typeof en> = {
     'problems.template.pringle': 'ポテトチップ形',
 
     // AI サーバーのうち人が読むもの（src/ai/）：通知、ポート、各アプリの設定の置き場所。AI アプリへの応答は英語のまま。
-    'problems.ai.notice': 'Easy TikZ：{message}。',
+    'problems.ai.notice': 'Easy Graphs, Charts & TikZ：{message}。',
     'problems.ai.addedChart': 'AI アプリが {path} にグラフを追加しました',
     'problems.ai.madeNote': 'AI アプリがグラフ入りの新しいノート {path} を作りました',
     'problems.ai.changedChart': 'AI アプリが {path} の {index} 番目のグラフを変更しました',
-    'problems.ai.undone': 'Easy TikZ：{path} の変更を元に戻しました。',
-    'problems.ai.notUndone': 'Easy TikZ：{path} はその後に変更されたため、元に戻しませんでした。',
+    'problems.ai.undone': 'Easy Graphs, Charts & TikZ：{path} の変更を元に戻しました。',
+    'problems.ai.notUndone': 'Easy Graphs, Charts & TikZ：{path} はその後に変更されたため、元に戻しませんでした。',
     'problems.ai.portInUse': 'ポート {port} はすでに使われています。設定で別のポートを選んでください。',
-    'problems.ai.whereClaudeCode': 'ターミナルで 1 回実行します。その後は、どのプロジェクトでも Claude Code から Easy TikZ のツールを使えます。',
+    'problems.ai.whereClaudeCode': 'ターミナルで 1 回実行します。その後は、どのプロジェクトでも Claude Code から Easy Graphs, Charts & TikZ のツールを使えます。',
     'problems.ai.whereCodex': '1 行目をターミナルで 1 回実行し、Codex がトークンを見つけられるように 2 行目をシェルのプロファイルに書きます。',
     'problems.ai.whereGemini': 'ターミナルで 1 回実行します。',
     'problems.ai.whereCursor': '~/.cursor/mcp.json に追加します（すでにあるサーバーの設定とまとめます）。',

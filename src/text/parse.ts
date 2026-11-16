@@ -1,5 +1,5 @@
 /*
- * Easy TikZ charts as text: one line per object, written the way the math
+ * Easy Graphs, Charts & TikZ charts as text: one line per object, written the way the math
  * reads, instead of one JSON object. Lines read like English:
  *
  *   show x from -3 to 3 and y from -4 to 4
@@ -737,7 +737,9 @@ function conditionsOf(b: Builder, body: Piece): { conditions: string[]; labels: 
 
 /** Is this condition a plain sign condition like x >= 0 (left out by `numbered`)? */
 export function isSignCondition(c: string): boolean {
-    return /^\s*[A-Za-z][A-Za-z0-9_]*\s*>=\s*0\s*$/.test(c) || /^\s*0\s*<=\s*[A-Za-z][A-Za-z0-9_]*\s*$/.test(c);
+    // In LaTeX too: `x \ge 0`, `x \geq 0`, `0 \le x`, `0 \leq x`.
+    const plain = c.replace(/\\geq?(?![A-Za-z])/g, '>=').replace(/\\leq?(?![A-Za-z])/g, '<=');
+    return /^\s*[A-Za-z][A-Za-z0-9_]*\s*>=\s*0\s*$/.test(plain) || /^\s*0\s*<=\s*[A-Za-z][A-Za-z0-9_]*\s*$/.test(plain);
 }
 
 function addTool(b: Builder, type: string, name: string | null, fields: Data, options: Piece[], kind: keyof typeof OPTION_HELP): Data {
@@ -884,7 +886,7 @@ function statement(b: Builder, line: string) {
         return;
     }
     // LaTeX formulas (5.0) sit in $...$ as in a note; the dollars go, labels in quotes keep theirs.
-    line = stripMathDollars(line);
+    line = stripMathDollars(line, b.explicit);
     // Axis numbers keep the rest of the line as written (commas included): `x numbers every pi/2`,
     // `x numbers at a "a", b "b"`, `x numbers off`.
     const numbers = /^(\s*)([xyz])\s+numbers\b\s*(every|at|off)?\b\s*(.*)$/i.exec(line);

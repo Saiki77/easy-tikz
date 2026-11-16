@@ -29,7 +29,6 @@ import {
     Guide,
     GuideStep,
     guideCategoryLabel,
-    guideLevelLabel,
     guideUrl,
     guidesIn,
     localGuide,
@@ -48,6 +47,9 @@ import { SettingsManager } from '../settings';
 import { cloneData, fitPixelScale } from '../util';
 import { PanelHost } from './host';
 import { iconButton, textButton, trapEscape, uniqueId, visuallyHidden } from './kit';
+import { LiveChart, detach3D, fitToContent, fluid } from './liveChart';
+import { printChartText } from '../text/print';
+import type { GuideCategory } from '../guides/types';
 
 type Block =
     /** Paragraph. */
@@ -90,12 +92,8 @@ export interface HelpPanelHandle {
 
 const MOD = Platform.isMacOS ? 'Cmd' : 'Ctrl';
 
-/** Thumbnail canvas: both sides below the renderer's compact limits (200 x 120), so it draws no ticks or texts. */
-const THUMB_W = 196;
-const THUMB_H = 98;
-/** 3D thumbnails are drawn at this size, then zoomed onto the drawing. */
-const THUMB_3D_W = 300;
-const THUMB_3D_H = 150;
+/** The guide of the language tour: its finished chart heads the home page, in words and as a picture. */
+const TOUR_ID = 'chart-language';
 /** Charts start rendering this far (px) before they scroll into view. */
 const LAZY_MARGIN_PX = 240;
 /** Inline code up to this many characters never wraps (it fits the narrowest help pane). */
@@ -150,9 +148,9 @@ function makeSections(): Section[] {
                         ['show x from 0 to 5 and y from 0 to 4.5', t('help.ref.text.c1')],
                         ['axes on the edges', t('help.ref.text.c2')],
                         ['slider c from 0 to 15, starting at 6', t('help.ref.text.c3')],
-                        ['shade where x + y <= 4 and x + 3y <= 6 and x >= 0 and y >= 0, numbered', t('help.ref.text.c4')],
-                        ['draw 2x + 3y = c in red, dashed, labelled "z = {c}"', t('help.ref.text.c5')],
-                        ['mark the maximum of 2x + 3y in the region, large, with coordinates', t('help.ref.text.c6')],
+                        ['shade where $x + y \\le 4$ and $x + 3y \\le 6$ and $x \\ge 0$ and $y \\ge 0$, numbered', t('help.ref.text.c4')],
+                        ['draw $2x + 3y = c$ in red, dashed, labelled "$z = {c}$"', t('help.ref.text.c5')],
+                        ['mark the maximum of $2x + 3y$ in the region, large, with coordinates', t('help.ref.text.c6')],
                         '```',
                     ],
                 },
@@ -160,9 +158,9 @@ function makeSections(): Section[] {
                 { sub: t('help.ref.text.sub1') },
                 {
                     terms: [
-                        ['plot f(x) = x^2 - 2', t('help.ref.text.t1')],
-                        ['shade where x + y <= 4 and x >= 0', t('help.ref.text.t2')],
-                        ['draw x^2 + y^2 = 9', t('help.ref.text.t3')],
+                        ['plot $f(x) = x^2 - 2$', t('help.ref.text.t1')],
+                        ['shade where $x + y \\le 4$ and $x \\ge 0$', t('help.ref.text.t2')],
+                        ['draw $x^2 + y^2 = 9$', t('help.ref.text.t3')],
                         ['mark (1, 2) and (3, a)', t('help.ref.text.t4')],
                         ['draw an arrow from (0, 0) to (3, 2)', t('help.ref.text.t5')],
                         ['write "optimum" at (3, 1.2)', t('help.ref.text.t6')],
@@ -663,59 +661,18 @@ function renderBody(parent: HTMLElement, body: string): void {
 
 // ------------------------------------------------------------------ charts
 
-/** Rendered guide thumbnails by thumbnailKey, cloned into cards (failures are retried next time). */
-const THUMBNAILS = new Map<string, SVGSVGElement>();
-
-/**
- * Cache key of a guide's thumbnail. 2D charts are drawn with the theme's CSS
- * variables and follow a theme switch by themselves; the 3D renderer resolves
- * its colours when it draws, so those thumbnails are kept per theme.
- */
-function thumbnailKey(guide: Guide): string {
-    if (!chartIs3D(guide.chart)) return guide.id;
-    return `${guide.id}|${activeDocument.body.hasClass('theme-dark') ? 'dark' : 'light'}`;
-}
-
-/** Where the reader was when the editor closed: the Help tab opens there again (this session only). */
-let lastRead: { guide: string; scroll: number } | null = null;
+/** Where the reader was when the editor closed: the Help tab opens there again, at that step (this session only). */
+let lastRead: { guide: string; step: number } | null = null;
 
 function chartIs3D(chart: ChartData): boolean {
     return chart.dimension === true;
 }
 
-/** Take the SVG out of a 3D renderer's root: outside the root no .tikz-3d-svg rule hides it. */
-function detach3D(renderer: SVG3DRenderer): SVGSVGElement | null {
-    const svg = renderer.getElement().querySelector('svg');
-    if (!svg) return null;
-    svg.remove();
-    svg.classList.remove('tikz-3d-svg');
-    return svg;
-}
-
-/** Let CSS size the picture; the viewBox keeps its proportions. */
-function fluid(svg: SVGSVGElement): SVGSVGElement {
-    svg.removeAttribute('width');
-    svg.removeAttribute('height');
-    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    svg.setAttribute('aria-hidden', 'true');
-    return svg;
-}
-
-/** Width : height of the preview canvas of a chart (its paper size), 1.25 when it cannot be read. */
-function chartAspect(chart: ChartData): number {
-    try {
-        const { width, height } = SettingsManager.fromJSON(cloneData(chart)).previewCanvas();
-        return width > 0 && height > 0 ? width / height : 1.25;
-    } catch {
-        return 1.25;
-    }
-}
-
 /**
  * A chart as the editor would draw it, with the chart's own slider values.
  * The math context is private: the memoized one may be the editor's own
- * (same structure after "Open this step in the editor"), and its slider and
- * computed values must stay the editor's.
+ * (same structure after "Open in the editor"), and its slider and computed
+ * values must stay the editor's.
  */
 function chartConfig(chart: ChartData) {
     const settings = SettingsManager.fromJSON(cloneData(chart));
@@ -723,103 +680,46 @@ function chartConfig(chart: ChartData) {
     return { math, config: settings.toRendererConfig(math) };
 }
 
-/** Thumbnail of a chart: 2D in the renderer's compact mode (no ticks, no texts), 3D as a small export SVG. */
-function renderThumbnail(chart: ChartData): SVGSVGElement | null {
-    const { math, config } = chartConfig(chart);
-    config.title = '';
-    if (config.is3D) {
-        config.width = THUMB_3D_W;
-        config.height = THUMB_3D_H;
-        const renderer = new SVG3DRenderer();
-        renderer.renderSvg(config, { math });
-        return detach3D(renderer);
+/** A chart in the words of the chart language, one line each (the built-in English words). */
+function chartLines(chart: ChartData): string[] {
+    try {
+        return printChartText(cloneData(chart))
+            .split('\n')
+            .filter((line) => line.trim() !== '');
+    } catch {
+        return [];
     }
-    config.width = THUMB_W;
-    config.height = THUMB_H;
-    // Grid lines are noise at this size.
-    config.gridMajor = false;
-    config.gridMinor = false;
-    return new SVGRenderer(config, { math }).render() as SVGSVGElement;
 }
 
-/**
- * 3D charts: the camera leaves wide margins around the box, so once the SVG
- * is in the document, zoom its viewBox onto what is drawn (the groups and
- * the title; texts are display: none in thumbnails and do not count).
- * Returns the new viewBox, or null when nothing has a size.
- */
-function fitToContent(svg: SVGSVGElement, pad: number): string | null {
-    let x0 = Infinity;
-    let y0 = Infinity;
-    let x1 = -Infinity;
-    let y1 = -Infinity;
-    for (const el of Array.from(svg.querySelectorAll<SVGGraphicsElement>(':scope > g, :scope > text'))) {
-        let b: DOMRect;
-        try {
-            b = el.getBBox();
-        } catch {
-            continue;
-        }
-        if (!(b.width > 0 && b.height > 0)) continue;
-        x0 = Math.min(x0, b.x);
-        y0 = Math.min(y0, b.y);
-        x1 = Math.max(x1, b.x + b.width);
-        y1 = Math.max(y1, b.y + b.height);
-    }
-    if (!Number.isFinite(x0) || !Number.isFinite(y0)) return null;
-    const viewBox = `${x0 - pad} ${y0 - pad} ${x1 - x0 + 2 * pad} ${y1 - y0 + 2 * pad}`;
-    svg.setAttribute('viewBox', viewBox);
-    return viewBox;
+/** One line of chart text, coloured: what the line does (its first word), formulas in `$...$`, texts in quotes. */
+function paintLine(el: HTMLElement, line: string): void {
+    line.split(/(\$[^$]*\$|"[^"]*")/).forEach((part, i) => {
+        if (!part) return;
+        if (part.startsWith('$')) el.createSpan({ cls: 'etz-help-words-tex', text: part });
+        else if (part.startsWith('"')) el.createSpan({ cls: 'etz-help-words-str', text: part });
+        else if (i === 0) {
+            const m = /^((?:[A-Za-z][A-Za-z0-9_]*:\s*)?)(shade where|use the table above|with a grid|equal scale|[A-Za-z0-9]+)([\s\S]*)$/.exec(part);
+            if (!m) {
+                el.appendText(part);
+                return;
+            }
+            if (m[1]) el.appendText(m[1]);
+            el.createSpan({ cls: 'etz-help-words-verb', text: m[2] });
+            if (m[3]) el.appendText(m[3]);
+        } else el.appendText(part);
+    });
 }
 
-let cloneCount = 0;
-
-/**
- * Give a cloned chart its own ids. A clone repeats the ids of its original,
- * and `url(#id)` resolves to the first element with that id in the document:
- * when that copy sits in a hidden view (the home cards while a guide is
- * open), the clone's arrowheads, patterns and clip paths would not draw.
- */
-function ownIds(svg: SVGSVGElement): SVGSVGElement {
-    const suffix = `-c${++cloneCount}`;
-    const ids = new Set<string>();
-    for (const el of Array.from(svg.querySelectorAll('[id]'))) {
-        ids.add(el.id);
-        el.id += suffix;
-    }
-    if (!ids.size) return svg;
-    for (const el of Array.from(svg.querySelectorAll('*'))) {
-        for (const attr of Array.from(el.attributes)) {
-            if (attr.name === 'id' || !attr.value.includes('#')) continue;
-            let value = attr.value.replace(/url\((["']?)#([^)"']+)\1\)/g, (match: string, quote: string, id: string) =>
-                ids.has(id) ? `url(${quote}#${id}${suffix}${quote})` : match
-            );
-            if ((attr.name === 'href' || attr.name === 'xlink:href') && value.startsWith('#') && ids.has(value.slice(1))) value += suffix;
-            if (value !== attr.value) el.setAttribute(attr.name, value);
-        }
-    }
-    return svg;
-}
-
-/**
- * Thumbnail SVG of a guide's finished chart (a clone of the cached drawing
- * with ids of its own), or null when it cannot be drawn. `key` is its cache
- * entry; `fresh` is true for a first render.
- */
-function guideThumbnail(guide: Guide): { svg: SVGSVGElement; key: string; fresh: boolean } | null {
-    const key = thumbnailKey(guide);
-    let svg = THUMBNAILS.get(key) ?? null;
-    const fresh = !svg;
-    if (!svg) {
-        try {
-            svg = renderThumbnail(guide.chart);
-        } catch {
-            svg = null;
-        }
-        if (!svg) return null;
-        THUMBNAILS.set(key, fluid(svg));
-    }
-    return { svg: ownIds(svg.cloneNode(true) as SVGSVGElement), key, fresh };
+/** A chart in words: a line each, the lines in `fresh` (what this step added) lit and tagged. */
+function chartWords(parent: HTMLElement, lines: string[], fresh: ReadonlySet<number>): HTMLElement {
+    const box = parent.createDiv({ cls: 'etz-help-words' });
+    lines.forEach((line, i) => {
+        const row = box.createDiv({ cls: 'etz-help-words-line' });
+        if (fresh.has(i)) row.addClass('is-new');
+        paintLine(row, line);
+        if (fresh.has(i)) row.createSpan({ cls: 'etz-help-words-new', text: t('help.step.new') });
+    });
+    return box;
 }
 
 /** A drawn figure, and (2D charts with `$...$` labels) the renderer's promise that says whether to draw it again. */
@@ -933,7 +833,6 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
     const pageLazy = new LazyJobs(scroller);
 
     let view: 'home' | 'guide' | 'reference' = 'home';
-    let openGuide: Guide | null = null;
     /** Scroll position of the home view and the control that left it, restored by "All guides". */
     let homeScroll = 0;
     let returnFocus: HTMLElement | null = null;
@@ -976,8 +875,10 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         if (view === 'home') return;
         show('home');
         pageLazy.clear();
+        live?.destroy();
+        live = null;
+        stepper = null;
         guideEl.empty();
-        openGuide = null;
         scroller.scrollTop = homeScroll;
         const target = returnFocus && returnFocus.isConnected ? returnFocus : searchInput;
         returnFocus = null;
@@ -988,14 +889,9 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         const guide = localGuideById(id);
         if (!guide) return false;
         show('guide');
-        const steps = buildGuide(guide);
-        lastRead = { guide: guide.id, scroll: 0 };
-        scroller.scrollTop = 0;
-        const stepEl = typeof step === 'number' ? steps[step] : undefined;
-        if (stepEl) scrollToTop(stepEl);
-        // Opened at a step: the focus goes to that step's heading, so the next Tab continues from
-        // there. (On the guide title it would be far above the view, and Tab would scroll back up.)
-        const target = (stepEl ? stepEl.querySelector<HTMLElement>('.etz-help-step-title') : null) || guideEl.querySelector<HTMLElement>('.etz-help-title');
+        lastRead = { guide: guide.id, step: 0 };
+        buildGuide(guide, typeof step === 'number' ? step : 0);
+        const target = guideEl.querySelector<HTMLElement>('.etz-help-step-title') || guideEl.querySelector<HTMLElement>('.etz-help-title');
         if (target && root.isShown()) target.focus({ preventScroll: true });
         return true;
     }
@@ -1006,8 +902,10 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         if (section && !heading) return false;
         show('reference');
         pageLazy.clear();
+        live?.destroy();
+        live = null;
+        stepper = null;
         guideEl.empty();
-        openGuide = null;
         scroller.scrollTop = 0;
         const target = heading || referenceEl.querySelector<HTMLElement>('.etz-help-title');
         if (heading) scrollToTop(heading);
@@ -1024,75 +922,50 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         bar.createSpan({ cls: 'etz-help-crumb', text: crumb });
     }
 
-    /** Fixed-aspect thumbnail box; the picture arrives when the box scrolls into view. */
-    function thumbnail(card: HTMLElement, guide: Guide, lazy: LazyJobs): void {
-        const box = card.createSpan({ cls: 'etz-help-thumb', attr: { 'aria-hidden': 'true' } });
-        lazy.add(box, () => {
-            if (!box.isConnected) return;
-            const thumb = guideThumbnail(guide);
-            if (!thumb) {
-                box.addClass('is-fallback');
-                return;
-            }
-            box.appendChild(thumb.svg);
-            if (thumb.fresh && chartIs3D(guide.chart)) {
-                // The cached original keeps the fitted viewBox for later clones.
-                const viewBox = fitToContent(thumb.svg, 4);
-                const cached = THUMBNAILS.get(thumb.key);
-                if (viewBox && cached) cached.setAttribute('viewBox', viewBox);
-            }
-        });
-    }
-
-    /** A guide (in the reader's language) as a card: thumbnail, title, summary, level and minutes. `hit` names the step a search found. */
-    function guideCard(grid: HTMLElement, guide: Guide, lazy: LazyJobs, hit?: number | null): HTMLButtonElement {
-        const card = grid.createEl('button', { cls: 'etz-help-card', attr: { type: 'button' } });
-        thumbnail(card, guide, lazy);
-        const text = card.createSpan({ cls: 'etz-help-card-text' });
-        const title = text.createSpan({ cls: 'etz-help-card-title', text: guide.title });
-        if (chartIs3D(guide.chart)) title.createSpan({ cls: 'etz-help-badge', text: '3D' });
-        text.createSpan({ cls: 'etz-help-card-summary', text: guide.summary });
-        const found = typeof hit === 'number' && guide.steps[hit] ? hit : null;
-        if (found !== null) text.createSpan({ cls: 'etz-help-card-hit', text: t('help.card.step', { n: found + 1, title: guide.steps[found].title }) });
-        const meta = text.createSpan({ cls: 'etz-help-card-meta' });
-        meta.createSpan({ cls: ['etz-help-level', `mod-${guide.level}`], text: guideLevelLabel(guide.level) });
-        meta.createSpan({ text: t('help.card.minutes', { minutes: guide.minutes }) });
-        card.addEventListener('click', () => {
-            leaveHome(card);
-            showGuide(guide.id, found ?? undefined);
-        });
-        return card;
-    }
-
-    /** A chart in a fixed-aspect box, drawn when it scrolls into view. */
-    function figure(parent: HTMLElement, chart: ChartData, label: string): HTMLElement {
-        const box = parent.createDiv({ cls: 'etz-help-figure', attr: { role: 'img' } });
-        const name = visuallyHidden(box, label);
-        name.id = uniqueId('help-figure');
-        box.setAttr('aria-labelledby', name.id);
-        box.setCssProps({ '--etz-help-aspect': String(Math.round(chartAspect(chart) * 1000) / 1000) });
+    /**
+     * Draw a chart into `box` (its size set by CSS) once the box scrolls into
+     * view; 3D charts zoom onto their drawing. A `$...$` label measured before
+     * MathJax styled it draws once more.
+     */
+    function drawInto(box: HTMLElement, chart: ChartData, lazy: LazyJobs): void {
         let shown: SVGSVGElement | null = null;
         const draw = (redraws: number): void => {
             if (!box.isConnected) return;
             const drawn = renderFigure(chart, box.clientWidth, box.clientHeight);
             if (!drawn) {
-                // A redraw that fails keeps the picture that is there.
                 if (!shown) box.addClass('is-fallback');
                 return;
             }
             if (shown) shown.replaceWith(drawn.svg);
             else box.appendChild(drawn.svg);
             shown = drawn.svg;
-            if (chartIs3D(chart)) fitToContent(drawn.svg, 8);
-            // A new `$...$` label is measured before MathJax has styled it: draw again when it has.
+            if (chartIs3D(chart)) fitToContent(drawn.svg, 6);
             if (drawn.settled && redraws < MATH_REDRAW_LIMIT) {
                 void drawn.settled.then((redraw) => {
                     if (redraw && shown === drawn.svg) draw(redraws + 1);
                 });
             }
         };
-        pageLazy.add(box, () => draw(0));
-        return box;
+        lazy.add(box, () => draw(0));
+    }
+
+    /** A guide (in the reader's language) as a tile: its finished chart, title, summary and steps. `hit` names the step a search found. */
+    function guideCard(grid: HTMLElement, guide: Guide, lazy: LazyJobs, hit?: number | null): HTMLButtonElement {
+        const card = grid.createEl('button', { cls: 'etz-help-tile', attr: { type: 'button' } });
+        drawInto(card.createSpan({ cls: 'etz-help-tile-chart', attr: { 'aria-hidden': 'true' } }), guide.chart, lazy);
+        const text = card.createSpan({ cls: 'etz-help-tile-text' });
+        const title = text.createSpan({ cls: 'etz-help-tile-title', text: guide.title });
+        if (chartIs3D(guide.chart)) title.createSpan({ cls: 'etz-help-badge', text: '3D' });
+        // A summary may hold `code`: as everywhere in the Help, it shows as code.
+        rich(text.createSpan({ cls: 'etz-help-tile-summary' }), guide.summary);
+        const found = typeof hit === 'number' && guide.steps[hit] ? hit : null;
+        if (found !== null) text.createSpan({ cls: 'etz-help-card-hit', text: t('help.card.step', { n: found + 1, title: guide.steps[found].title }) });
+        text.createSpan({ cls: 'etz-help-tile-meta', text: t('help.guide.steps', { count: guide.steps.length }) });
+        card.addEventListener('click', () => {
+            leaveHome(card);
+            showGuide(guide.id, found ?? undefined);
+        });
+        return card;
     }
 
     /** "Type" rows: where to type, the text, and a Copy button. */
@@ -1196,7 +1069,7 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         else if (guides.length) status.setText(t('help.search.guides', { count: guides.length }));
         else status.setText(t('help.search.sections', { count: sections.length }));
         if (guides.length) {
-            const grid = resultsEl.createDiv({ cls: 'etz-help-cards' });
+            const grid = resultsEl.createDiv({ cls: 'etz-help-tiles' });
             for (const hit of guides) guideCard(grid, hit.guide, homeLazy, hit.step);
         }
         if (sections.length) {
@@ -1248,132 +1121,238 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         });
     }
 
-    // Jump links: the reference is the last category, a long scroll below the guide cards.
-    const jump = browseEl.createEl('nav', { cls: 'etz-help-toc' });
-    const jumpLabel = visuallyHidden(jump, t('help.categories'));
-    jumpLabel.id = uniqueId('help-jump');
-    jump.setAttr('aria-labelledby', jumpLabel.id);
-    const jumpList = jump.createDiv({ cls: 'etz-help-toc-list' });
+    // Start here: the first guides, side by side.
+    const firstGuides = guidesIn('Getting started').map(localGuide);
+    if (firstGuides.length) {
+        const section = browseEl.createEl('section', { cls: 'etz-help-home-part' });
+        const label = section.createEl('h3', { cls: 'etz-help-label', text: t('help.home.start') });
+        label.id = uniqueId('help-start');
+        section.setAttr('aria-labelledby', label.id);
+        const row = section.createDiv({ cls: 'etz-help-starts' });
+        for (const guide of firstGuides) {
+            const button = row.createEl('button', { cls: 'etz-help-start', attr: { type: 'button' } });
+            button.createSpan({ cls: 'etz-help-start-title', text: guide.title });
+            rich(button.createSpan({ cls: 'etz-help-start-summary' }), guide.summary);
+            button.createSpan({ cls: 'etz-help-tile-meta', text: t('help.guide.steps', { count: guide.steps.length }) });
+            button.addEventListener('click', () => {
+                leaveHome(button);
+                showGuide(guide.id);
+            });
+        }
+    }
 
-    for (const category of GUIDE_CATEGORIES) {
-        const guides = guidesIn(category).map(localGuide);
-        const reference = category === 'Reference';
-        if (!guides.length && !reference) continue;
-        const name = guideCategoryLabel(category);
-        const section = browseEl.createEl('section', { cls: 'etz-help-category' });
-        const heading = section.createEl('h3', { cls: 'etz-help-h', text: name, attr: { tabindex: '-1' } });
-        heading.id = uniqueId('help-category');
-        section.setAttr('aria-labelledby', heading.id);
-        if (guides.length) {
-            const grid = section.createDiv({ cls: 'etz-help-cards' });
-            for (const guide of guides) guideCard(grid, guide, homeLazy);
-        }
-        if (reference) {
-            if (guides.length) section.createEl('h4', { cls: 'etz-help-sub', text: t('help.referenceSections') });
-            topicList(section, referenceSections());
-        }
-        textButton(jumpList, {
-            text: name,
-            variant: 'ghost',
-            size: 'sm',
-            cls: 'etz-help-toc-btn',
+    // The chart language: the tour's finished chart in words, beside its picture.
+    const tour = localGuideById(TOUR_ID);
+    if (tour) {
+        const feature = browseEl.createEl('section', { cls: 'etz-help-feature' });
+        const side = feature.createDiv({ cls: 'etz-help-feature-side' });
+        side.createSpan({ cls: 'etz-help-label', text: t('help.home.language.label') });
+        const title = side.createEl('h3', { cls: 'etz-help-feature-title', text: t('help.home.language.title') });
+        title.id = uniqueId('help-language');
+        feature.setAttr('aria-labelledby', title.id);
+        side.createEl('p', { cls: 'etz-help-p', text: t('help.home.language.text') });
+        chartWords(side, chartLines(tour.chart), new Set());
+        const buttons = side.createDiv({ cls: 'etz-help-row' });
+        const take = textButton(buttons, {
+            text: t('help.home.language.tour'),
+            variant: 'cta',
             onClick: () => {
-                scrollToTop(heading);
-                heading.focus({ preventScroll: true });
+                leaveHome(take.el);
+                showGuide(tour.id);
             },
         });
+        const sheet = textButton(buttons, {
+            text: t('help.home.cheatSheet'),
+            onClick: () => {
+                leaveHome(sheet.el);
+                showReference('text');
+            },
+        });
+        drawInto(feature.createDiv({ cls: 'etz-help-feature-chart', attr: { 'aria-hidden': 'true' } }), tour.chart, homeLazy);
     }
+
+    // The gallery: every other guide as a tile, the chips show one category.
+    const galleryCategories = GUIDE_CATEGORIES.filter((c) => c !== 'Getting started' && c !== 'Reference' && guidesIn(c).some((g) => g.id !== TOUR_ID));
+    const gallery = browseEl.createEl('section', { cls: 'etz-help-home-part' });
+    const galleryHead = gallery.createDiv({ cls: 'etz-help-gallery-head' });
+    const galleryLabel = galleryHead.createEl('h3', { cls: 'etz-help-label', text: t('help.home.gallery') });
+    galleryLabel.id = uniqueId('help-gallery');
+    gallery.setAttr('aria-labelledby', galleryLabel.id);
+    const chips = galleryHead.createDiv({ cls: 'etz-help-chips', attr: { role: 'group', 'aria-label': t('help.home.filter') } });
+    const grid = gallery.createDiv({ cls: 'etz-help-tiles' });
+    const tiles: Array<{ el: HTMLElement; category: GuideCategory }> = [];
+    for (const category of galleryCategories) {
+        for (const guide of guidesIn(category).map(localGuide)) {
+            if (guide.id === TOUR_ID) continue;
+            tiles.push({ el: guideCard(grid, guide, homeLazy), category });
+        }
+    }
+    const chipEls: Array<{ el: HTMLButtonElement; category: GuideCategory | null }> = [];
+    const pick = (category: GuideCategory | null): void => {
+        for (const chip of chipEls) {
+            chip.el.toggleClass('is-on', chip.category === category);
+            chip.el.setAttr('aria-pressed', String(chip.category === category));
+        }
+        for (const tile of tiles) tile.el.toggleClass('tikz-hidden', category !== null && tile.category !== category);
+    };
+    for (const category of [null, ...galleryCategories]) {
+        const el = chips.createEl('button', { cls: 'etz-help-chip', text: category ? guideCategoryLabel(category) : t('help.home.all'), attr: { type: 'button', 'aria-pressed': String(category === null) } });
+        if (category === null) el.addClass('is-on');
+        el.addEventListener('click', () => pick(category));
+        chipEls.push({ el, category });
+    }
+
+    // The reference: its guides, and the sections of the cheat sheet.
+    const reference = browseEl.createEl('section', { cls: 'etz-help-home-part' });
+    const referenceLabel = reference.createEl('h3', { cls: 'etz-help-label', text: guideCategoryLabel('Reference') });
+    referenceLabel.id = uniqueId('help-reference');
+    reference.setAttr('aria-labelledby', referenceLabel.id);
+    const referenceGuides = guidesIn('Reference').map(localGuide);
+    if (referenceGuides.length) {
+        const row = reference.createDiv({ cls: 'etz-help-tiles' });
+        for (const guide of referenceGuides) guideCard(row, guide, homeLazy);
+    }
+    topicList(reference, referenceSections());
 
     // ---------------------------------------------------------------- guide
 
-    /** Build the reader page of a guide (in the reader's language); returns its step elements. */
-    function buildGuide(guide: Guide): HTMLElement[] {
+    /** The live chart of the step on screen, and how to move: set while a guide is open. */
+    let live: LiveChart | null = null;
+    let stepper: { go(i: number): void; step(): number } | null = null;
+
+    /** Build the reader of a guide (in the reader's language), open at step `at`. */
+    function buildGuide(guide: Guide, at: number): void {
         pageLazy.clear();
+        live?.destroy();
+        live = null;
         guideEl.empty();
-        openGuide = guide;
         pageBar(guideEl, guideCategoryLabel(guide.category));
 
         const head = guideEl.createEl('header', { cls: 'etz-help-guide-head' });
         head.createEl('h3', { cls: ['etz-help-h', 'etz-help-title'], text: guide.title, attr: { tabindex: '-1' } });
-        const meta = head.createDiv({ cls: 'etz-help-meta' });
-        meta.createSpan({ cls: ['etz-help-level', `mod-${guide.level}`], text: guideLevelLabel(guide.level) });
-        meta.createSpan({ text: t('help.card.minutes', { minutes: guide.minutes }) });
-        meta.createSpan({ text: t('help.guide.steps', { count: guide.steps.length }) });
-        head.createEl('p', { cls: 'etz-help-p', text: guide.summary });
-
-        const before = (guide.requires || []).map((id) => localGuideById(id)).filter((g): g is Guide => !!g);
-        if (before.length) {
-            const line = head.createEl('p', { cls: ['etz-help-p', 'etz-help-requires'] });
-            // The links go where the template has {guides}; between two of them, what listJoin has between {before} and {after}.
-            const [lead, trail] = around(t('help.guide.readFirst'), 'guides');
-            const join = around(around(t('help.guide.listJoin'), 'before')[1], 'after')[0];
-            if (lead) line.appendText(lead);
-            before.forEach((g, i) => {
-                if (i > 0) line.appendText(join);
-                textButton(line, { text: g.title, variant: 'link', onClick: () => showGuide(g.id) });
-            });
-            if (trail) line.appendText(trail);
-        }
-
-        // What the reader gets: the outcomes beside the finished chart (the picture of the guide's card).
-        const lead = guideEl.createDiv({ cls: 'etz-help-lead' });
-        const outcomes = lead.createEl('section', { cls: 'etz-help-outcomes' });
-        outcomes.createEl('h4', { cls: 'etz-help-sub', text: t('help.guide.outcomes') });
-        const ul = outcomes.createEl('ul', { cls: 'etz-help-list' });
-        for (const outcome of guide.outcomes || []) rich(ul.createEl('li'), outcome);
-        const finished = lead.createDiv({ cls: 'etz-help-finished' });
-        thumbnail(finished, guide, pageLazy);
-        textButton(finished, { text: t('help.guide.openFinished'), variant: 'link', cls: 'etz-help-open-finished', onClick: () => host.loadChart(cloneData(guide.chart)) });
-
-        // Before and after the text of a tip: read only by screen readers.
-        const [tipLead, tipTrail] = around(t('help.guide.tip'), 'tip');
-        const stepEls: HTMLElement[] = [];
-        guide.steps.forEach((step, index) => {
-            const el = guideEl.createEl('section', { cls: 'etz-help-step' });
-            const stepHead = el.createDiv({ cls: 'etz-help-step-head' });
-            stepHead.createSpan({ cls: 'etz-help-step-num', text: String(index + 1), attr: { 'aria-hidden': 'true' } });
-            const title = stepHead.createEl('h4', { cls: 'etz-help-step-title', attr: { tabindex: '-1' } });
-            // The number is on screen already: the words around the title are read only by screen readers.
-            const [stepLead, stepTrail] = around(t('help.card.step', { n: index + 1 }), 'title');
-            if (stepLead) visuallyHidden(title, stepLead);
-            title.appendText(step.title);
-            if (stepTrail) visuallyHidden(title, stepTrail);
-            title.id = uniqueId('help-step');
-            el.setAttr('aria-labelledby', title.id);
-
-            renderBody(el, step.body);
-            if (step.type && step.type.length) typeRows(el, step.type);
-            if (step.tip) {
-                const tip = el.createDiv({ cls: 'etz-help-tip' });
-                setIcon(tip.createSpan({ cls: 'etz-help-tip-icon', attr: { 'aria-hidden': 'true' } }), 'lightbulb');
-                const text = tip.createDiv({ cls: 'etz-help-tip-text' });
-                if (tipLead) visuallyHidden(text, tipLead);
-                rich(text, step.tip);
-                if (tipTrail) visuallyHidden(text, tipTrail);
-            }
-            if (step.chart) figure(el, step.chart, t('help.guide.figure', { n: index + 1, title: step.title }));
-            // A step without its own chart keeps the previous one: the button still opens the chart of this point of the guide.
-            const chart = stepChart(guide, index);
-            if (chart) {
-                textButton(el, { text: t('help.guide.openStep'), size: 'sm', cls: 'etz-help-open', onClick: () => host.loadChart(cloneData(chart)) });
-            }
-            stepEls.push(el);
+        const count = head.createSpan({ cls: 'etz-help-step-count', attr: { 'aria-live': 'polite' } });
+        const progress = guideEl.createDiv({ cls: 'etz-help-progress', attr: { 'aria-hidden': 'true' } });
+        const segments = guide.steps.map(() => progress.createSpan());
+        const stage = guideEl.createDiv({ cls: 'etz-help-stage' });
+        const nav = guideEl.createDiv({ cls: 'etz-help-nav' });
+        const back = textButton(nav, { text: t('help.step.back'), icon: 'arrow-left', onClick: () => go(now - 1) });
+        nav.createSpan({ cls: 'etz-help-keys', text: t('help.step.keys') });
+        const following = (guide.next || []).map((id) => localGuideById(id)).find((g): g is Guide => !!g && g.id !== guide.id) ?? null;
+        const next = textButton(nav, {
+            text: t('help.step.next'),
+            variant: 'cta',
+            onClick: () => {
+                if (now < guide.steps.length - 1) go(now + 1);
+                else if (following) showGuide(following.id);
+                else showHome();
+            },
         });
 
-        const next = (guide.next || []).map((id) => localGuideById(id)).filter((g): g is Guide => !!g && g.id !== guide.id);
-        if (next.length) {
-            const section = guideEl.createEl('section', { cls: 'etz-help-next' });
-            section.createEl('h3', { cls: 'etz-help-h', text: t('help.guide.next') });
-            const grid = section.createDiv({ cls: 'etz-help-cards' });
-            for (const g of next) guideCard(grid, g, pageLazy);
-        }
+        let now = 0;
+        const go = (i: number): void => {
+            now = Math.max(0, Math.min(guide.steps.length - 1, i));
+            if (lastRead && lastRead.guide === guide.id) lastRead.step = now;
+            renderStep(guide, now, stage);
+            count.setText(t('help.step.count', { n: now + 1, total: guide.steps.length }));
+            segments.forEach((segment, k) => segment.toggleClass('is-done', k <= now));
+            back.setDisabled(now === 0);
+            const last = now === guide.steps.length - 1;
+            next.setText(last ? (following ? t('help.step.nextGuide', { title: following.title }) : t('help.step.finish')) : t('help.step.next'));
+            scroller.scrollTop = 0;
+        };
+        stepper = { go, step: () => now };
+        go(at);
 
         const foot = guideEl.createEl('p', { cls: ['etz-help-p', 'etz-help-foot'] });
         const link = foot.createEl('a', { cls: 'external-link', text: t('help.guide.github'), href: guideUrl(guide.id) });
         link.setAttr('target', '_blank');
         link.setAttr('rel', 'noopener');
-        return stepEls;
     }
+
+    /** One step: its live chart beside what to do, and the chart in words with the lines this step added lit. */
+    function renderStep(guide: Guide, index: number, stage: HTMLElement): void {
+        live?.destroy();
+        live = null;
+        stage.empty();
+        const step = guide.steps[index];
+        const chart = stepChart(guide, index);
+        const left = stage.createDiv({ cls: 'etz-help-stage-chart' });
+        if (chart) {
+            try {
+                live = new LiveChart(left, chart, {
+                    label: t('help.guide.figure', { n: index + 1, title: step.title }),
+                    sliders: t('help.step.sliders'),
+                    play: (name) => t('panels.whatsNew.play', { name }),
+                    pause: (name) => t('panels.whatsNew.pause', { name }),
+                    boxCls: 'etz-help-live',
+                });
+            } catch {
+                left.addClass('is-fallback');
+            }
+        }
+        const right = stage.createDiv({ cls: 'etz-help-stage-top' });
+        stage.prepend(right);
+        const title = right.createEl('h4', { cls: 'etz-help-step-title', attr: { tabindex: '-1' } });
+        const [stepLead, stepTrail] = around(t('help.card.step', { n: index + 1 }), 'title');
+        if (stepLead) visuallyHidden(title, stepLead);
+        title.appendText(step.title);
+        if (stepTrail) visuallyHidden(title, stepTrail);
+        renderBody(right, step.body);
+        if (index === 0 && guide.outcomes && guide.outcomes.length) {
+            const outcomes = right.createDiv({ cls: 'etz-help-outcomes' });
+            outcomes.createDiv({ cls: 'etz-help-label', text: t('help.guide.outcomes') });
+            const ul = outcomes.createEl('ul', { cls: 'etz-help-list' });
+            for (const outcome of guide.outcomes) rich(ul.createEl('li'), outcome);
+        }
+        if (step.type && step.type.length) typeRows(right, step.type);
+        if (step.tip) {
+            const [tipLead, tipTrail] = around(t('help.guide.tip'), 'tip');
+            const tip = right.createDiv({ cls: 'etz-help-tip' });
+            setIcon(tip.createSpan({ cls: 'etz-help-tip-icon', attr: { 'aria-hidden': 'true' } }), 'lightbulb');
+            const text = tip.createDiv({ cls: 'etz-help-tip-text' });
+            if (tipLead) visuallyHidden(text, tipLead);
+            rich(text, step.tip);
+            if (tipTrail) visuallyHidden(text, tipTrail);
+        }
+        if (!chart) return;
+        const lines = chartLines(chart);
+        const before = index > 0 ? stepChart(guide, index - 1) : null;
+        const old = new Set(before ? chartLines(before) : []);
+        const fresh = new Set<number>(before ? lines.map((line, k) => (old.has(line) ? -1 : k)).filter((k) => k >= 0) : []);
+        const words = stage.createDiv({ cls: 'etz-help-stage-words' });
+        words.createDiv({ cls: 'etz-help-label', text: t('help.step.words') });
+        chartWords(words, lines, fresh);
+        const row = words.createDiv({ cls: 'etz-help-row' });
+        // The Help hides the preview: the chart opens on the Build tab, where it shows.
+        textButton(row, { text: t('help.step.openEditor'), icon: 'pencil', size: 'sm', onClick: () => host.loadChart(live ? live.chart() : cloneData(chart), () => host.showTab('build')) });
+        const copy = textButton(row, { text: t('help.step.copyChart'), icon: 'copy', size: 'sm' });
+        let timer: number | null = null;
+        copy.el.addEventListener('click', () => {
+            const block = ['```easy-tikz', ...lines, '```'].join('\n');
+            void navigator.clipboard.writeText(block).then(
+                () => {
+                    copy.setText(t('common.copied'));
+                    if (timer !== null) window.clearTimeout(timer);
+                    timer = window.setTimeout(() => {
+                        timer = null;
+                        copy.setText(t('help.step.copyChart'));
+                    }, COPIED_MS);
+                },
+                () => new Notice(t('help.copyFailed'))
+            );
+        });
+    }
+
+    // The arrow keys move between the steps of the open guide (not while a field has the focus).
+    guideEl.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (view !== 'guide' || !stepper || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        const target = e.target instanceof HTMLElement ? e.target : null;
+        if (target && (target.closest('input, textarea, select, [contenteditable="true"]') || target.getAttribute('role') === 'slider')) return;
+        if (e.key === 'ArrowRight') stepper.go(stepper.step() + 1);
+        else if (e.key === 'ArrowLeft') stepper.go(stepper.step() - 1);
+        else return;
+        e.preventDefault();
+    });
 
     // ------------------------------------------------------------ reference
 
@@ -1416,23 +1395,11 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
 
     // -------------------------------------------------------------- resume
 
-    // Remember how far the open guide was read, so the next editor (a chart
-    // inserted into a note closes this one) opens the Help tab there again.
-    scroller.addEventListener(
-        'scroll',
-        () => {
-            if (view === 'guide' && openGuide && lastRead && lastRead.guide === openGuide.id && root.isShown()) lastRead.scroll = scroller.scrollTop;
-        },
-        { passive: true }
-    );
+    // The next editor (a chart inserted into a note closes this one) opens the guide that was open, at its step.
     const resume = lastRead && localGuideById(lastRead.guide) ? { ...lastRead } : null;
     if (resume) {
-        showGuide(resume.guide);
+        showGuide(resume.guide, resume.step);
         lastRead = { ...resume };
-        // The tab panel is hidden until the Help tab is picked: scroll once it shows.
-        homeLazy.add(root, () => {
-            if (view === 'guide' && openGuide && openGuide.id === resume.guide) scroller.scrollTop = resume.scroll;
-        });
     }
 
     return {
@@ -1450,6 +1417,8 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         },
         destroy: () => {
             destroyed = true;
+            live?.destroy();
+            live = null;
             homeLazy.clear();
             pageLazy.clear();
             syncEscape();

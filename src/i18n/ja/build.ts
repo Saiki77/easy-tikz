@@ -81,6 +81,13 @@ export const build: Messages<typeof en> = {
     'build.menu.builtIn': '組み込み',
     'build.menu.saved': '保存済み',
     'build.menu.template': '{name}：{expression}',
+    'build.picker.label': 'グラフに追加',
+    'build.picker.search': '検索：面積、矢印、正規分布、積分',
+    'build.picker.groups': 'グループ',
+    'build.picker.nothing': '「{query}」に一致するものはありません。「面積」「矢印」など、別の言葉で探してください。',
+    'build.picker.keys': '上下キーで選択、Enter で追加、Tab で次のグループ、Esc で閉じます。',
+    'build.picker.keysSingle': '上下キーで選択、Enter で追加、Esc で閉じます。',
+    'build.picker.templates': 'テンプレート',
 
     // ---- recipes
     'build.recipe.function': '関数 y = f(x)',

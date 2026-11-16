@@ -324,7 +324,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         setChartLanguage(this.data.chartLanguage);
         this.register(() => setChartLanguage('words'));
 
-        this.addRibbonIcon('square-function', 'Easy TikZ', () => {
+        this.addRibbonIcon('square-function', 'Easy Graphs, Charts & TikZ', () => {
             new TikzModal(this.app, this).open();
         });
 
@@ -700,7 +700,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         }
     }
 
-    /** Add (or refresh) the Easy TikZ section of AGENTS.md and CLAUDE.md at the vault root, which AI agents read. */
+    /** Add (or refresh) the Easy Graphs, Charts & TikZ section of AGENTS.md and CLAUDE.md at the vault root, which AI agents read. */
     async writeAgentFiles(): Promise<string[]> {
         const section = agentsSection(this.app.vault.configDir, this.data.aiPort, this.manifest.version);
         const written: string[] = [];

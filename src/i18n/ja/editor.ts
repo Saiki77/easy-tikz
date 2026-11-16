@@ -3,7 +3,7 @@ import type { Messages } from '../types';
 import type { editor as en } from '../en/editor';
 
 export const editor: Messages<typeof en> = {
-    'editor.shell.title': 'Easy TikZ エディタ',
+    'editor.shell.title': 'Easy Graphs, Charts & TikZ エディタ',
     'editor.header.chartType': 'グラフの種類',
     'editor.header.coordinates': '座標系',
     'editor.header.cartesian': '直交座標',

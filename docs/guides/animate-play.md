@@ -2,137 +2,91 @@
 
 # Animate a chart with play
 
-[All guides](README.md) · Functions and sliders · Core · about 8 minutes
+[All guides](README.md) · Functions and sliders · Core · about 3 minutes
 
-A point runs around the unit circle while the sine curve draws itself behind it: one slider in points, a domain, a path and the title, then press play.
+A point runs around the unit circle while the circle unrolls into the sine curve, all on one slider.
 
 <p align="center"><img src="img/animate-play-card.png" alt="The finished chart of the guide Animate a chart with play" width="480"></p>
 
 **What you can do afterwards**
 
-- Move points, a domain and a path with one slider
-- Choose the range and the step of a slider for an animation
-- Play a slider and print live values in the title
+- Move points, arcs and curves with one slider
+- Give a slider one turn and a fine step
+- Play it and print live values in the title
 
 **Read first:** [Sliders that move the picture](sliders.md)
 
-## 1. Set up a wide view
+## 1. Draw the unit circle
 
-Start with a new chart and open the Chart tab. Under Ranges set x from -3 to 7 and y from -1.5 to 1.5. Under Axes choose the style Middle and switch on Equal scale. Under Export size drag Width to 15 cm and Height to 5 cm.
+A wide window with `equal scale` keeps the circle round. The circle of radius 1 sits left of the y-axis, so the sine gets the right side.
 
-The picture will hold a circle on the left and one period of a sine wave on the right. Equal scale keeps the circle round, and the wide export size gives the long x range the room it needs.
+The chart in words:
 
-| Where | Type |
-| --- | --- |
-| Chart \> Ranges, x from | `-3` |
-| Chart \> Ranges, x to | `7` |
-| Chart \> Ranges, y from | `-1.5` |
-| Chart \> Ranges, y to | `1.5` |
+```easy-tikz
+show x from -3 to 7 and y from -2 to 2
+size 12 x 6
+equal scale
+axes in the middle
+draw (x + 1.5)^2 + y^2 = 1 in gray
+```
 
-![Screenshot of the editor for step 1: Set up a wide view](img/animate-play-1.png)
+![Draw the unit circle](img/animate-play-1.png)
 
-*Ranges, the Middle axis style, Equal scale and a wide export size, all in the Chart tab.*
+## 2. Run a point around it
 
-> **Tip:** With Equal scale on, one unit has the same length on both axes, and the part of the canvas the plot does not need stays empty. An export size of about the same shape as the ranges keeps that empty part small.
+The slider `a` from 0.01 to 6.28 is one turn. The point `(cos(a) - 1.5, sin(a))` sits on the circle at the angle a, a second one at `(a, sin(a))`.
 
-## 2. Draw the unit circle
+The chart gets these lines:
 
-Go back to the Build tab, click + Add and choose Circle in the group Curves and lines. Replace the equation of the new card C1 with the one below.
+```easy-tikz
+slider a from 0.01 to 6.28, starting at 2, in steps of 0.01
+P: mark (cos(a) - 1.5, sin(a)) and (a, sin(a))
+```
 
-It is the circle of radius 1 around (-1.5, 0). It sits left of the y-axis, so the sine wave has the right half of the picture to itself.
+![Run a point around it](img/animate-play-2.png)
 
-| Where | Type |
-| --- | --- |
-| C1, Equation | `(x + 1.5)^2 + y^2 = 1` |
+> **Tip:** The slider starts just above 0: a curve from 0 to a needs some length.
 
-![Screenshot of the editor for step 2: Draw the unit circle](img/animate-play-2.png)
+## 3. Unroll the arc onto the axis
 
-*The unit circle, moved 1.5 to the left.*
+The red arc runs from the angle 0 to a, so its length is a. The red segment from 0 to a on the x-axis has the same length: the circle unrolled.
 
-## 3. Put two points on a slider
+The chart gets these lines:
 
-Click + Add and choose Points from a list. Replace the sample points with the two below. The name `a` is unknown, so a button Add slider a appears under the field. Click it. The slider starts at 1.
+```easy-tikz
+plot $c(t) = (\cos(t) - 1.5, \sin(t))$ for t from 0 to a in red, very thick
+draw a line from (0, 0) to (a, 0) in red, very thick
+```
 
-The first point is `(cos(a), sin(a))` moved 1.5 to the left: the point of the circle at the angle a, measured in radians. The second point has the same height, sin(a), but sits at x = a. That is where the sine curve will end.
+![Unroll the arc onto the axis](img/animate-play-3.png)
 
-| Where | Type |
-| --- | --- |
-| P1, Points | `(cos(a) - 1.5, sin(a)); (a, sin(a))` |
+## 4. Draw the sine up to a
 
-![Screenshot of the editor for step 3: Put two points on a slider](img/animate-play-3.png)
+`from x = 0 to a` stops the sine at the second point. The dashed path joins the centre, the point on the circle and the end of the curve.
 
-*Two points computed from the slider a: one on the circle, one at the same height at x = a.*
+The chart gets these lines:
 
-> **Tip:** Points from a list take formulas. Anything that gives a number works inside the brackets, sliders included.
+```easy-tikz
+plot $f(x) = \sin(x)$ from x = 0 to a in blue, very thick
+draw a line from (-1.5, 0) to P, dashed
+```
 
-## 4. Draw the sine curve up to a
+![Draw the sine up to a](img/animate-play-4.png)
 
-Click + Add and choose Function y = f(x). Type `sin(x)` into the new card f1 and `0:a` into its Domain field. Click the colour swatch on the card and pick Blue.
+## 5. Press play
 
-The curve is drawn from x = 0 to x = a only, so it ends exactly at the second point. When a grows, the curve grows with it.
+Press play on `a`: the point runs around, the arc unrolls and the sine grows behind it. The title prints the angle and its sine, here at 4, past half a turn.
 
-| Where | Type |
-| --- | --- |
-| f1, y = | `sin(x)` |
-| f1, Domain | `0:a` |
+The chart gets these lines:
 
-![Screenshot of the editor for step 4: Draw the sine curve up to a](img/animate-play-4.png)
+```easy-tikz
+title $a = {a:2}$, $\sin(a) = {sin(a):2}$
+slider a from 0.01 to 6.28, starting at 4, in steps of 0.01
+```
 
-*The domain 0:a stops the curve at the second point.*
+![Press play](img/animate-play-5.png)
 
-> **Tip:** A domain needs its end after its start. At a = 0 the domain `0:a` is empty and the card reports an error, which is why a stays above 0 later on.
-
-## 5. Join the points with one path
-
-Click + Add and choose Line segment. Replace the path of the card S1 with the one below and switch on Dashed in the Line row.
-
-A path entry can be the name of a points card: `P1` stands for its two points, in order. So the path runs from the centre of the circle to the point on the circle, which draws the radius, and on to the end of the curve at the same height.
-
-| Where | Type |
-| --- | --- |
-| S1, Path | `(-1.5, 0); P1` |
-
-![Screenshot of the editor for step 5: Join the points with one path](img/animate-play-5.png)
-
-*One path through the centre, the point on the circle and the end of the curve.*
-
-> **Tip:** The path follows P1 by itself. Every point the card computes is part of the path, wherever it moves.
-
-## 6. Give a a range and a step
-
-In the Sliders dock, open the menu behind the three dots on the row of a and set Min to 0.01, Max to 6.28 and Step to 0.01. Then drag a to 2.
-
-The range is one full turn, since 6.28 is about 2π. It starts just above 0, because the domain `0:a` needs some length. The step is the grid the slider stops on: with 0.01 you can stop at 3.14, half a turn.
-
-| Where | Type |
-| --- | --- |
-| Sliders, a: Min | `0.01` |
-| Sliders, a: Max | `6.28` |
-| Sliders, a: Step | `0.01` |
-
-![Screenshot of the editor for step 6: Give a a range and a step](img/animate-play-6.png)
-
-*a = 2: the point has gone a third of the way round, and the curve has grown with it.*
-
-> **Tip:** The small numbers at the two ends of a slider are its Min and Max as well. Click one and type to change it.
-
-## 7. Press play and print the values
-
-Open the Chart tab and type the title below. Back in the Build tab, click the play button on the row of a.
-
-The point runs around the circle, the dashed path follows, and the sine curve grows behind the second point: one turn in about four seconds, then back again. The title prints the angle and its sine on every frame. Click the button again to stop, for example near a = 4.
-
-A step of 0.01 is already fine enough for smooth motion, so play moves a from one step to the next. With a coarse step such as 0.5, play moves on a finer grid while it runs and puts a back onto the step when you stop. A whole-number step such as 1 stays whole while it plays, so a count never turns into a fraction.
-
-| Where | Type |
-| --- | --- |
-| Chart \> Axes, Title | `a = {a:2}, sin(a) = {sin(a):2}` |
-
-![Screenshot of the editor for step 7: Press play and print the values](img/animate-play-7.png)
-
-*Stopped at a = 4: past half a turn, the point is below the axis and the sine is negative.*
-
-> **Tip:** A sweep takes about four seconds whatever the range. In a note, the slider strip under the chart has no play button: drag a there instead.
+> **Tip:** In a note the slider strip has no play button: drag `a` there instead.
 
 ## The finished chart
 
@@ -142,24 +96,26 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-show x from -3 to 7 and y from -1.5 to 1.5
-size 15 x 5
+show x from -3 to 7 and y from -2 to 2
+size 12 x 6
 equal scale
 axes in the middle
-title a = {a:2}, sin(a) = {sin(a):2}
+title $a = {a:2}$, $\sin(a) = {sin(a):2}$
 slider a from 0.01 to 6.28, starting at 4, in steps of 0.01
-plot f1(x) = sin(x) from x = 0 to a in blue
-draw (x + 1.5)^2 + y^2 = 1
-P1: mark (cos(a) - 1.5, sin(a)) and (a, sin(a))
-draw a line from (-1.5, 0) to P1, dashed
+plot $c(t) = (\cos(t) - 1.5, \sin(t))$ for t from 0 to a in red, very thick
+plot $f(x) = \sin(x)$ from x = 0 to a in blue, very thick
+draw (x + 1.5)^2 + y^2 = 1 in gray
+draw a line from (0, 0) to (a, 0) in red, very thick
+P: mark (cos(a) - 1.5, sin(a)) and (a, sin(a))
+draw a line from (-1.5, 0) to P, dashed
 ```
 
 </details>
 
 ## Next guides
 
-- [From secant to tangent](secant-tangent.md): Draw the secant through two points of a curve, shrink their distance h with a slider and watch its slope approach the slope of the tangent.
-- [An area that grows with a slider](area-accumulation.md): Shade the area under a curve from 0 to a slider b, print its size, and draw the function that adds it up, so the height of one curve shows the area under the other.
-- [Charts in your notes](charts-in-notes.md): Insert a chart into a note, play with its sliders there, set its width and alignment, and open it again to change it.
+- [From secant to tangent](secant-tangent.md): Shrink the gap h between two points of a curve and watch the secant through them turn into the tangent.
+- [An area that grows with a slider](area-accumulation.md): Shade the area under a curve up to a slider and draw the function that adds it up.
+- [Parametric and polar curves](parametric-polar.md): Trace a curve from x(t) and y(t), then switch to polar and grow a rose whose petals a slider counts.
 
 [All guides](README.md)

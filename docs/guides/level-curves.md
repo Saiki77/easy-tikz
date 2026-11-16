@@ -2,114 +2,87 @@
 
 # Find a nonlinear optimum with level curves
 
-[All guides](README.md) · Regions and optimisation · Advanced · about 8 minutes
+[All guides](README.md) · Regions and optimisation · Advanced · about 3 minutes
 
-Level curves of an objective, a constraint region, the best point on its edge, and the level curve that touches it there.
+Circles of equal distance as level curves, and the closest point of a region, where one of them touches.
 
 <p align="center"><img src="img/level-curves-card.png" alt="The finished chart of the guide Find a nonlinear optimum with level curves" width="480"></p>
 
 **What you can do afterwards**
 
 - Draw the level curves of a formula in x and y
-- Find the optimum of a nonlinear objective over a region
-- Draw the level curve through the optimum with a computed value
-- Watch the solution follow a slider
+- Find a nonlinear minimum over a region
+- Draw the level curve through the optimum
 
 **Read first:** [Solve a linear program in a picture](linear-program.md)
 
-## 1. Add level curves
+## 1. Draw level curves
 
-Start with a new chart. Click + Add and choose Level curves of F(x, y).
+A level curve joins the points where a formula has one value. This formula is the squared distance from (6, 5), so its level curves are circles.
 
-The card C1 holds the formula `x*y` in Equation and the list `2, 4, 8` in Levels. The preview draws one curve per level: all points where x times y equals 2, 4 or 8. Its Label, `{level}`, prints the value on each curve.
+The chart in words:
 
-Read `x*y` as the objective of this guide, for example the utility of a bundle of two goods. Curves further out are better.
+```easy-tikz
+show x from -0.5 to 9 and y from -0.5 to 7
+size 12 x 8
+equal scale
+axes in the middle
+draw the level curves of (x - 6)^2 + (y - 5)^2 at 1, 4, 9 and 16 in purple, labelled "{level}"
+```
 
-![Screenshot of the editor for step 1: Add level curves](img/level-curves-1.png)
+![Draw level curves](img/level-curves-1.png)
 
-*One curve per entry of Levels. Without levels, the same card draws the single curve F = 0.*
+## 2. Add the region
 
-> **Tip:** Write `x*y` or `x y`. Without the star or the space, `xy` is read as one name.
+Which point of the region lies closest to (6, 5)? It sits on the smallest circle that still reaches the region.
 
-## 2. Add the constraint
+The chart gets these lines:
 
-Click + Add and choose Feasible region (inequalities). Type the condition below into the empty third row of the card R1.
+```easy-tikz
+shade where $x + y \le 6$ and $x \le 4$ and $x \ge 0$ and $y \ge 0$ in teal
+```
 
-The shaded triangle is the budget set: all bundles that cost at most 7 when x costs 1 and y costs 2. The curve 2 and the curve 4 pass through it. The curve 8 lies outside, out of reach.
+![Add the region](img/level-curves-2.png)
 
-| Where | Type |
-| --- | --- |
-| R1, condition 3 | `x + 2y <= 7` |
+## 3. Mark the closest point
 
-![Screenshot of the editor for step 2: Add the constraint](img/level-curves-2.png)
+`mark the minimum` searches the whole region, inside and on the edges. Here the best point lies on an edge, between two corners.
 
-*The budget set and three level curves of the objective.*
+The chart gets these lines:
 
-> **Tip:** Fills always sit below lines and points, so the order of the cards does not hide the curves.
+```easy-tikz
+P: mark the minimum of (x - 6)^2 + (y - 5)^2 in the region, large, with coordinates
+```
 
-## 3. Find the best point
+![Mark the closest point](img/level-curves-3.png)
 
-On the card R1 click Find optimum. The field Objective of the new card P1 holds the sample `2x + 3y`, already selected: type the formula below over it. Leave the switch on Max.
+## 4. Draw the circle through it
 
-The marker lands at (3.5, 1.75), in the middle of the sloping edge. It is not a corner: for a nonlinear objective the best point can lie anywhere on the boundary or inside, and the points card searches all of it.
+`P_val` is the value at P. Its level curve touches the edge at P without crossing it: that is what an optimum looks like.
 
-| Where | Type |
-| --- | --- |
-| P1, Objective | `x*y` |
+The chart gets these lines:
 
-![Screenshot of the editor for step 3: Find the best point](img/level-curves-3.png)
+```easy-tikz
+draw the level curves of (x - 6)^2 + (y - 5)^2 at 1, 4, 9, 16 and P_val in purple, labelled "{level}"
+```
 
-*The maximum of x\*y over the budget set lies on the edge, between the corners.*
+![Draw the circle through it](img/level-curves-4.png)
 
-> **Tip:** The hint under Objective says what is searched: the best point anywhere in R1, inside, on an edge or at a corner.
+## 5. Move the centre with a slider
 
-## 4. Draw the curve through the optimum
+Put a slider `p` in place of 6. Drag it: the point slides along the edge and, from `p = 7` on, stays at the corner (4, 2).
 
-On the card C1, add `P1_val` to the list in Levels so that it reads as below.
+The chart gets these lines:
 
-`P1_val` is the objective value at the point P1 found, here 6.125. The new curve touches the budget line in exactly that point and stays outside the region everywhere else. That tangency is the picture of an optimum under a constraint.
+```easy-tikz
+slider p from 2 to 8, starting at 6
+draw the level curves of (x - p)^2 + (y - 5)^2 at 1, 4, 9, 16 and P_val in purple, labelled "{level}"
+P: mark the minimum of (x - p)^2 + (y - 5)^2 in the region, large, with coordinates
+```
 
-| Where | Type |
-| --- | --- |
-| C1, Levels | `2, 4, 8, P1_val` |
+![Move the centre with a slider](img/level-curves-5.png)
 
-![Screenshot of the editor for step 4: Draw the curve through the optimum](img/level-curves-4.png)
-
-*The level P1\_val is the curve that just touches the budget line.*
-
-> **Tip:** Levels can mix numbers, sliders and computed values, separated by commas.
-
-## 5. Print the optimal value
-
-On the card P1 set Label to Custom and replace the text with the template below.
-
-The marker now shows the value of the objective instead of its coordinates: u\* = 6.13. The `:2` limits the number to two decimals.
-
-| Where | Type |
-| --- | --- |
-| P1, Label | `u* = {val:2}` |
-
-![Screenshot of the editor for step 5: Print the optimal value](img/level-curves-5.png)
-
-*A custom point label with the objective value.*
-
-> **Tip:** To print both, write `({x}, {y}): u* = {val:2}`.
-
-## 6. Put the budget on a slider
-
-In the third row of R1, replace the 7 by the name `b`, so that the row reads as below. Click Add slider b under the field, then drag the new slider from 1 up to 9.
-
-The triangle grows, the optimum slides outwards, and the touching level curve follows it. At b = 9 the best value is about 10.13, beyond the curve 8.
-
-| Where | Type |
-| --- | --- |
-| R1, condition 3 | `x + 2y <= b` |
-
-![Screenshot of the editor for step 6: Put the budget on a slider](img/level-curves-6.png)
-
-*With the budget on a slider, region, optimum and level curve are recomputed while you drag.*
-
-> **Tip:** Before you press play on b, click the small number at the left end of the slider and type 1: a budget of 0 or less leaves nothing to shade.
+> **Tip:** `mark the maximum` works the same way: the best point lies on the largest level curve that still reaches the region.
 
 ## The finished chart
 
@@ -119,18 +92,21 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-slider b from -10 to 10, starting at 9, in steps of 0.1
-draw the level curves of x*y at 2, 4, 8 and P1_val in purple, labelled "{level}"
-shade where x >= 0 and y >= 0 and x + 2y <= b, with constraint lines
-P1: mark the maximum of x*y in the region, large, labelled "u* = {val:2}"
+show x from -0.5 to 9 and y from -0.5 to 7
+size 12 x 8
+equal scale
+axes in the middle
+slider p from 2 to 8, starting at 6
+draw the level curves of (x - p)^2 + (y - 5)^2 at 1, 4, 9, 16 and P_val in purple, labelled "{level}"
+shade where $x + y \le 6$ and $x \le 4$ and $x \ge 0$ and $y \ge 0$ in teal
+P: mark the minimum of (x - p)^2 + (y - 5)^2 in the region, large, with coordinates
 ```
 
 </details>
 
 ## Next guides
 
-- [Draw a market with surplus areas](supply-demand.md): Demand and supply, their equilibrium with guide lines, and consumer and producer surplus that follow a slider.
-- [Compare an integer program with its relaxation](integer-program.md): Integer points inside a feasible region, the best integer point, and how far it is from the optimum of the relaxed linear program.
-- [Charts in your notes](charts-in-notes.md): Insert a chart into a note, play with its sliders there, set its width and alignment, and open it again to change it.
+- [Draw a market with surplus areas](supply-demand.md): Demand and supply, the equilibrium with lines to the axes, and both surpluses following a demand slider.
+- [Surfaces, planes and points in 3D](surfaces-3d.md): Plot a surface coloured by height in a cube, turn it, and cut it with a plane on a slider.
 
 [All guides](README.md)

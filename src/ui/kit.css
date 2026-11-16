@@ -1,4 +1,4 @@
-/* Easy TikZ UI kit (src/ui/kit.ts). Obsidian colour variables only, so
+/* Easy Graphs, Charts & TikZ UI kit (src/ui/kit.ts). Obsidian colour variables only, so
    light and dark themes (and community themes) follow automatically.
    Sizes come from the --etz-* tokens on .tikz-modal / .etz-tokens
    (src/styles.css). Selectors on buttons and inputs carry the element

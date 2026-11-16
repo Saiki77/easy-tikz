@@ -2,128 +2,89 @@
 
 # Segments, arrows and braces
 
-[All guides](README.md) · Points, lines and labels · Core · about 10 minutes
+[All guides](README.md) · Points, lines and labels · Core · about 3 minutes
 
-Draw a slope triangle on a line: a polyline for run and rise, two braces with labels and an arrow that points at the line.
+Draw a slope triangle: a path for the run and the rise, braces with live labels and an arrow.
 
 <p align="center"><img src="img/arrows-braces-card.png" alt="The finished chart of the guide Segments, arrows and braces" width="480"></p>
 
 **What you can do afterwards**
 
-- Draw segments and polylines through points you type
-- Add braces with labels and flip them to the other side
-- Point at things with arrows and adjust their ends by dragging
+- Draw paths, arrows and braces through points
+- Label a brace with a value computed from a function
+- Read a slope as rise over run
 
-**Read first:** [Your first chart](first-chart.md)
+**Read first:** [Write a chart in words](chart-language.md)
 
-## 1. Start with a line
+## 1. Draw a path through points
 
-Open the editor on an empty chart. Click + Add and choose Function y = f(x), then type the formula into the `y =` field of the card f1.
+`draw a line from A to B to C` joins the points. This one runs 4 across from the line, then up to it again: the run and the rise.
 
-Click the round colour swatch at the left of the card and pick Blue. The annotations you add next are black, so the line stays easy to tell apart.
+The chart in words:
 
-| Where | Type |
-| --- | --- |
-| f1, y = | `0.5x` |
+```easy-tikz
+show x from 0 to 8 and y from 0 to 6
+size 12 x 8
+axes on the edges
+with a grid
+plot $g(x) = \frac{1}{2}x + 1$ in blue, thick
+draw a line from (2, g(2)) to (6, g(2)) to (6, g(6)) in gray, dashed
+```
 
-![Screenshot of the editor for step 1: Start with a line](img/arrows-braces-1.png)
+![Draw a path through points](img/arrows-braces-1.png)
 
-*The line y = 0.5x in the default view.*
+## 2. Label the run with a brace
 
-> **Tip:** Typing the first formula into Start a chart also fits the view to it. Reset ranges (the round arrow in the action pill of the preview) brings back the default view this guide uses.
+A brace spans two points and carries a label. It bulges to the left of its direction, so drawn from right to left it hangs below.
 
-## 2. Draw a line segment
+The chart gets these lines:
 
-Click + Add and choose Line segment. The card S1 starts with a sample path. Replace it with the path below.
+```easy-tikz
+draw a brace from (6, g(2)) to (2, g(2)), labelled "run = 4"
+```
 
-A path is a list of points separated by `;`. Two points make a straight segment: here the horizontal run from x = 2 to x = 8, starting on the line.
+![Label the run with a brace](img/arrows-braces-2.png)
 
-| Where | Type |
-| --- | --- |
-| S1, Path | `(2, 1); (8, 1)` |
+> **Tip:** Swap the two points to flip a brace to the other side.
 
-![Screenshot of the editor for step 2: Draw a line segment](img/arrows-braces-2.png)
+## 3. Print the rise as a value
 
-*S1 is a segment between two typed points.*
+Curly brackets in a label compute: `{g(6) - g(2)}` reads the rise off the line, so the label stays right when the line changes.
 
-> **Tip:** Coordinates are formulas, not just numbers. `(2, f1(2)); (8, f1(2))` draws the same segment and keeps it on the line when you change f1.
+The chart gets these lines:
 
-## 3. Extend it to a polyline
+```easy-tikz
+draw a brace from (6, g(6)) to (6, g(2)), labelled "rise = {g(6) - g(2)}"
+```
 
-Add a third point to the path, then switch on Dashed in the Line row. The path now turns the corner and climbs back to the line: first the run, then the rise. The summary on the card changes to Path through 3 points.
+![Print the rise as a value](img/arrows-braces-3.png)
 
-| Where | Type |
-| --- | --- |
-| S1, Path | `(2, 1); (8, 1); (8, 4)` |
+## 4. Draw the slope as an arrow
 
-![Screenshot of the editor for step 3: Extend it to a polyline](img/arrows-braces-3.png)
+An arrow is a vector from its tail to its head: here 4 across and 2 up. Its label divides the rise by the run: the slope.
 
-*Three points make a polyline: run, then rise.*
+The chart gets these lines:
 
-> **Tip:** Closed (next to Dashed) joins the last point back to the first and turns the path into a polygon outline.
+```easy-tikz
+draw an arrow from (2, g(2)) to (6, g(6)) in red, very thick, labelled "slope = {(g(6) - g(2))/4}"
+```
 
-## 4. Label the run with a brace
+![Draw the slope as an arrow](img/arrows-braces-4.png)
 
-Click + Add and choose Brace with label. In the card S2, type the path and the label below.
+> **Tip:** `draw a double arrow from A to B` puts a head at both ends.
 
-A brace spans the first two points of its path and carries its label at its tip.
+## 5. Turn the line with a slider
 
-| Where | Type |
-| --- | --- |
-| S2, Path | `(8, 1); (2, 1)` |
-| S2, Label | `run = 6` |
+Make the slope a slider `m`. Drag it: the line turns, and the rise, its brace and the arrow follow.
 
-![Screenshot of the editor for step 4: Label the run with a brace](img/arrows-braces-4.png)
+The chart gets these lines:
 
-*A brace under the run. Its path is written from right to left.*
+```easy-tikz
+slider m from 0.25 to 0.75, starting at 0.5
+plot g(x) = m x + 1 in blue, thick
+```
 
-> **Tip:** A brace bulges to the left of the direction from its first point to its second. Written from right to left, as here, it hangs below the segment. Swap the two points to flip it.
-
-## 5. Label the rise with a live value
-
-Add a second brace: + Add, then Brace with label. This one runs from top to bottom, so it bulges to the right, away from the triangle.
-
-Its label is a template. The part in braces is computed: `f1(8) - f1(2)` is how far the line rises over the run, so the label reads rise = 3 and stays correct when you change the formula of f1.
-
-| Where | Type |
-| --- | --- |
-| S3, Path | `(8, 4); (8, 1)` |
-| S3, Label | `rise = {f1(8) - f1(2)}` |
-
-![Screenshot of the editor for step 5: Label the rise with a live value](img/arrows-braces-5.png)
-
-*The second brace prints a value computed from the line.*
-
-> **Tip:** A number after a colon limits the decimals: `{f1(8) - f1(2):1}` prints at most one. Without it, a value prints with up to three decimals.
-
-## 6. Point at the line with an arrow
-
-Click + Add and choose Arrow. In the card S4, type the path and the label below. The arrow starts in the empty space above the line and ends just above it.
-
-In the Style row, the button with the head at the end is selected. The buttons next to it put the head at the start or at both ends.
-
-| Where | Type |
-| --- | --- |
-| S4, Path | `(2.5, 4); (4.4, 2.35)` |
-| S4, Label | `slope = {(f1(8) - f1(2))/6}` |
-
-![Screenshot of the editor for step 6: Point at the line with an arrow](img/arrows-braces-6.png)
-
-*An arrow with a computed label points at the line.*
-
-> **Tip:** With an arrow style, a path through more than two points gets a head on every leg.
-
-## 7. Drag an end to fine-tune
-
-In the preview, grab the tail of the arrow and drag it up and to the left, to about (2, 4.5). The numbers of that point in Path follow the pointer, rounded to what the screen can show (hundredths at this zoom), so yours may read (2.05, 4.47). Close to a grid point the end snaps onto it.
-
-Grab the arrow by its shaft instead and the whole arrow moves.
-
-![Screenshot of the editor for step 7: Drag an end to fine-tune](img/arrows-braces-7.png)
-
-*The tail of the arrow after the drag. The Path field shows the new numbers.*
-
-> **Tip:** Hold Shift while you drag an end and it moves straight: horizontally, vertically or diagonally.
+![Turn the line with a slider](img/arrows-braces-5.png)
 
 ## The finished chart
 
@@ -133,19 +94,23 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-plot f1(x) = 0.5x in blue
-draw a line from (2, 1) to (8, 1) to (8, 4), dashed
-draw a brace from (8, 1) to (2, 1), labelled "run = 6"
-draw a brace from (8, 4) to (8, 1), labelled "rise = {f1(8) - f1(2)}"
-draw an arrow from (2, 4.5) to (4.4, 2.35), labelled "slope = {(f1(8) - f1(2))/6}"
+show x from 0 to 8 and y from 0 to 6
+size 12 x 8
+axes on the edges
+with a grid
+slider m from 0.25 to 0.75, starting at 0.5
+plot g(x) = m x + 1 in blue, thick
+draw a line from (2, g(2)) to (6, g(2)) to (6, g(6)) in gray, dashed
+draw a brace from (6, g(2)) to (2, g(2)), labelled "run = 4"
+draw a brace from (6, g(6)) to (6, g(2)), labelled "rise = {g(6) - g(2)}"
+draw an arrow from (2, g(2)) to (6, g(6)) in red, very thick, labelled "slope = {(g(6) - g(2))/4}"
 ```
 
 </details>
 
 ## Next guides
 
-- [Points, intersections and live labels](points-labels.md): Mark points from a list, find where two curves cross, and print values that update when a slider moves.
-- [Drag shapes to edit them](drag-to-edit.md): Grab a line or a curve in the preview and its numbers follow: move, turn, stretch, undo.
-- [Tangents and extrema](tangents-extrema.md): Mark the turning points of a function, add a tangent, slide it along the curve and label its slope.
+- [Calculate with computed points](computed-values.md): Use what crossing points publish, their count and coordinates, in a title, a new point and an area.
+- [Points and live labels](points-labels.md): Mark points from a list or from a formula, name them in LaTeX and print their values in labels.
 
 [All guides](README.md)

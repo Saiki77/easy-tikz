@@ -2,127 +2,89 @@
 
 # Shade a region with inequalities
 
-[All guides](README.md) · Regions and optimisation · Core · about 6 minutes
+[All guides](README.md) · Regions and optimisation · Core · about 3 minutes
 
-Shade the set where inequalities hold: one condition per row, chains, alternatives with or, and labels for the rows and the region.
+Shade where conditions hold, between two curves and cut by a third, then number its corners and hatch it.
 
 <p align="center"><img src="img/regions-card.png" alt="The finished chart of the guide Shade a region with inequalities" width="480"></p>
 
 **What you can do afterwards**
 
-- Shade the set of points where several inequalities hold at once
-- Write a range as a chain and join alternatives with or
-- Label the conditions and the region, and choose between constraint lines and an outline
+- Shade a region with conditions in LaTeX
+- Put y between two curves with a chain
+- Mark and number the corners of a region
 
-**Read first:** [Your first chart](first-chart.md)
+**Read first:** [Write a chart in words](chart-language.md)
 
-## 1. Add a feasible region
+## 1. Shade where a condition holds
 
-Start with a new chart. Click + Add and choose Feasible region (inequalities) in the group Regions.
+A `shade where` line colours every point where its condition holds. Write the condition in LaTeX between dollars, as in your notes: here, every point above a parabola.
 
-A card named R1 appears under Shapes and marks. It has two rows, `x >= 0` and `y >= 0`, and an empty third row. The preview shades every point where both rows hold: everything to the right of the line x = 0 and above the line y = 0.
+The chart in words:
 
-A region is one card. Each row is one condition, and a point is shaded only when every row holds.
+```easy-tikz
+show x from -2 to 5 and y from -0.5 to 5
+size 12 x 8
+axes in the middle
+with a grid
+shade where $y \ge \frac{1}{4}x^2$ in purple
+```
 
-![Screenshot of the editor for step 1: Add a feasible region](img/regions-1.png)
+![Shade where a condition holds](img/regions-1.png)
 
-*The + Add menu of a new chart lists the recipes by group. Feasible region (inequalities) starts a region with two rows filled in.*
+> **Tip:** A region is shaded inside the window only, so the `show` line decides where it ends.
 
-> **Tip:** A region is computed inside the visible ranges only. If nothing is shaded, check Chart \> Ranges first.
+## 2. Shade between two curves
 
-## 2. Type a third inequality
+A chain puts y between two curves: above the parabola and below the line. The region ends where the two curves cross.
 
-Click the empty third row and type the condition below.
+The chart gets these lines:
 
-The shaded set shrinks to the triangle under the line x + 2y = 8. The line itself runs across the whole view, because the chip Constraint lines is on.
+```easy-tikz
+shade where $\frac{1}{4}x^2 \le y \le \frac{1}{2}x + 2$ in purple
+```
 
-You write a condition the way you would on paper: `2y` means 2 times y, and less than or equal is typed as `<=`.
+![Shade between two curves](img/regions-2.png)
 
-| Where | Type |
-| --- | --- |
-| R1, condition 3 | `x + 2y <= 8` |
+## 3. Add a condition with and
 
-![Screenshot of the editor for step 2: Type a third inequality](img/regions-2.png)
+Join conditions with `and`: a point is shaded only where all of them hold. Here `$x \ge -1$` cuts off the left tip.
 
-*Three rows, one triangle. Every row cuts a piece off the plane.*
+The chart gets these lines:
 
-> **Tip:** Use `<=` and `>=` in a region. A single `=` is not a condition: to draw the line itself, use + Add \> Line from an equation.
+```easy-tikz
+shade where $\frac{1}{4}x^2 \le y \le \frac{1}{2}x + 2$ and $x \ge -1$ in purple
+```
 
-## 3. Write a range as a chain
+![Add a condition with and](img/regions-3.png)
 
-Replace the first row, `x >= 0`, with the chain below.
+## 4. Number the corners
 
-A chain means that both comparisons hold, so the region is now limited on the left and on the right: it lies between x = 1 and x = 6. The preview draws two vertical constraint lines for this one row.
+`mark the corners of the region` puts a point where two edges meet. In the label, `{i}` counts them: 1, 2, 3.
 
-| Where | Type |
-| --- | --- |
-| R1, condition 1 | `1 <= x <= 6` |
+The chart gets these lines:
 
-![Screenshot of the editor for step 3: Write a range as a chain](img/regions-3.png)
+```easy-tikz
+mark the corners of the region, labelled "{i}"
+```
 
-*One row, two bounds: the chain 1 &lt;= x &lt;= 6 replaces two separate rows.*
+![Number the corners](img/regions-4.png)
 
-> **Tip:** Both ends of a chain can be formulas, for example `0 <= y <= 4 - x/2`.
+> **Tip:** Write `with coordinates` instead of the label to see where each corner lies.
 
-## 4. Join two alternatives with or
+## 5. Hatch the region and name it
 
-Press Enter in the last row (or click Add condition) and type the condition below into the new row.
+Options after a comma change the look: `pattern north-east` hatches the region, `outlined` draws its edge, and `labelled` writes a name in the middle.
 
-A row with `or` holds when at least one side holds. The region keeps its tall part to the left of x = 3 and the low strip under y = 1, and loses the corner above and to the right of both. The result is an L shape: a dent that straight-line conditions joined with and can never make.
+The chart gets these lines:
 
-| Where | Type |
-| --- | --- |
-| R1, condition 4 | `x <= 3 or y <= 1` |
+```easy-tikz
+shade where $\frac{1}{4}x^2 \le y \le \frac{1}{2}x + 2$ and $x \ge -1$ in purple, pattern north-east, outlined, labelled "$S$"
+```
 
-![Screenshot of the editor for step 4: Join two alternatives with or](img/regions-4.png)
+![Hatch the region and name it](img/regions-5.png)
 
-*The fourth row allows either side: left of x = 3 or below y = 1.*
-
-> **Tip:** Rows are always joined with and. Write `or` inside one row: two separate rows can never mean or.
-
-## 5. Number the conditions
-
-Click Number them (1), (2), ... under the rows.
-
-Each row gets its number in the small Label box next to it, and the preview prints the number at the end of the row's constraint line. Now a text can refer to condition (3) and the reader finds it in the picture.
-
-Instead of a number you can type any text into a Label box, for example `budget`.
-
-![Screenshot of the editor for step 5: Number the conditions](img/regions-5.png)
-
-*Every row has a Label box. Its text is printed on the constraint line of that row.*
-
-> **Tip:** The link appears as soon as two rows are filled in. It overwrites the Label boxes, so number first and rename afterwards.
-
-## 6. Name the region
-
-Type a name into the field Label of the card, below Outline.
-
-The name is printed in bold at the visual centre of the shaded area. It moves with the region whenever a condition changes, so you never have to place it by hand.
-
-| Where | Type |
-| --- | --- |
-| R1, Label | `S` |
-
-![Screenshot of the editor for step 6: Name the region](img/regions-6.png)
-
-*The region label sits inside the shape and follows it.*
-
-> **Tip:** Text between dollar signs is typeset as math: `$S_1$` prints S with a subscript 1.
-
-## 7. Swap constraint lines for an outline
-
-Click the chip Constraint lines to switch it off, then set Outline to Solid.
-
-The full-length lines disappear and only the region's own boundary is drawn. The numbers move to the edges they belong to.
-
-Use constraint lines when the picture is about the inequalities, as in a linear program. Use an outline when it is about the shape.
-
-![Screenshot of the editor for step 7: Swap constraint lines for an outline](img/regions-7.png)
-
-*The same region with an outline instead of constraint lines.*
-
-> **Tip:** To show the boundary without shading, switch the chip Fill off and keep the outline.
+> **Tip:** Other patterns: `horizontal`, `vertical`, `crosshatch`, `dots` and `north-west`.
 
 ## The finished chart
 
@@ -132,15 +94,19 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-shade 1 <= x <= 6 "(1)", y >= 0 "(2)", x + 2y <= 8 "(3)", x <= 3 or y <= 1 "(4)", outlined, labelled "S"
+show x from -2 to 5 and y from -0.5 to 5
+size 12 x 8
+axes in the middle
+with a grid
+shade where $\frac{1}{4}x^2 \le y \le \frac{1}{2}x + 2$ and $x \ge -1$ in purple, pattern north-east, outlined, labelled "$S$"
+mark the corners of the region, labelled "{i}"
 ```
 
 </details>
 
 ## Next guides
 
-- [Shade the areas between two curves](areas-between.md): Two curves, the areas between them in two colours, and their crossing points as the limits of the shading.
-- [Solve a linear program in a picture](linear-program.md): Feasible region, labelled constraint lines, an objective line on a slider, the optimum, the corners, and a sensitivity test by dragging.
-- [Points, intersections and live labels](points-labels.md): Mark points from a list, find where two curves cross, and print values that update when a slider moves.
+- [Shade the areas between two curves](areas-between.md): Two waves, the areas between them split where they cross, each in its own colour and labelled.
+- [Solve a linear program in a picture](linear-program.md): Constraint lines, the feasible region and its corners, an objective line on a slider, the maximum and the minimum.
 
 [All guides](README.md)

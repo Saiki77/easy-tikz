@@ -2,145 +2,88 @@
 
 # Shade between a curve and its tangent
 
-[All guides](README.md) · Regions and optimisation · Advanced · about 10 minutes
+[All guides](README.md) · Regions and optimisation · Advanced · about 4 minutes
 
-Write the tangent at a slider point as a function, shade the area it encloses with the curve, and make it work for any curve.
+Write the tangent at a slider point as a function and shade the area it encloses with the curve.
 
 <p align="center"><img src="img/tangent-area-card.png" alt="The finished chart of the guide Shade between a curve and its tangent" width="480"></p>
 
 **What you can do afterwards**
 
-- Write the tangent at a slider point as a function of its own
-- Shade the area between curve and tangent, whichever is on top
-- End the area at a computed crossing point
-- Reuse the chart for any curve with a numeric slope
+- Write a tangent that follows a slider
+- Shade from one computed point to another
+- Make the chart work for any curve
 
 **Read first:** [Shade the areas between two curves](areas-between.md), [Sliders that move the picture](sliders.md)
 
-## 1. Set the view
+## 1. Draw the curve
 
-Start with a new chart and open the Chart tab. Under Ranges set x from -3 to 3 and y from -4 to 4.
+Plot the cubic `f` in a window around its hill and its valley. The next step adds a tangent that touches it at a point you can drag.
 
-The default view shows x from -0.5 to 10. The curve of this guide has its hill and its valley close to 0 and grows fast outside them, so the ranges come first: with them in place, the editor leaves the view alone when you type the formula.
+The chart in words:
 
-![Screenshot of the editor for step 1: Set the view](img/tangent-area-1.png)
+```easy-tikz
+show x from -3 to 3 and y from -4 to 4
+size 10 x 8
+axes in the middle
+plot f(x) = x^3 - 3x in blue, thick
+```
 
-*Chart \> Ranges. Each bound is a field of its own and accepts formulas.*
+![Draw the curve](img/tangent-area-1.png)
 
-> **Tip:** Lost the curve after panning or zooming? The Reset button under the ranges brings the default view back.
+## 2. Write the tangent as a function
 
-## 2. Type the curve
+The tangent at `a` is the height `f(a)` plus the slope `3a^2 - 3` times the step `x - a`. Drag `a` and the line rolls along the curve.
 
-Go back to the Build tab, type the formula below into Start a chart and press Enter.
+The chart gets these lines:
 
-The card f1 appears and the preview shows a cubic with a hill at x = -1 and a valley at x = 1.
+```easy-tikz
+slider a from -1.1 to 1.1, starting at 1
+plot g(x) = f(a) + (3a^2 - 3)(x - a) in red, thick
+```
 
-| Where | Type |
-| --- | --- |
-| Start a chart | `x^3 - 3x` |
+![Write the tangent as a function](img/tangent-area-2.png)
 
-![Screenshot of the editor for step 2: Type the curve](img/tangent-area-2.png)
+> **Tip:** `with its tangent at a` draws a tangent too, but without a name, and a region needs a named function.
 
-*The curve f1. Its name is what the tangent refers to in the next step.*
+## 3. Mark where the two meet
 
-> **Tip:** `3x` means 3 times x. Powers bind first, so `-x^2` is the negative of x squared.
+The tangent touches the curve at `a` and crosses it once more. `P_x` and `P_x2` are the x of the two points, from left to right.
 
-## 3. Write the tangent as a function
+The chart gets these lines:
 
-Click + Add and choose Function y = f(x). Type the formula below into the new card f2. The name `a` is unknown, so a button Add slider a appears under the field. Click it.
+```easy-tikz
+P: mark where f and g cross, with coordinates
+```
 
-The formula is the point-slope form of a line: the height of the curve at a, plus the slope there times the distance from a. `f1(a)` calls the first function by its name, and `3a^2 - 3` is the derivative of `x^3 - 3x` at a. The slider starts at 1, the bottom of the valley, so the tangent is the horizontal line y = -2.
+![Mark where the two meet](img/tangent-area-3.png)
 
-| Where | Type |
-| --- | --- |
-| f2, y = | `f1(a) + (3a^2 - 3)(x - a)` |
+## 4. Shade between the two points
 
-![Screenshot of the editor for step 3: Write the tangent as a function](img/tangent-area-3.png)
+`shade between f and g` fills the gap between the curves, whichever is on top, and the range keeps the part from `P_x` to `P_x2`.
 
-*The tangent at x = a as the function f2. The slider a appears in the Sliders dock under the preview.*
+The chart gets these lines:
 
-> **Tip:** A function card can draw a tangent by itself (Options, Tangent), but that line has no name. A region can only use named functions, which is why the tangent is written out here.
+```easy-tikz
+shade between f and g from x = P_x to P_x2 in orange
+```
 
-## 4. Shade between curve and tangent
+![Shade between the two points](img/tangent-area-4.png)
 
-Click + Add and choose Area between two functions. The card R1 starts with `f2 <= y <= f1`, which shades only where the curve is above the tangent. Replace it with the condition below.
+> **Tip:** At `a = 0` the tangent meets the curve only once, so there is nothing to shade.
 
-`min` and `max` pick the lower and the upper of the two at every x, so the area is shaded whichever one is on top. For now the shading runs across the whole view, also beyond the points where the two lines meet.
+## 5. Make it work for any curve
 
-| Where | Type |
-| --- | --- |
-| R1, condition 1 | `min(f1, f2) <= y <= max(f1, f2)` |
+Write the slope as a difference quotient: it measures the slope of `f` at `a` for any formula. Now change `f`: the tangent, the points and the area follow.
 
-![Screenshot of the editor for step 4: Shade between curve and tangent](img/tangent-area-4.png)
+The chart gets these lines:
 
-*Everything between curve and tangent is shaded, on both sides of the crossing.*
+```easy-tikz
+plot $f(x) = 2x\cos(x)$ in blue, thick
+plot $g(x) = f(a) + \frac{f(a + 0.001) - f(a - 0.001)}{0.002}(x - a)$ in red, thick
+```
 
-> **Tip:** With `f2 <= y <= f1` the area between the contact points would vanish whenever the tangent lies above the curve there, for example at a = -1.
-
-## 5. Keep the part between the contact points
-
-Click Add condition on R1 and type the chain below. The shading now ends where tangent and curve meet. Drag the slider a under the preview and the area follows.
-
-For this curve the tangent at a meets the curve again at x = -2a: curve minus tangent is `(x - a)^2 (x + 2a)`, which is zero at a and at -2a. Which of the two lies further left depends on the sign of a, so the chain uses `min` and `max` once more.
-
-| Where | Type |
-| --- | --- |
-| R1, condition 2 | `min(a, -2a) <= x <= max(a, -2a)` |
-
-![Screenshot of the editor for step 5: Keep the part between the contact points](img/tangent-area-5.png)
-
-*The area between the curve and its tangent at a = 1, from x = -2 to x = 1.*
-
-> **Tip:** The shaded area is exactly 27a^4/4 here. Put `A = {27a^4/4:2}` into the Label of R1 and the picture prints its own area.
-
-## 6. Find the far crossing
-
-Most curves have no formula like -2a for the second meeting point, so let the chart find it. Click + Add and choose Intersections of two functions. The card P1 marks the two points where f1 and f2 meet.
-
-Then type the formula below into the field Objective and leave the switch on Max. P1 keeps only the point furthest from a, the far crossing, and publishes its position as `P1_x` and `P1_y`.
-
-| Where | Type |
-| --- | --- |
-| P1, Objective | `abs(x - a)` |
-
-![Screenshot of the editor for step 6: Find the far crossing](img/tangent-area-6.png)
-
-*An objective keeps the best of the crossings: here the one furthest from a.*
-
-> **Tip:** Without the objective, P1 holds the contact point too, and which one comes first changes with the sign of a. The objective makes `P1_x` unambiguous.
-
-## 7. Use the crossing as the limit
-
-In the second row of R1, replace `-2a` by `P1_x` in both places, so that the row reads as below. Then drag the slider a to -0.8 to check.
-
-The tangent now touches the hill, the far crossing sits on the right at x = 1.6, and the shading ends exactly there. No formula of yours says where the lines cross any more.
-
-| Where | Type |
-| --- | --- |
-| R1, condition 2 | `min(a, P1_x) <= x <= max(a, P1_x)` |
-
-![Screenshot of the editor for step 7: Use the crossing as the limit](img/tangent-area-7.png)
-
-*At a = -0.8 the area lies on the other side. The limit P1\_x followed by itself.*
-
-> **Tip:** When the tangent does not meet the curve a second time inside the view, there is nothing to shade and the status chip on the preview says so.
-
-## 8. Swap in another curve
-
-One formula still belongs to the cubic: the slope `3a^2 - 3` in f2. Replace it by a difference quotient, as in the first row below. It measures the slope of f1 at a from two points close to a, so it is right for every formula.
-
-Now change f1 itself to the second row. The tangent, the far crossing and the shaded area all follow, without any calculus from you.
-
-| Where | Type |
-| --- | --- |
-| f2, y = | `f1(a) + (f1(a + 0.001) - f1(a - 0.001)) / 0.002 * (x - a)` |
-| f1, y = | `2x cos(x)` |
-
-![Screenshot of the editor for step 8: Swap in another curve](img/tangent-area-8.png)
-
-*A different curve, the same chart: slope and crossing are computed.*
-
-> **Tip:** Give a a smaller range so the tangent stays in view: click the small numbers at the two ends of the slider and type -1.5 and 1.5.
+![Make it work for any curve](img/tangent-area-5.png)
 
 ## The finished chart
 
@@ -151,20 +94,20 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 
 ```easy-tikz
 show x from -3 to 3 and y from -4 to 4
-slider a from -10 to 10, starting at -0.8, in steps of 0.1
-plot f1(x) = 2x cos(x)
-plot f2(x) = f1(a) + (f1(a + 0.001) - f1(a - 0.001)) / 0.002 * (x - a) in blue
-shade between f1 and f2 from x = min(a, P1_x) to max(a, P1_x)
-P1: mark where f1 and f2 cross, with coordinates, objective="abs(x - a)"
+size 10 x 8
+axes in the middle
+slider a from -1.1 to 1.1, starting at 1
+plot $f(x) = 2x\cos(x)$ in blue, thick
+plot $g(x) = f(a) + \frac{f(a + 0.001) - f(a - 0.001)}{0.002}(x - a)$ in red, thick
+P: mark where f and g cross, with coordinates
+shade between f and g from x = P_x to P_x2 in orange
 ```
 
 </details>
 
 ## Next guides
 
-- [From secant to tangent](secant-tangent.md): Draw the secant through two points of a curve, shrink their distance h with a slider and watch its slope approach the slope of the tangent.
-- [Tangents and extrema](tangents-extrema.md): Mark the turning points of a function, add a tangent, slide it along the curve and label its slope.
-- [Drag shapes to edit them](drag-to-edit.md): Grab a line or a curve in the preview and its numbers follow: move, turn, stretch, undo.
-- [Export to LaTeX](export-latex.md): Get pgfplots code that compiles with pdflatex: as a standalone document or as a snippet, at the size you need, in the colours of the preview.
+- [Solve a linear program in a picture](linear-program.md): Constraint lines, the feasible region and its corners, an objective line on a slider, the maximum and the minimum.
+- [From secant to tangent](secant-tangent.md): Shrink the gap h between two points of a curve and watch the secant through them turn into the tangent.
 
 [All guides](README.md)

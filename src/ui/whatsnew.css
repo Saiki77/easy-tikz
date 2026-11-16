@@ -93,32 +93,7 @@ p.etz-whatsnew-subtitle {
     transform: rotate(45deg);
 }
 
-.etz-whatsnew-chart {
-    width: 100%;
-    overflow: hidden;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--etz-radius-m);
-    aspect-ratio: var(--etz-whatsnew-aspect, 1.25);
-}
-
-.etz-whatsnew-chart > svg.etz-whatsnew-svg {
-    display: block;
-    width: 100%;
-    height: 100%;
-    max-width: none;
-}
-
-.etz-inline-strip.etz-whatsnew-strip {
-    margin-top: 0;
-}
-
-button.etz-icon-btn.etz-whatsnew-play {
-    margin-top: 1px;
-}
-
-button.etz-icon-btn.etz-whatsnew-play[aria-pressed='true'] {
-    color: var(--interactive-accent);
-}
+/* The live chart of a slide: src/ui/live.css (.etz-live-chart). */
 
 .etz-whatsnew-caption {
     padding: 0 2px;

@@ -2,119 +2,88 @@
 
 # Surfaces, planes and points in 3D
 
-[All guides](README.md) · 3D · Core · about 10 minutes
+[All guides](README.md) · 3D · Core · about 3 minutes
 
-Plot a surface z = f(x, y), choose the shape of its box, turn the view, and cut the surface with a plane on a slider.
+Plot a surface coloured by height in a cube, turn it, and cut it with a plane on a slider.
 
 <p align="center"><img src="img/surfaces-3d-card.png" alt="The finished chart of the guide Surfaces, planes and points in 3D" width="480"></p>
 
 **What you can do afterwards**
 
-- Plot a surface and choose the shape of its box
-- Rotate, zoom and style a 3D chart
-- Add a plane on a slider, a labelled point and a label that moves with the slider
+- Plot a surface in a colour map inside a cube
+- Turn the view and keep its angles
+- Add a moving plane, a marked point and a label
 
-**Read first:** [Your first chart](first-chart.md), [Sliders that move the picture](sliders.md)
+**Read first:** [Sliders that move the picture](sliders.md)
 
-## 1. Switch to 3D and type a surface
+## 1. Plot a surface in a cube
 
-Open the editor on an empty chart and click 3D in the header. Type the formula into the Start a chart field and press Enter.
+A formula in `x` and `y` is a surface, so the chart turns 3D. `cube` draws its box as a cube, whatever the ranges of x, y and z.
 
-The saddle appears in a cube: the surface rises along x and falls along y. The editor fitted the ranges to the surface and rounded them: x and y run from -5 to 5, z from -25 to 25.
+The chart in words:
 
-| Where | Type |
-| --- | --- |
-| Start a chart | `x^2 - y^2` |
+```easy-tikz
+3d
+cube
+show x from -5 to 5, y from -5 to 5 and z from -25 to 25
+size 12 x 9
+plot f(x, y) = x^2 - y^2
+```
 
-![Screenshot of the editor for step 1: Switch to 3D and type a surface](img/surfaces-3d-1.png)
+![Plot a surface in a cube](img/surfaces-3d-1.png)
 
-*The saddle z = x^2 - y^2 in a cube, with the ranges fitted to it.*
+## 2. Colour it by height
 
-> **Tip:** A surface has its own x range and y range on its card (here `-5:5`). They say where the surface is computed. The box around it is set in the Chart tab under Ranges.
+`in viridis` colours the surface by its height. `heat`, `cool`, `diverging`, `rainbow` and `greyscale` work too.
 
-## 2. Choose the shape of the box
+The chart gets these lines:
 
-Open the Chart tab. Under 3D view, Box reads Cube: a new 3D chart draws every axis with the same length on screen. That is why the saddle shows, although z runs from -25 to 25 and x and y only from -5 to 5.
+```easy-tikz
+plot f(x, y) = x^2 - y^2 in viridis
+```
 
-Set Box to Proportional to see the true proportions: the surface turns into a narrow column, five times as high as it is wide. Then set Box back to Cube.
-
-![Screenshot of the editor for step 2: Choose the shape of the box](img/surfaces-3d-2.png)
-
-*Box under 3D view in the Chart tab. Cube gives every axis the same length.*
-
-> **Tip:** Proportional suits charts whose three ranges are similar, such as a sphere. Charts from older versions of Easy TikZ keep the box they had: if one looks like a narrow column, set its Box to Cube.
+![Colour it by height](img/surfaces-3d-2.png)
 
 ## 3. Turn the view
 
-Drag in the preview to rotate the chart. When the preview has the focus, the arrow keys turn it in steps of 5 degrees. The last three buttons of the action pill, in the corner of the preview, zoom in, zoom out and reset the zoom.
+In the editor, drag the chart to turn it. The two angles are kept as lines: `rotationX` tilts the view, `rotationZ` turns it around the z-axis.
 
-For exact angles, use Elevation and Azimuth under 3D view in the Chart tab. This step uses an elevation of 20 and an azimuth of 60 degrees.
+The chart gets these lines:
 
-![Screenshot of the chart preview for step 3: Turn the view](img/surfaces-3d-3.png)
+```easy-tikz
+set rotationX = 20
+set rotationZ = 60
+```
 
-*The same surface seen from elevation 20 and azimuth 60.*
+![Turn the view](img/surfaces-3d-3.png)
 
-> **Tip:** If dragging up and down feels the wrong way round, switch on Invert vertical drag in 3D in the plugin settings (Settings, Community plugins, Easy TikZ).
+> **Tip:** Elevation and Azimuth under 3D view in the Chart tab set the two angles exactly.
 
-## 4. Style the surface
+## 4. Cut it with a plane on a slider
 
-Go back to the Build tab. On the card f1, drag Opacity down to 50 % and Samples down to 24. The surface becomes more transparent and its mesh coarser, which leaves room for the things you add next. Mesh lines, under Opacity, fades the lines on the surface: at 0 % it is smooth. Wireframe in the Style row removes the faces and keeps only the mesh.
+`draw the plane z = h` lays a flat plane at the height `h`. Press play on `h`: the plane moves up and down through the saddle.
 
-![Screenshot of the editor for step 4: Style the surface](img/surfaces-3d-4.png)
+The chart gets these lines:
 
-*Opacity 50 % and 24 samples per axis on the surface card.*
+```easy-tikz
+slider h from -20 to 20, starting at 1
+draw the plane z = h, opacity 0.4
+```
 
-> **Tip:** The exported LaTeX uses at most 60 samples per axis, because pdflatex runs out of memory above that. The hint under Samples says the same.
+![Cut it with a plane on a slider](img/surfaces-3d-4.png)
 
-## 5. Cut it with a plane
+## 5. Mark a point and add a label
 
-Click + Add and choose Plane. The card PL1 reads Plane z = 0. Replace the value with the name `h` and click Add slider h under the field.
+A point in 3D has three coordinates. A label takes a height as well: `z = {h}` sits on a corner of the plane and rides with it.
 
-A horizontal plane cuts the saddle at z = 1. Drag h in the Sliders dock, or press its play button, and the plane moves up and down through the surface.
+The chart gets these lines:
 
-| Where | Type |
-| --- | --- |
-| PL1, Plane value | `h` |
+```easy-tikz
+mark (0, 0, 0), large, labelled "saddle point"
+write "z = {h}" at (5, -5, h), center
+```
 
-![Screenshot of the editor for step 5: Cut it with a plane](img/surfaces-3d-5.png)
-
-*The plane z = h, with h on a slider.*
-
-> **Tip:** The x, y and z buttons on the card choose which coordinate the plane holds constant: x = h and y = h give vertical planes.
-
-## 6. Mark a point and name it
-
-Click + Add and choose Point. In the card P1, replace the sample point with the one below: three coordinates, `(x, y, z)`. Then click Custom in the Label row and type the name. A red marker sits on the saddle point, where the surface is flat.
-
-| Where | Type |
-| --- | --- |
-| P1, Points | `(0, 0, 0)` |
-| P1, Label text | `saddle point` |
-
-![Screenshot of the editor for step 6: Mark a point and name it](img/surfaces-3d-6.png)
-
-*A labelled point at the origin, the saddle point of the surface.*
-
-> **Tip:** \+ Add also has Segment and Arrow for 3D. Their paths take `(x, y, z)` points too, for example `(0, 0, 0); (0, 0, 20)`.
-
-## 7. Let a label ride on the plane
-
-Click + Add and choose Text label. In the card Label 1, type the text and the three positions below. In 3D a label has a z position as well.
-
-The x and y positions are a corner of the box, and the z position is the slider itself. So the label sits on a corner of the plane and shows its height. Drag h: the plane, the label and its number move together.
-
-| Where | Type |
-| --- | --- |
-| Label 1, Text | `z = {h}` |
-| Label 1, Position x | `5` |
-| Label 1, Position y | `-5` |
-| Label 1, Position z | `h` |
-
-![Screenshot of the editor for step 7: Let a label ride on the plane](img/surfaces-3d-7.png)
-
-*The label uses the slider h as its z position and in its text.*
-
-> **Tip:** In 3D, dragging in the preview always rotates the view. Labels and shapes are moved by typing their coordinates.
+![Mark a point and add a label](img/surfaces-3d-5.png)
 
 ## The finished chart
 
@@ -127,12 +96,13 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 3d
 cube
 show x from -5 to 5, y from -5 to 5 and z from -25 to 25
+size 12 x 9
 set rotationX = 20
 set rotationZ = 60
-slider h from -10 to 10, starting at 1, in steps of 0.1
-plot f1(x, y) = x^2 - y^2, opacity 0.5, with 24 samples
-draw the plane z = h
-mark (0, 0, 0), labelled "saddle point"
+slider h from -20 to 20, starting at 1
+plot f(x, y) = x^2 - y^2 in viridis
+draw the plane z = h, opacity 0.4
+mark (0, 0, 0), large, labelled "saddle point"
 write "z = {h}" at (5, -5, h), center
 ```
 
@@ -140,8 +110,7 @@ write "z = {h}" at (5, -5, h), center
 
 ## Next guides
 
-- [Charts in your notes](charts-in-notes.md): Insert a chart into a note, play with its sliders there, set its width and alignment, and open it again to change it.
-- [Export to LaTeX](export-latex.md): Get pgfplots code that compiles with pdflatex: as a standalone document or as a snippet, at the size you need, in the colours of the preview.
-- [Find a nonlinear optimum with level curves](level-curves.md): Level curves of an objective, a constraint region, the best point on its edge, and the level curve that touches it there.
+- [Charts in your notes](charts-in-notes.md): Insert a chart into a note, edit it again, and move its sliders there, also across charts.
+- [Export to LaTeX](export-latex.md): Copy a chart as pgfplots code, compile it with pdflatex, or take only the picture for your document.
 
 [All guides](README.md)

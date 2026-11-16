@@ -1,5 +1,5 @@
 /*
- * The tools of the Easy TikZ AI server, and the Model Context Protocol (MCP)
+ * The tools of the Easy Graphs, Charts & TikZ AI server, and the Model Context Protocol (MCP)
  * around them. Any AI app that speaks MCP, or any agent that can send an
  * HTTP request, gets the guide, the examples, the plugin's own checks, a
  * picture of the chart, and a way to put the chart into a note.
@@ -28,7 +28,7 @@ export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 /** What the server tells an AI app when it connects (MCP `instructions`). */
 export const INSTRUCTIONS = [
-    'Easy TikZ draws charts in Obsidian notes from `easy-tikz` code blocks: a few lines of text per chart, one line per object, written the way the math reads (function plots, tangents, areas between curves, feasible regions and linear programs, level curves, 3D, live sliders).',
+    'Easy Graphs, Charts & TikZ draws charts in Obsidian notes from `easy-tikz` code blocks: a few lines of text per chart, one line per object, written the way the math reads (function plots, tangents, areas between curves, feasible regions and linear programs, level curves, 3D, live sliders).',
     'Before your first chart, read the guide with get_guide (the sections "Rules that prevent most mistakes" and "The text syntax" at least).',
     'Then: start from get_example, run check_chart until it reports no problems and its computed values match the request, look at it with render_chart, and put it into the note with add_chart (it refuses charts with problems).',
     'Never write easy-tikz blocks into notes by hand while these tools are available. The plugin does not differentiate or integrate: slopes and areas in labels are formulas you work out.',
@@ -256,7 +256,7 @@ const INSTRUCTION_FILES = new Set(['agents.md', 'claude.md', 'claude.local.md', 
 
 function writable(path: string): void {
     const base = (path.split('/').pop() || '').toLowerCase();
-    if (INSTRUCTION_FILES.has(base)) throw new ToolError(`${path} holds instructions for AI agents; Easy TikZ does not write charts there. Choose another note.`);
+    if (INSTRUCTION_FILES.has(base)) throw new ToolError(`${path} holds instructions for AI agents; Easy Graphs, Charts & TikZ does not write charts there. Choose another note.`);
 }
 
 /** Check a chart and refuse it when the check reports problems. */
@@ -273,8 +273,8 @@ function chartsIn(textOfNote: string) {
 const TOOLS: ToolDef[] = [
     {
         name: 'get_guide',
-        title: 'Read the Easy TikZ guide',
-        description: 'How Easy TikZ charts are written: the workflow, the rules that prevent most mistakes, every field, formulas, labels and recipes. Read it before the first chart. Give "section" (a heading, such as "Rules" or "points") for one part.',
+        title: 'Read the Easy Graphs, Charts & TikZ guide',
+        description: 'How Easy Graphs, Charts & TikZ charts are written: the workflow, the rules that prevent most mistakes, every field, formulas, labels and recipes. Read it before the first chart. Give "section" (a heading, such as "Rules" or "points") for one part.',
         inputSchema: { type: 'object', properties: { section: { type: 'string', description: 'Optional: words from a heading of the guide.' } } },
         annotations: { readOnlyHint: true },
         async run(args) {
@@ -551,7 +551,7 @@ async function handleOne(msg: RpcRequest, host: ChartHost): Promise<RpcResponse 
             return ok({
                 protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
                 capabilities: { tools: { listChanged: false }, resources: { listChanged: false }, prompts: { listChanged: false } },
-                serverInfo: { name: SERVER_NAME, title: 'Easy TikZ', version: host.version },
+                serverInfo: { name: SERVER_NAME, title: 'Easy Graphs, Charts & TikZ', version: host.version },
                 instructions: INSTRUCTIONS,
             });
         }
@@ -564,7 +564,7 @@ async function handleOne(msg: RpcRequest, host: ChartHost): Promise<RpcResponse 
             return ok(await callTool(name, params.arguments, host));
         }
         case 'resources/list':
-            return ok({ resources: [{ uri: 'easy-tikz://guide', name: 'guide', title: 'Easy TikZ guide for AI assistants', mimeType: 'text/markdown' }] });
+            return ok({ resources: [{ uri: 'easy-tikz://guide', name: 'guide', title: 'Easy Graphs, Charts & TikZ guide for AI assistants', mimeType: 'text/markdown' }] });
         case 'resources/read':
             if (params.uri !== 'easy-tikz://guide') return isNotification ? null : rpcError(msg.id, -32002, `Unknown resource ${typeof params.uri === 'string' ? params.uri : ''}`);
             return ok({ contents: [{ uri: 'easy-tikz://guide', mimeType: 'text/markdown', text: GUIDE }] });
@@ -575,8 +575,8 @@ async function handleOne(msg: RpcRequest, host: ChartHost): Promise<RpcResponse 
                 prompts: [
                     {
                         name: 'make_chart',
-                        title: 'Make an Easy TikZ chart',
-                        description: 'Describe a chart; the AI builds it with the Easy TikZ tools and puts it into the open note.',
+                        title: 'Make an Easy Graphs, Charts & TikZ chart',
+                        description: 'Describe a chart; the AI builds it with the Easy Graphs, Charts & TikZ tools and puts it into the open note.',
                         arguments: [{ name: 'description', description: 'What to draw', required: true }],
                     },
                 ],
@@ -591,7 +591,7 @@ async function handleOne(msg: RpcRequest, host: ChartHost): Promise<RpcResponse 
                         role: 'user',
                         content: {
                             type: 'text',
-                            text: `Make this chart with the Easy TikZ tools and put it into the note open in Obsidian: ${description}\n\nRead get_guide first if you have not, start from get_example, run check_chart until it is clean, look at render_chart, then add_chart.`,
+                            text: `Make this chart with the Easy Graphs, Charts & TikZ tools and put it into the note open in Obsidian: ${description}\n\nRead get_guide first if you have not, start from get_example, run check_chart until it is clean, look at render_chart, then add_chart.`,
                         },
                     },
                 ],

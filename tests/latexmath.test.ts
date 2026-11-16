@@ -113,3 +113,19 @@ test('latex: letters side by side multiply when each is known (a\\sin(bx) is a s
     assert.ok(Math.abs(at('\\arcsin(x)', 0.5) - Math.asin(0.5)) < 1e-12);
     assert.ok(Math.abs(at('\\cos^2(x)', 0.7) - Math.cos(0.7) ** 2) < 1e-12);
 });
+
+test('latex: inside $...$ letters side by side multiply; the chart own names stay whole; without dollars ax is one name', () => {
+    const errors = (lines: string[]) => {
+        const chart = parseChartText(lines.join('\n'));
+        const settings = SettingsManager.fromJSON(chart.data);
+        const math = settings.createMathContext({ memo: false });
+        const params = settings.getValue('parameters');
+        math.setParams(Array.isArray(params) ? params : []);
+        return [...chart.problems.map((p) => p.message), ...math.functions().filter((f) => f.error).map((f) => String(f.error))];
+    };
+    assert.deepEqual(errors(['slider k from 1 to 3', 'plot $f(x) = kx^2$']), []);
+    assert.deepEqual(errors(['slider speed from 1 to 3', 'plot $f(x) = speed \\cdot x$']), []);
+    assert.deepEqual(errors(['slider k from 1 to 3', 'plot f(x) = kx^2']), ["Unknown name 'kx'. Did you mean k*x?"]);
+    const region = parseChartText(['slider a from 1 to 3', 'slider b from 1 to 3', 'shade where $ax + by \\le 4$'].join('\n')).data.tools as Array<{ conditions: string[] }>;
+    assert.deepEqual(region[0].conditions, ['a x + b y \\le 4']);
+});

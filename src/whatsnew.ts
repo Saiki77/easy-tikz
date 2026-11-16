@@ -54,7 +54,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Obsidian's loadData returns null when the plugin never saved anything (or
  * its data file cannot be read): a fresh install, unless the vault shows
- * that Easy TikZ was used before (see shouldShowWhatsNew).
+ * that Easy Graphs, Charts & TikZ was used before (see shouldShowWhatsNew).
  */
 export function isFreshInstall(stored: unknown): boolean {
     return !isRecord(stored);
@@ -170,7 +170,7 @@ function item(icon: string, title: MessageKey, text: MessageKey, guide?: string,
     return out;
 }
 
-export const WHATS_NEW_TITLE = 'Easy TikZ 5';
+export const WHATS_NEW_TITLE = 'Easy Graphs, Charts & TikZ 5';
 
 /** The line under the title, in the reader's language. */
 export const whatsNewSubtitle = (): string => t('panels.whatsNew.subtitle');
@@ -363,5 +363,5 @@ export const WHATS_NEW_ICONS: readonly string[] = [
 ];
 
 /** The guide on formulas, linked under the live chart. */
-export const WHATS_NEW_CHART_GUIDE = 'formulas';
+export const WHATS_NEW_CHART_GUIDE = 'notes-formulas';
 

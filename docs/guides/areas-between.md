@@ -2,131 +2,79 @@
 
 # Shade the areas between two curves
 
-[All guides](README.md) · Regions and optimisation · Core · about 7 minutes
+[All guides](README.md) · Regions and optimisation · Core · about 3 minutes
 
-Two curves, the areas between them in two colours, and their crossing points as the limits of the shading.
+Two waves, the areas between them split where they cross, each in its own colour and labelled.
 
 <p align="center"><img src="img/areas-between-card.png" alt="The finished chart of the guide Shade the areas between two curves" width="480"></p>
 
 **What you can do afterwards**
 
-- Shade the area where one function lies above another
-- Give each area its own colour and label
-- Mark the crossing points and use them as limits
+- Shade the area between two curves
+- Give each side its own colour with a chain
+- Label an area with math in dollars
 
-**Read first:** [Your first chart](first-chart.md)
+**Read first:** [Shade a region with inequalities](regions.md)
 
-## 1. Type the first curve
+## 1. Draw the two curves
 
-Start with a new chart. The Build tab shows Start a chart. Click its formula field if the cursor is not in it yet, type the formula below and press Enter.
+Give each curve a name, `f` and `g`, so other lines can use it. `x numbers every pi/2` numbers the x axis in steps of π/2.
 
-A card f1 appears under Functions and the preview draws the wave. The ranges fit themselves to the curve, because they were still the defaults.
+The chart in words:
 
-| Where | Type |
-| --- | --- |
-| Start a chart | `2 + sin(x)` |
+```easy-tikz
+show x from 0 to 2pi and y from -2.5 to 2.5
+size 12 x 6
+axes in the middle
+x numbers every pi/2
+plot $f(x) = 2\sin(x)$ in blue, thick
+plot $g(x) = \sin(2x)$ in magenta, thick
+```
 
-![Screenshot of the editor for step 1: Type the first curve](img/areas-between-1.png)
+![Draw the two curves](img/areas-between-1.png)
 
-*The first formula becomes the function f1, and the view fits it.*
+## 2. Shade between them
 
-> **Tip:** Functions need brackets: write `sin(x)`, not `sin x`.
+`shade between f and g` fills every gap between the two curves, whichever lies on top. It is one region in one colour.
 
-## 2. Add the second curve
+The chart gets these lines:
 
-Click + Add and choose Function y = f(x). Type the formula below into the new card f2. It gets the next free colour, blue.
+```easy-tikz
+shade between f and g
+```
 
-The two curves cross several times. Between two crossings one of them is on top, and those are the pieces the next steps shade.
+![Shade between them](img/areas-between-2.png)
 
-| Where | Type |
-| --- | --- |
-| f2, y = | `2 + cos(x)` |
+## 3. Split the area where they cross
 
-![Screenshot of the editor for step 2: Add the second curve](img/areas-between-2.png)
+The chain `$g \le y \le f$` holds only where `f` lies above `g`. Write it both ways, each in its own colour, and mark where the curves cross.
 
-*Two functions with the names f1 and f2. The names are what regions refer to.*
+The chart gets these lines:
 
-> **Tip:** Click the name badge on a card to rename a function. Every formula that uses the name is updated.
+```easy-tikz
+shade where $g \le y \le f$
+shade where $f \le y \le g$ in magenta
+mark where f and g cross in black
+```
 
-## 3. Shade where f1 is on top
+![Split the area where they cross](img/areas-between-3.png)
 
-Click + Add and choose Area between two functions. The new card R1 already holds the condition `f2 <= y <= f1`, built from your first two functions.
+> **Tip:** In a condition, a function name without brackets is its value at each x.
 
-Read it as: y is at least f2 and at most f1. That is only possible where f1 lies above f2, so the preview shades exactly those pieces. A function name without brackets stands for its value at the current x.
+## 4. Label each area
 
-![Screenshot of the editor for step 3: Shade where f1 is on top](img/areas-between-3.png)
+`labelled` writes a label in the middle of each area. Both areas are 4: the integral of `2\sin(x) - \sin(2x)` from 0 to π gives the first.
 
-*One condition shades every piece where the black curve lies above the blue one.*
+The chart gets these lines:
 
-> **Tip:** The order matters: `f2 <= y <= f1` shades nothing where f2 is on top. For both sides at once, write `min(f1, f2) <= y <= max(f1, f2)`.
+```easy-tikz
+shade where $g \le y \le f$, labelled "$A_1 = 4$"
+shade where $f \le y \le g$ in magenta, labelled "$A_2 = 4$"
+```
 
-## 4. Shade the other side in orange
+![Label each area](img/areas-between-4.png)
 
-Add a second Area between two functions in the same way. The card R2 gets the next colour, orange, and the same condition. Swap the two names so that it reads as below.
-
-Now the pieces where f2 is on top are shaded too, in their own colour. Two regions, one per sign, are the usual way to show that the areas count with opposite signs in an integral.
-
-| Where | Type |
-| --- | --- |
-| R2, condition 1 | `f1 <= y <= f2` |
-
-![Screenshot of the editor for step 4: Shade the other side in orange](img/areas-between-4.png)
-
-*A second region with the names swapped shades the remaining pieces.*
-
-> **Tip:** New regions take the next free colour by themselves. Click the colour swatch on a card to choose another one.
-
-## 5. Mark the crossings
-
-Click + Add and choose Intersections of two functions. The card P1 picks f1 and f2 by itself, marks every crossing in the view and labels it with its coordinates.
-
-The coordinates are long and the waves leave little room, so number the crossings instead: on the card P1 set Label to Custom and type the text below. `{i}` prints 1 for the first crossing from the left, 2 for the second, and so on.
-
-P1 also publishes what it found under names that every other field can use: `P1_x` and `P1_y` for crossing 1, `P1_x2` and `P1_y2` for crossing 2, `P1_x3` for crossing 3, and so on.
-
-| Where | Type |
-| --- | --- |
-| P1, Label | `{i}` |
-
-![Screenshot of the editor for step 5: Mark the crossings](img/areas-between-5.png)
-
-*Intersections are computed points, numbered here. Their coordinates are available as P1\_x, P1\_x2, P1\_x3, ...*
-
-> **Tip:** No labels at all? Set Label to None on the P1 card. The points and their names stay.
-
-## 6. Stop the shading at the crossings
-
-Give each region a second row. On the card R1 click Add condition and type the first chain below. Do the same on R2 with the second chain.
-
-R1 now keeps only the piece between the first and the second crossing, and R2 the piece between the second and the third. The limits are computed, so they stay right when you change one of the formulas.
-
-| Where | Type |
-| --- | --- |
-| R1, condition 2 | `P1_x <= x <= P1_x2` |
-| R2, condition 2 | `P1_x2 <= x <= P1_x3` |
-
-![Screenshot of the editor for step 6: Stop the shading at the crossings](img/areas-between-6.png)
-
-*Each region ends at computed crossings instead of typed numbers.*
-
-> **Tip:** Plain numbers work as well: `0 <= x <= 2pi` limits a region to one period.
-
-## 7. Label the two areas
-
-Type a name into the field Label of each region card.
-
-Each name is printed in bold in the middle of its area, in the colour of the region. The chart is ready for Insert into note.
-
-| Where | Type |
-| --- | --- |
-| R1, Label | `A1` |
-| R2, Label | `A2` |
-
-![Screenshot of the editor for step 7: Label the two areas](img/areas-between-7.png)
-
-*Two areas, two colours, two labels.*
-
-> **Tip:** A label can show a value: `A1 = {P1_x2 - P1_x:2}` prints the width of the first area with two decimals.
+> **Tip:** Text between dollars in a label is set as math: `$A_1$` prints A with a small 1.
 
 ## The finished chart
 
@@ -136,21 +84,22 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 <summary>The chart as an easy-tikz block</summary>
 
 ```easy-tikz
-show x from -0.5 to 10 and y from 0.8 to 3.2
-plot f1(x) = 2 + sin(x)
-plot f2(x) = 2 + cos(x) in blue
-shade where f2 <= y <= f1 and P1_x <= x <= P1_x2, labelled "A1"
-shade where f1 <= y <= f2 and P1_x2 <= x <= P1_x3 in orange, labelled "A2"
-P1: mark where f1 and f2 cross, labelled "{i}"
+show x from 0 to 2pi and y from -2.5 to 2.5
+size 12 x 6
+axes in the middle
+x numbers every pi/2
+plot $f(x) = 2\sin(x)$ in blue, thick
+plot $g(x) = \sin(2x)$ in magenta, thick
+shade where $g \le y \le f$, labelled "$A_1 = 4$"
+shade where $f \le y \le g$ in magenta, labelled "$A_2 = 4$"
+mark where f and g cross in black
 ```
 
 </details>
 
 ## Next guides
 
-- [Shade between a curve and its tangent](tangent-area.md): Write the tangent at a slider point as a function, shade the area it encloses with the curve, and make it work for any curve.
-- [An area that grows with a slider](area-accumulation.md): Shade the area under a curve from 0 to a slider b, print its size, and draw the function that adds it up, so the height of one curve shows the area under the other.
-- [Draw a market with surplus areas](supply-demand.md): Demand and supply, their equilibrium with guide lines, and consumer and producer surplus that follow a slider.
-- [Points, intersections and live labels](points-labels.md): Mark points from a list, find where two curves cross, and print values that update when a slider moves.
+- [Shade between a curve and its tangent](tangent-area.md): Write the tangent at a slider point as a function and shade the area it encloses with the curve.
+- [Draw a market with surplus areas](supply-demand.md): Demand and supply, the equilibrium with lines to the axes, and both surpluses following a demand slider.
 
 [All guides](README.md)

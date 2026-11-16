@@ -2,129 +2,81 @@
 
 # Parametric and polar curves
 
-[All guides](README.md) · Functions and sliders · Core · about 7 minutes
+[All guides](README.md) · Functions and sliders · Core · about 3 minutes
 
-Draw a curve from x(t) and y(t), then switch a chart to polar and grow a rose from r(θ).
+Trace a curve from x(t) and y(t), then switch to polar and grow a rose whose petals a slider counts.
 
 <p align="center"><img src="img/parametric-polar-card.png" alt="The finished chart of the guide Parametric and polar curves" width="480"></p>
 
 **What you can do afterwards**
 
-- Add a parametric curve and set its t range
-- Keep shapes true with Equal scale
-- Switch a chart to polar and type r(θ)
+- Draw a parametric curve and keep its shape with equal scale
+- Plot r(θ) in a polar chart
 - Count petals with a whole-number slider
 
-**Read first:** [Your first chart](first-chart.md), [Sliders that move the picture](sliders.md)
+**Read first:** [Sliders that move the picture](sliders.md)
 
-## 1. Add a parametric curve
+## 1. Trace a curve with t
 
-In a new chart, click + Add and choose Parametric curve x(t), y(t). The card has two formula rows, `x(t) =` and `y(t) =`, and a t range. It arrives filled in with an ellipse around (3, 2).
+A parametric curve gives x and y as formulas in t. `(2\cos(t), 2\sin(t))` runs once around a circle as t goes from 0 to 2π, and `equal scale` keeps it round.
 
-![Screenshot of the editor for step 1: Add a parametric curve](img/parametric-polar-1.png)
+The chart in words:
 
-*The parametric recipe: an ellipse given by x(t) and y(t).*
+```easy-tikz
+show x from -3.6 to 3.6 and y from -2.4 to 2.4
+size 12 x 8
+equal scale
+axes in the middle
+with a grid
+plot $c(t) = (2\cos(t), 2\sin(t))$ in teal, very thick
+```
 
-> **Tip:** An existing function becomes parametric in its Options: switch from y = f(x) to x(t), y(t) at the top.
+![Trace a curve with t](img/parametric-polar-1.png)
 
-## 2. Give both axes the same scale
+> **Tip:** In the editor, choose + Add, then Parametric curve x(t), y(t).
 
-The ellipse is 4 wide and 3 high, yet it looks taller than wide, because the two axes use different units. Open the Chart tab and click Equal scale under Axes.
+## 2. Change the speeds of x and y
 
-Both axes now share one unit, so the ellipse has its true shape and circles are round. The exported picture keeps that.
+Give x and y different speeds: `(2\sin(3t), 2\sin(2t))` is a Lissajous figure. It closes because 3 and 2 are whole numbers.
 
-![Screenshot of the editor for step 2: Give both axes the same scale](img/parametric-polar-2.png)
+The chart gets these lines:
 
-*Equal scale on: the ellipse is wider than high, as its formulas say.*
+```easy-tikz
+plot $c(t) = (2\sin(3t), 2\sin(2t))$ in teal, very thick
+```
 
-## 3. Type a spiral
+![Change the speeds of x and y](img/parametric-polar-2.png)
 
-Back in the Build tab, replace the two formulas. The radius `0.12t` grows with t while `cos(t)` and `sin(t)` go around, so the curve spirals away from (5, 2.25).
+## 3. Switch to a polar chart
 
-With the range the recipe came with, `0:2*pi`, it makes one turn.
+In a chart with the line `polar`, a formula gives the radius r for each angle θ. `2\cos(2\theta)` is a rose with four petals.
 
-| Where | Type |
-| --- | --- |
-| f1, x(t) = | `5 + 0.12t cos(t)` |
-| f1, y(t) = | `2.25 + 0.12t sin(t)` |
+The chart gets these lines:
 
-![Screenshot of the editor for step 3: Type a spiral](img/parametric-polar-3.png)
+```easy-tikz
+polar
+show x from -3.4 to 3.4 and y from -2.25 to 2.25
+plot $r(theta) = 2\cos(2theta)$ in magenta, very thick
+```
 
-*One turn of the spiral.*
+![Switch to a polar chart](img/parametric-polar-3.png)
 
-> **Tip:** Keep the space in `0.12t cos(t)`. Without it, `tcos` is read as one unknown name, and the field offers `Use t*cos`.
+> **Tip:** In the editor, Polar in the header switches a new chart.
 
-## 4. Extend the t range
+## 4. Count the petals with a slider
 
-Type `0:6pi` into the t range field. The spiral now makes three turns.
+Write `k` for the 2, give `k` whole steps from 1 to 8 and press play. An odd `k` draws k petals, an even one 2k.
 
-The t range is written like a domain, `min:max`, and accepts formulas. Left empty it runs from 0 to 2π.
+The chart gets these lines:
 
-| Where | Type |
-| --- | --- |
-| f1, t range | `0:6pi` |
+```easy-tikz
+slider k from 1 to 8, starting at 5, in steps of 1
+plot $r(theta) = 2\cos(k\theta)$ in magenta, very thick
+```
 
-![Screenshot of the editor for step 4: Extend the t range](img/parametric-polar-4.png)
+![Count the petals with a slider](img/parametric-polar-4.png)
 
-*t from 0 to 6π: three turns.*
-
-## 5. Switch a new chart to Polar
-
-Polar curves get a chart of their own. Insert the spiral into your note (or close the editor), open the editor again and click Polar in the header. If the editor offers to restore the unsaved spiral, click Discard.
-
-The Start a chart field now asks for r(θ): in a polar chart every function gives the radius for an angle.
-
-![Screenshot of the editor for step 5: Switch a new chart to Polar](img/parametric-polar-5.png)
-
-*A new chart switched to Polar. The field asks for r(θ).*
-
-> **Tip:** In a polar chart Equal scale is always on.
-
-## 6. Type r as a formula in theta
-
-Type the formula and press Enter. Write the angle as `theta` (or `θ`).
-
-The curve is a rose with four petals, and the ranges are fitted around it. The θ range is empty, which means 0 to 2π.
-
-| Where | Type |
-| --- | --- |
-| Start a chart | `2cos(2theta)` |
-
-![Screenshot of the editor for step 6: Type r as a formula in theta](img/parametric-polar-6.png)
-
-*r = 2cos(2theta): a rose with four petals.*
-
-## 7. Put the petal count on a slider
-
-In the formula, replace the `2` inside the cosine with `k` and click Add slider k. `k` starts at 1, and `2cos(theta)` is a plain circle.
-
-Keep the space in `k theta`: `ktheta` would be one name.
-
-| Where | Type |
-| --- | --- |
-| f1, r = | `2cos(k theta)` |
-
-![Screenshot of the editor for step 7: Put the petal count on a slider](img/parametric-polar-7.png)
-
-*With k = 1 the rose is a single circle.*
-
-## 8. Step through whole numbers
-
-Open the menu behind the three dots on the slider row and set Min to 1, Max to 8 and Step to 1. Then drag `k` to 5: five petals.
-
-An odd `k` gives k petals, an even `k` twice as many. With a step of 0.1 the slider would also stop between whole numbers, where the rose does not close.
-
-| Where | Type |
-| --- | --- |
-| Sliders, k: Min | `1` |
-| Sliders, k: Max | `8` |
-| Sliders, k: Step | `1` |
-
-![Screenshot of the editor for step 8: Step through whole numbers](img/parametric-polar-8.png)
-
-*k = 5 in whole steps: five petals.*
-
-> **Tip:** Parametric and polar curves cannot be dragged in the preview yet. Change their formulas or their sliders.
+> **Tip:** A whole-number step stays whole while it plays, so the rose always closes.
 
 ## The finished chart
 
@@ -135,17 +87,20 @@ Paste this block into a note to get the finished chart of this guide. Click the 
 
 ```easy-tikz
 polar
-show x from -2.25 to 2.25 and y from -2.25 to 2.25
+show x from -3.4 to 3.4 and y from -2.25 to 2.25
+size 12 x 8
+axes in the middle
+with a grid
 slider k from 1 to 8, starting at 5, in steps of 1
-plot f1(theta) = 2cos(k theta)
+plot $r(theta) = 2\cos(k\theta)$ in magenta, very thick
 ```
 
 </details>
 
 ## Next guides
 
-- [Tangents and extrema](tangents-extrema.md): Mark the turning points of a function, add a tangent, slide it along the curve and label its slope.
-- [Shade the areas between two curves](areas-between.md): Two curves, the areas between them in two colours, and their crossing points as the limits of the shading.
-- [Export to LaTeX](export-latex.md): Get pgfplots code that compiles with pdflatex: as a standalone document or as a snippet, at the size you need, in the colours of the preview.
+- [Animate a chart with play](animate-play.md): A point runs around the unit circle while the circle unrolls into the sine curve, all on one slider.
+- [Tangents and extrema](tangents-extrema.md): Mark the turning points of a curve, roll a tangent along it with a slider and print its slope.
+- [Export to LaTeX](export-latex.md): Copy a chart as pgfplots code, compile it with pdflatex, or take only the picture for your document.
 
 [All guides](README.md)
