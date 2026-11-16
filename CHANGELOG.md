@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.0.2] - 2026-11-16
+
+### Fixed
+
+- **Which formulas in a note have a chart** (`src/formula.ts`). A function of x_1 and x_2 is a surface now, with x_1 and x_2 on the x and y axes (`2x_1^2 + x_2^2 - 2x_2 + 1`, `-x_1x_2`); a third variable (x_3) has no chart. An optimisation problem charts its objective (`\min_{x \in \mathbb{R}^2} ...`, `\underbrace{min}_{x \in R^2} ...`), and an equivalence (`\iff`, ⟺) draws both sides, each in its own colour. `f'(x) = 2x` is a function. Matrices, transposes (`x^\top A x`), gradients, sums, factorials, sets and `f^{(n)}` are no longer marked or charted, and a lone letter (`$a$`) is no chart.
+- **Formulas in tables in Live Preview** open their own chart; before, a table's formulas all read as the first one, so most showed no chart.
+- Charts of surfaces from formulas are coloured by height (Viridis).
+
 ## [5.0.1] - 2026-11-16
 
 ### Fixed

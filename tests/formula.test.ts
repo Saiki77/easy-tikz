@@ -10,7 +10,7 @@ test('formula: what each kind of formula draws', () => {
         ['f(x) = \\frac{1}{2}x^2 - 2', 'function', 'plot $f(x) = \\frac{1}{2}x^2 - 2$ in blue, thick'],
         ['y = 2x + 1', 'function', 'plot $f(x) = 2x + 1$ in blue, thick'],
         ['\\sqrt{x}', 'function', 'plot $f(x) = \\sqrt{x}$ in blue, thick'],
-        ['z = x^2 - y^2', 'surface', 'plot $z = x^2 - y^2$ in blue'],
+        ['z = x^2 - y^2', 'surface', 'plot $z = x^2 - y^2$ in viridis'],
         ['r = 1 + \\cos\\theta', 'polar', 'plot $r(\\theta) = 1 + \\cos\\theta$ in blue, thick'],
         ['x^2 + y^2 = 1', 'equation', 'draw $x^2 + y^2 = 1$ in blue, thick'],
         ['x + y \\le 4', 'region', 'shade where $x + y \\le 4$'],
@@ -51,11 +51,54 @@ test('formula: the formula at the cursor, and the formulas of a section in order
     assert.deepEqual(formulasIn(text).map((f) => f.tex), ['a', 'c = 1', 'd']);
 });
 
-test('formula: only formulas with a chart are marked (they use x, y, z, r or theta and read as a chart)', () => {
-    for (const tex of ['y = ax^2 + b', 'f(x) = \\frac{1}{2}x^2 - 2', 'x + y \\le 4', 'z = x^2 - y^2', 'r = 1 + \\cos\\theta', 'x^2 + y^2 = 4', '\\sin x']) {
+test('formula: only formulas with a chart are marked, also in x_1, x_2 and in optimisation problems', () => {
+    const kinds: Array<[string, string]> = [
+        ['y = ax^2 + b', 'function'],
+        ["f'(x) = 2x", 'function'],
+        ['-e^x', 'function'],
+        ['(x-3)^2 + (x+1)^2', 'function'],
+        ['-x_1', 'function'],
+        ['2x_1^2 + x_2^2 - 2x_2 + 1', 'surface'],
+        ['x_1^2 + x_2^2 - 2x_1x_2 + 1', 'surface'],
+        ['-x_1x_2', 'surface'],
+        ['f(x_1, x_2) = x_1^2 + 3x_2^2', 'surface'],
+        ['\\underbrace{min}_{x \\in R^2} \\quad (x_1-3)^4 + 4(x_1-3)^2x_2^2 + 4x_2^4', 'surface'],
+        ['\\min_{x \\in \\mathbb{R}^2} \\sqrt{(x_1-1)^2 + (x_2+2)^2 + 4}', 'surface'],
+        ['z = x^2 - y^2', 'surface'],
+        ['x^2 + y^2 = 4', 'equation'],
+        ['x + y \\le 4', 'region'],
+        ['r = 1 + \\cos\\theta', 'polar'],
+        ['f(x) = \\min(x^2, 1)', 'function'],
+    ];
+    for (const [tex, kind] of kinds) {
         assert.equal(chartable(tex), true, tex);
+        assert.equal(formulaLines(tex)?.kind, kind, tex);
     }
-    for (const tex of ['E = mc^2', '\\frac{1}{2}', 'a^2 + b^2 = c^2', '\\sum_{k=1}^{n} k', 'n = 5', '']) {
+    // x_1 x_2 is x times y, written for the chart.
+    assert.ok((formulaLines('-x_1x_2')?.lines ?? []).includes('plot $z = -x y$ in viridis'));
+    // An equivalence draws both sides, each in its own colour.
+    const both = formulaLines('\\underbrace{min}_{x\\in R} \\ln(x^2 - 6x + 10) \\iff \\underbrace{min}_{x \\in R} x^2 - 6x + 10')?.lines ?? [];
+    assert.deepEqual(both, ['plot $f(x) = \\ln(x^2 - 6x + 10)$ in blue, thick', 'plot $g(x) = x^2 - 6x + 10$ in red, thick']);
+    for (const tex of [
+        'E = mc^2',
+        '\\frac{1}{2}',
+        'a^2 + b^2 = c^2',
+        '\\sum_{k=1}^{n} k',
+        'n = 5',
+        'n \\geq 3',
+        'a',
+        'x',
+        '-1',
+        '',
+        'f^{(n)}(x) = 0',
+        "f(x) = f(a) + \\frac{f'(a)}{1!}(x-a) + \\frac{f''(a)}{2!}(x-a)^2",
+        '\\begin{pmatrix} 2 & 0 \\\\ 0 & 1 \\end{pmatrix}',
+        'f(x) = x^\\top A x + b^\\top x + c',
+        '\\nabla f(x) = (A + A^\\top)x + b',
+        'x_1^2 + x_2^2 + x_3^2 - 2x_1 + 4x_3',
+        '-x_1x_2x_3',
+    ]) {
         assert.equal(chartable(tex), false, tex);
     }
 });
+

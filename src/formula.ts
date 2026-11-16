@@ -63,33 +63,133 @@ export function freeNames(tex: string): string[] {
 /** What a formula draws: a function of x, a surface z = f(x, y), a polar curve r(θ), an equation, a region. */
 export type FormulaKind = 'function' | 'surface' | 'polar' | 'equation' | 'region';
 
-/** The chart lines for a formula, without the view: what it is, written in the chart language. */
-export function formulaLines(texIn: string): { kind: FormulaKind; lines: string[] } | null {
-    // A formula from a note is LaTeX: ax^2 is a x^2.
-    const tex = splitLetterRuns(clean(texIn));
-    if (!tex) return null;
-    const sliders = (body: string) => freeNames(body).map((n) => `slider ${n} from -5 to 5, starting at 1`);
-    if (/\\(le|leq|ge|geq|lt|gt)\b|[<>]/.test(tex)) return { kind: 'region', lines: [...sliders(tex), `shade where $${tex}$`] };
-    const eq = tex.split('=');
-    if (eq.length === 2) {
-        const left = eq[0].trim();
-        const right = eq[1].trim();
-        const named = /^([A-Za-z][A-Za-z0-9_]*)\s*\(\s*x\s*\)$/.exec(left);
-        if (named) return { kind: 'function', lines: [...sliders(right), `plot $${named[1]}(x) = ${right}$ in blue, thick`] };
-        if (/^y$/.test(left)) return { kind: 'function', lines: [...sliders(right), `plot $f(x) = ${right}$ in blue, thick`] };
-        if (/^y$/.test(right)) return { kind: 'function', lines: [...sliders(left), `plot $f(x) = ${left}$ in blue, thick`] };
-        // A surface: z = f(x, y), or f(x, y) = ...
-        if (/^z$/.test(left) || /^[A-Za-z][A-Za-z0-9_]*\s*\(\s*x\s*,\s*y\s*\)$/.test(left)) {
-            return { kind: 'surface', lines: ['3d', 'cube', ...sliders(right), `plot $z = ${right}$ in blue`] };
+/**
+ * Formulas without a chart: matrices and vectors, transposes, gradients and
+ * partial derivatives, sums, products, integrals and limits, sets and maps,
+ * factorials, a derivative of order n (f^{(n)}).
+ */
+const NOT_A_CHART =
+    /\\(?:begin|nabla|partial|sum|prod|int|iint|oint|lim|top|intercal|mathbf|boldsymbol|vec|mathbb|forall|exists|subset|subseteq|supset|cup|cap|det|to|mapsto|rightarrow|cdots|ldots|dots|vdots|binom|choose|in|notin)(?![A-Za-z])|(?<!\\)!|\^\s*\{?\s*T\s*\}?(?![A-Za-z])|\^\s*\{\s*\(/;
+
+/** A braced group, one level of nested braces inside: {x \in R^2}, {x_{1}}. */
+const GROUP = String.raw`\{(?:[^{}]|\{[^{}]*\})*\}`;
+
+/**
+ * An optimisation problem charts its objective: min, max, argmin, inf, sup,
+ * written as \min_{x \in \mathbb{R}^2}, \underbrace{min}_{x \in R^2},
+ * \underset{x}{\min}, \operatorname{argmin}_x or a plain min, go with their
+ * subscripts. A min that is called, min(x, 1), is a function and stays.
+ * Constraints after s.t. are left out.
+ */
+function objective(tex: string): string {
+    const op = String.raw`(?:arg\s*)?(?:min|max|inf|sup)`;
+    const sub = String.raw`(?:\s*_\s*(?:${GROUP}|[A-Za-z0-9]))?`;
+    return tex
+        .replace(/\\text\s*\{\s*(?:s\.\s*t\.|u\.\s*d\.\s*N\.|subject to|unter)[\s\S]*$/i, '')
+        .replace(/(?:^|\s)s\.\s*t\.[\s\S]*$/i, '')
+        .replace(new RegExp(String.raw`\\underbrace\s*\{\s*\\?${op}\s*\}${sub}`, 'g'), ' ')
+        .replace(new RegExp(String.raw`\\underset\s*${GROUP}\s*\{\s*\\?${op}\s*\}`, 'g'), ' ')
+        .replace(new RegExp(String.raw`(?:\\operatorname\*?\s*\{\s*${op}\s*\}|\\arg\s*\\(?:min|max)|\\text\s*\{\s*${op}\s*\})${sub}`, 'g'), ' ')
+        .replace(new RegExp(String.raw`\\(?:min|max|inf|sup)\s*_\s*(?:${GROUP}|[A-Za-z0-9])`, 'g'), ' ')
+        .replace(new RegExp(String.raw`(^|[^A-Za-z\\])(?:arg)?(?:min|max)\s*_\s*(?:${GROUP}|[A-Za-z0-9])`, 'g'), '$1 ')
+        .replace(/(^|[^A-Za-z\\])((?:\\)?(?:arg)?(?:min|max|inf|sup))(?![A-Za-z])(?!\s*\()/g, '$1 ')
+        .trim();
+}
+
+/**
+ * The axes of a formula in x_1, x_2 (also x_{1}): x_1 is x and x_2 is y, so
+ * 2x_1^2 + x_2^2 is the surface z = 2x^2 + y^2. A third one (x_3) has no
+ * chart: null.
+ */
+function axesOf(tex: string): string | null {
+    if (/x_\s*\{?\s*[3-9]/.test(tex)) return null;
+    return tex.replace(/x_\s*\{\s*1\s*\}|x_\s*1(?![0-9])/g, 'x').replace(/x_\s*\{\s*2\s*\}|x_\s*2(?![0-9])/g, 'y');
+}
+
+/** The names of a formula after it reads as the plain syntax. */
+function namesOf(tex: string): Set<string> {
+    return new Set(latexToPlain(tex).match(/[A-Za-z][A-Za-z0-9_]*/g) ?? []);
+}
+
+/** One formula of a note made ready to chart: its objective, its axes x and y, ax^2 as a x^2. Null: it has no chart. */
+function prepared(part: string): string | null {
+    const tex = clean(objective(clean(part)));
+    if (!tex || NOT_A_CHART.test(tex)) return null;
+    const axes = axesOf(tex);
+    return axes === null ? null : splitLetterRuns(axes);
+}
+
+/** A head of a function of x: y, f(x), f'(x), g''(x). Its name, or null. */
+const FUNCTION_HEAD = /^(?:y|([A-Za-z][A-Za-z0-9_]*)\s*'*\s*\(\s*x\s*\))$/;
+/** A head of a function of x and y: z, f(x, y). */
+const SURFACE_HEAD = /^(?:z|[A-Za-z][A-Za-z0-9_]*\s*'*\s*\(\s*x\s*,\s*y\s*\))$/;
+/** A head of a polar curve: r, r(θ). */
+const POLAR_HEAD = /^r(?:\s*\(\s*\\?theta\s*\))?$/;
+
+/** What one prepared formula draws, with the formula to plot (its right side, or all of it). */
+function kindOf(tex: string): { kind: FormulaKind; body: string } | null {
+    const names = namesOf(tex);
+    const usesX = names.has('x');
+    const usesY = names.has('y');
+    // A lone variable (x, y) is no chart.
+    if (/^[xy]$/.test(tex)) return null;
+    if (/\\(?:le|leq|ge|geq|lt|gt)(?![A-Za-z])|[<>]/.test(tex)) return usesX || usesY ? { kind: 'region', body: tex } : null;
+    const sides = tex.split('=');
+    if (sides.length > 2) return null;
+    if (sides.length === 2) {
+        const left = sides[0].trim();
+        const right = sides[1].trim();
+        const rightNames = namesOf(right);
+        if (FUNCTION_HEAD.test(left) || SURFACE_HEAD.test(left)) {
+            // f(x) = x^2 + y^2 with x a vector (x_1, x_2): a surface.
+            if (rightNames.has('y') || SURFACE_HEAD.test(left)) return { kind: 'surface', body: right };
+            return { kind: 'function', body: right };
         }
-        // A polar curve: r = f(θ), or r(θ) = ...
-        if (/^r(\s*\(\s*\\?theta\s*\))?$/.test(left)) {
-            return { kind: 'polar', lines: [...sliders(right), `plot $r(\\theta) = ${right}$ in blue, thick`] };
-        }
-        return { kind: 'equation', lines: [...sliders(tex), `draw $${tex}$ in blue, thick`] };
+        if (/^y$/.test(right) && !namesOf(left).has('y')) return { kind: 'function', body: left };
+        if (POLAR_HEAD.test(left)) return { kind: 'polar', body: right };
+        return usesX || usesY ? { kind: 'equation', body: tex } : null;
     }
-    if (eq.length === 1) return { kind: 'function', lines: [...sliders(tex), `plot $f(x) = ${tex}$ in blue, thick`] };
-    return null;
+    if (usesY) return { kind: 'surface', body: tex };
+    return usesX ? { kind: 'function', body: tex } : null;
+}
+
+/** At most this many sliders: a formula with more letters is notation, not a chart. */
+const MAX_SLIDERS = 4;
+const COLOURS = ['blue', 'red', 'green'];
+
+/**
+ * The chart lines for a formula, without the view: what it is, written in
+ * the chart language. A formula of a note may hold several parts joined by
+ * an equivalence or an implication (ln(x^2 + 1) \iff x^2 + 1): the first part
+ * with a chart decides what is drawn; in 2D the other functions join it,
+ * each in its own colour.
+ */
+export function formulaLines(texIn: string): { kind: FormulaKind; lines: string[] } | null {
+    const parts = clean(texIn)
+        .split(/\\(?:iff|Leftrightarrow|Longleftrightarrow|Rightarrow|Longrightarrow|implies|impliedby|Leftarrow|Longleftarrow)(?![A-Za-z])|⟺|⇔|⇒|⟹/)
+        .map((part) => prepared(part))
+        .map((tex) => (tex ? { tex, found: kindOf(tex) } : null))
+        .filter((x): x is { tex: string; found: { kind: FormulaKind; body: string } } => !!x && !!x.found);
+    if (!parts.length) return null;
+    const first = parts[0].found;
+    const kind = first.kind;
+    const bodies = kind === 'function' ? parts.filter((p) => p.found.kind === 'function').slice(0, COLOURS.length).map((p) => p.found.body) : [first.body];
+    const free = Array.from(new Set(bodies.flatMap((b) => freeNames(b))));
+    if (free.length > MAX_SLIDERS) return null;
+    const sliders = free.map((n) => `slider ${n} from -5 to 5, starting at 1`);
+    const body = bodies[0];
+    switch (kind) {
+        case 'function':
+            return { kind, lines: [...sliders, ...bodies.map((b, i) => `plot $${'fgh'[i]}(x) = ${b}$ in ${COLOURS[i]}, thick`)] };
+        case 'surface':
+            return { kind, lines: ['3d', 'cube', ...sliders, `plot $z = ${body}$ in viridis`] };
+        case 'polar':
+            return { kind, lines: [...sliders, `plot $r(\\theta) = ${body}$ in blue, thick`] };
+        case 'region':
+            return { kind, lines: [...sliders, `shade where $${body}$`] };
+        default:
+            return { kind, lines: [...sliders, `draw $${body}$ in blue, thick`] };
+    }
 }
 
 /** A formula as a whole chart: its lines with a view fitted to what they draw, or null when it does not draw. */
@@ -176,24 +276,22 @@ export function formulaBlock(tex: string, def: Rec | null | undefined): string |
     return printChartText(applyFormulaDefault(parsed.data, def));
 }
 
-/** The variables a chart of a formula runs along: a formula without any of them (E = mc^2, a lone 1/2) has no chart. */
-const VARIABLES = new Set(['x', 'y', 'z', 'r', 'theta']);
-
 const chartableMemo = new Map<string, boolean>();
 
 /**
  * Does a formula of a note have a chart (5.0)? It reads as chart lines
- * without a problem and uses a variable (x, y, z, r, theta). The card opens
- * only for these, and the setting Highlight formulas in notes marks them.
+ * without a problem: it uses a variable (x, y, x_1, x_2, z, r, theta) and
+ * is no matrix, sum or set. The card opens only for these, and the setting
+ * Highlight formulas in notes marks them.
  */
 export function chartable(tex: string): boolean {
     const hit = chartableMemo.get(tex);
     if (hit !== undefined) return hit;
     let ok = false;
     try {
+        // formulaLines knows the variables (x, y, x_1, x_2, z, r, theta): a formula without one has no lines.
         const f = formulaLines(tex);
-        const names = latexToPlain(splitLetterRuns(clean(tex))).match(/[A-Za-z][A-Za-z0-9_]*/g) ?? [];
-        ok = !!f && names.some((n) => VARIABLES.has(n)) && parseChartText(f.lines.join('\n')).problems.length === 0;
+        ok = !!f && parseChartText(f.lines.join('\n')).problems.length === 0;
     } catch {
         ok = false;
     }

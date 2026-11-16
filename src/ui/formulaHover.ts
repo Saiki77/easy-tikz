@@ -183,7 +183,10 @@ export class FormulaHover {
                     }),
             };
         }
-        const view = EditorView.findFromDOM(math);
+        // A table's cells have editors of their own: the note's editor is the one around the table.
+        const table = math.closest('table');
+        const host = table ? table.closest<HTMLElement>('.cm-editor') : null;
+        const view = host ? EditorView.findFromDOM(host) : EditorView.findFromDOM(math);
         if (!view) return null;
         const found = formulaInEditor(view, math);
         if (!found) return null;
@@ -319,6 +322,25 @@ export class FormulaHover {
 
 /** The formula a rendered formula of the editor shows: its TeX, and the end of the line where it ends. */
 function formulaInEditor(view: EditorView, math: HTMLElement): { tex: string; end: number } | null {
+    // Live Preview draws a table as one widget: every place in it is the table's start. The formula is the
+    // one at the same place among the formulas of the table's lines.
+    const table = math.closest('table');
+    if (table) {
+        let at: number;
+        try {
+            at = view.posAtDOM(table);
+        } catch {
+            return null;
+        }
+        const doc = view.state.doc;
+        let first = doc.lineAt(Math.min(at, doc.length));
+        while (first.number < doc.lines && !/^\s*(?:>\s*)*\|/.test(first.text)) first = doc.line(first.number + 1);
+        let last = first;
+        while (last.number < doc.lines && /^\s*(?:>\s*)*\|/.test(doc.line(last.number + 1).text)) last = doc.line(last.number + 1);
+        const index = Array.from(table.querySelectorAll('.math')).indexOf(math);
+        const found = formulasIn(doc.sliceString(first.from, last.to))[index];
+        return found ? { tex: found.tex, end: last.to } : null;
+    }
     let pos: number;
     try {
         pos = view.posAtDOM(math);

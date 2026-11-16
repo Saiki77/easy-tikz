@@ -27,3 +27,7 @@ data.json
 
 # local Claude Code sessions and worktrees
 .claude/
+
+# local only
+/docs/release-posts/
+/docs/media/post-*

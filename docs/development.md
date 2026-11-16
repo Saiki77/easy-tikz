@@ -129,5 +129,4 @@ docs/
   reference.md       # everything the plugin does, by topic
   ai.md              # the guide for AI assistants (also served by the AI server)
   media/             # generated: hero, feature cards, social images, videos (MP4, GIF, poster)
-  release-posts/     # announcement texts per channel, each naming the media to attach
 ```
