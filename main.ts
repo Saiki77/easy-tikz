@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, Notice, Platform, Plugin, PluginSettingTab, SettingDefinitionItem, SettingGroupItem, TFile, getLanguage, normalizePath, setIcon } from 'obsidian';
+import { App, Editor, MarkdownPostProcessorContext, MarkdownPreviewRenderer, MarkdownRenderChild, MarkdownView, Notice, Platform, Plugin, PluginSettingTab, SettingDefinitionItem, SettingGroupItem, TFile, getLanguage, normalizePath, setIcon } from 'obsidian';
 import { TikzModal } from './src/modal';
 import { SettingsManager } from './src/settings';
 import { SVGRenderer } from './src/renderer';
@@ -287,6 +287,16 @@ function showBlockError(el: HTMLElement, message: string) {
     el.createDiv({ cls: 'tikz-block-error', text: message });
 }
 
+/**
+ * Obsidian's table of code block languages (not in the public API; Obsidian's own registerMarkdownCodeBlockProcessor
+ * adds to it and removes from it). Read here only so that a load does not fail on a language that is taken.
+ */
+const blockLanguages = MarkdownPreviewRenderer as unknown as {
+    codeBlockPostProcessors?: Record<string, unknown>;
+    unregisterCodeBlockPostProcessor?: (language: string) => void;
+};
+const languageTaken = (language: string) => !!blockLanguages.codeBlockPostProcessors && Object.prototype.hasOwnProperty.call(blockLanguages.codeBlockPostProcessors, language);
+
 export default class EasyTikzPlugin extends Plugin implements PluginHost {
     data: PluginData = { ...DEFAULT_PLUGIN_DATA };
     /** Charts as SVG files (5.0): writes a note's files after it changed, with the setting on. */
@@ -299,8 +309,31 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
     /** Charts under blocks being edited (src/live.ts), by the element they draw in. */
     private readonly liveDrawn = new Map<HTMLElement, InlineChart>();
 
+    /**
+     * Every cleanup runs when the plugin unloads, even after one of them fails. Obsidian runs them last first and
+     * stops at the first that throws: the one that removes the easy-tikz block handler (registered early, so run
+     * late) was skipped, and the next load (an update, the plugin turned on again) failed with "Code block
+     * postprocessor for language easy-tikz is already registered".
+     */
+    register(cb: () => unknown): void {
+        super.register(() => {
+            try {
+                cb();
+            } catch (e) {
+                console.error('Easy Graphs Charts and TikZ: a cleanup failed', e);
+            }
+        });
+    }
+
+    onunload() {
+        this.unloaded = true;
+    }
+
     async onload() {
         const stored = (await this.loadData()) as Partial<PluginData> | null;
+        // Turned off while its data was read (an update or a second toggle meanwhile): a later load does the work,
+        // and what this one would register now would never be removed.
+        if (this.unloaded) return;
         const storedTemplates = stored?.userTemplates;
         const storedDraft = stored?.draft;
         this.data = {
@@ -340,6 +373,9 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
 
         // Render `easy-tikz` blocks inline via the same SVG renderers the
         // modal uses for its live preview: no external TeX engine needed.
+        // A handler left by an earlier load of this plugin that could not clean up (before 5.2.4, see register)
+        // would make this load fail: the language is this plugin's own, so this load takes it over.
+        if (languageTaken('easy-tikz')) blockLanguages.unregisterCodeBlockPostProcessor?.('easy-tikz');
         this.registerMarkdownCodeBlockProcessor('easy-tikz', (source, el, ctx) => {
             this.renderEasyTikzBlock(source, el, ctx);
         });
@@ -347,9 +383,14 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         // Optionally also render plain `tikz` blocks the same way. Off by
         // default to coexist with `obsidian-tikzjax` and friends.
         if (this.data.renderTikzBlocks) {
-            this.registerMarkdownCodeBlockProcessor('tikz', (source, el, ctx) => {
-                this.renderEasyTikzBlock(source, el, ctx, /* fromTikzTag */ true);
-            });
+            // Another plugin that renders `tikz` blocks keeps them; the rest of this plugin loads.
+            if (languageTaken('tikz')) {
+                console.warn('Easy Graphs Charts and TikZ: another plugin renders tikz blocks, so this one leaves them to it');
+            } else {
+                this.registerMarkdownCodeBlockProcessor('tikz', (source, el, ctx) => {
+                    this.renderEasyTikzBlock(source, el, ctx, /* fromTikzTag */ true);
+                });
+            }
         }
 
         // While a block is edited in Live Preview, its chart sits under its lines and moves as you type.

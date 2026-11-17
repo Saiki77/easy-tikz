@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.2.4] - 2026-11-17
+
+### Fixed
+
+- **The plugin loads after an update or after it is turned off and on:** Obsidian stops cleaning up a plugin at the first step that fails. The step that removes the handler for `easy-tikz` blocks could be skipped, and the next load failed with "Code block postprocessor for language easy-tikz is already registered". Every cleanup step now runs, a load replaces a handler that an earlier load left, and a load that is turned off while it reads its settings stops. If a plugin that renders `tikz` blocks is installed, it keeps them, and the rest of this plugin loads.
+
 ## [5.2.3] - 2026-11-17
 
 ### Added
