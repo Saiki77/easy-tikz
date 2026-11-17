@@ -10,6 +10,8 @@ npm run media:tour -- proof                             # the opening only, abou
 npm run media:tour -- --root --out ~/Desktop/tour.mp4   # the build in the repository root, another file
 npm run media:tour -- --size 1800x1200                  # 3:2 instead of 16:9 (1920 x 1080, the default for YouTube)
 node scripts/media/film/check.mjs film.mp4 --sheet sheet.png   # uneven frames and a contact sheet of a video
+npm run media:readme -- --root --sound --music          # the README video (readme.mjs), with sound and a bed
+node scripts/media/film/upload.mjs film.mp4 --card still.png   # the copy to upload: a card first, under 10 MB
 ```
 
 Beside the MP4 the tour writes `<name>-sheet.png` (a picture per 2 s) and `<name>-stills/` (a picture per
@@ -87,6 +89,28 @@ frame. Nothing is recorded or downloaded, and the same events give the same soun
 
 Levels are fixed: the effects peak at -3 dBFS, the bed's RMS is -21 dBFS, a soft limit above that. The 5.2
 tour with the bed measures -18.9 LUFS, peak -1 dBFS; that version (effects and bed) was the one chosen.
+
+## README video
+
+`readme.mjs` films the video at the top of the repository README: the editor on the chart of a note (+ Add finds
+the Riemann sum, the tangent moves, a label goes into the area), a plane typed under the chart and hovered, a new
+note with a 3D chart typed by hand (solid, smooth, 80 samples), and that chart zoomed and turned in the editor.
+
+GitHub plays a README video only when it was uploaded on github.com. A video file in the repository does not
+play: GitHub removes a `<video>` tag whose source is not such an upload, and its pages load media only from its
+upload hosts (`media-src` of its Content-Security-Policy), not from raw.githubusercontent.com.
+
+1. Make the copy: `node scripts/media/film/upload.mjs readme-music.mp4 --card still.png`. It stays under 9.4 MB
+   (the Free plan takes 10 MB per video). The card (1 s, then a 0.5 s fade) is the frame a player shows before play.
+2. Drag the copy into the text box of a new issue on GitHub. Wait for the link
+   `https://github.com/user-attachments/assets/...` and copy it. Close the page, or close the issue if it was
+   submitted: the link stays.
+3. Put it at the top of `README.md`: `<video src="LINK" controls muted width="100%"></video>`. GitHub turns the
+   tag into its player, and Obsidian's plugin page, which shows the README, plays the same tag. A bare link plays
+   on GitHub only.
+
+Before the push, `gh api markdown -f mode=gfm -f text='<video src="LINK"></video>'` shows what GitHub makes of it:
+its player is a `<details>` block with a `<video>`.
 
 ## Adding a part
 

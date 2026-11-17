@@ -1,4 +1,4 @@
-<video src="https://github.com/user-attachments/assets/1b71afd1-c7ba-4fae-9bef-70f7888b39d5" controls muted width="100%"></video>
+<video src="https://github.com/user-attachments/assets/4cd1bfb8-1e34-4add-86e7-ff72c2ec2e62" controls muted width="100%"></video>
 
 <h3 align="center">Every formula in your notes is a chart.</h3>
 

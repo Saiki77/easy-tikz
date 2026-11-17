@@ -12,7 +12,8 @@
         "media:guides": "node scripts/media/build-guides.mjs",
         "media:brand": "node scripts/media/brand/build.mjs",
         "media:film": "node scripts/media/cinema/build.mjs",
-        "media:tour": "node scripts/media/film/tour.mjs"
+        "media:tour": "node scripts/media/film/tour.mjs",
+        "media:readme": "node scripts/media/film/readme.mjs"
     },
     "keywords": [
         "obsidian",

@@ -64,6 +64,7 @@ npm run media:film -- --list             # the scenes of cinema/scenes
 npm run media:film -- overview --out /tmp/film --port 9381   # a film: MP4, GIF loop, poster, contact sheets, stills
 npm run media:film -- overview --out /tmp/film --skip-capture # edit again from the last capture: composite only
 npm run media:tour                       # the 5.2 tour: a frame-exact clean take with a pointer (film/README.md)
+npm run media:readme                     # the README video, same kit (film/README.md)
 
 node scripts/media/build-promo.mjs       # first-round images: docs/media/card-*.png, social-*.png, square-1080.png
 node scripts/media/build-video.mjs clip-3d   # first-round clips: film what changed, not everything
