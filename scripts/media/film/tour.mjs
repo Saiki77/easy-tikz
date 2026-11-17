@@ -1,10 +1,12 @@
 /* eslint-env browser, node */
-// The 5.2 tour as one clean take with a pointer: 3:2, 1800 x 1200, 60 fps, about 70 s, filmed with kit.mjs in
+// The 5.2 tour as one clean take with a pointer: 16:9, 1920 x 1080, 60 fps, about 70 s, filmed with kit.mjs in
 // the isolated Obsidian of ../lib/obsidian.mjs (never the user's app). See README.md in this folder.
 //
 //   npm run media:tour                                  # the whole tour, to <tmp>/easy-tikz-media/film/tour.mp4
 //   npm run media:tour -- proof                         # the opening only (about 12 s): to check a change quickly
 //   npm run media:tour -- --root --out ~/Desktop/tour.mp4   # the build in the repository root, another file
+//   npm run media:tour -- --sound --music               # also tour-sound.mp4 (effects) and tour-music.mp4 (with a bed)
+//   npm run media:tour -- --size 1800x1200              # another frame: 3:2 here; the window takes the same aspect
 //
 // The parts, in order:
 //   1  a plane typed in a note
@@ -22,6 +24,7 @@ import { parseArgs } from 'node:util';
 import { PORTS, defaultWorkDir, launch } from '../lib/obsidian.mjs';
 import { checkFilm } from './check.mjs';
 import { createFilm, rectOf } from './kit.mjs';
+import { addSound } from './sound.mjs';
 
 const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -30,17 +33,25 @@ const { values, positionals } = parseArgs({
         port: { type: 'string' },
         work: { type: 'string' },
         root: { type: 'boolean', default: false },
+        size: { type: 'string', default: '1920x1080' },
+        sound: { type: 'boolean', default: false },
+        music: { type: 'boolean', default: false },
         help: { type: 'boolean', short: 'h' },
     },
 });
 if (values.help) {
-    console.log('Usage: node scripts/media/film/tour.mjs [proof] [--out FILE.mp4] [--port 9345] [--work DIR] [--root]');
+    console.log('Usage: node scripts/media/film/tour.mjs [proof] [--out FILE.mp4] [--size 1920x1080] [--port 9345] [--work DIR] [--root] [--sound] [--music]');
     process.exit(0);
 }
 const part = positionals[0] === 'proof' ? 'proof' : 'all';
 const port = Number(values.port || process.env.ETZ_MEDIA_PORT || PORTS.film);
 const OUT = path.resolve(values.out || path.join(os.tmpdir(), 'easy-tikz-media', 'film', part === 'proof' ? 'proof.mp4' : 'tour.mp4'));
 const BASE = OUT.replace(/\.mp4$/i, '');
+// The frame, and a window of the same aspect at the full-screen height of a 16 inch MacBook Pro (1117 CSS px):
+// a wider frame shows more at the sides, never less above and below.
+const [FRAME_W, FRAME_H] = values.size.split('x').map(Number);
+if (!(FRAME_W > 0 && FRAME_H > 0)) throw new Error(`--size ${values.size}: expected WIDTHxHEIGHT, such as 1920x1080`);
+const WINDOW = { width: Math.round((1117 * FRAME_W) / FRAME_H), height: 1117 };
 const say = (s) => process.stderr.write(`[tour] ${s}\n`);
 
 const BLOCK = [
@@ -57,8 +68,8 @@ const obs = await launch({
     workDir: values.work ? path.resolve(values.work) : defaultWorkDir(port),
     plugin: values.root ? 'root' : 'source',
     theme: 'light',
-    width: 1728,
-    height: 1117,
+    width: WINDOW.width,
+    height: WINDOW.height,
     notes: { 'Planes and areas.md': '' },
     // Typing as it is typed: no auto-paired brackets or marks, no spelling marks.
     appConfig: { autoPairBrackets: false, autoPairMarkdown: false, spellcheck: false, showInlineTitle: true },
@@ -86,14 +97,14 @@ const waitFor = (fn, message, timeout = 8000) => obs.waitFor(() => obs.call(fn),
 try {
     await obs.openNote('Planes and areas', { mode: 'live', cursor: 'end' });
     await obs.sleep(800);
-    const film = await createFilm(obs, { out: OUT, fps: 60, width: 1800, height: 1200, stills: `${BASE}-stills`, say });
+    const film = await createFilm(obs, { out: OUT, fps: 60, width: FRAME_W, height: FRAME_H, stills: `${BASE}-stills`, say });
 
     // ---------------------------------------------------------------- 1. the plane, typed
     const sizer = await rectOf(obs, `${NOTE} .cm-sizer`);
     const title = await rectOf(obs, `${NOTE} .inline-title`);
     const left = title.x - 36;
     // Close on the title and the sentence being typed; the pointer rests to the side, in the frame.
-    film.camera({ cx: left + 320, cy: sizer.y + 140, w: 640 }, 0);
+    film.camera({ cx: left + 360, cy: sizer.y + 140, w: 720 }, 0);
     await obs.mouse.move({ x: left + 560, y: sizer.y + 250 });
     await film.hold(0.6, { still: false });
     await film.type('The plane $z = 4 - x - 2y$ cuts all three axes.', 15);
@@ -105,6 +116,7 @@ try {
     // The card opens after its delay (real time): the film holds still meanwhile, then the card fades in on the film clock.
     await film.hold(0.35);
     await waitFor(() => !!document.querySelector('.etz-formula-pop .etz-formula-chart svg, .etz-formula-pop .etz-formula-chart canvas'), 'the formula card');
+    film.mark('pop');
     await film.tick(18);
     const card = await rectOf(obs, '.etz-formula-pop');
     film.camera(card, 1.0, { pad: 36 });
@@ -122,7 +134,8 @@ try {
     } else {
         // ---------------------------------------------------------------- 3. a block: the chart grows as its lines are typed
         await obs.key('Escape');
-        film.camera({ cx: sizer.x + sizer.width / 2, cy: 600, w: 1500 }, 1.0);
+        // The whole height: the code and the chart that grows under it.
+        film.camera('full', 1.0);
         await film.tick(20);
         await obs.key('End');
         await film.type('\n\n```easy-tikz\n\n```\n', 18);
@@ -148,6 +161,7 @@ try {
         const box = await rectOf(obs, `${NOTE} .block-language-easy-tikz .etz-inline-box`);
         await film.click(box.x + box.width * 0.55, box.y + box.height * 0.35, 0.7);
         await waitFor(() => !!window.__etzMedia.editor() && window.__etzMedia.editor().ready === true, 'the editor');
+        film.mark('pop');
         await film.tick(6);
         const modal = await rectOf(obs, MODAL);
         say(`modal ${JSON.stringify(modal)}`);
@@ -170,6 +184,7 @@ try {
         const add = await rectOf(obs, `${MODAL} .etz-build-add`);
         await film.click(center(add).x, center(add).y, 0.8);
         await waitFor(() => !!document.querySelector('.etz-picker .etz-picker-input'), 'the + Add menu');
+        film.mark('pop');
         await film.tick(12);
         await film.type('riemann', 12);
         await film.tick(16);
@@ -217,11 +232,13 @@ try {
         await film.cameraWait();
         await obs.key('p', { mod: true });
         await waitFor(() => !!document.querySelector('.prompt input'), 'the command palette');
+        film.mark('pop');
         await film.tick(12);
         await film.type('open editor', 16);
         await film.tick(14);
         await obs.key('Enter');
         await waitFor(() => !!window.__etzMedia.editor() && window.__etzMedia.editor().ready === true, 'the new editor');
+        film.mark('pop');
         await film.tick(8);
         const modal2 = await rectOf(obs, MODAL);
         film.camera(modal2, 0.8, { pad: 12 });
@@ -235,6 +252,7 @@ try {
         const add3 = await rectOf(obs, `${MODAL} .etz-build-add`);
         await film.click(center(add3).x, center(add3).y, 0.8);
         await waitFor(() => !!document.querySelector('.etz-picker .etz-picker-input'), 'the + Add menu in 3D');
+        film.mark('pop');
         await film.tick(12);
         await film.type('ripple', 12);
         await film.tick(16);
@@ -287,3 +305,6 @@ try {
 }
 const report = await checkFilm(OUT, { sheet: `${BASE}-sheet.png` });
 say(`${OUT}\n${report.text}`);
+// The sound, from the events the film wrote beside itself (sound.mjs): effects, and with --music the bed too.
+if (values.sound || values.music) say(`with sound: ${await addSound(OUT, { music: false })}`);
+if (values.music) say(`with music: ${await addSound(OUT, { music: true })}`);

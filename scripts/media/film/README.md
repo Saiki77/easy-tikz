@@ -8,11 +8,14 @@ screen only (no paper, captions or cards), with a drawn pointer and an eased cam
 npm run media:tour                                      # the whole tour: <tmp>/easy-tikz-media/film/tour.mp4
 npm run media:tour -- proof                             # the opening only, about 12 s
 npm run media:tour -- --root --out ~/Desktop/tour.mp4   # the build in the repository root, another file
+npm run media:tour -- --size 1800x1200                  # 3:2 instead of 16:9 (1920 x 1080, the default for YouTube)
 node scripts/media/film/check.mjs film.mp4 --sheet sheet.png   # uneven frames and a contact sheet of a video
 ```
 
 Beside the MP4 the tour writes `<name>-sheet.png` (a picture per 2 s) and `<name>-stills/` (a picture per
-second), and prints the check. The whole tour takes about 10 minutes (about 50 ms per picture, 4200 pictures).
+second), and prints the check. The window takes the aspect of the frame at the full-screen height of a 16 inch
+MacBook Pro (1117 CSS px): 1986 x 1117 for 16:9, so a wider frame shows more at the sides and nothing less
+above and below (a window wider than the screen is emulated by the kit). The whole tour takes about 10 minutes (about 50 ms per picture, 4200 pictures).
 It needs `ffmpeg`. Nothing is written into the repository: copy a film where it belongs.
 
 ## Why frame-exact
@@ -60,6 +63,30 @@ Holds repeat the last picture when nothing moves and the camera rests.
 
 `rectOf(obs, selector)` gives the rectangle of the first visible element. `check.mjs` exports `checkFilm(file,
 { sheet })` and `unevenFrames(values, fps)`.
+
+## Sound
+
+```bash
+npm run media:tour -- --sound --music                  # also tour-sound.mp4 (effects) and tour-music.mp4 (effects and a bed)
+node scripts/media/film/sound.mjs tour.mp4 --music      # mix again from tour-events.json: seconds, no new film
+```
+
+While it films, the kit writes `<name>-events.json`: every key, press and release, drag, camera move, wheel and
+scroll, at the second of the film it happens, and `film.mark('pop')` where the scene opens something (the
+card, the editor, a menu, the palette). `sound.mjs` synthesises the sound from it, so each sound sits on its
+frame. Nothing is recorded or downloaded, and the same events give the same sound (seeded).
+
+| Event | Sound |
+| --- | --- |
+| `key` | A soft key: filtered noise and a low thump, a little different each time; Space and Enter lower |
+| `press`, `release` | A crisp click; a softer, lower one |
+| `camera`, `wheel`, `scroll` | A whoosh that follows the move: a band of noise that rises on a zoom in, falls on a zoom out |
+| `drag` | A faint texture that swells and fades with the speed of the hand |
+| `pop` | A soft rising blip |
+| `--music` | Pads on Cmaj9, G6, Am9, Fmaj9 (two bars each at 76 bpm), a bass and a few plucks, in a small stereo room |
+
+Levels are fixed: the effects peak at -3 dBFS, the bed's RMS is -21 dBFS, a soft limit above that. The 5.2
+tour with the bed measures -18.9 LUFS, peak -1 dBFS; that version (effects and bed) was the one chosen.
 
 ## Adding a part
 

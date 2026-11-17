@@ -107,6 +107,9 @@ export async function createFilm(obs, { out, fps = 60, width = 1800, height = 12
     let releaseAt = -1e9;
     let last = null;
     let captureMs = 0;
+    // The event track for the sound (sound.mjs): what happens, at which second of the film.
+    const events = [];
+    const mark = (type, data = {}) => events.push({ t: Math.round((frame / fps) * 1e4) / 1e4, type, ...data });
 
     fs.mkdirSync(path.dirname(out), { recursive: true });
     if (stills) fs.mkdirSync(stills, { recursive: true });
@@ -215,6 +218,8 @@ export async function createFilm(obs, { out, fps = 60, width = 1800, height = 12
         tick,
         hold,
         idle,
+        /** Note an event for the sound at this moment: 'pop' when something opens, or any type sound.mjs knows. */
+        mark,
         pointer(on) {
             shown = on;
         },
@@ -235,6 +240,7 @@ export async function createFilm(obs, { out, fps = 60, width = 1800, height = 12
                 return;
             }
             move = { from, to, start: frame, frames: Math.max(1, Math.round(seconds * fps)) };
+            mark('camera', { seconds, zoom: Math.round((from.w / to.w) * 1000) / 1000 });
         },
         async cameraWait() {
             while (move) await tick();
@@ -258,11 +264,13 @@ export async function createFilm(obs, { out, fps = 60, width = 1800, height = 12
             }
         },
         async press() {
+            mark('press');
             await obs.mouse.down();
             down = true;
             pressAt = frame / fps;
         },
         async release() {
+            mark('release');
             await obs.mouse.up();
             down = false;
             releaseAt = frame / fps;
@@ -288,6 +296,7 @@ export async function createFilm(obs, { out, fps = 60, width = 1800, height = 12
                 [px, py] = [x, y];
             }
             const n = Math.max(1, Math.round(seconds * fps));
+            mark('drag', { seconds, length: Math.round(total) });
             for (let i = 1; i <= n; i++) {
                 const d = smooth(i / n) * total;
                 const s = segs.find((g) => d <= g.at + g.len + 1e-9) ?? segs[segs.length - 1];
@@ -304,6 +313,7 @@ export async function createFilm(obs, { out, fps = 60, width = 1800, height = 12
             let seed = 7;
             const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
             for (const ch of Array.from(text)) {
+                mark('key', { key: ch === '\n' ? 'Enter' : ch === ' ' ? 'Space' : 'char' });
                 if (ch === '\n') await obs.key('Enter');
                 else await obs.type(ch);
                 const frames = Math.max(1, Math.round((fps / cps) * (0.7 + 0.6 * rnd())));
@@ -311,12 +321,14 @@ export async function createFilm(obs, { out, fps = 60, width = 1800, height = 12
             }
         },
         async key(name, mods) {
+            mark('key', { key: name === 'Enter' ? 'Enter' : 'char' });
             await obs.key(name, mods);
             await tick();
         },
         /** Wheel steps spread over `seconds` at (x, y): `total` deltaY in all (negative zooms in). */
         async wheel(x, y, total, seconds = 0.8) {
             const n = Math.max(1, Math.round(seconds * fps));
+            mark('wheel', { seconds, zoom: total < 0 ? 'in' : 'out' });
             let sent = 0;
             for (let i = 1; i <= n; i++) {
                 const want = smooth(i / n) * total;
@@ -330,6 +342,7 @@ export async function createFilm(obs, { out, fps = 60, width = 1800, height = 12
         async scroll(selector, top, seconds = 1) {
             const from = await obs.call((s) => document.querySelector(s).scrollTop, selector);
             const n = Math.max(1, Math.round(seconds * fps));
+            mark('scroll', { seconds });
             for (let i = 1; i <= n; i++) {
                 await obs.call((s, v) => {
                     document.querySelector(s).scrollTop = v;
@@ -340,6 +353,7 @@ export async function createFilm(obs, { out, fps = 60, width = 1800, height = 12
         async finish() {
             ff.stdin.end();
             await done;
+            fs.writeFileSync(out.replace(/\.mp4$/i, '') + '-events.json', JSON.stringify({ fps, seconds: frame / fps, events }, null, 1));
             await obs.call(() => {
                 document.getElementById('film-pointer')?.remove();
             });

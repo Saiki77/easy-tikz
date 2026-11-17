@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.2.3] - 2026-11-17
+
+### Added
+
+- **A video tour at the top of the README:** 70 seconds in Obsidian, with sound. A plane typed in a note becomes a chart under the pointer, a chart block shades the area under a curve, the editor adds a Riemann sum, moves the tangent and drags a label, + Add builds a 3D surface from a template that turns and zooms, and a Help guide is clicked through. The plugin is the same as in 5.2.2.
+
 ## [5.2.2] - 2026-11-17
 
 ### Fixed

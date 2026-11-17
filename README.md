@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/media/readme/formula.png" alt="A note reads: The function f(x) = x³/3 − ax has two extrema when a is above 0. The formula has a dotted line under it and the pointer rests on it. Below it a card opens with the formula, the word Function, the chart of f with its maximum and minimum marked, and a slider for a. Beside the card is the chart block that Insert chart writes." width="100%">
-</p>
+<video src="https://github.com/user-attachments/assets/1b71afd1-c7ba-4fae-9bef-70f7888b39d5" controls muted width="100%"></video>
 
 <h3 align="center">Every formula in your notes is a chart.</h3>
 
