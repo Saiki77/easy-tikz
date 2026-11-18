@@ -90,11 +90,38 @@ frame. Nothing is recorded or downloaded, and the same events give the same soun
 Levels are fixed: the effects peak at -3 dBFS, the bed's RMS is -21 dBFS, a soft limit above that. The 5.2
 tour with the bed measures -18.9 LUFS, peak -1 dBFS; that version (effects and bed) was the one chosen.
 
+## Parts that are kept (`parts.mjs`)
+
+A scene in parts films only what changed. Each part is filmed into its own segment in a cache folder
+(`.media-cache/film/<scene>/<part>.mp4`, ignored by git) and filmed again only when its key changes:
+
+| In the key | So a part is filmed again when |
+| --- | --- |
+| its `setup` and `film` code, its `notes` and `inputs` | you change the part |
+| the code of the shared helpers (`shared`) | you change a helper all parts use |
+| the plugin files it runs (`pluginKey`) | the plugin build changes |
+| the state it starts from (what the part before returned) | the part before it ends differently |
+| the frame size and rate | the format changes |
+
+`--refilm build,plane` (or `all`) films parts again whatever their key. The kept segments and the new ones are
+joined with their streams copied (no new encode), the events with their offsets, so the sound is mixed over the
+whole film.
+
+A part starts from a state its `setup` makes off camera (notes written, a note opened, the editor opened) and from
+the camera and pointer the part before returned (`film.cameraNow()`, `film.pointerNow()`). When that state looks
+like the last picture of the part before, the join cannot be seen. End a part where the picture is simple and
+fixed (an opened note, the camera and the pointer at rest), so that a change in one part does not spread to the
+next.
+
 ## README video
 
-`readme.mjs` films the video at the top of the repository README: the editor on the chart of a note (+ Add finds
-the Riemann sum, the tangent moves, a label goes into the area), a plane typed under the chart and hovered, a new
-note with a 3D chart typed by hand (solid, smooth, 80 samples), and that chart zoomed and turned in the editor.
+`readme.mjs` films the video at the top of the repository README, in three kept parts: `build` (a function typed
+as display math and hovered; Open in the editor; its tangent dragged to x = 4; the area under the function and a
+Riemann sum, both from 0 to the tangent's point; Save changes), `plane` (a plane typed under the chart and hovered;
+a new note) and `ripple` (a 3D chart typed by hand, solid, smooth, 80 samples, then zoomed and turned in the
+editor). The vault's formula charts draw their axes through the origin (the setting Default chart for formulas,
+given to the parts as `pluginData`), so the area and the Riemann sum stand on the x-axis and start at the y-axis. Film it with the released plugin, so the README shows what users
+get: `gh release download X.Y.Z --dir <dir>`, then `npm run media:readme -- --plugin <dir> --sound --music`.
 
 GitHub plays a README video only when it was uploaded on github.com. A video file in the repository does not
 play: GitHub removes a `<video>` tag whose source is not such an upload, and its pages load media only from its

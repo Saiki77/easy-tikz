@@ -31,3 +31,6 @@ data.json
 # local only
 /docs/release-posts/
 /docs/media/post-*
+
+# kept film parts (scripts/media/film/parts.mjs)
+/.media-cache/

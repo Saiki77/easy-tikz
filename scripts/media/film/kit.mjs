@@ -245,6 +245,14 @@ export async function createFilm(obs, { out, fps = 60, width = 1800, height = 12
         async cameraWait() {
             while (move) await tick();
         },
+        /** Where the camera rests or goes to, {cx, cy, w}: what the next part of a film in parts starts from (parts.mjs). */
+        cameraNow() {
+            return { ...(move ? move.to : cam) };
+        },
+        /** The pointer's position: what the next part of a film in parts starts from. */
+        pointerNow() {
+            return { x: obs.mouse.x, y: obs.mouse.y };
+        },
         /** Glide the pointer to (x, y) in `seconds`, on a slight arc, still at both ends. */
         async move(x, y, seconds = 0.6, { arc = 0.08 } = {}) {
             const x0 = obs.mouse.x;
