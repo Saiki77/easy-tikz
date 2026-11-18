@@ -171,6 +171,7 @@ export const problems = {
     'problems.text.gridTakes': 'grid takes nothing, major, minor, fine or an opacity: grid opacity 0.3',
     'problems.text.numbersTakes': 'Write {axis} numbers every 0.5, {axis} numbers at 1, 3 or {axis} numbers off.',
     'problems.text.sizeTakes': 'size takes width x height in cm, such as size 12 x 6',
+    'problems.text.boxTakes': 'box takes the three lengths of the 3D box, x : y : z, such as box 1 x 2 x 0.6',
     'problems.text.standsAlone': '{word} stands alone on its line',
     'problems.text.optimumTakes': '{word} takes an objective and a region: {word} 2x + 3y over R1',
     'problems.text.viewTakes': 'view takes ranges such as x -3..3, y -4..4',

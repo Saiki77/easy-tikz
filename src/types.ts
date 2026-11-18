@@ -127,8 +127,11 @@ export type AxisStyle = 'box' | 'middle' | 'axes';
  * - 'equal': each axis is normalized to a unit length, so the bounding
  *   box is a perfect cube on screen regardless of the data ranges.
  *   Exported as pgfplots' default box (no aspect option).
+ * - 'custom': the edges have the lengths of `boxRatio` (x : y : z), such
+ *   as 1 : 2 : 0.6 for a long box that still shows its heights (the line
+ *   `box 1 x 2 x 0.6`; pgfplots' `plot box ratio`).
  */
-export type BoxAspect = 'true' | 'equal';
+export type BoxAspect = 'true' | 'equal' | 'custom';
 
 export type ArrowStyle = 'none' | 'forward' | 'backward' | 'both';
 
@@ -467,8 +470,10 @@ export interface RendererConfig {
     rotationZ: number;
     /** Multiplier on the 3D camera scale. 1.0 is the default fit-to-viewport. */
     zoom3D: number;
-    /** 3D bounding-box aspect: 'true' (data-proportional) or 'equal' (cube). */
+    /** 3D bounding-box aspect: 'true' (data-proportional), 'equal' (cube) or 'custom' (the lengths of boxRatio). */
     boxAspect: BoxAspect;
+    /** With boxAspect 'custom': the lengths of the box edges, x : y : z. */
+    boxRatio?: number[];
     functions3D: Function3DParameters[];
     /** Paper size of the exported figure in cm (clamped 1..100); the preview typesets its text at this scale. */
     paperWidthCm?: number;

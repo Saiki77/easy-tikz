@@ -532,6 +532,49 @@ if (started) {
             return `wall ${px.wall}, floor ${px.floor}`;
         });
 
+        await check('3D: a box of its own lengths (Custom 1 : 2 : 0.6) in the preview, the Chart tab and a typed length', async () => {
+            await obs.openEditor();
+            await loadClean(
+                {
+                    v: 4, dimension: true, boxAspect: 'custom', boxRatio: [1, 2, 0.6], rotationX: 30, rotationZ: 45,
+                    xmin: '-5', xmax: '5', ymin: '-5', ymax: '5', zmin: '-1', zmax: '1',
+                    functions3D: [{ name: 'f1', expression: 'sin(sqrt(x^2 + y^2))', xDomain: '-5:5', yDomain: '-5:5', color: 'blue', wireframe: false, opacity: 1, samples: 30 }],
+                },
+                true
+            );
+            // The edges of the box in preview units (units per data unit times the range), as shares of the longest.
+            const edges = () =>
+                obs.call(() => {
+                    const r = window.__etzMedia.requireEditor().renderer3d;
+                    const e = [r.xNormFactor * 10, r.yNormFactor * 10, r.zNormFactor * 2];
+                    return e.map((v) => Math.round((v / Math.max(...e)) * 1000) / 1000);
+                });
+            const before = await edges();
+            assert(sameJson(before, [0.5, 1, 0.3]), `the box edges are ${before.join(' : ')}, not 0.5 : 1 : 0.3`);
+            await obs.showTab('chart');
+            const tab = await obs.call(() => {
+                const row = window.__etzMedia.requireEditor().modalEl.querySelector('.etz-box-lengths');
+                const active = row ? row.parentElement.querySelector('[aria-checked="true"]') : null;
+                return {
+                    shown: !!row && !row.classList.contains('tikz-hidden') && row.getClientRects().length > 0,
+                    active: active ? (active.textContent || '').trim() : null,
+                    values: row ? Array.from(row.querySelectorAll('input')).map((i) => i.value) : [],
+                };
+            });
+            assert(tab.shown, 'the row of box lengths is not shown for a Custom box');
+            assert(tab.active === 'Custom', `the Box choice is ${tab.active}, not Custom`);
+            assert(sameJson(tab.values, ['1', '2', '0.6']), `the lengths read ${tab.values.join(' : ')}`);
+            // A length typed in the Chart tab: z from 0.6 to 1.
+            await obs.call(() => {
+                const z = window.__etzMedia.requireEditor().modalEl.querySelectorAll('.etz-box-lengths input')[2];
+                z.value = '1';
+                z.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            await obs.waitFor(async () => sameJson(await edges(), [0.5, 1, 0.5]), { timeout: 4000, interval: 50, message: 'the box after the length z = 1' });
+            await obs.closeEditor();
+            return `${before.join(' : ')}, then 0.5 : 1 : 0.5`;
+        });
+
         // Notes: insert, render, sliders, edit from the note, save back.
         const note = 'Smoke test';
         let inserted = null;

@@ -306,10 +306,10 @@ const DEFAULT_CHART_KEYS = [
     'axis_style', 'show_axis_label', 'axis_label_x', 'axis_label_y', 'axis_label_z',
     'showLargeGrid', 'showSmallGrid', 'gridOpacity', 'gridSize', 'majorTickNum',
     'numbers_x', 'numbers_step_x', 'numbers_at_x', 'numbers_y', 'numbers_step_y', 'numbers_at_y', 'numbers_z', 'numbers_step_z', 'numbers_at_z',
-    'equalScale', 'size_x_cm', 'size_y_cm', 'boxAspect', 'rotationX', 'rotationZ', 'zoom3D', 'documentSetup', 'showSlidersInNote',
+    'equalScale', 'size_x_cm', 'size_y_cm', 'boxAspect', 'boxRatio', 'rotationX', 'rotationZ', 'zoom3D', 'documentSetup', 'showSlidersInNote',
 ];
 /** The 3D view of a default chart: it counts only when the default is 3D. */
-const VIEW_3D = ['boxAspect', 'rotationX', 'rotationZ', 'zoom3D'];
+const VIEW_3D = ['boxAspect', 'boxRatio', 'rotationX', 'rotationZ', 'zoom3D'];
 /** The style of a line the default's first function gives the functions and curves of a formula chart (its colour: the first only). */
 const LINE_STYLE = ['color', 'thickness', 'dashed', 'extrema', 'showLegend', 'fill', 'fillOpacity', 'fillPattern'];
 /** The style the default's first surface gives a surface. */

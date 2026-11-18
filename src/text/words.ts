@@ -48,6 +48,7 @@ export const PIECES: readonly Piece[] = [
     piece('numbers', 'numbers', 'phrases', 'panels.words.what.numbers'),
     piece('equal-scale', 'equal scale', 'lines', 'panels.words.what.equalScale'),
     piece('cube', 'cube', 'lines', 'panels.words.what.cube'),
+    piece('box', 'box', 'lines', 'panels.words.what.box'),
     piece('title', 'title', 'lines', 'panels.words.what.title', { keepsRest: true }),
     piece('xlabel', 'xlabel', 'lines', 'panels.words.what.xlabel', { keepsRest: true }),
     piece('ylabel', 'ylabel', 'lines', 'panels.words.what.ylabel', { keepsRest: true }),

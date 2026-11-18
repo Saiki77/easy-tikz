@@ -31,6 +31,7 @@ import {
     labelMetricsFor,
 } from './scene';
 import { sampleCurve } from './util';
+import { boxFactors } from './box3d';
 import { TickAxis, axisTicks, tickOptions } from './ticks';
 
 // ------------------------------------------------------------------ tuning
@@ -1045,8 +1046,9 @@ export interface Camera3D {
     azimuth: number;
     elevation: number;
     /**
-     * Preview units per data unit on each axis: 2 / its range for boxAspect
-     * 'equal' (a cube), 2 / the largest range for 'true' (data proportions).
+     * Preview units per data unit on each axis (box3d.ts boxFactors): a cube
+     * for boxAspect 'equal', the proportions of the ranges for 'true', those
+     * of boxRatio for 'custom'.
      */
     factors: Vec3;
     /** Screen vectors (right, up) of one data unit along x, y and z, in preview units. */
@@ -1066,8 +1068,7 @@ export interface Camera3D {
 export function previewCamera3D(config: RendererConfig): Camera3D {
     const range = (lo: number, hi: number) => hi - lo || 1;
     const ranges: Vec3 = [range(config.xmin, config.xmax), range(config.ymin, config.ymax), range(config.zmin, config.zmax)];
-    const largest = Math.max(...ranges);
-    const [fx, fy, fz] = ranges.map((r) => 2 / (config.boxAspect === 'true' ? largest : r));
+    const [fx, fy, fz] = boxFactors(ranges, config.boxAspect, config.boxRatio);
     const azimuth = num(config.rotationZ, 45);
     const elevation = num(config.rotationX, 30);
     const a = (azimuth * Math.PI) / 180;

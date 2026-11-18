@@ -84,10 +84,13 @@ export const panels = {
     'panels.chart.elevation': 'Elevation',
     'panels.chart.azimuth': 'Azimuth',
     'panels.chart.box': 'Box',
-    'panels.chart.boxHint': 'Cube gives every axis the same length; Proportional follows the data ranges.',
+    'panels.chart.boxHint': 'Cube gives every axis the same length; Proportional follows the data ranges; Custom takes the lengths x : y : z.',
     'panels.chart.boxAspect': 'Box aspect',
     'panels.chart.cube': 'Cube',
     'panels.chart.proportional': 'Proportional',
+    'panels.chart.custom': 'Custom',
+    'panels.chart.boxLengths': 'Lengths of the box, x : y : z',
+    'panels.chart.boxLength': 'Length of the box along {axis}',
 
     // Code tab (src/ui/codePanel.ts)
     'panels.code.standalone': 'Standalone document',
@@ -197,6 +200,7 @@ export const panels = {
     'panels.words.what.numbers': 'The numbers on an axis: x numbers every 0.5, x numbers at 1, 3, x numbers off',
     'panels.words.what.equalScale': 'The same unit on both axes',
     'panels.words.what.cube': 'The 3D box as a cube: every axis the same length',
+    'panels.words.what.box': 'The 3D box with its own lengths, x : y : z',
     'panels.words.what.title': 'A title over the chart',
     'panels.words.what.xlabel': 'The name of the x-axis',
     'panels.words.what.ylabel': 'The name of the y-axis',

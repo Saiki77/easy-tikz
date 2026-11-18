@@ -20,6 +20,74 @@ export function toViewer(azimuth: number, elevation: number): Vec3 {
     return [-Math.sin(a) * Math.cos(e), -Math.cos(a) * Math.cos(e), Math.sin(e)];
 }
 
+/** Box lengths x : y : z: three finite numbers above 0, or null. Accepts an array or a text such as "1 2 0.6" or "1 x 2 x 0.6". */
+export function boxRatioOf(value: unknown): Vec3 | null {
+    const parts = Array.isArray(value) ? value : typeof value === 'string' ? value.trim().split(/\s*(?:x|×|by|:|,|\s)\s*/i) : null;
+    if (!parts || parts.length !== 3) return null;
+    const r = parts.map((p) => (typeof p === 'number' ? p : typeof p === 'string' && p.trim() !== '' ? Number(p) : NaN));
+    return r.every((v) => Number.isFinite(v) && v > 0) ? [r[0], r[1], r[2]] : null;
+}
+
+/** The stored box aspect as the renderer reads it: 'equal' (a cube), 'custom' (the lengths of boxRatio) or 'true' (the ranges). */
+export function boxAspectOf(aspect: unknown): 'true' | 'equal' | 'custom' {
+    return aspect === 'equal' || aspect === 'custom' ? aspect : 'true';
+}
+
+/**
+ * Preview units per data unit on each axis, from the ranges (each above 0)
+ * and the box aspect. The box is centred on 0 and its longest edge is 2:
+ * 'equal' makes every edge 2 (a cube), 'true' gives the edges the
+ * proportions of the ranges, 'custom' those of `ratio` (a cube when the
+ * ratio is not valid).
+ */
+export function boxFactors(ranges: Vec3, aspect: string, ratio?: unknown): Vec3 {
+    if (aspect === 'true') {
+        const largest = Math.max(...ranges);
+        return [2 / largest, 2 / largest, 2 / largest];
+    }
+    const lengths = (aspect === 'custom' && boxRatioOf(ratio)) || [1, 1, 1];
+    const longest = Math.max(...lengths);
+    return [0, 1, 2].map((k) => (2 * lengths[k]) / longest / ranges[k]) as Vec3;
+}
+
+/**
+ * Width and height on screen, in preview units, of a box centred on 0 with
+ * the half lengths `half`, seen from the azimuth and elevation in degrees
+ * (the projection of renderer3d: right = nx cos a - ny sin a, up =
+ * (nx sin a + ny cos a) sin e + nz cos e).
+ */
+export function projectedBox(half: Vec3, azimuth: number, elevation: number): { width: number; height: number } {
+    const a = (azimuth * Math.PI) / 180;
+    const e = (elevation * Math.PI) / 180;
+    const [cosA, sinA, cosE, sinE] = [Math.abs(Math.cos(a)), Math.abs(Math.sin(a)), Math.abs(Math.cos(e)), Math.abs(Math.sin(e))];
+    return {
+        width: 2 * (half[0] * cosA + half[1] * sinA),
+        height: 2 * ((half[0] * sinA + half[1] * cosA) * sinE + half[2] * cosE),
+    };
+}
+
+/**
+ * The share of the space inside the padding that the box itself may fill,
+ * across and up; the rest is for the tick numbers and axis labels around it.
+ * Set so a cube seen from the default view (azimuth 45°, elevation 30°)
+ * keeps the size it had before 5.2.5 (0.28 of the shorter side per unit).
+ */
+export const BOX_FILL_ACROSS = 0.792;
+export const BOX_FILL_UP = 0.881;
+
+/**
+ * Pixels per preview unit so the box, as seen from this view, fills the
+ * space `availW` x `availH` (less the room for its labels) as far as it
+ * can: a long box fills a wide chart, a tall one a narrow chart.
+ */
+export function boxFitScale(half: Vec3, azimuth: number, elevation: number, availW: number, availH: number): number {
+    const seen = projectedBox(half, azimuth, elevation);
+    const across = seen.width > 1e-9 ? (BOX_FILL_ACROSS * availW) / seen.width : Infinity;
+    const up = seen.height > 1e-9 ? (BOX_FILL_UP * availH) / seen.height : Infinity;
+    const scale = Math.min(across, up);
+    return Number.isFinite(scale) && scale > 0 ? scale : 0.28 * Math.min(availW, availH);
+}
+
 /** Painter's order: farther first, so what is nearer covers it. */
 export function farFirst(a: { depth: number }, b: { depth: number }): number {
     return b.depth - a.depth;

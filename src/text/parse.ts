@@ -26,6 +26,7 @@ import { MessageKey, t as msg } from '../i18n';
 import { stripMathDollars } from '../latex';
 import { FULL_OPTION_HELP, isFullText, mapFull, readFull } from './full';
 import { eventNames } from '../beyond/event';
+import { boxRatioOf } from '../box3d';
 
 type Data = Record<string, unknown>;
 
@@ -59,7 +60,7 @@ export interface TextChart {
 
 /** Words that start a line (a function may still be called like one: line(x) = ... is a function). */
 export const KEYWORDS = new Set([
-    'view', 'title', 'xlabel', 'ylabel', 'zlabel', 'axes', 'grid', 'size', 'equal', 'polar', '3d', 'cube', 'snippet', 'variables', 'set',
+    'view', 'title', 'xlabel', 'ylabel', 'zlabel', 'axes', 'grid', 'size', 'equal', 'polar', '3d', 'cube', 'box', 'snippet', 'variables', 'set',
     'slider', 'shade', 'line', 'curve', 'levels', 'point', 'points', 'crossings', 'intersections', 'corners', 'max', 'min',
     'integer', 'arrow', 'segment', 'polygon', 'brace', 'text', 'plane', 'raw',
     // the English verbs and openings
@@ -968,6 +969,17 @@ function statement(b: Builder, line: string) {
             if (options.length) b.problem(options[0].at, msg('problems.text.standsAlone', { word: 'cube' }));
             b.chart.boxAspect = 'equal';
             return;
+        case 'box': {
+            // The 3D box with its own lengths, x : y : z: `box 1 x 2 x 0.6`. A line that does not start with a number
+            // stays a formula (`box + x = 3`, a slider called box).
+            const lengths = rest.text.trim();
+            if (!/^[\d.]/.test(lengths)) return formulaLine(b, name, body, options);
+            const ratio = boxRatioOf(lengths);
+            if (!ratio || options.length) return b.problem(rest.at, msg('problems.text.boxTakes'));
+            b.chart.boxAspect = 'custom';
+            b.chart.boxRatio = ratio;
+            return;
+        }
         case 'raw':
             return rawLine(b, rest);
         case 'snippet':

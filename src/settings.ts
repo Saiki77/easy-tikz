@@ -1,4 +1,4 @@
-import { Annotation, AxisStyle, BoxAspect, CoordinateSystem, Function3DParameters, FunctionParameters, Parameter, RendererConfig, Tool } from './types';
+import { Annotation, AxisStyle, CoordinateSystem, Function3DParameters, FunctionParameters, Parameter, RendererConfig, Tool } from './types';
 import { MathContext, MathContextInput } from './mathcontext';
 import { View } from './geometry';
 import { SCHEMA_VERSION, migrateSettings } from './migrate';
@@ -7,6 +7,7 @@ import { t } from './i18n';
 import { GRID_OPACITY, opacityValue } from './opacity';
 import { AxisNumbers, TickAxis, numbersKeys, numbersMode } from './ticks';
 import { NoteTable, tableData } from './beyond/table';
+import { boxAspectOf, boxRatioOf } from './box3d';
 
 /** The six axis range keys. */
 export type RangeKey = 'xmin' | 'xmax' | 'ymin' | 'ymax' | 'zmin' | 'zmax';
@@ -362,7 +363,8 @@ export class SettingsManager {
             rotationX: numberValue(this.getValue('rotationX'), 30),
             rotationZ: numberValue(this.getValue('rotationZ'), 45),
             zoom3D: numberValue(this.getValue('zoom3D'), 1),
-            boxAspect: this.getValue<BoxAspect | undefined>('boxAspect') === 'equal' ? 'equal' : 'true',
+            boxAspect: boxAspectOf(this.getValue('boxAspect')),
+            boxRatio: boxRatioOf(this.getValue('boxRatio')) ?? undefined,
             functions3D: arrayValue<Function3DParameters>(this.getValue('functions3D')),
             // The paper size lets the preview typeset its text at the PDF's scale.
             paperWidthCm: paper.w,

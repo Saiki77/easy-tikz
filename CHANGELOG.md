@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.2.5] - 2026-11-18
+
+### Added
+
+- **A 3D box with lengths of your own:** in the editor, Chart, 3D view, **Box** has a third choice, **Custom**, with the three lengths of the box, x : y : z. A box such as 1 : 2 : 0.6 shows a surface over a long range and still shows its heights. Custom starts from the box as it is (from Proportional, the proportions of the ranges), so nothing jumps. In the chart words it is the line `box 1 x 2 x 0.6`, in Full LaTeX `plot box ratio={1 2 0.6}`. The LaTeX export draws the same box.
+
+### Changed
+
+- **The 3D box fills the chart:** the preview sizes the box by its outline as the view shows it, as the PDF does. A long or flat box now fills a wide chart; before, it had the size of a cube and left space empty. While a long box turns, it grows or shrinks so that it always fits. A cube in the default view keeps its size.
+
 ## [5.2.4] - 2026-11-17
 
 ### Fixed

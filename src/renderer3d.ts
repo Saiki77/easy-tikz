@@ -3,7 +3,7 @@ import { LABEL_LOCALS, MathContext, labelDisplayText } from './mathcontext';
 import { ArrowHeads, Scene3D, SceneIssue, computeScene3D, edgeLabelSide3D } from './scene';
 import { COLOR_MAP, THICKNESS_MAP, resolveCssColor } from './colors';
 import { colormapCss, colormapRange, colormapRgb, isColormap, rgbCss } from './colormaps';
-import { BOX_EDGES, edgeKind, farFirst, gridLines, stepValues, tickSides, toViewer } from './box3d';
+import { BOX_EDGES, Vec3, boxFactors, boxFitScale, edgeKind, farFirst, gridLines, stepValues, tickSides, toViewer } from './box3d';
 import { MESH_OPACITY, opacityValue } from './opacity';
 import { AxisTicks, axisTicks } from './ticks';
 import { niceInterval, stripLatex, hexToRgb, rgbStringToRgb } from './util';
@@ -14,9 +14,6 @@ const PADDING_TOP = 40;
 const PADDING_RIGHT = 40;
 const PADDING_BOTTOM = 40;
 const PADDING_LEFT = 40;
-
-/** Fraction of the available viewport used by the projected unit cube. */
-const VIEWPORT_SCALE = 0.28;
 
 /** Default surface sampling resolution per axis. */
 const DEFAULT_GRID_SAMPLES = 40;
@@ -550,7 +547,6 @@ export class SVG3DRenderer {
         const availW = config.width - PADDING_LEFT - PADDING_RIGHT;
         const availH = config.height - PADDING_TOP - PADDING_BOTTOM;
         const zoom = Math.max(0.1, Math.min(10, config.zoom3D || 1));
-        this.scale = Math.min(availW, availH) * VIEWPORT_SCALE * zoom;
         const az = (config.rotationZ * Math.PI) / 180;
         const el = (config.rotationX * Math.PI) / 180;
         this.cosA = Math.cos(az);
@@ -558,28 +554,19 @@ export class SVG3DRenderer {
         this.cosE = Math.cos(el);
         this.sinE = Math.sin(el);
 
-        // Per-axis normalization. The box and surfaces share this space.
-        //  - 'equal': each axis spans [-1, 1] independently - cube box.
-        //  - 'true':  divide every axis by the LARGEST range so the box's
-        //    edge lengths reflect data proportions while still fitting
-        //    the canvas (a non-normalising "true" projection would put
-        //    box corners far off-canvas for typical data ranges).
+        // Per-axis normalization (box3d.ts boxFactors). The box and surfaces share this space, centred on 0 with
+        // the longest edge 2: 'equal' a cube, 'true' the proportions of the ranges, 'custom' those of boxRatio.
         const xRange = config.xmax - config.xmin || 1;
         const yRange = config.ymax - config.ymin || 1;
         const zRange = config.zmax - config.zmin || 1;
         this.xCenter = (config.xmin + config.xmax) / 2;
         this.yCenter = (config.ymin + config.ymax) / 2;
         this.zCenter = (config.zmin + config.zmax) / 2;
-        if (config.boxAspect === 'true') {
-            const maxRange = Math.max(xRange, yRange, zRange);
-            this.xNormFactor = 2 / maxRange;
-            this.yNormFactor = 2 / maxRange;
-            this.zNormFactor = 2 / maxRange;
-        } else {
-            this.xNormFactor = 2 / xRange;
-            this.yNormFactor = 2 / yRange;
-            this.zNormFactor = 2 / zRange;
-        }
+        [this.xNormFactor, this.yNormFactor, this.zNormFactor] = boxFactors([xRange, yRange, zRange], config.boxAspect, config.boxRatio);
+        // The box fills the chart as this view shows it (as the PDF's box fills its paper): a long box fills a wide
+        // chart. A cube seen from the default view keeps the size of before (box3d.ts BOX_FILL_*).
+        const half: Vec3 = [Math.abs(this.xNormFactor * xRange) / 2, Math.abs(this.yNormFactor * yRange) / 2, Math.abs(this.zNormFactor * zRange) / 2];
+        this.scale = boxFitScale(half, config.rotationZ, config.rotationX, availW, availH) * zoom;
 
         // Tools first: points tools publish derived names (P1_x, ...) that
         // surfaces and labels may read.

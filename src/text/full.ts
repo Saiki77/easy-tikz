@@ -32,6 +32,7 @@ import { looksLikeLatex, stripMathDollars } from '../latex';
 import type { LineTrace, ObjectList, TextChart, TextProblem } from './parse';
 import { COLORS, LINE_BREAK, NAME_RE, THICKNESSES, definedNames, parseChartText, splitStatement, splitTop } from './parse';
 import { NO_WORDS, chartWords, hasWords, readWords } from './words';
+import { boxRatioOf } from '../box3d';
 
 type Data = Record<string, unknown>;
 
@@ -822,6 +823,11 @@ function axisWords(cmd: Command, line: number, problems: TextProblem[]): Mapped[
             else unknown(o);
         } else if (!v) continue;
         else if (/^[xyz](min|max)$/.test(o.key)) bounds.set(o.key, { o, v });
+        else if (o.key === 'plot box ratio') {
+            const ratio = boxRatioOf(v.text.replace(/[{}]/g, ' '));
+            if (ratio) say(`box ${ratio.join(' x ')}`, o.at);
+            else unknown(o);
+        }
         else if (o.key === 'axis lines') {
             const word = AXIS_LINES[v.text.trim().toLowerCase()];
             if (word) say(word, o.at);
@@ -1326,7 +1332,7 @@ function verbFor(list: ObjectList, item: Data | undefined): string | null {
 }
 
 /** A line that starts a chart line in words (show, axes, title, set, x numbers, ...). */
-const CHART_LINE = /^(?:(?:view|show|axes|no|with|grid|size|equal|polar|3d|cube|snippet|variables|set|title|xlabel|ylabel|zlabel)(?![A-Za-z0-9_(])|[xyz]\s+numbers\b)/i;
+const CHART_LINE = /^(?:(?:view|show|axes|no|with|grid|size|equal|polar|3d|cube|box|snippet|variables|set|title|xlabel|ylabel|zlabel)(?![A-Za-z0-9_(])|[xyz]\s+numbers\b)/i;
 
 const listItems = (v: unknown): Data[] => (Array.isArray(v) ? (v.filter((x) => x && typeof x === 'object' && !Array.isArray(x)) as Data[]) : []);
 
@@ -1372,7 +1378,15 @@ function axisFull(fields: string[], chart: Data): string[] {
         write(chart[k]);
     };
     take('dimension', (v) => (v === true ? opts.push('3d') : generic('dimension')));
-    take('boxAspect', (v) => (v === 'equal' ? opts.push('cube') : generic('boxAspect')));
+    take('boxAspect', (v) => {
+        // pgfplots' own key for a box with its own lengths.
+        const ratio = v === 'custom' ? boxRatioOf(chart.boxRatio) : null;
+        if (v === 'equal') opts.push('cube');
+        else if (ratio) {
+            opts.push(`plot box ratio={${ratio.join(' ')}}`);
+            done.add('boxRatio');
+        } else generic('boxAspect');
+    });
     take('coordinateSystem', (v) => (v === 'polar' ? opts.push('polar') : generic('coordinateSystem')));
     take('documentSetup', (v) => (v === false ? opts.push('snippet') : generic('documentSetup')));
     for (const k of ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax']) {

@@ -87,10 +87,13 @@ export const panels: Messages<typeof en> = {
     'panels.chart.elevation': '仰角',
     'panels.chart.azimuth': '方位角',
     'panels.chart.box': 'ボックス',
-    'panels.chart.boxHint': '「立方体」ではすべての軸が同じ長さになり、「比例」ではデータの範囲に合わせます。',
+    'panels.chart.boxHint': '「立方体」ではすべての軸が同じ長さになり、「比例」ではデータの範囲に合わせ、「カスタム」では長さを x : y : z で指定します。',
     'panels.chart.boxAspect': 'ボックスの比率',
     'panels.chart.cube': '立方体',
     'panels.chart.proportional': '比例',
+    'panels.chart.custom': 'カスタム',
+    'panels.chart.boxLengths': 'ボックスの長さ x : y : z',
+    'panels.chart.boxLength': '{axis} 方向のボックスの長さ',
 
     // Code tab (src/ui/codePanel.ts)
     'panels.code.standalone': '単体の文書',
@@ -196,6 +199,7 @@ export const panels: Messages<typeof en> = {
     'panels.words.what.numbers': '軸の目盛りの数値：x numbers every 0.5、x numbers at 1, 3、x numbers off',
     'panels.words.what.equalScale': '両方の軸で同じ単位の長さ',
     'panels.words.what.cube': '3D のボックスを立方体にする（すべての軸が同じ長さ）',
+    'panels.words.what.box': '3D のボックスの長さを x : y : z で指定する',
     'panels.words.what.title': 'グラフの上のタイトル',
     'panels.words.what.xlabel': 'x 軸の名前',
     'panels.words.what.ylabel': 'y 軸の名前',

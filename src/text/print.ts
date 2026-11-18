@@ -25,6 +25,7 @@ import { FULL_END, axisLines, chartLanguage, exactFull, fullLine, isFullText, wi
 import { isColormap } from '../colormaps';
 import { looksLikeLatex } from '../latex';
 import { eventNames } from '../beyond/event';
+import { boxRatioOf } from '../box3d';
 
 // ---------------------------------------------------------------- values
 
@@ -472,8 +473,16 @@ function labelLine(min: Data, full: Data): string {
 /** The chart lines, each with the fields it covers, in the order a block lists them. */
 const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): string[] }> = [
     { keys: ['dimension'], print: (m) => (m.dimension === true ? ['3d'] : 'dimension' in m ? [`set dimension = ${JSON.stringify(m.dimension)}`] : []) },
-    // The 3D box as a cube; without the line it follows the data ranges (the stored default).
-    { keys: ['boxAspect'], print: (m) => (m.boxAspect === 'equal' ? ['cube'] : 'boxAspect' in m ? [`set boxAspect = ${JSON.stringify(m.boxAspect)}`] : []) },
+    // The 3D box as a cube, or with its own lengths x : y : z; without a line it follows the data ranges (the stored default).
+    {
+        keys: ['boxAspect', 'boxRatio'],
+        print: (m) => {
+            if (m.boxAspect === 'equal' && !('boxRatio' in m)) return ['cube'];
+            const ratio = m.boxAspect === 'custom' ? boxRatioOf(m.boxRatio) : null;
+            if (ratio) return [`box ${ratio.map((v) => str(v)).join(' x ')}`];
+            return (['boxAspect', 'boxRatio'] as const).filter((k) => k in m).map((k) => `set ${k} = ${JSON.stringify(m[k])}`);
+        },
+    },
     {
         keys: ['coordinateSystem'],
         print: (m) => (m.coordinateSystem === 'polar' ? ['polar'] : 'coordinateSystem' in m ? [`set coordinateSystem = ${JSON.stringify(m.coordinateSystem)}`] : []),

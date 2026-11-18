@@ -528,6 +528,20 @@ button.etz-status-chip:focus-visible {
     line-height: var(--etz-control-h);
 }
 
+/* Chart, 3D view, Box Custom: the lengths x : y : z under the switch. */
+.etz-box-lengths {
+    display: flex;
+    align-items: center;
+    gap: var(--etz-gap);
+    margin-top: var(--etz-gap);
+}
+
+.etz-box-lengths .etz-box-length {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 0;
+}
+
 .etz-chart-hint {
     color: var(--text-muted);
     font-size: var(--etz-font-meta);

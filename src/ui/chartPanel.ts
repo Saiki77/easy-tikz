@@ -10,6 +10,7 @@ import { FieldHandle, PanelHost } from './host';
 import { MessageKey, t } from '../i18n';
 import { GRID_OPACITY, opacityValue } from '../opacity';
 import { NumbersMode, TickAxis, numbersKeys, numbersMode } from '../ticks';
+import { boxAspectOf, boxRatioOf } from '../box3d';
 import {
     ChipHandle,
     ExprInputHandle,
@@ -419,19 +420,58 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
             layout: 'inline',
             hint: t('panels.chart.boxHint'),
         });
+        // Custom starts from the box as it is (from Proportional, the proportions of the ranges), so nothing jumps.
+        const startLengths = (): number[] => {
+            if (boxAspectOf(settings.getValue('boxAspect')) !== 'true') return [1, 1, 1];
+            const span = (lo: string, hi: string) => Number(settings.getValue(hi)) - Number(settings.getValue(lo));
+            const spans = [span('xmin', 'xmax'), span('ymin', 'ymax'), span('zmin', 'zmax')];
+            if (!spans.every((v) => Number.isFinite(v) && v > 0)) return [1, 1, 1];
+            const smallest = Math.min(...spans);
+            return spans.map((v) => Number((v / smallest).toPrecision(2)));
+        };
         const aspect = segmented(aspectField.controlEl, {
             label: t('panels.chart.boxAspect'),
-            value: settings.getValue('boxAspect') === 'equal' ? 'equal' : 'true',
+            value: boxAspectOf(settings.getValue('boxAspect')),
             options: [
                 { value: 'equal', text: t('panels.chart.cube') },
                 { value: 'true', text: t('panels.chart.proportional') },
+                { value: 'custom', text: t('panels.chart.custom') },
             ],
             onChange: (value) => {
+                if (value === 'custom' && !boxRatioOf(settings.getValue('boxRatio'))) settings.setValue('boxRatio', startLengths());
                 settings.setValue('boxAspect', value);
+                syncLengths();
                 host.requestUpdate();
             },
         });
         aspectField.bind(aspect.el);
+        // The lengths x : y : z of a Custom box.
+        const lengthsRow = aspectField.controlEl.createDiv({ cls: 'etz-box-lengths', attr: { role: 'group', 'aria-label': t('panels.chart.boxLengths') } });
+        const lengthInputs = (['x', 'y', 'z'] as const).map((axis, k) => {
+            if (k > 0) lengthsRow.createSpan({ cls: 'etz-range-sep', text: ':', attr: { 'aria-hidden': 'true' } });
+            const input = textInput(lengthsRow, {
+                value: '',
+                monospace: true,
+                onInput: () => {
+                    const ratio = boxRatioOf(lengthInputs.map((i) => i.el.value));
+                    if (!ratio) return;
+                    settings.setValue('boxRatio', ratio);
+                    host.requestUpdate();
+                },
+                onCommit: () => host.commit(),
+            });
+            input.el.setAttr('aria-label', t('panels.chart.boxLength', { axis }));
+            input.el.addClass('etz-box-length');
+            return input;
+        });
+        const syncLengths = () => {
+            const custom = boxAspectOf(settings.getValue('boxAspect')) === 'custom';
+            lengthsRow.toggleClass('tikz-hidden', !custom);
+            if (!custom) return;
+            const ratio = boxRatioOf(settings.getValue('boxRatio')) ?? [1, 1, 1];
+            lengthInputs.forEach((input, k) => input.setValue(String(ratio[k])));
+        };
+        syncLengths();
     };
 
     const build = () => {

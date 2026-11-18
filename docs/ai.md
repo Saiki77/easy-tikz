@@ -85,6 +85,7 @@ The short forms of version 4.4 still work and mean the same: `view x -3..3, y -4
 | `polar` | Every function is r(θ), written with `theta`. A line `plot r(theta) = ...` makes the chart polar too. |
 | `3d` | A 3D chart. A surface or plane line makes the chart 3D too. |
 | `cube` | 3D: the box is a cube, whatever the ranges. Without it, its edges follow the ranges. |
+| `box 1 x 2 x 0.6` | 3D: the box with its own lengths, x : y : z, such as a long box that still shows its heights. |
 | `variables q, p` | Other axis letters. `x` and `y` keep working. |
 | `snippet` | The LaTeX export is only the tikzpicture, not a document. |
 | `set field = value` | Any chart field from the tables below, the value as JSON: `set showSlidersInNote = false`, `set displayWidth = 480`. |
@@ -220,6 +221,7 @@ The linear program of the first section, in Full LaTeX:
 | `title ...`, `xlabel ...`, `ylabel ...`, `zlabel ...` | `title={...}`, `xlabel={...}`, `ylabel={...}`, `zlabel={...}` |
 | `size 12 x 6`, `equal scale` | `width=12cm, height=6cm`, `axis equal` |
 | `3d`, `cube`, `polar`, `snippet`, `variables q, p` | `3d`, `cube`, `polar`, `snippet`, `variables={q, p}` |
+| `box 1 x 2 x 0.6` | `plot box ratio={1 2 0.6}` |
 | `set displayWidth = 480` | `displayWidth=480` (in `\axis`), or `\set{displayWidth = 480}` |
 | `slider c from 0 to 15, starting at 6, in steps of 0.1` | `\slider[min=0, max=15, start=6, step=0.1]{c}` |
 | `plot f(x) = x^2 from x = 0 to 4 in blue, thick` | `\plot[domain=0:4, blue, thick]{f(x) = x^2}` |
@@ -271,7 +273,8 @@ The options above set these fields. A `set` line or a `key=value` option can set
 | `variables` | `"x, y"` | Other axis letters, such as `"q, p"` or `"x1, x2"`. `x` and `y` keep working, and point labels still use `{x}` and `{y}`. |
 | `dimension` | `false` | `true` makes a 3D chart (see 3D). |
 | `zmin` `zmax` `axis_label_z` | `"-5"` `"5"` `"z"` | 3D only. |
-| `boxAspect` | `"true"` | 3D only: `"true"` gives the box the proportions of the ranges, `"equal"` makes it a cube (the line `cube`). |
+| `boxAspect` | `"true"` | 3D only: `"true"` gives the box the proportions of the ranges, `"equal"` makes it a cube (the line `cube`), `"custom"` gives it the lengths of `boxRatio` (the line `box 1 x 2 x 0.6`). |
+| `boxRatio` | none | 3D only, with `boxAspect` `"custom"`: the lengths of the box, x : y : z, such as `[1, 2, 0.6]`. |
 | `showSlidersInNote` | `true` | Sliders under the chart in the note. Moving them never edits the note. |
 | `documentSetup` | `true` | The LaTeX export is a standalone document (`false`: only the tikzpicture). |
 | `displayWidth` `displayAlign` | (unset) | Width in px and `"left"`, `"center"` or `"right"` of the chart in the note. Usually leave them out. |
@@ -412,7 +415,7 @@ Crossings (intersections) come sorted from left to right, so `P1_x < P1_x2 < ...
 
 ## 3D
 
-Write `3d` and a `show` line with a z range; add `cube` for a box that is a cube whatever the ranges. Surfaces are `plot s(x, y) = x^2 + y^2 for x from -2 to 2 and y from -2 to 2 in blue, opacity 0.7` (or `plot z = ...`); planes are `draw the plane z = h`; points, segments and text labels take `(x, y, z)`. In JSON: `"dimension": true`, surfaces in `functions3D`, points and segments with `"dim": 3`.
+Write `3d` and a `show` line with a z range; add `cube` for a box that is a cube whatever the ranges, or `box 1 x 2 x 0.6` for a box with its own lengths x : y : z. Surfaces are `plot s(x, y) = x^2 + y^2 for x from -2 to 2 and y from -2 to 2 in blue, opacity 0.7` (or `plot z = ...`); planes are `draw the plane z = h`; points, segments and text labels take `(x, y, z)`. In JSON: `"dimension": true`, surfaces in `functions3D`, points and segments with `"dim": 3`.
 
 A surface in a colour is shaded by height: light at the bottom of the box, the full colour at the top. A colour map colours it by height instead, written like a colour: `plot z = x^2 - y^2 in viridis`. The maps: `viridis` (dark purple to yellow), `heat` (black, red, yellow, white), `cool` (white, blue, magenta), `diverging` (blue below z = 0, white at 0, red above), `rainbow` (dark blue, cyan, yellow, dark red), `greyscale` (black to white). The colours spread over the z range of the box (`diverging`: from -m to m, m the larger of |zmin| and |zmax|); a wireframe draws its lines in the map's colours. The map is a surface's own option: on anything else it is a problem. In JSON it is the surface field `colormap`: `"colormap": "viridis"`; without it the surface takes its `color`.
 
