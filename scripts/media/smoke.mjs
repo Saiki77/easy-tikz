@@ -602,6 +602,27 @@ if (started) {
             assert((await obs.sliderValue('c', { scope: 'note' })) === 6, 'the strip slider did not move');
             assert((await obs.readNote(note)) === before, 'moving a slider in the note changed the file');
         });
+        await check('print and PDF export: the chart without its slider strip (5.2.6)', async () => {
+            const shown = () =>
+                obs.call(() => {
+                    const block = document.querySelector('.workspace-leaf.mod-active .block-language-easy-tikz');
+                    const strip = block && block.querySelector('.etz-inline-strip');
+                    const chart = block && block.querySelector('.etz-inline-box svg');
+                    return { strip: strip ? getComputedStyle(strip).display : null, chart: chart ? getComputedStyle(chart).display : null };
+                });
+            const screen = await shown();
+            await obs.cdp.send('Emulation.setEmulatedMedia', { media: 'print' });
+            let print;
+            try {
+                print = await shown();
+            } finally {
+                await obs.cdp.send('Emulation.setEmulatedMedia', { media: '' });
+            }
+            assert(screen.strip === 'flex', `on screen the slider strip is ${screen.strip}`);
+            assert(print.strip === 'none', `in print the slider strip is ${print.strip}, not hidden`);
+            assert(print.chart !== null && print.chart !== 'none', `in print the chart is ${print.chart}`);
+            return `strip ${screen.strip} on screen, ${print.strip} in print`;
+        });
         await check('clicking the chart reopens it in the editor, Save changes writes it back', async () => {
             await obs.editChartInNote(0);
             const state = await obs.editorState();

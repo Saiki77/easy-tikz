@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.2.6] - 2026-11-23
+
+### Fixed
+
+- **PDF exports and printouts show charts without their sliders:** the slider strip under a chart in a note is a control that works only in the note, but a PDF export (Obsidian's Export to PDF or an export plugin) and a printout showed it under the chart. A chart now prints as it stands, at the values the sliders have; in the note the strip stays.
+
 ## [5.2.5] - 2026-11-18
 
 ### Added

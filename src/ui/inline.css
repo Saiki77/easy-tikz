@@ -167,6 +167,13 @@ button.etz-icon-btn.etz-inline-reset {
     margin-top: 1px;
 }
 
+/* A PDF export or a printout shows the chart as it stands, without its sliders: they only work in the note. */
+@media print {
+    .etz-inline-strip {
+        display: none;
+    }
+}
+
 /* Connect with others (5.0): muted when off, the accent when on. */
 button.etz-icon-btn.etz-inline-link {
     flex: 0 0 auto;
