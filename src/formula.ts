@@ -14,6 +14,8 @@ import { parseChartText } from './text/parse';
 import { printChartText } from './text/print';
 import { BUILTIN_FUNCTION_NAMES, CONSTANT_NAMES } from './expr';
 import { latexToPlain, splitLetterRuns } from './latex';
+// 6.0 B
+import { RESERVED_NAMES } from './migrate';
 
 /** The inline formula `$...$` around column `ch` of a line: its TeX and where it sits (dollars included). */
 export function formulaAt(line: string, ch: number): { tex: string; from: number; to: number } | null {
@@ -191,8 +193,8 @@ const SURFACE_HEAD = /^(?:z|[A-Za-z][A-Za-z0-9_]*\s*'*\s*\(\s*x\s*,\s*y\s*\))$/;
 /** A head of a polar curve: r, r(θ). */
 const POLAR_HEAD = /^r(?:\s*\(\s*\\?theta\s*\))?$/;
 
-/** What one prepared formula draws, with the formula to plot (its right side, or all of it). */
-function kindOf(tex: string, vector = false): { kind: FormulaKind; body: string } | null {
+/** What one prepared formula draws, with the formula to plot (its right side, or all of it); 6.0 B: and the note's name of a function (g(x) = ...: g). */
+function kindOf(tex: string, vector = false): { kind: FormulaKind; body: string; name?: string } | null {
     const names = namesOf(tex);
     const usesX = names.has('x');
     const usesY = names.has('y');
@@ -211,7 +213,9 @@ function kindOf(tex: string, vector = false): { kind: FormulaKind; body: string 
         if (FUNCTION_HEAD.test(left)) {
             // f(x) = x_1^2 + x_2^2 with x a vector: a surface. f(x) = y names a value: no chart.
             if (rightNames.has('y')) return vector ? { kind: 'surface', body: right } : null;
-            return { kind: 'function', body: right };
+            // 6.0 B: g(x) = ... stays g (not g'(x), not g^{-1}(x): those are other functions).
+            const own = /^([A-Za-z][A-Za-z0-9_]*)\s*\(\s*x\s*\)$/.exec(left);
+            return own && !RESERVED_NAMES.has(own[1]) ? { kind: 'function', body: right, name: own[1] } : { kind: 'function', body: right };
         }
         if (/^y$/.test(right) && !namesOf(left).has('y')) return { kind: 'function', body: left };
         if (POLAR_HEAD.test(left)) return { kind: 'polar', body: right };
@@ -244,21 +248,31 @@ export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; 
         .map((part) => prepared(part))
         .map((p) => (p ? { tex: p.tex, axis: p.axis, found: kindOf(p.tex, p.vector) } : null))
         // n = 5 gives a value, not a curve: an equation in another variable has no chart.
-        .filter((x): x is { tex: string; axis: string | undefined; found: { kind: FormulaKind; body: string } } => !!x && !!x.found && !(x.axis && x.found.kind === 'equation'));
+        .filter((x): x is { tex: string; axis: string | undefined; found: { kind: FormulaKind; body: string; name?: string } } => !!x && !!x.found && !(x.axis && x.found.kind === 'equation'));
     if (!parts.length) return null;
     const first = parts[0].found;
     const axis = parts[0].axis;
     // The axis keeps the formula's own letter.
     const label = axis ? [`xlabel ${axis}`] : [];
     const kind = first.kind;
-    const bodies = kind === 'function' ? parts.filter((p) => p.found.kind === 'function').slice(0, COLOURS.length).map((p) => p.found.body) : [first.body];
+    const fns = kind === 'function' ? parts.filter((p) => p.found.kind === 'function').slice(0, COLOURS.length) : [];
+    const bodies = kind === 'function' ? fns.map((p) => p.found.body) : [first.body];
     const free = Array.from(new Set(bodies.flatMap((b) => freeNames(b))));
     if (free.length > MAX_SLIDERS) return null;
     const sliders = free.map((n) => `slider ${n} from -5 to 5, starting at 1`);
     const body = bodies[0];
     switch (kind) {
-        case 'function':
-            return { kind, axis, lines: [...label, ...sliders, ...bodies.map((b, i) => `plot $${'fgh'[i]}(x) = ${b}$ in ${COLOURS[i]}, thick`)] };
+        case 'function': {
+            // 6.0 B: each function keeps the note's name (g stays g); f, g, h for the others, never one taken.
+            const taken = new Set<string>(free);
+            const names = fns.map((p) => {
+                const own = p.found.name;
+                const name = own && !taken.has(own) ? own : ['f', 'g', 'h', 'p', 'q', 'u'].find((n) => !taken.has(n) && !fns.some((q) => q.found.name === n)) ?? 'f';
+                taken.add(name);
+                return name;
+            });
+            return { kind, axis, lines: [...label, ...sliders, ...bodies.map((b, i) => `plot $${names[i]}(x) = ${b}$ in ${COLOURS[i]}, thick`)] };
+        }
         case 'surface':
             return { kind, lines: ['3d', 'cube', ...sliders, `plot $z = ${body}$ in viridis`] };
         case 'polar':
@@ -295,6 +309,8 @@ export function formulaChart(tex: string, row?: number): string[] | null {
             const z = fit.z ? fit.z.text : ['-5', '5'];
             return [`show x from ${x[0]} to ${x[1]}, y from ${y[0]} to ${y[1]} and z from ${z[0]} to ${z[1]}`, ...lines];
         }
+        // 6.0 B: a function's chart gives x only, so y follows what it draws (src/notes6/yfit.ts) when x changes.
+        if (kind === 'function') return [`show x from ${x[0]} to ${x[1]}`, ...lines];
         return [`show x from ${x[0]} to ${x[1]} and y from ${y[0]} to ${y[1]}`, ...lines];
     } catch {
         return start;

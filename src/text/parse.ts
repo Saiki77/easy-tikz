@@ -862,6 +862,9 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
     }
     resolveNearest(b);
     b.problems.sort((p, q) => p.line - q.line || p.column - q.column);
+    // 6.0 B: a 2D chart that gives x and no y: y follows what is drawn (src/notes6/yfit.ts).
+    const c = b.chart;
+    if (!b.is3D && c.dimension !== true && c.coordinateSystem !== 'polar' && ('xmin' in c || 'xmax' in c) && !('ymin' in c) && !('ymax' in c) && !('fitY' in c)) c.fitY = true;
     if (b.is3D) b.chart.dimension = true;
     const out: TextChart = { data: b.data(), problems: b.problems };
     if (opts.trace) out.lines = traces;
@@ -1207,10 +1210,14 @@ function mark(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
         return;
     }
     // 6.0 B: mark where g(x) <= 0 on the x-axis, a set on an axis.
-    const set = readAxisSet(p.text);
-    if (set && /^where\s/i.test(rest.text.trim())) {
-        addTool(b, 'axisSet', name, set, options, 'axisSet');
-        return;
+    if (/^where\s/i.test(rest.text.trim()) && looksLikeAxisSet(rest.text)) {
+        // Options the words did not catch (`..., sparkly`) are named, not read as part of the condition.
+        const f = formulaOptions(p, options);
+        const set = readAxisSet(f.formula.text);
+        if (set) {
+            addTool(b, 'axisSet', name, set, f.options, 'axisSet');
+            return;
+        }
     }
     if (/^where\s/i.test(rest.text.trim()) && looksLikeAxisSet(rest.text)) return b.problem(p.at, msg('notes6.text.axisSetTakes'));
     // 5.0: mark the data (of D2); options the words did not catch are named.

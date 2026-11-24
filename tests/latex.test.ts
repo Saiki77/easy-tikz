@@ -580,6 +580,28 @@ const BEYOND: Record<string, { text: string; table?: NoteTable | null }> = {
     },
 };
 
+// 6.0 B: sets on an axis (open and filled dots, arrows, unions, R with amssymb, points) and chords at a slider.
+const NOTES6: Record<string, string> = {
+    sets: [
+        'show x from -5 to 5',
+        'slider c from 0 to 9, starting at 4',
+        'plot $g(x) = x^2 - c$',
+        'mark where $g(x) \\le 0$ on the x-axis, labelled',
+        'mark where $g(x) > 0$ on the x-axis in red, labelled',
+        'mark where $g(x) = 0$ on the x-axis in blue, labelled',
+        'mark where $y^2 < 4$ on the y-axis in purple, labelled',
+    ].join('\n'),
+    everything: ['show x from -3 to 3 and y from -1 to 3', 'mark where $x^2 \\ge -1$ on the x-axis, labelled'].join('\n'),
+    snippet: ['snippet', 'show x from -3 to 3 and y from -1 to 3', 'mark where $x^2 \\ge -1$ on the x-axis, labelled'].join('\n'),
+    chord: [
+        'show x from -3 to 4 and y from -2 to 6',
+        'slider lambda from 0 to 1, starting at 0.3',
+        'plot $g(x) = x^2/2 - 1$ in blue',
+        'draw the chord of g from -1 to 3 at $\\lambda$, labelled',
+        'draw the chord of g from -2 to 0 in green, dashed',
+    ].join('\n'),
+};
+
 // --------------------------------------------------------------- compile
 
 /** The block's export as a complete document. Snippets are wrapped using their own `% Needs:` lines. */
@@ -676,6 +698,7 @@ if (!hasLatex) {
     cases.push({ name: 'snippet-2d', data: { ...STRESS.pgfmath, documentSetup: false, tools: [...(STRESS.pgfmath.tools as unknown[]), ...(STRESS.hole.tools as unknown[])] } });
     cases.push({ name: 'snippet-3d', data: { ...STRESS.surface3d, documentSetup: false } });
     for (const [k, c] of Object.entries(BEYOND)) cases.push({ name: `beyond-${k}`, data: parseChartText(c.text).data, table: c.table });
+    for (const [k, text] of Object.entries(NOTES6)) cases.push({ name: `notes6-${k}`, data: parseChartText(text).data }); // 6.0 B
 
     const jobs = pool(
         cases.map((c) => ({

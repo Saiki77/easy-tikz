@@ -391,7 +391,9 @@ export class FormulaHover {
                     const [x0, x1, y0, y1] = [num(data.xmin, -5), num(data.xmax, 5), num(data.ymin, -5), num(data.ymax, 5)];
                     const cx = x0 + fx * (x1 - x0);
                     const cy = y0 + fy * (y1 - y0);
-                    Object.assign(data, { xmin: round(cx - (cx - x0) * k), xmax: round(cx + (x1 - cx) * k), ymin: round(cy - (cy - y0) * k), ymax: round(cy + (y1 - cy) * k) });
+                    Object.assign(data, { xmin: round(cx - (cx - x0) * k), xmax: round(cx + (x1 - cx) * k) });
+                    // 6.0 B: a chart whose y follows what is drawn zooms x only (y follows).
+                    if (data.fitY !== true) Object.assign(data, { ymin: round(cy - (cy - y0) * k), ymax: round(cy + (y1 - cy) * k) });
                 }
                 redraw();
             },
@@ -424,12 +426,9 @@ export class FormulaHover {
                 const r = box.getBoundingClientRect();
                 const ux = (num(data.xmax, 5) - num(data.xmin, -5)) / Math.max(1, r.width);
                 const uy = (num(data.ymax, 5) - num(data.ymin, -5)) / Math.max(1, r.height);
-                Object.assign(data, {
-                    xmin: round(num(data.xmin, -5) - dx * ux),
-                    xmax: round(num(data.xmax, 5) - dx * ux),
-                    ymin: round(num(data.ymin, -5) + dy * uy),
-                    ymax: round(num(data.ymax, 5) + dy * uy),
-                });
+                Object.assign(data, { xmin: round(num(data.xmin, -5) - dx * ux), xmax: round(num(data.xmax, 5) - dx * ux) });
+                // 6.0 B: a chart whose y follows what is drawn pans x only (y follows).
+                if (data.fitY !== true) Object.assign(data, { ymin: round(num(data.ymin, -5) + dy * uy), ymax: round(num(data.ymax, 5) + dy * uy) });
             }
             redraw();
         });

@@ -148,7 +148,7 @@ function touch(g: (t: number) => number, a: number, b: number): number {
 function tidyEnd(t: number, span: number): number {
     for (let d = 0; d <= 12; d++) {
         const v = Number(t.toFixed(d));
-        if (Math.abs(v - t) <= 1e-9 * Math.max(1, span)) return v;
+        if (Math.abs(v - t) <= 1e-9 * Math.max(1, span)) return v === 0 ? 0 : v;
     }
     return t;
 }

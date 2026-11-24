@@ -499,8 +499,17 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
     },
     { keys: ['documentSetup'], print: (m) => (m.documentSetup === false ? ['snippet'] : 'documentSetup' in m ? [`set documentSetup = ${JSON.stringify(m.documentSetup)}`] : []) },
     {
-        keys: ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'],
+        keys: ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'fitY'],
         print: (m, f) => {
+            // 6.0 B: y follows what is drawn: x only (a y range of its own, which it does not draw, as set lines).
+            if (m.fitY === true) {
+                const flat = f.dimension !== true && f.coordinateSystem !== 'polar';
+                const x = [str(f.xmin), str(f.xmax)];
+                const out = flat && x.every((p) => bound(p)) ? [`show x from ${x[0]} to ${x[1]}`] : ['set fitY = true', ...(['xmin', 'xmax'] as const).filter((k) => k in m).map((k) => `set ${k} = ${JSON.stringify(m[k])}`)];
+                for (const k of ['ymin', 'ymax', 'zmin', 'zmax']) if (k in m) out.push(`set ${k} = ${JSON.stringify(m[k])}`);
+                return out;
+            }
+            if ('fitY' in m) return [`set fitY = ${JSON.stringify(m.fitY)}`];
             if (!['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'].some((k) => k in m)) return [];
             const axes = ['x', 'y'];
             if (f.dimension === true || 'zmin' in m || 'zmax' in m) axes.push('z');
