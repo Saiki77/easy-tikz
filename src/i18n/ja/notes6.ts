@@ -89,4 +89,19 @@ export const notes6: Messages<typeof en> = {
     'notes6.ask.dropLines': '軸への線',
     'notes6.ask.coordinates': '座標',
     'notes6.ask.liveLabel': 'このブロックのグラフです。曲線、領域、点をクリックすると質問が出ます。Enter キーでも開きます。',
+
+    // ---- hover cards
+    'notes6.hover.kind.set': '集合',
+    'notes6.hover.kind.map': '写像',
+    'notes6.hover.kind.condition': '条件',
+    'notes6.hover.kind.interval': '区間',
+    'notes6.hover.kind.jensen': '不等式（イェンセン）',
+    'notes6.hover.kind.epigraph': 'エピグラフ',
+    'notes6.hover.fromNote': '{name}(x) = {body} はこのノートの定義です。',
+    'notes6.hover.example': 'このノートは {name} を定義していないので、例を表示します：{name}(x) = {body}。ノートで {name} を定義すると、その定義を使います。',
+    'notes6.hover.variable': 'x 軸は {variable} です。',
+    'notes6.hover.plane': 'n = 2 では {name}(x) を {name}(|x|) と読みます。x² は x₁² + x₂² です。',
+    'notes6.hover.dimension': '次元 n',
+    'notes6.hover.n1': 'n = 1',
+    'notes6.hover.n2': 'n = 2',
 };

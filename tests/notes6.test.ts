@@ -402,3 +402,77 @@ test('ask: what a click hits', () => {
     assert.equal(pickTarget(drawn, tools, { x: 4, y: 4 }, 50, 50, 10)?.kind, 'region');
     assert.equal(pickTarget(drawn, tools, { x: -4, y: 4 }, 50, 50, 10), null);
 });
+
+// ---------------------------------------------------------- hover cards
+
+import { hoverCard, hoverKind, noteDefinitions } from '../src/notes6/hover';
+import { chartable } from '../src/formula';
+
+const NOTE = ['g(x) = x^2 - 4', 'g: \\mathbb{R}^n \\to \\mathbb{R}', 'h(x) := a x^2'];
+
+test('hover: what each new kind of formula is', () => {
+    const kinds: Array<[string, string]> = [
+        ['\\{x \\in \\mathbb{R}^n \\mid g(x) \\le 0\\}', 'set'],
+        ['\\left\\{ x \\mid x^2 < 4 \\right\\}', 'set'],
+        ['\\{(x, y) \\mid x^2 + y^2 \\le 1\\}', 'set'],
+        ['g: \\mathbb{R}^n \\to \\mathbb{R}', 'map'],
+        ['f: ℝ → ℝ', 'map'],
+        ['g(x) \\le 0', 'condition'],
+        ['x > 0', 'condition'],
+        ['|x| < 1', 'condition'],
+        ['\\lambda \\in [0, 1]', 'interval'],
+        ['(a, b]', 'interval'],
+        ['g(\\lambda x + (1-\\lambda) y) \\le \\lambda g(x) + (1-\\lambda) g(y)', 'jensen'],
+        ['\\operatorname{epi} g = \\{(x, t) \\mid g(x) \\le t\\}', 'epigraph'],
+        ['\\{(x, t) \\mid f(x) \\le t\\}', 'epigraph'],
+    ];
+    for (const [tex, kind] of kinds) assert.equal(hoverKind(tex), kind, tex);
+    for (const tex of ['f(x) = x^2', 'x^2 + y^2 = 1', 'a^2 + b^2 = c^2', '\\sum_{k=1}^{n} k', '\\frac{1}{2}']) assert.equal(hoverKind(tex), null, tex);
+    // Today's formulas keep their cards: the new ones only come where there was none.
+    for (const [tex] of kinds) assert.equal(chartable(tex), false, tex);
+});
+
+test('hover: the definitions of the note, and an example when it has none', () => {
+    const defs = noteDefinitions(NOTE);
+    assert.deepEqual([...defs.keys()], ['g', 'h']);
+    assert.deepEqual(defs.get('h')?.sliders, ['slider a from -5 to 5, starting at 1']);
+    const set = hoverCard('\\{x \\in \\mathbb{R}^n \\mid g(x) \\le 0\\}', defs);
+    assert.ok(set);
+    assert.deepEqual(set.fn, { name: 'g', body: 'x^2 - 4', from: 'note' });
+    assert.deepEqual(set.lines, ['show x from -4 to 4', 'plot $g(x) = x^2 - 4$ in blue, thick', 'mark where $g(x) \\le 0$ on the x-axis, labelled']);
+    assert.ok(set.lines2?.includes('shade where $g(\\sqrt{x^2 + y^2}) \\le 0$, outlined'));
+    const example = hoverCard('\\{x \\in \\mathbb{R}^n \\mid g(x) \\le 0\\}', new Map());
+    assert.deepEqual(example?.fn, { name: 'g', body: 'x^2 - 1', from: 'example' });
+    // The sliders of a definition come along.
+    assert.ok(hoverCard('h(x) \\ge 1', defs)?.lines.includes('slider a from -5 to 5, starting at 1'));
+});
+
+test('hover: every new card draws without a problem, n = 1 and n = 2', () => {
+    const defs = noteDefinitions(NOTE);
+    for (const tex of [
+        '\\{x \\in \\mathbb{R}^n \\mid g(x) \\le 0\\}',
+        'g: \\mathbb{R}^n \\to \\mathbb{R}',
+        'g(x) \\le 0',
+        '|x| < 1',
+        'n \\geq 3',
+        '\\lambda \\in [0, 1]',
+        't \\in (0, \\infty)',
+        '(a, b]',
+        'g(\\lambda x + (1-\\lambda) y) \\le \\lambda g(x) + (1-\\lambda) g(y)',
+        '\\operatorname{epi} g = \\{(x, t) \\mid g(x) \\le t\\}',
+        '\\{(x, y) \\mid x^2 + y^2 \\le 1\\}',
+    ]) {
+        const card = hoverCard(tex, defs);
+        assert.ok(card, tex);
+        for (const lines of [card.lines, card.lines2 ?? []]) {
+            if (!lines.length) continue;
+            const scene = sceneOf(lines.join('\n'));
+            assert.deepEqual(scene.issues.filter((i) => i.severity === 'error'), [], `${tex}: ${lines.join(' / ')}`);
+            assert.ok(scene.items.length > 0 || lines.some((l) => l.startsWith('plot')), tex);
+        }
+    }
+    // Jensen: the chord with a slider λ; the interval names its axis.
+    assert.ok(hoverCard('g(\\lambda x + (1-\\lambda) y) \\le \\lambda g(x) + (1-\\lambda) g(y)', defs)?.lines.includes('draw the chord of g from -1.5 to 2.5 at $\\lambda$, labelled'));
+    assert.ok(hoverCard('\\lambda \\in [0, 1]', defs)?.lines.includes('xlabel $\\lambda$'));
+    assert.ok(hoverCard('\\operatorname{epi} g = \\{(x, t) \\mid g(x) \\le t\\}', defs)?.lines.includes('shade where $y \\ge g(x)$, labelled "epi g"'));
+});

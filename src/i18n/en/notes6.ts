@@ -86,4 +86,19 @@ export const notes6 = {
     'notes6.ask.dropLines': 'Lines to the axes',
     'notes6.ask.coordinates': 'Its coordinates',
     'notes6.ask.liveLabel': 'Chart of this block. Click a curve, a region or a point for its questions, or press Enter.',
+
+    // ---- hover cards
+    'notes6.hover.kind.set': 'Set',
+    'notes6.hover.kind.map': 'Map',
+    'notes6.hover.kind.condition': 'Condition',
+    'notes6.hover.kind.interval': 'Interval',
+    'notes6.hover.kind.jensen': 'Inequality (Jensen)',
+    'notes6.hover.kind.epigraph': 'Epigraph',
+    'notes6.hover.fromNote': '{name}(x) = {body} comes from this note.',
+    'notes6.hover.example': 'This note does not define {name}, so the card shows an example: {name}(x) = {body}. Define {name} in the note and the card uses yours.',
+    'notes6.hover.variable': 'The x-axis is {variable}.',
+    'notes6.hover.plane': 'For n = 2, {name}(x) reads as {name}(|x|): x² is x₁² + x₂².',
+    'notes6.hover.dimension': 'Dimension n',
+    'notes6.hover.n1': 'n = 1',
+    'notes6.hover.n2': 'n = 2',
 };
