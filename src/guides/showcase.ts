@@ -427,7 +427,8 @@ const MATRIX_GRID: Guide = {
 };
 
 // ------------------------------------------------------------------ two paths of the Lorenz system
-const LZ_WINDOW = ['3d', 'show x from -25 to 25, y from -30 to 30 and z from 0 to 50'];
+// 6.0 F4: the butterfly turns by itself.
+const LZ_WINDOW = ['3d', 'turning', 'show x from -25 to 25, y from -30 to 30 and z from 0 to 50'];
 const LZ_SYSTEM = 'draw the solution of $\\dot{p} = (10(y - x), x(28 - z) - y, xy - \\frac{8}{3}z)$';
 const lzTime = (end: number) => `slider T from 5 to 40, starting at ${end}`;
 const LZ_TWO = [`${LZ_SYSTEM} through (1, 1, 1) for t from 0 to T in blue`, `${LZ_SYSTEM} through (1.001, 1, 1) for t from 0 to T in red`];

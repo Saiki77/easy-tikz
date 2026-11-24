@@ -1438,6 +1438,17 @@ export class SVG3DRenderer {
             if (c.dashed) path.setAttribute('stroke-dasharray', '6 4');
             group.appendChild(path);
         }
+        // 6.0 F4: the heads of traced curves (a live chart draws its frames in SVG).
+        for (const m of this.curveHeads) {
+            const circle = createSvg('circle');
+            circle.setAttribute('cx', m.sx.toFixed(2));
+            circle.setAttribute('cy', m.sy.toFixed(2));
+            circle.setAttribute('r', String(m.r));
+            circle.setAttribute('fill', m.color);
+            circle.setAttribute('stroke', this.themeColors.bgPrimary);
+            circle.setAttribute('stroke-width', '1.5');
+            group.appendChild(circle);
+        }
         for (const s of this.segmentMarks) {
             const line = createSvg('line');
             line.setAttribute('x1', s.x1.toFixed(2));

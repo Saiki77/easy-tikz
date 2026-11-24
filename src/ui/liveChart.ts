@@ -6,7 +6,11 @@
  * a draft on each slider frame and the full picture after a pause; a 3D
  * chart is drawn by the 3D renderer and zoomed onto what it draws. 6.0 D: a
  * chart with steps or moving objects gets the player of charts in notes
- * (Previous, Play, Next, step k of n; Pause for moving objects).
+ * (Previous, Play, Next, step k of n; Pause for moving objects). 6.0 F4:
+ * moving objects are drawn as in notes: a 2D chart's live canvas
+ * (src/motion6/live.ts) moves on each frame of the clock, a 3D chart turns
+ * and draws its traced curves; steps play once from the first when the
+ * chart is shown (a slide or a page opens).
  */
 import { NoteTable } from '../beyond/table';
 import { MathContext } from '../mathcontext';
@@ -22,6 +26,9 @@ import { IconButtonHandle, LiveSliderHandle, formatDecimals, iconButton, liveSli
 import { MotionPlayer } from '../motion6/player';
 import { playerFor } from '../motion6/host';
 import { atStep } from '../motion6/steps';
+// 6.0 F4: the live canvas of moving things, the turn of a turning 3D chart.
+import { LiveLayer } from '../motion6/live';
+import { Turn, turnSpeed } from '../motion6/clock';
 
 /** After the last slider frame, the full-quality picture follows this much later. */
 const FULL_RENDER_DELAY_MS = 150;
@@ -130,6 +137,14 @@ export class LiveChart {
     /** 6.0 D: the player of a chart with steps or moving objects, and the chart at an earlier step. */
     private player: MotionPlayer | null = null;
     private stepView: { step: number; manager: SettingsManager; math: MathContext } | null = null;
+    // 6.0 F4
+    private liveLayer: LiveLayer | null = null;
+    /** 3D: one renderer for every frame (its scene is kept while only the clock moves) and its SVG. */
+    private renderer3d: SVG3DRenderer | null = null;
+    private svg3d: SVGSVGElement | null = null;
+    /** A turning 3D chart: its turn, and the view that holds it all the way round. */
+    private readonly turn = new Turn();
+    private turnBox: string | null = null;
 
     constructor(
         parent: HTMLElement,
@@ -149,12 +164,18 @@ export class LiveChart {
         this.box.setAttr('aria-labelledby', name.id);
         // 6.0 D: steps and the clock, drawn as in notes.
         this.player = playerFor(this.manager.serialize(), {
-            draw: (_frame, clock) => this.safeRender(clock && !this.is3D ? 'draft' : 'full'),
+            draw: (frame, clock) => {
+                // 6.0 F4: a frame of the clock alone moves the live canvas of a 2D chart; the SVG stays.
+                if (clock && frame.progress >= 1 && !this.is3D && this.liveLayer?.active()) this.liveLayer.paint(frame.time);
+                else this.safeRender(clock && !this.is3D ? 'draft' : 'full', clock);
+            },
             watched: () => this.box,
         });
+        if (this.player) this.liveLayer = new LiveLayer(); // 6.0 F4
         this.render('full');
         this.buildStrip(parent);
         this.player?.watch();
+        this.player?.playFromStart(); // 6.0 F4: steps play once when the chart is shown
     }
 
     /** The chart as it is now, the sliders back on their steps: what Open in the editor and Try an example take. */
@@ -179,15 +200,20 @@ export class LiveChart {
         this.stopPlay(true);
     }
 
-    /** In view again: draw at full quality for the size the box has now. */
+    /** In view again: draw at full quality for the size the box has now (6.0 F4: and play the steps once). */
     redraw(): void {
         this.safeRender('full');
+        this.player?.playFromStart();
     }
 
     destroy(): void {
         this.destroyed = true;
         this.player?.destroy(); // 6.0 D
         this.player = null;
+        this.liveLayer?.destroy(); // 6.0 F4
+        this.liveLayer = null;
+        this.renderer3d = null;
+        this.svg3d = null;
         this.stopPlay(false);
         if (this.frameRaf !== null) window.cancelAnimationFrame(this.frameRaf);
         if (this.fullTimer !== null) window.clearTimeout(this.fullTimer);
@@ -197,7 +223,7 @@ export class LiveChart {
         this.chartEl = null;
     }
 
-    private render(quality: 'draft' | 'full') {
+    private render(quality: 'draft' | 'full', clock = false) {
         if (this.destroyed) return;
         if (quality === 'full') {
             if (this.frameRaf !== null) window.cancelAnimationFrame(this.frameRaf);
@@ -210,6 +236,9 @@ export class LiveChart {
         const config = view.manager.toRendererConfig(view.math);
         config.parameters = this.params;
         if (this.player) config.motion = this.player.frame();
+        // 6.0 F4: a turning 3D chart turns from its azimuth on the clock.
+        const turning = this.is3D && !!this.player && view.manager.getValue('turning') === true;
+        if (turning && config.motion) config.turn = this.turn.angle(config.motion.time, turnSpeed(view.manager.getValue('turnSpeed')));
         const aspect = config.width > 0 && config.height > 0 ? config.width / config.height : 1.25;
         this.box.setCssProps({ '--etz-live-aspect': String(Math.round(aspect * 1000) / 1000) });
         // Measured on full renders only, never per drag frame.
@@ -220,12 +249,21 @@ export class LiveChart {
             const width = Math.round(Math.max(MIN_3D_W, Math.min(MAX_3D_W, (this.boxSize.w > 0 ? this.boxSize.w : MAX_3D_W) * ZOOM_3D)));
             config.width = width;
             config.height = Math.round(width / aspect);
-            const renderer = new SVG3DRenderer();
+            // 6.0 F4: one renderer for every frame, so a frame of the clock reuses its scene.
+            if (!this.renderer3d) this.renderer3d = new SVG3DRenderer();
+            const renderer = this.renderer3d;
             renderer.renderSvg(config, { math: view.math });
-            const svg = detach3D(renderer);
+            const svg = this.svg3d ?? detach3D(renderer);
             if (!svg) return;
+            this.svg3d = svg;
             this.place(fluid(svg));
-            fitToContent(svg, 8);
+            if (!turning) {
+                fitToContent(svg, 8);
+                return;
+            }
+            // A turning chart keeps one view all the way round (else the zoom would follow the turn).
+            if (!clock || !this.turnBox) this.turnBox = this.turnFit(renderer, svg, config, view.math);
+            if (this.turnBox) svg.setAttribute('viewBox', this.turnBox);
             return;
         }
         const renderer = new SVGRenderer(config, {
@@ -233,6 +271,7 @@ export class LiveChart {
             cache: this.cache,
             quality,
             pixelScale: fitPixelScale(this.boxSize.w, this.boxSize.h, config.width, config.height),
+            live: this.liveLayer ?? undefined, // 6.0 F4
         });
         const svg = renderer.render() as SVGSVGElement;
         this.place(svg);
@@ -244,6 +283,31 @@ export class LiveChart {
                 this.safeRender('full');
             }
         });
+    }
+
+    /**
+     * 6.0 F4: the view of a turning 3D chart that holds what it draws at every
+     * angle: the union of the fitted views of 12 angles round, then the
+     * picture of now drawn again.
+     */
+    private turnFit(renderer: SVG3DRenderer, svg: SVGSVGElement, config: ReturnType<SettingsManager['toRendererConfig']>, math: MathContext): string | null {
+        if (!svg.isConnected) return null;
+        const now = config.turn ?? 0;
+        let box: number[] | null = null;
+        for (let k = 0; k < 12; k++) {
+            renderer.renderSvg({ ...config, turn: now + 30 * k }, { math });
+            fluid(svg);
+            const fit = fitToContent(svg, 8);
+            const b = fit ? fit.split(' ').map(Number) : null;
+            if (!b || !b.every(Number.isFinite)) continue;
+            box = box ? [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[0] + box[2], b[0] + b[2]), Math.max(box[1] + box[3], b[1] + b[3])] : [b[0], b[1], b[0] + b[2], b[1] + b[3]];
+        }
+        renderer.renderSvg(config, { math });
+        fluid(svg);
+        if (!box) return null;
+        // Within the drawing's own area (a label of a box seen edge on may stand far out).
+        const [x0, y0, x1, y1] = [Math.max(0, box[0]), Math.max(0, box[1]), Math.min(config.width, box[2]), Math.min(config.height, box[3])];
+        return x1 > x0 && y1 > y0 ? `${x0} ${y0} ${x1 - x0} ${y1 - y0}` : null;
     }
 
     /** 6.0 D: the chart as drawn now: at the step the player shows (later objects hidden), else the chart itself. */
@@ -281,9 +345,9 @@ export class LiveChart {
     }
 
     /** Later frames keep the last drawing when one fails (the first one, in the constructor, throws). */
-    private safeRender(quality: 'draft' | 'full') {
+    private safeRender(quality: 'draft' | 'full', clock = false) {
         try {
-            this.render(quality);
+            this.render(quality, clock);
         } catch {
             // The picture of the previous values stays.
         }

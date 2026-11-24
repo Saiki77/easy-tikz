@@ -55,7 +55,8 @@ export class MotionPlayer {
     private time = 0;
     /** The steps play on. */
     private playing = false;
-    private stepStart = 0;
+    /** How long the step shown has been on while the steps play (ms of the frame clock; 6.0 F4: not the wall clock, so a film or a hidden page counts only frames shown). */
+    private stepTime = 0;
     /** The clock runs (when the chart is on screen). */
     private running: boolean;
     private visible = false;
@@ -130,10 +131,20 @@ export class MotionPlayer {
         this.step = next;
         // A step that comes in moves from 0 to 1; going back shows it settled.
         this.progress = forward && this.opts.moversInSteps && !reducedMotion() ? 0 : 1;
-        this.stepStart = performance.now();
+        this.stepTime = 0;
         this.host.draw(this.frame(), false);
         this.sync();
         this.loop();
+    }
+
+    /**
+     * 6.0 F4: play the steps once from the first (a slide or a page that opens);
+     * nothing for a chart without steps or when the system asks for less motion.
+     */
+    playFromStart(): void {
+        if (this.opts.last <= 0 || this.destroyed || reducedMotion()) return;
+        this.playing = true;
+        this.go(0, true);
     }
 
     private togglePlay(): void {
@@ -182,7 +193,8 @@ export class MotionPlayer {
             draw = true;
         }
         if (draw) this.host.draw(this.frame(), true);
-        if (this.playing && now - this.stepStart >= STEP_MS) {
+        if (this.playing) this.stepTime += dt * 1000;
+        if (this.playing && this.stepTime >= STEP_MS) {
             if (this.step >= this.opts.last) {
                 this.playing = false;
                 this.sync();
