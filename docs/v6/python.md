@@ -138,3 +138,4 @@ Measured in node (tests/python-numpy.test.ts, worst of 30 runs with new inputs e
 - Ask the curve has no questions for what a script draws; script dots cannot be dragged.
 - Classes, generators, `with`; pandas and scipy; subplots; 3D drawing.
 - A slice is a copy, not a view; ints are 64-bit floats.
+- In a 3D chart a script function used as a surface (`plot z = g(x, y)`) has no pgfplots form: the export leaves it out (2D curves of script functions export as coordinates).
