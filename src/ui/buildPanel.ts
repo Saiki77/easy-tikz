@@ -29,6 +29,7 @@ import '../motion6/cards'; // 6.0 C
 import '../notes6/cards';
 // 6.0 A
 import '../values/cards';
+import '../iterate/cards'; // 6.0 E
 import { CardUiState, FunctionCardHandle, createFunctionCard, createSurfaceCard } from './functionCards';
 import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, textButton, trapEscape } from './kit';
 import { PickerContent, PickerGroup, PickerItem, addPicker } from './addPicker';
@@ -120,6 +121,9 @@ const SECTION_ICONS: Record<string, string> = {
     Motion: 'wind', // 6.0 C
     // 6.0 A
     Values: 'braces',
+    // 6.0 E
+    Iterate: 'repeat',
+    'Colour the plane': 'palette',
 };
 
 /** More words that find a recipe in the + Add picker (English, as people search): vector finds Arrow. */
@@ -168,6 +172,18 @@ const RECIPE_WORDS: Record<string, string> = {
     'let-definition': 'let define matrix complex function variable name',
     'vector-arrow': 'vector arrow let tip tail',
     'list-points': 'list roots unity complex polygon',
+    // 6.0 E
+    mandelbrot: 'fractal escape time complex iterate',
+    julia: 'fractal complex iterate sliders',
+    'newton-basins': 'fractal roots basins attraction complex',
+    'domain-colouring': 'complex function colour color phase portrait zeros poles',
+    'heat-map': 'colour color map density two variables',
+    orbit: 'iterate recurrence sequence complex points path',
+    'gradient-descent': 'optimisation optimization minimum learning rate step downhill',
+    cobweb: 'logistic map iterate fixed point staircase',
+    bifurcation: 'logistic map chaos period doubling',
+    'newton-method': 'root tangent iterate zero',
+    'fourier-circles': 'epicycles series square wave animation sum',
 };
 
 /** Menu heading per recipe section (Functions reads Surfaces in 3D charts). */
@@ -186,6 +202,9 @@ const SECTION_TITLES: Record<string, MessageKey> = {
     Motion: 'motion6.section', // 6.0 C
     // 6.0 A
     Values: 'values.section.values',
+    // 6.0 E
+    Iterate: 'iterate.section.iterate',
+    'Colour the plane': 'iterate.section.plane',
 };
 
 /** One-click links under the starter examples: [text key, recipe id]. */

@@ -553,7 +553,8 @@ function computeCircles(t: FourierCirclesTool, ctx: SceneCtx): SceneOutput {
     }
     const color = str(t.color) || 'blue';
     const width = str(t.thickness) || 'thick';
-    if (trace.length > 1) out.strokes.push({ lines: [trace], color, width, dashed: false });
+    // The curve of the tip, faint: the wave and the circles are what moves.
+    if (trace.length > 1) out.strokes.push({ lines: [trace], color, width: 'thin', dashed: false, opacity: 0.55 });
     hold(out, { circles: { terms, trace, reach, color, width, wave: !!t.wave }, fit: trace });
     return out;
 }

@@ -20,6 +20,7 @@ import { MOTION_PREFIX, completeMotionTool, keptStep, restPointsDefaults, trajec
 import { axisSetDefaults, chordDefaults, completeAxisSet, completeChord } from './notes6/tools';
 // 6.0 E
 import { ITERATE_PREFIX, completeIterateTool, iterateDefaults } from './iterate/tools';
+import { iterateRecipes } from './iterate/recipes';
 import { notes6Recipes } from './notes6/recipes';
 import {
     Annotation,
@@ -2128,6 +2129,13 @@ function recipes2D(): Recipe[] {
         }),
         // 6.0 A
         ...valueRecipes(in2D, false),
+        // 6.0 E
+        ...iterateRecipes(in2D, {
+            tool: (type, ctx) => defaultTool(type as ToolType, toolOpts(ctx)),
+            newFunction: (ctx, expression) => ({ ...defaultFunction(chartNames(ctx), nextFunctionColor(ctx.functions)), expression }),
+            callable: callableFunctions,
+            names: chartNames,
+        }),
         labelRecipe(in2D),
         sliderRecipe(in2D),
     ];

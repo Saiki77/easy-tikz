@@ -97,8 +97,8 @@ export const iterate: Messages<typeof en> = {
     'iterate.hover.recurrence': '漸化式',
     'iterate.hover.sum': '部分和',
     'iterate.hover.domain': 'z の関数',
-    'iterate.hover.recurrenceNote': 'z₀ = 0 から始め、c を点 P に置いた軌道です。P をドラッグしてください。',
-    'iterate.hover.cobwebNote': 'x₀ = 0.2 から始めたクモの巣図です。r を動かしてください。',
+    'iterate.hover.recurrenceNote': 'z₀ = 0 から始め、c = a + bi とした軌道です。a と b を動かしてください。',
+    'iterate.hover.cobwebNote': 'x₀ = 0.2 から始めたクモの巣図です。スライダーを動かしてください。',
     'iterate.hover.sumNote': 'n までの部分和です。n を動かしてください。',
     'iterate.hover.domainNote': '色相: f(z) の偏角。帯: その大きさ (2 のべきごと)。',
 

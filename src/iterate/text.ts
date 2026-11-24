@@ -245,7 +245,7 @@ export function readIterateDraw(rest: Piece, options: Piece[]): IterateRead | nu
         delete fields.given;
         return { type: 'bifurcation', fields, extra };
     }
-    m = /^(?:the\s+)?newton(?:'s|’s|s)?\s+method\s+(?:for|of|on)\s+/i.exec(head.text);
+    m = /^(?:the\s+)?newton(?:'s|’s|s)?\s+method\b\s*(?:(?:for|of|on)\b\s*)?/i.exec(head.text);
     if (m) {
         const body = head.text.slice(m[0].length).trim();
         const fm = /^([A-Za-z][A-Za-z0-9_]*)(?:\s+from\s+([\s\S]+))?$/.exec(body);

@@ -94,8 +94,8 @@ export const iterate = {
     'iterate.hover.recurrence': 'Recurrence',
     'iterate.hover.sum': 'Partial sum',
     'iterate.hover.domain': 'Function of z',
-    'iterate.hover.recurrenceNote': 'The orbit from z₀ = 0 with c at P: drag P.',
-    'iterate.hover.cobwebNote': 'The cobweb from x₀ = 0.2: move r.',
+    'iterate.hover.recurrenceNote': 'The orbit from z₀ = 0 with c = a + bi: move a and b.',
+    'iterate.hover.cobwebNote': 'The cobweb from x₀ = 0.2: move the sliders.',
     'iterate.hover.sumNote': 'The partial sum up to n: move n.',
     'iterate.hover.domainNote': 'Hue: the angle of f(z). Bands: its size, at each power of 2.',
 

@@ -20,6 +20,8 @@ import { ExprError } from '../expr';
 import { t as msg } from '../i18n';
 import { ESCAPE2, INSIDE, Rgb, SETTLE2, basinRgb, domainRgb, escapeRgb, glslColours, mapRgb, smoothSpeed } from './colour';
 
+/** The fit holds the points whose orbit stays at least this many steps. */
+const FIT_STAY = 8;
 /** Steps per pixel at most (also the GLSL loop's bound). */
 export const MAX_PIXEL_STEPS = 1000;
 /** A bifurcation diagram's run-in and kept steps per column at most. */
@@ -148,8 +150,8 @@ export function escapePrim(ctx: MathContext, s: EscapeSpec): PixelPrim {
     const sin = new Float64Array(2 * (2 + G));
     const inp = new Float64Array(2 * (1 + G + 2));
     const out = new Float64Array(2);
-    /** The colour of the pixel at (x, y), and whether its orbit stayed (for the fit). */
-    const colour = (x: number, y: number, n: number): { c: Rgb | null; stayed: boolean } => {
+    /** The colour of the pixel at (x, y), and how long its orbit stayed (for the fit). */
+    const colour = (x: number, y: number, n: number): { c: Rgb | null; stayed: number } => {
         gin[0] = x;
         gin[1] = 0;
         gin[2] = y;
@@ -176,18 +178,18 @@ export function escapePrim(ctx: MathContext, s: EscapeSpec): PixelPrim {
             const im = out[1];
             const d = re * re + im * im;
             if (!(d <= ESCAPE2)) {
-                if (d !== d) return { c: INSIDE, stayed: true };
-                return { c: escapeRgb(s.map, smoothSpeed(i, d), n), stayed: false };
+                if (d !== d) return { c: INSIDE, stayed: n };
+                return { c: escapeRgb(s.map, smoothSpeed(i, d), n), stayed: i };
             }
             if (s.basins) {
                 const ex = re - inp[0];
                 const ey = im - inp[1];
-                if (ex * ex + ey * ey < SETTLE2 * Math.max(1, d)) return { c: basinRgb(re, im, i), stayed: true };
+                if (ex * ex + ey * ey < SETTLE2 * Math.max(1, d)) return { c: basinRgb(re, im, i), stayed: n };
             }
             inp[0] = re;
             inp[1] = im;
         }
-        return { c: INSIDE, stayed: true };
+        return { c: INSIDE, stayed: n };
     };
 
     // The GPU: the same orbit in vec2s, sliders as uniforms.
@@ -232,7 +234,7 @@ export function escapePrim(ctx: MathContext, s: EscapeSpec): PixelPrim {
         },
         bounds() {
             if (s.basins) return null;
-            // Where orbits stay, on a grid over the window |x|, |y| <= 3.
+            // Where orbits stay a while (the set and the halo of slow orbits around it), on a grid over |x|, |y| <= 3.
             const n = 64;
             const r = 3;
             let box: View | null = null;
@@ -241,7 +243,7 @@ export function escapePrim(ctx: MathContext, s: EscapeSpec): PixelPrim {
                 for (let i = 0; i < n; i++) {
                     const x = -r + ((i + 0.5) * 2 * r) / n;
                     const y = -r + ((j + 0.5) * 2 * r) / n;
-                    if (!colour(x, y, few).stayed) continue;
+                    if (colour(x, y, few).stayed < Math.min(few, FIT_STAY)) continue;
                     if (!box) box = { xmin: x, xmax: x, ymin: y, ymax: y };
                     else {
                         box.xmin = Math.min(box.xmin, x);

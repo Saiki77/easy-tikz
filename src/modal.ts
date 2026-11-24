@@ -16,6 +16,9 @@ import { showcaseExamples } from './guides';
 import { beyondToolReads, renameInBeyondTool } from './beyond/tools';
 import { motionToolReads, renameInMotionTool } from './motion6/tools'; // 6.0 C
 import { iterateToolReads, renameInIterateTool } from './iterate/tools'; // 6.0 E
+import './iterate/ask'; // 6.0 E: the questions of part E in Ask the curve (the editor and the notes)
+import { ExportFile, collectExportFiles } from './iterate/export'; // 6.0 E
+import { savePictures } from './iterate/files'; // 6.0 E
 import { MotionPlayer } from './motion6/player'; // 6.0 C
 import { playerFor } from './motion6/host'; // 6.0 C
 import { atStep, lastStep, movesWithSteps } from './motion6/steps'; // 6.0 C
@@ -1130,7 +1133,10 @@ export class TikzModal extends Modal implements PanelHost {
         this.codePanel = createCodePanel(panel('code'), this, {
             generate: () => this.generateCode(),
             isVisible: () => this.activeTab === 'code',
-            copy: (text, button) => void this.copyText(text, button),
+            copy: (text, button) => {
+                void this.copyText(text, button);
+                void this.savePictures(text); // 6.0 E
+            },
         });
         this.helpPanel = createHelpPanel(panel('help'), this);
         this.aiPanel = createAiPanel(panel('ai'), this);
@@ -3505,6 +3511,7 @@ export class TikzModal extends Modal implements PanelHost {
                     return;
                 }
                 void this.copyText(text, copyTikz);
+                void this.savePictures(text); // 6.0 E
             },
         });
         bar.createDiv({ cls: 'etz-actionbar-spacer' });
@@ -3546,7 +3553,23 @@ export class TikzModal extends Modal implements PanelHost {
     private generateCode(): string {
         const math = this.math();
         math.setParams(this.list<Parameter>('parameters'));
-        return this.is3D() ? this.settings.generate3DTikzCode(math) : this.settings.generateTikzCode(math);
+        // 6.0 E: the pictures of coloured planes the code reads (Copy LaTeX saves them beside the note).
+        const made = collectExportFiles(() => (this.is3D() ? this.settings.generate3DTikzCode(math) : this.settings.generateTikzCode(math)));
+        this.exportFiles = made.files;
+        return made.result;
+    }
+
+    /** 6.0 E: the PNGs of the last code made, and their saving after Copy LaTeX. */
+    private exportFiles: ExportFile[] = [];
+
+    private async savePictures(code: string): Promise<void> {
+        if (!this.exportFiles.some((f) => code.includes(f.name))) return;
+        try {
+            const paths = await savePictures(this.app, this.exportFiles, code, this.sourceFile ? this.sourceFile.path : null);
+            if (paths.length) this.flashStatus(t('iterate.export.saved', { files: paths.join(', ') }));
+        } catch (e) {
+            this.flashStatus(t('iterate.export.failed', { error: errorText(e) }));
+        }
     }
 
     /**

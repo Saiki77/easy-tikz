@@ -50,9 +50,25 @@ export function pictureSize(wPt: number, hPt: number, dpi = EXPORT_DPI, maxSide 
     return { w, h };
 }
 
-/** A picture of an item's pixel layer as a PNG (null when it has none). */
+/** The last PNGs made (the editor's Code tab makes the code again after each change). */
+const made = new Map<string, Uint8Array>();
+
+/** The pictures of an item's pixel layers as PNGs. */
 export function pixelPng(item: SceneItem2D, view: View, w: number, h: number): Uint8Array[] {
-    return (item.pixels ?? []).map((prim) => encodePng(paintAll(prim, view, w, h), w, h));
+    return (item.pixels ?? []).map((prim) => {
+        const key = `${prim.key}|${view.xmin},${view.xmax},${view.ymin},${view.ymax}|${w}x${h}`;
+        let png = made.get(key);
+        if (!png) {
+            png = encodePng(paintAll(prim, view, w, h), w, h);
+            made.set(key, png);
+            while (made.size > 4) {
+                const first = made.keys().next().value;
+                if (first === undefined) break;
+                made.delete(first);
+            }
+        }
+        return png;
+    });
 }
 
 /** A PNG as a data: URL (SVG files, Copy SVG). */
