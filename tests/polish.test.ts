@@ -15,7 +15,8 @@ import { insertTool, letLines } from '../src/values/order';
 import { EN } from '../src/i18n/en';
 import { JA } from '../src/i18n/ja';
 import { SettingsManager } from '../src/settings';
-import { computeScene2D, labelMetricsFor } from '../src/scene';
+import { computeScene2D, computeScene3D, labelMetricsFor } from '../src/scene';
+import { stripMathDollars } from '../src/latex';
 import { generateTikz2D } from '../src/export';
 import { fitSettings } from '../src/fit';
 import { AskTarget, answerPresent, applyAnswer, askContext, askQuestions, pickTarget, removeAnswer } from '../src/notes6/ask';
@@ -385,4 +386,38 @@ test('polish: the fit leaves room for the labels of a list of points', () => {
         { x: -1, y: 0 },
     ]);
     assert.ok(room[0].x > 1 && room[1].x < -1);
+});
+
+// ------------------------------------------------------------ small fixes
+
+test('polish: a label placeholder may hold a vector, a matrix or a complex number', () => {
+    const settings = SettingsManager.fromJSON(read('let v = (2, 1)\nlet A = [[1, 2], [3, 4]]\nlet c = -0.8 + 0.156i\nwrite "v = {v}, A^-1 = {A^(-1)}, c = {c}" at (1, 2)'));
+    const math = settings.createMathContext();
+    const label = 'v = {v}, A^-1 = {A^(-1)}, c = {c}';
+    assert.deepEqual(math.validate(label, 'template'), { ok: true });
+    assert.equal(math.formatTemplate(label), 'v = (2, 1), A^-1 = [[-2, 1], [1.5, -0.5]], c = -0.8 + 0.156i');
+    // A name nobody defined is still a problem.
+    const wrong = math.validate('{w}', 'template');
+    assert.equal(wrong.ok, false);
+});
+
+test('polish: the LaTeX norm \\|v\\| and \\lVert v \\rVert read as the length of v', () => {
+    const data = read('let v = (3, 4)\nlet $n = \\|v\\|$\nlet $m = \\lVert v \\rVert$\nplot $f(x) = \\|v\\| x$');
+    const math = SettingsManager.fromJSON(data).createMathContext();
+    assert.equal(math.value('n', NaN), 5);
+    assert.equal(math.value('m', NaN), 5);
+    assert.equal(math.functionInfo('f')?.fn(2), 10);
+    // A plain bar is still an absolute value; the text reads back the same.
+    assert.equal(stripMathDollars('let $k = |x - 1|$'), 'let k = \\vert x - 1\\vert ');
+    assert.equal(canonical(read(printChartText(data))), canonical(data));
+});
+
+test('polish: in a 3D chart, the lines of part E are named as 2D only', () => {
+    const settings = SettingsManager.fromJSON(read('3d\ncolour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 200 steps\nP: mark (0.1, 0.2, 0)\ndraw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = 0.3$, 10 steps'));
+    const math = settings.createMathContext();
+    const scene = computeScene3D({ tools: settings.toRendererConfig(math).tools, math, view: { xmin: -1, xmax: 1, ymin: -1, ymax: 1, zmin: -1, zmax: 1 } });
+    assert.deepEqual(
+        scene.issues.map((i) => i.message),
+        ['CP1 is drawn in 2D charts only', 'OR1 is drawn in 2D charts only']
+    );
 });

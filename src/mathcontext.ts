@@ -1090,8 +1090,20 @@ export class MathContext {
             try {
                 this.compileField('value', 'cartesian', part.expr, names);
             } catch (e) {
+                // 6.0 F1: a placeholder may hold any value a label prints (a complex number, a vector, a matrix).
+                if (this.printsAsValue(part.expr)) continue;
                 throw relocate(this.localElsewhere(e, part.expr, names), t, part.offset, part.expr.length);
             }
+        }
+    }
+
+    /** 6.0 F1: does a placeholder compile as a value that is not a number (what valueText prints)? */
+    private printsAsValue(src: string): boolean {
+        try {
+            // Only a value a number field cannot hold: a number keeps the number check and its fixes ({ab} is a*b).
+            return this.letTable.compileField(src, this.env('value', 'cartesian', null)).shape.k !== 'num';
+        } catch {
+            return false;
         }
     }
 
