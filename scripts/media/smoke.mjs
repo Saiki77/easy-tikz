@@ -110,6 +110,7 @@ const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 let EXAMPLES = [];
 let GUIDES = [];
+let V6_EXAMPLES = []; // 6.0 F2
 await check('examples are defined in src/migrate.ts', async () => {
     ({ EXAMPLES } = await importTs('src/migrate.ts'));
     assert(Array.isArray(EXAMPLES) && EXAMPLES.length > 0, 'EXAMPLES is empty');
@@ -117,10 +118,11 @@ await check('examples are defined in src/migrate.ts', async () => {
 });
 let guidesLoaded = false;
 await check('guides bundle from src/guides/index.ts', async () => {
-    ({ GUIDES } = await importTs('src/guides/index.ts'));
+    ({ GUIDES, V6_EXAMPLES } = await importTs('src/guides/index.ts'));
     assert(Array.isArray(GUIDES), 'GUIDES is not an array');
+    assert(Array.isArray(V6_EXAMPLES), 'V6_EXAMPLES is not an array'); // 6.0 F2
     guidesLoaded = true;
-    return `${GUIDES.length} guides`;
+    return `${GUIDES.length} guides, ${V6_EXAMPLES.length} examples of 6.0`;
 });
 const lp = EXAMPLES.find((e) => e.id === 'lp');
 let TEXT = null;
@@ -265,8 +267,8 @@ if (started) {
             assert(!state.banner, `a banner shows: "${state.banner}"`);
             assert((await obs.statusChip()) === null, 'the status chip is visible on an empty chart');
             const tiles = await obs.call(() => document.querySelectorAll('.modal.tikz-modal .etz-build-example').length);
-            // The examples and the Showcase guides (5.2), both open from the empty chart.
-            const shown = EXAMPLES.length + GUIDES.filter((g) => g.category === 'Showcase').length;
+            // The examples and the Showcase guides (5.2), both open from the empty chart; 6.0 F2: and the examples of 6.0.
+            const shown = EXAMPLES.length + GUIDES.filter((g) => g.category === 'Showcase').length + V6_EXAMPLES.length;
             assert(tiles === shown, `${tiles} example tiles for ${shown} examples and Showcase charts`);
         });
 
@@ -400,7 +402,8 @@ if (started) {
             const info = await loadClean(TEXT.parseChartText(text).data, false);
             const picture = () =>
                 obs.call(() => {
-                    const c = document.querySelector('.modal.tikz-modal foreignObject.etz-pixels canvas');
+                    // 6.0 F2: the preview's picture, not the one of a Help tile (the Showcase has coloured planes now).
+                    const c = document.querySelector('.modal.tikz-modal .etz-stage foreignObject.etz-pixels canvas');
                     if (!c) return null;
                     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
                     let sum = 0;
@@ -423,6 +426,14 @@ if (started) {
 
         // Every example, through the modal's loadChart (the second load also answers the Replace dialog).
         for (const example of EXAMPLES) {
+            await check(`example ${example.id}: ${example.title}`, async () => {
+                const info = await loadClean(example.data, example.is3D);
+                return `${info.mode}, ${info.shapes} shapes`;
+            });
+        }
+
+        // 6.0 F2: every example of version 6 (src/guides/examples.ts), the same way.
+        for (const example of V6_EXAMPLES) {
             await check(`example ${example.id}: ${example.title}`, async () => {
                 const info = await loadClean(example.data, example.is3D);
                 return `${info.mode}, ${info.shapes} shapes`;

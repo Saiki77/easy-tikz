@@ -22,6 +22,9 @@ export const help = {
     'help.category.showcase': 'Showcase',
     'help.category.calculus': 'Calculus',
     'help.category.dataProbability': 'Data and probability',
+    // 6.0 F2
+    'help.category.linearComplex': 'Linear algebra and complex numbers',
+    'help.category.dynamicsFractals': 'Dynamics and fractals',
     'help.level.start': 'Start here',
     'help.level.core': 'Core',
     'help.level.advanced': 'Advanced',

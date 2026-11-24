@@ -24,6 +24,9 @@ export const help: Messages<typeof en> = {
     'help.category.showcase': 'ショーケース',
     'help.category.calculus': '微分積分',
     'help.category.dataProbability': 'データと確率',
+    // 6.0 F2
+    'help.category.linearComplex': '線形代数と複素数',
+    'help.category.dynamicsFractals': '力学系とフラクタル',
     'help.level.start': 'ここから',
     'help.level.core': '基本',
     'help.level.advanced': '応用',

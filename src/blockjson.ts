@@ -40,7 +40,7 @@ export function readBlock(body: string): BlockChart | string {
     return { data: impliedV4(data) ? { v: 4, ...data } : data, format: 'json', problems: [] };
 }
 
-const V4_TOOL_TYPES = new Set(['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory', 'value', 'vector', 'listPoints', 'planeGrid', 'basisVectors', 'transform', 'eigenvectors', 'unitSquare', 'span', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourPlane', 'fourierCircles']); // 6.0 C: vectorField, restPoints, trajectory; A: value, vector, listPoints; D: planeGrid to span; E: orbit to fourierCircles
+const V4_TOOL_TYPES = new Set(['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory', 'value', 'vector', 'listPoints', 'planeGrid', 'basisVectors', 'transform', 'eigenvectors', 'unitSquare', 'span', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourPlane', 'fourierCircles', 'axisSet', 'chord']); // 6.0 C: vectorField, restPoints, trajectory; A: value, vector, listPoints; D: planeGrid to span; E: orbit to fourierCircles
 
 /**
  * JSON.parse, and on failure once more with // and /* *\/ comments and

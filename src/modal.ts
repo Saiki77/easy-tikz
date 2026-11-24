@@ -12,7 +12,7 @@ import { SceneCache, SceneIssue } from './scene';
 import { FitResult, fitSettings } from './fit';
 import { View } from './geometry';
 import { EXAMPLES, defaultParameter } from './migrate';
-import { showcaseExamples } from './guides';
+import { V6_EXAMPLES, showcaseExamples } from './guides'; // 6.0 F2: V6_EXAMPLES
 import { beyondToolReads, renameInBeyondTool } from './beyond/tools';
 import { motionToolReads, renameInMotionTool } from './motion6/tools'; // 6.0 C
 import { linearToolReads, renameInLinearTool } from './linear/tools'; // 6.0 D
@@ -1059,7 +1059,8 @@ export class TikzModal extends Modal implements PanelHost {
     private fillMoreMenu(menu: Menu) {
         menu.addItem((item) => item.setTitle(t('editor.menu.examples')).setIsLabel(true));
         // Example names stay as src/migrate.ts writes them (the Build and Help tabs show the same names).
-        for (const example of [...showcaseExamples(), ...EXAMPLES]) {
+        // 6.0 F2: the examples of version 6 after the others, as in the Build tab.
+        for (const example of [...showcaseExamples(), ...EXAMPLES, ...V6_EXAMPLES]) {
             menu.addItem((item) =>
                 item
                     .setTitle(example.is3D ? `${example.title} (3D)` : example.title)

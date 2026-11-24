@@ -2,7 +2,8 @@
  * Guides of the category Showcase (5.2): charts whose parts follow each
  * other. A slider moves a point, a tangent, a region or a label, and what
  * depends on it moves along. The editor offers their finished charts as
- * examples too (src/ui/buildPanel.ts, src/modal.ts).
+ * examples too (src/ui/buildPanel.ts, src/modal.ts). 6.0 adds six pictures
+ * of version 6 in front.
  */
 import type { Guide } from './types';
 import { chart } from './chart';
@@ -342,4 +343,238 @@ const THROW: Guide = {
     ],
 };
 
-export const SHOWCASE_GUIDES: Guide[] = [TANGENT_TRIANGLE, LARGEST_RECTANGLE, MEAN_VALUE, TAYLOR_SINE, GRADIENT_LEVELS, CROSSING_LINES, SLIDING_LADDER, THROW];
+// ------------------------------------------------------------------ 6.0 F2: the pictures of version 6
+// Fractals, a matrix, the Lorenz system, a pendulum, domain colouring and turning circles. They come
+// first in the Showcase, so the Help's gallery and the editor's examples open with them.
+
+// ------------------------------------------------------------------ the orbit of a point in the Mandelbrot set
+const MO_WINDOW = ['size 12 x 8', 'show x from -2.4 to 1 and y from -1.15 to 1.15', 'equal scale'];
+const MO_TITLE = 'title c = {a} + {b}i';
+const moSliders = (a: number, b: number) => [`slider a from -2 to 0.5, starting at ${a}, in steps of 0.01`, `slider b from 0 to 1.1, starting at ${b}, in steps of 0.01`];
+const MO_PLANE = 'colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 200 steps';
+const MO_P = 'P: mark (a, b), large';
+const MO_ORBIT = 'draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps, as a path';
+
+const MANDELBROT_ORBIT: Guide = {
+    id: 'mandelbrot-orbit',
+    title: 'The orbit of a point in the Mandelbrot set',
+    summary: 'Move c with two sliders over the Mandelbrot set: its orbit goes round inside the set and flies off outside it.',
+    category: 'Showcase',
+    level: 'core',
+    minutes: 2,
+    outcomes: ['Colour the plane by a recurrence', 'Draw the orbit of a point on sliders', 'See the inside and the outside of the set'],
+    next: ['fractals', 'orbits-cobwebs'],
+    chart: chart(...MO_WINDOW, MO_TITLE, ...moSliders(-0.12, 0.75), MO_PLANE, MO_P, MO_ORBIT),
+    steps: [
+        {
+            title: 'Colour the plane by the recurrence',
+            body: 'Every point c runs `z_{n+1} = z_n^2 + c` from 0. The dark points keep their orbit small: they are the Mandelbrot set.',
+            chart: chart(...MO_WINDOW, MO_PLANE),
+        },
+        {
+            title: 'Put c on two sliders',
+            body: 'P sits at `(a, b)`, and the orbit of 0 for c = P is drawn as a path. Here it goes round three points for ever.',
+            chart: chart(...MO_WINDOW, MO_TITLE, ...moSliders(-0.12, 0.75), MO_PLANE, MO_P, MO_ORBIT),
+        },
+        {
+            title: 'Move c out of the set',
+            body: 'Drag `a` and `b` to 0.4 and 0.6. Outside the set the orbit turns a few times and flies away.',
+            chart: chart(...MO_WINDOW, MO_TITLE, ...moSliders(0.4, 0.6), MO_PLANE, MO_P, MO_ORBIT),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ a matrix with a slider moves the grid
+const MG_WINDOW = ['size 12 x 8', 'show x from -4.5 to 4.5 and y from -3 to 3', 'equal scale'];
+const mgSlider = (k: number) => `slider k from -1 to 3, starting at ${k}, in steps of 0.05`;
+const MG_A = 'let $A = \\begin{pmatrix} 1 & k \\\\ 1 & 2 \\end{pmatrix}$';
+const MG_BEFORE = ['draw the grid', 'draw the basis vectors', 'shade the unit square, labelled'];
+const MG_MOVE = 'then transform the plane by A';
+const MG_EIGEN = 'then draw the eigenvectors of A, labelled';
+
+const MATRIX_GRID: Guide = {
+    id: 'matrix-grid',
+    title: 'A matrix with a slider moves the grid',
+    summary: 'A slider changes one number of a matrix: the moved grid, the eigenvectors and the determinant follow it.',
+    category: 'Showcase',
+    level: 'core',
+    minutes: 2,
+    outcomes: ['Put a slider inside a matrix', 'Play the move of the plane', 'Watch the determinant pass through 0'],
+    next: ['matrix-plane'],
+    chart: chart(...MG_WINDOW, mgSlider(0.5), MG_A, ...MG_BEFORE, MG_MOVE, MG_EIGEN),
+    steps: [
+        {
+            title: 'Draw the plane before the move',
+            body: 'The grid, î, ĵ and the unit square. The matrix A has the slider `k` in its top right corner.',
+            chart: chart(...MG_WINDOW, mgSlider(0.5), MG_A, ...MG_BEFORE),
+        },
+        {
+            title: 'Move it by A',
+            body: '`then transform the plane by A` moves it in step 2. Press Play, then drag `k`: the grid follows at once.',
+            chart: chart(...MG_WINDOW, mgSlider(0.5), MG_A, ...MG_BEFORE, MG_MOVE),
+        },
+        {
+            title: 'Add the eigenvectors',
+            body: 'Step 3 adds the eigenvectors of A. Drag `k` and they turn; below -0.25 they are gone, as A then turns every line.',
+            chart: chart(...MG_WINDOW, mgSlider(0.5), MG_A, ...MG_BEFORE, MG_MOVE, MG_EIGEN),
+        },
+        {
+            title: 'Flatten the plane',
+            body: 'At k = 2 the determinant is 0 and the plane falls onto a line. Past 2 it is below 0: the square turns over.',
+            chart: chart(...MG_WINDOW, mgSlider(3), MG_A, ...MG_BEFORE, MG_MOVE, MG_EIGEN),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ two paths of the Lorenz system
+const LZ_WINDOW = ['3d', 'show x from -25 to 25, y from -30 to 30 and z from 0 to 50'];
+const LZ_SYSTEM = 'draw the solution of $\\dot{p} = (10(y - x), x(28 - z) - y, xy - \\frac{8}{3}z)$';
+const lzTime = (end: number) => `slider T from 5 to 40, starting at ${end}`;
+const LZ_TWO = [`${LZ_SYSTEM} through (1, 1, 1) for t from 0 to T in blue`, `${LZ_SYSTEM} through (1.001, 1, 1) for t from 0 to T in red`];
+
+const LORENZ_BUTTERFLY: Guide = {
+    id: 'lorenz-butterfly',
+    title: 'Two paths of the Lorenz system',
+    summary: 'Start the Lorenz system twice, a thousandth apart: the two paths stay together for a while, then part for good.',
+    category: 'Showcase',
+    level: 'advanced',
+    minutes: 2,
+    outcomes: ['Draw the solution of a system in 3D', 'Start two solutions side by side', 'Put the end time on a slider'],
+    next: ['systems'],
+    chart: chart(...LZ_WINDOW, lzTime(40), ...LZ_TWO),
+    steps: [
+        {
+            title: 'Draw one path',
+            body: 'The Lorenz system from (1, 1, 1), coloured by time. It winds round two wings and never repeats.',
+            chart: chart(...LZ_WINDOW, `${LZ_SYSTEM} through (1, 1, 1) for t from 0 to 40, coloured by time`),
+        },
+        {
+            title: 'Start a second path close by',
+            body: 'A red path starts at (1.001, 1, 1), and both end at the time `T`. Up to T = 15 the red path lies on the blue one.',
+            chart: chart(...LZ_WINDOW, lzTime(15), ...LZ_TWO),
+        },
+        {
+            title: 'Let time run on',
+            body: 'Drag `T` past 18: the paths part and go round the wings each in its own way. A small change at the start grows until it is all that counts.',
+            chart: chart(...LZ_WINDOW, lzTime(40), ...LZ_TWO),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ a pendulum as a vector field
+const PF_WINDOW = ['size 12 x 8', 'show x from -6.3 to 6.3 and y from -4.2 to 4.2', 'xlabel angle', 'ylabel speed'];
+const PF_FIELD = 'draw the vector field $F(x, y) = (y, -\\sin x - 0.25y)$, coloured by length, with moving particles';
+const PF_REST = 'mark the rest points of F, labelled';
+const pfPush = (v: number) => `slider v from 0 to 4, starting at ${v}, in steps of 0.05`;
+const PF_P = 'P: mark (-6, v), large';
+const PF_SWING = 'draw the solution of $\\dot{p} = (y, -\\sin x - 0.25y)$ through P for t from 0 to 40 in red, very thick';
+
+const PENDULUM_FIELD: Guide = {
+    id: 'pendulum-field',
+    title: 'A pendulum as a vector field',
+    summary: 'The angle and the speed of a pendulum as a field with flowing particles: push it with a slider until it swings over the top.',
+    category: 'Showcase',
+    level: 'core',
+    minutes: 2,
+    outcomes: ['Draw a field with moving particles', 'Mark and name its rest points', 'Draw the solution from a point on a slider'],
+    next: ['vector-fields', 'systems'],
+    chart: chart(...PF_WINDOW, pfPush(3), PF_FIELD, PF_REST, PF_P, PF_SWING),
+    steps: [
+        {
+            title: 'Draw the field of the pendulum',
+            body: 'x is the angle and y the speed. `$F(x, y) = (y, -\\sin x - 0.25y)$` has a little friction; the particles flow the way the pendulum moves.',
+            chart: chart(...PF_WINDOW, PF_FIELD),
+        },
+        {
+            title: 'Mark the rest points',
+            body: 'Hanging down is stable: spirals at 0 and ±2π. Standing upright, at ±π, is a saddle.',
+            chart: chart(...PF_WINDOW, PF_FIELD, PF_REST),
+        },
+        {
+            title: 'Push the pendulum',
+            body: 'P starts near the left rest point with the speed `v`. The red path is its swing: a small push dies down in the same well.',
+            chart: chart(...PF_WINDOW, pfPush(1.5), PF_FIELD, PF_REST, PF_P, PF_SWING),
+        },
+        {
+            title: 'Push it over the top',
+            body: 'Drag `v` past 2.5: the pendulum swings over the top once and comes to rest in the next well. At 4 it goes over twice.',
+            chart: chart(...PF_WINDOW, pfPush(3), PF_FIELD, PF_REST, PF_P, PF_SWING),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ colour the plane by a complex function
+const DC_WINDOW = ['size 12 x 8', 'show x from -3 to 3 and y from -2 to 2', 'equal scale'];
+const DC_SLIDER = 'slider a from -2 to 2, starting at 1, in steps of 0.05';
+const DC_MOVING = 'colour the plane by $f(z) = \\frac{z^2 - a}{z^2 + 1}$';
+const DC_ZEROS = 'mark the points $\\{\\sqrt{a + 0i}, -\\sqrt{a + 0i}\\}$, labelled';
+
+const DOMAIN_COLOURING: Guide = {
+    id: 'domain-colouring',
+    title: 'Colour the plane by a complex function',
+    summary: 'Each point z takes the colour of f(z): find the zeros and the poles, then move two zeros with a slider.',
+    category: 'Showcase',
+    level: 'advanced',
+    minutes: 2,
+    outcomes: ['Colour the plane by f(z)', 'Find zeros and poles by their colours', 'Move zeros with a slider'],
+    next: ['complex-maps'],
+    chart: chart(...DC_WINDOW, DC_SLIDER, DC_MOVING, DC_ZEROS),
+    steps: [
+        {
+            title: 'Colour the plane by z',
+            body: 'With f(z) = z the colour is the angle of z: red where z is a positive number, and once round the colour wheel round 0. The light grows with |z|.',
+            chart: chart(...DC_WINDOW, 'colour the plane by $f(z) = z$'),
+        },
+        {
+            title: 'Find the zeros and the poles',
+            body: '`\\frac{z^2 - 1}{z^2 + 1}` is 0 at ±1 and has poles at ±i. The colours go round each of them; zeros are dark, poles white.',
+            chart: chart(...DC_WINDOW, 'colour the plane by $f(z) = \\frac{z^2 - 1}{z^2 + 1}$'),
+        },
+        {
+            title: 'Move the zeros with a slider',
+            body: 'With `a` in place of 1 the zeros are ±√a. Drag `a` below 0: they move onto the imaginary axis, and at -1 they meet the poles.',
+            chart: chart(...DC_WINDOW, DC_SLIDER, DC_MOVING, DC_ZEROS),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ circles that draw a square wave
+const FC_WINDOW = ['size 12 x 8', 'show x from -2 to 8 and y from -2 to 2', 'equal scale'];
+const FC_TITLE = 'title n = {n}';
+const fcCount = (n: number) => `slider n from 1 to 20, starting at ${n}, in steps of 1`;
+const FC_CIRCLES = 'draw the circles of $\\sum_{k=1}^{n} \\frac{4}{\\pi (2k - 1)} e^{i(2k - 1)t}$, with its wave';
+
+const FOURIER_CIRCLES: Guide = {
+    id: 'fourier-circles',
+    title: 'Circles that draw a square wave',
+    summary: 'Circles turn on each other: the tip of the last draws a wave, and more circles make it more square.',
+    category: 'Showcase',
+    level: 'core',
+    minutes: 2,
+    outcomes: ['Draw the turning circles of a sum', 'Draw the wave of the tip', 'Add terms with a slider'],
+    next: ['sums-series'],
+    chart: chart(...FC_WINDOW, FC_TITLE, fcCount(3), FC_CIRCLES),
+    steps: [
+        {
+            title: 'Turn one circle',
+            body: 'With `n = 1` one circle turns, and the height of its tip draws a sine wave on the right.',
+            chart: chart(...FC_WINDOW, FC_TITLE, fcCount(1), FC_CIRCLES),
+        },
+        {
+            title: 'Add circles',
+            body: 'Each new circle turns on the tip of the one before, faster and smaller. With three of them the wave gets corners.',
+            chart: chart(...FC_WINDOW, FC_TITLE, fcCount(3), FC_CIRCLES),
+        },
+        {
+            title: 'Use twenty circles',
+            body: 'Drag `n` to 20: the wave is nearly square, with small spikes at its corners.',
+            chart: chart(...FC_WINDOW, FC_TITLE, fcCount(20), FC_CIRCLES),
+        },
+    ],
+};
+
+export const SHOWCASE_GUIDES: Guide[] = [
+    // 6.0 F2: the pictures of version 6 first
+    MANDELBROT_ORBIT, MATRIX_GRID, LORENZ_BUTTERFLY, PENDULUM_FIELD, DOMAIN_COLOURING, FOURIER_CIRCLES,
+    TANGENT_TRIANGLE, LARGEST_RECTANGLE, MEAN_VALUE, TAYLOR_SINE, GRADIENT_LEVELS, CROSSING_LINES, SLIDING_LADDER, THROW,
+];

@@ -10,7 +10,7 @@
  * the AI tools).
  */
 import { test, assert } from './_lib';
-import { EXAMPLES } from '../src/migrate';
+import { EXAMPLES, defaultTool } from '../src/migrate';
 import { GUIDES } from '../src/guides';
 import { whatsNewChart } from '../src/whatsnew';
 import { canonical } from '../src/chartdata';
@@ -167,6 +167,16 @@ const commands = (full: string) =>
 
 const sameChart = (a: string, b: Data) => canonical(parseChartText(a).data) === canonical(b);
 
+/** 6.0 F2: the Full LaTeX commands of version 6 (src/text/full.ts, docs/v6/*.md). */
+const COMMANDS_6 = ['let', 'then', 'vectorfield', 'restpoints', 'solution', 'transform', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourplane', 'circles'];
+
+/** 6.0 F2: a colour an object is not drawn in now (a tool without a colour is drawn in its default one: the basis vectors in green). */
+function otherColour(item: Data): string {
+    let drawn = item.color;
+    if (drawn === undefined && typeof item.type === 'string') drawn = (defaultTool(item.type as never, { is3D: false, tools: [], functions: [] }) as unknown as Data).color;
+    return drawn === 'green' ? 'purple' : 'green';
+}
+
 // ------------------------------------------------------------ the forms
 
 test('full: the demo chart prints exactly in the approved form, and both forms are the same chart', () => {
@@ -180,7 +190,6 @@ test('full: the demo chart prints exactly in the approved form, and both forms a
 });
 
 /** 6.0: the commands of the new lines (src/text/full.ts), commands of their own like \plot. */
-const COMMANDS_6 = ['let', 'then', 'vectorfield', 'restpoints', 'solution', 'transform', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourplane', 'circles'];
 
 test('full: every built-in chart prints in Full LaTeX, a command on every line, and reads back as the same chart', () => {
     const failures: string[] = [];
@@ -451,7 +460,7 @@ test('full: recolouring any object of any built-in chart rewrites that one line,
             const items = (parsed[key] as Data[] | undefined) ?? [];
             items.forEach((item, i) => {
                 const next = JSON.parse(JSON.stringify(parsed)) as Data;
-                const color = item.color === 'green' ? 'purple' : 'green';
+                const color = otherColour(item); // 6.0 F2
                 (next[key] as Data[])[i] = { ...item, color };
                 const out = writeChartText(text, next);
                 if (!isFullText(out)) failures.push(`${id} ${key}[${i}]: not Full LaTeX\n${out}`);

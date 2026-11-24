@@ -13,7 +13,7 @@ import { Scene2D, SceneIssue, SceneItem2D, computeScene2D, computeScene3D, label
 import { issueText } from '../issues';
 import { marchingGrid } from '../util';
 import { impliedV4, parseLenientJson } from '../blockjson';
-import { GUIDES } from '../guides';
+import { GUIDES, V6_EXAMPLES } from '../guides'; // 6.0 F2: V6_EXAMPLES
 import { COLOR_MAP, THICKNESS_MAP } from '../colors';
 import { COLORMAPS } from '../colormaps';
 import type { Pt } from '../geometry';
@@ -24,9 +24,7 @@ import { inEnglish } from '../i18n';
 export type { Data };
 export { canonical, clone, minimize };
 
-const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory', 'value', 'vector', 'listPoints', 'planeGrid', 'basisVectors', 'transform', 'eigenvectors', 'unitSquare', 'span', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourPlane', 'fourierCircles']; // 6.0 C: vectorField, restPoints, trajectory; A: value, vector, listPoints; D: planeGrid to span; E: orbit to fourierCircles
-// 6.0 B: sets on an axis and chords (the merge left them out, so check_chart refused them).
-TOOL_TYPES.push('axisSet', 'chord');
+const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory', 'value', 'vector', 'listPoints', 'planeGrid', 'basisVectors', 'transform', 'eigenvectors', 'unitSquare', 'span', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourPlane', 'fourierCircles', 'axisSet', 'chord']; // 6.0 C: vectorField, restPoints, trajectory; A: value, vector, listPoints; D: planeGrid to span; E: orbit to fourierCircles; B: axisSet, chord
 /** Keys a block may carry that the editor's defaults do not list: how the chart sits in the note. */
 const DISPLAY_KEYS = ['displayWidth', 'displayAlign'];
 
@@ -757,6 +755,8 @@ interface Example {
 export function examples(): Example[] {
     return inEnglish(() => {
         const out: Example[] = EXAMPLES.map((e) => ({ id: e.id, title: e.title, about: e.description, data: e.data }));
+        // 6.0 F2: the examples of version 6
+        for (const e of V6_EXAMPLES) out.push({ id: e.id, title: e.title, about: e.description, data: e.data });
         for (const g of GUIDES) out.push({ id: g.id, title: g.title, about: g.summary, data: g.chart });
         return out;
     });
