@@ -1,0 +1,49 @@
+/* Motion (6.0, src/motion6/player.ts): Play and the steps, and the clock's
+   Pause / Play. In a note they are the first row of the strip under the
+   chart (print hides the strip); in the editor a bar over the preview. */
+.etz-motion6-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 24px;
+}
+
+.etz-motion6-step {
+    margin: 0 6px 0 4px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* A pressed clock button is a paused clock: it reads like any other off state. */
+.etz-motion6-row button.etz-icon-btn.etz-motion6-clock[aria-pressed='true'] {
+    color: var(--text-muted);
+    background-color: transparent;
+}
+
+/* A strip with only the player's row has no reset button: no room kept for it. */
+.etz-inline-strip.etz-motion6-strip {
+    padding-right: 6px;
+}
+
+/* The editor: a bar over the preview, bottom left (the pill sits bottom right). */
+.etz-motion6-bar {
+    position: absolute;
+    bottom: 10px;
+    left: 12px;
+    padding: 3px 6px 3px 3px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 999px;
+    background-color: var(--background-primary);
+    box-shadow: var(--shadow-s);
+}
+
+.etz-motion6-bar .etz-motion6-row {
+    height: 26px;
+}
+
+/* The step of an object on its card (shown while the chart has steps). */
+.etz-motion6-steprow input.etz-motion6-stepinput {
+    width: 56px;
+}

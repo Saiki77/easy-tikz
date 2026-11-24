@@ -1,0 +1,90 @@
+/* 日本語: Motion (6.0): steps (`then`), the play bar, the animation clock, vector fields, rest points and solutions of systems. */
+import type { Messages } from '../types';
+import type { motion6 as en } from '../en/motion6';
+
+export const motion6: Messages<typeof en> = {
+    // ---- the kinds of cards
+    'motion6.kind.vectorField': 'ベクトル場',
+    'motion6.kind.restPoints': '平衡点',
+    'motion6.kind.trajectory': '連立微分方程式の解',
+
+    // ---- + Add menu
+    'motion6.section': '動き',
+    'motion6.recipe.vectorField': 'ベクトル場',
+    'motion6.recipeHint.vectorField': 'F(x, y) = (P, Q) の矢印を表示範囲の格子に描きます。画面上の長さはすべて同じです。',
+    'motion6.recipe.particles': '動く粒子つきのベクトル場',
+    'motion6.recipeHint.particles': 'グラフが画面にある間、場に沿って流れる粒子つきのベクトル場です。',
+    'motion6.recipe.restPoints': '平衡点',
+    'motion6.recipeHint.restPoints': 'F = 0 となる点です。安定なら塗りつぶし、そうでなければ白抜きで描きます。',
+    'motion6.recipe.trajectory': '連立微分方程式の解',
+    'motion6.recipeHint.trajectory': "点 P を通る p' = F(p) の解を t = 0 から 10 まで描きます。P をドラッグすると解も動きます。",
+    'motion6.recipe.trajectory3d': '3D の連立微分方程式の解',
+    'motion6.recipeHint.trajectory3d': '(1, 1, 1) を通るローレンツ方程式の解を、時間で色分けして描きます。',
+
+    // ---- cards
+    'motion6.field.expression': 'F(x, y) =',
+    'motion6.field.expressionPlaceholder': '例: (y, -x)',
+    'motion6.field.density': '矢印',
+    'motion6.field.byLength': '長さで色分け',
+    'motion6.field.particles': '動く粒子',
+    'motion6.field.streamlines': '流線',
+    'motion6.field.summary': 'F = {expression}',
+    'motion6.field.empty': '場がまだありません',
+    'motion6.card.colormap': 'カラーマップ',
+    'motion6.rest.field': '場',
+    'motion6.rest.chooseField': 'ベクトル場を選んでください',
+    'motion6.rest.noField': 'ベクトル場が必要です。',
+    'motion6.rest.addField': 'ベクトル場を追加',
+    'motion6.rest.kinds': '種類をラベルにする',
+    'motion6.rest.summary': '{field} の平衡点',
+    'motion6.trajectory.expression': "p' =",
+    'motion6.trajectory.expressionPlaceholder': '例: (y, -x)',
+    'motion6.trajectory.expressionPlaceholder3d': '例: (10(y - x), x(28 - z) - y, xy - 8z/3)',
+    'motion6.trajectory.through': '通る点',
+    'motion6.trajectory.throughPlaceholder': 'P、または (1, 0)',
+    'motion6.trajectory.from': 't の始め',
+    'motion6.trajectory.to': 't の終わり',
+    'motion6.trajectory.byTime': '時間で色分け',
+    'motion6.trajectory.summary': "{through} を通る p' = {expression}",
+    'motion6.trajectory.empty': '方程式がまだありません',
+    'motion6.step.label': 'ステップ',
+    'motion6.step.hint': 'このオブジェクトが現れるステップです。0 は最初から、1 は最初の "then" のあと、以下同様です。',
+    'motion6.step.newStep': 'ステップ {step} で表示',
+
+    // ---- the kinds of rest points (labels)
+    'motion6.rest.stableNode': '安定結節点',
+    'motion6.rest.unstableNode': '不安定結節点',
+    'motion6.rest.stableSpiral': '安定渦状点',
+    'motion6.rest.unstableSpiral': '不安定渦状点',
+    'motion6.rest.saddle': '鞍点',
+    'motion6.rest.centre': '渦心点',
+    'motion6.rest.degenerate': '孤立していない点',
+
+    // ---- problems
+    'motion6.problem.tuple': '括弧の中に {count} 個の式をカンマで区切って書いてください: {count, plural, one {(P)} =2 {(P, Q)} other {(P, Q, R)}}',
+    'motion6.problem.part': '{index} 番目: {message}',
+    'motion6.problem.chooseField': 'ベクトル場を選んでください',
+    'motion6.problem.notField': '{name} はベクトル場ではありません',
+    'motion6.problem.noRestPoints': '表示範囲に平衡点はありません',
+    'motion6.problem.capped': '最大 {steps} ステップで描きます: 時間の範囲が長いと刻みが粗くなります',
+    'motion6.problem.stopped': 't = {t} より後で解の値がありません',
+    'motion6.text.kindVectorField': 'ベクトル場',
+    'motion6.text.kindRestPoints': '平衡点',
+    'motion6.text.kindTrajectory': '連立微分方程式の解',
+    'motion6.text.vectorFieldTakes': '次のように書いてください: draw the vector field F(x, y) = (y, -x)',
+    'motion6.text.restPointsTakes': '次のように書いてください: mark the rest points of F',
+    'motion6.text.trajectoryTakes': "次のように書いてください: draw the solution of p' = (y, -x) through P for t from 0 to 10",
+    'motion6.text.theFieldMissing': '"the rest points" にはベクトル場が必要です: draw the vector field F(x, y) = (y, -x)',
+    'motion6.text.thenObject': '"then" は何かを描く行（関数、図形、ラベル）の前に書きます',
+    'motion6.text.framesAlone': '"frames" は単独で 1 行に書きます',
+
+    // ---- the strip under a chart, and the editor's step bar
+    'motion6.player.group': 'ステップと動き',
+    'motion6.player.play': 'ステップを再生',
+    'motion6.player.pause': 'ステップを一時停止',
+    'motion6.player.previous': '前のステップ',
+    'motion6.player.next': '次のステップ',
+    'motion6.player.step': 'ステップ {step} / {count}',
+    'motion6.player.clockPlay': '動きを再生',
+    'motion6.player.clockPause': '動きを一時停止',
+};

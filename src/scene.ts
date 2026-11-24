@@ -16,6 +16,7 @@ import {
     FillPattern,
     FunctionParameters,
     MarkerSize,
+    MotionFrame,
     PlaneTool,
     PointsTool,
     RegionTool,
@@ -46,6 +47,8 @@ import { findExtrema1D } from './math';
 import { errorText } from './util';
 import { language, t as msg } from './i18n';
 import { BEYOND_TYPES, BeyondOutput, beyondSources, computeBeyond } from './beyond/scene';
+// 6.0 C
+import { MOTION_3D_TYPES, MOTION_TYPES, MotionOutput, computeMotion, computeMotion3D, motionSources, motionStrokes } from './motion6/scene';
 
 export type ArrowHeads = 'forward' | 'backward' | 'both';
 
@@ -69,6 +72,9 @@ export interface StrokePrim {
     closed?: boolean;
     /** Exact line segment: exporter may emit it as a plain 2-point \draw. */
     exact?: boolean;
+    // 6.0 C
+    /** Opacity of the lines, 0..1 (absent: 1): the faded trails of moving particles. */
+    opacity?: number;
 }
 
 export interface MarkerPrim {
@@ -78,6 +84,9 @@ export interface MarkerPrim {
     size: MarkerSize;
     /** Drawn with reduced opacity (e.g. optimum of an unbounded problem within the view). */
     dim?: boolean;
+    // 6.0 C
+    /** An open circle (a rest point that is not stable): the background inside a ring of `color`. */
+    open?: boolean;
 }
 
 /** Side of its anchor point a scene text sits on: the annotation anchors plus the four diagonals. */
@@ -240,6 +249,9 @@ export interface SceneInput2D {
      * `labelMetrics`.
      */
     equalScale?: boolean;
+    // 6.0 C
+    /** The clock's time and the step shown (src/motion6/clock.ts); absent: the still frame. */
+    motion?: MotionFrame;
 }
 
 /** Plot size and font sizes for label placement, in pt. */
@@ -396,6 +408,9 @@ interface Output {
     planes3?: Scene3D['planes'];
     /** What the tools beyond functions hand their readers (src/beyond/scene.ts): a distribution, a slope field. */
     beyond?: BeyondOutput;
+    // 6.0 C
+    /** What a vector field hands its rest points and its particles (src/motion6/scene.ts). */
+    motion?: MotionOutput;
 }
 
 /** A function's decorations or a tool, as a node of the dependency graph. */
@@ -826,6 +841,7 @@ function toolNode(t: Tool, math: MathContext): SceneNode {
             break;
         default:
             beyondSources(t, scan, refs);
+            motionSources(t, scan, refs); // 6.0 C
     }
     return { id: `tool:${t.id}`, name: str(t.name) || str(t.id), tool: t, refs, sources, base: toolBase(t) };
 }
@@ -2160,6 +2176,9 @@ function scene2D(input: SceneInput2D): Scene2D {
         };
         // The memo's own array: a cached frame hands out the same handle objects.
         if (out.handles && out.handles.length) item.handles = out.handles;
+        // 6.0 C: moving particles follow the clock, after the memo (never into the cached arrays).
+        const moving = motionStrokes(node.tool, out, ctx, input.motion);
+        if (moving && moving.length) item.strokes = out.strokes.concat(moving);
         items.push(item);
         itemSpecs.push({ item, node, out });
     });
@@ -2267,7 +2286,7 @@ function compute2D(node: SceneNode, ctx: Ctx): Output {
         case 'segment':
             return computeSegmentTool(t, ctx);
         default:
-            return computeBeyond(t, ctx) ?? newOutput();
+            return computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? newOutput(); // 6.0 C
     }
 }
 
@@ -3569,6 +3588,9 @@ export interface Scene3D {
         width: string;
         dashed: boolean;
         arrow?: ArrowHeads;
+        // 6.0 C
+        /** Legs of one polyline (a solution in 3D) share a run: the export joins them into one path. */
+        run?: number;
     }>;
     planes: Array<{ axis: 'x' | 'y' | 'z'; value: number; color: string; opacity: number }>;
     issues: SceneIssue[];
@@ -3681,10 +3703,11 @@ function scene3D(input: SceneInput3D): Scene3D {
     const nodes: SceneNode[] = [];
     for (const t of tools) {
         if (t.type === 'plane3D' || ((t.type === 'points' || t.type === 'segment') && t.dim === 3)) nodes.push(toolNode(t, math));
+        else if (MOTION_3D_TYPES.has(t.type)) nodes.push(toolNode(t, math)); // 6.0 C
     }
     // Data, probability, Riemann sums and slope fields are drawn in 2D charts only (5.0).
     const only2D: SceneIssue[] = tools
-        .filter((t) => BEYOND_TYPES.has(t.type) && !t.hidden)
+        .filter((t) => (BEYOND_TYPES.has(t.type) || (MOTION_TYPES.has(t.type) && !MOTION_3D_TYPES.has(t.type))) && !t.hidden) // 6.0 C
         .map((t) => ({ source: str(t.name), message: msg('beyond.problem.only2D', { name: str(t.name) }), severity: 'error' as const }));
     if (!nodes.length) {
         math.setDerived({});
@@ -3702,7 +3725,7 @@ function scene3D(input: SceneInput3D): Scene3D {
             if (t.type === 'points') return computePoints3D(t, ctx);
             if (t.type === 'segment') return computeSegment3D(t, ctx);
             if (t.type === 'plane3D') return computePlane(t, ctx);
-            return newOutput();
+            return computeMotion3D(t, ctx) ?? newOutput(); // 6.0 C
         },
         new Set()
     );

@@ -13,5 +13,6 @@ import { plugin } from './plugin';
 import { problems } from './problems';
 import { help } from './help';
 import { beyond } from './beyond';
+import { motion6 } from './motion6'; // 6.0 C
 
-export const JA: Messages<typeof EN> = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond };
+export const JA: Messages<typeof EN> = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...motion6 };

@@ -40,7 +40,7 @@ export function readBlock(body: string): BlockChart | string {
     return { data: impliedV4(data) ? { v: 4, ...data } : data, format: 'json', problems: [] };
 }
 
-const V4_TOOL_TYPES = new Set(['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution']);
+const V4_TOOL_TYPES = new Set(['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory']); // vectorField, restPoints, trajectory: 6.0 C
 
 /**
  * JSON.parse, and on failure once more with // and /* *\/ comments and

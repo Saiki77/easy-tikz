@@ -33,6 +33,7 @@ import {
 import { sampleCurve } from './util';
 import { boxFactors } from './box3d';
 import { TickAxis, axisTicks, tickOptions } from './ticks';
+import { stillFrame } from './motion6/clock'; // 6.0 C
 
 // ------------------------------------------------------------------ tuning
 
@@ -566,6 +567,8 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
         polar,
         labelMetrics: labelMetricsFor(paperCm.w, paperCm.h),
         equalScale: !!config.equalScale,
+        // 6.0 C: moving particles are drawn still, at time 0 or the chart's stillTime.
+        motion: stillFrame(settings.getValue('stillTime')),
     });
     const items = scene.items || [];
     const colors = new ColorSet();
@@ -800,6 +803,8 @@ function strokeCmds(s: StrokePrim, colors: ColorSet, view: View, guide: boolean)
     const base = guide
         ? [colors.use(s.color), 'thin', 'dashed', 'draw opacity=0.6']
         : [colors.use(s.color), lineWidth(s.width), ...(s.dashed ? ['dashed'] : [])];
+    // 6.0 C: faded lines (the trails of moving particles).
+    if (!guide && typeof s.opacity === 'number' && s.opacity >= 0 && s.opacity < 1) base.push(`draw opacity=${fmtNum(s.opacity)}`);
     const exact = !!s.exact;
     const arrow = guide ? undefined : s.arrow;
     if (!arrow) {
@@ -841,10 +846,12 @@ function addMarkers(layers: Layers, item: SceneItem2D, colors: ColorSet, view: V
         if (!finitePt(m) || !inView(m, view, 0)) continue;
         const c = colors.use(m.color);
         const size = MARK_SIZE[m.size] || MARK_SIZE.normal;
-        const key = `${c}|${size}|${m.dim ? 1 : 0}`;
+        const key = `${c}|${size}|${m.dim ? 1 : 0}|${m.open ? 1 : 0}`;
         let g = groups.length ? groups[groups.length - 1] : null;
         if (!g || g.key !== key) {
-            const opts = ['only marks', 'mark=*', `mark size=${size}`, c, 'mark options={draw=white, line width=0.4pt}'];
+            // 6.0 C: an open circle (a rest point that is not stable) is white inside a ring of its colour.
+            const look = m.open ? `mark options={fill=white, draw=${c}, line width=0.8pt}` : 'mark options={draw=white, line width=0.4pt}';
+            const opts = ['only marks', 'mark=*', `mark size=${size}`, c, look];
             if (m.dim) opts.push(`opacity=${fmtNum(DIM_OPACITY)}`);
             opts.push('forget plot');
             g = { key, opts: opts.join(', '), pts: [] };
@@ -1467,11 +1474,35 @@ function clipSegment3D(a: [number, number, number], b: [number, number, number],
 
 function segmentCmds(scene: Scene3D, box: Box, colors: ColorSet): string[] {
     const out: string[] = [];
+    // 6.0 C: legs of one run (a solution in 3D), whole in the box and end to end, are one path.
+    let open: { run: number; key: string; pts: Array<[number, number, number]> } | null = null;
+    const close = () => {
+        if (open && open.pts.length >= 2) out.push(`\\addplot3[${open.key}] coordinates {${open.pts.map(tuple3).join(' ')}};`);
+        open = null;
+    };
     for (const s of scene.segments || []) {
-        if (![...s.a, ...s.b].every(Number.isFinite)) continue;
+        if (![...s.a, ...s.b].every(Number.isFinite)) {
+            close();
+            continue;
+        }
         const span = clipSegment3D(s.a, s.b, box);
-        if (!span) continue;
+        if (!span) {
+            close();
+            continue;
+        }
         const [t0, t1] = span;
+        if (s.run !== undefined && !s.arrow && t0 <= 0 && t1 >= 1) {
+            const opts = [colors.use(s.color), lineWidth(s.width), ...(s.dashed ? ['dashed'] : []), 'forget plot'].join(', ');
+            const cur = open as { run: number; key: string; pts: Array<[number, number, number]> } | null;
+            const last = cur ? cur.pts[cur.pts.length - 1] : null;
+            if (cur && last && cur.run === s.run && cur.key === opts && last.every((v, k) => v === s.a[k])) cur.pts.push(s.b);
+            else {
+                close();
+                open = { run: s.run, key: opts, pts: [s.a, s.b] };
+            }
+            continue;
+        }
+        close();
         const at = (t: number): [number, number, number] => [0, 1, 2].map((k) => s.a[k] + (s.b[k] - s.a[k]) * t) as [number, number, number];
         const opts = [colors.use(s.color), lineWidth(s.width)];
         if (s.dashed) opts.push('dashed');
@@ -1480,6 +1511,7 @@ function segmentCmds(scene: Scene3D, box: Box, colors: ColorSet): string[] {
         opts.push('forget plot');
         out.push(`\\addplot3[${opts.join(', ')}] coordinates {${tuple3(at(t0))} ${tuple3(at(t1))}};`);
     }
+    close();
     return out.length ? ['% segments', ...out] : [];
 }
 

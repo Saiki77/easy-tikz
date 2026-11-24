@@ -45,6 +45,8 @@ import {
     uniqueId,
 } from './kit';
 import { t } from '../i18n';
+import { setStep, stepMenu, stepRow } from '../motion6/steprow'; // 6.0 C
+import { lastStep, stepOf } from '../motion6/steps'; // 6.0 C
 
 /** Referenceable name: letter first, then letters, digits, underscores. */
 const NAME_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -334,7 +336,7 @@ class CardFields {
 }
 
 /** Duplicate / Move up / Move down / [Save as template] / Delete. */
-function fillCardMenu(menu: Menu, actions: CardActions, opts: FunctionCardOptions, saveTemplate: (() => void) | null): void {
+function fillCardMenu(menu: Menu, actions: CardActions, opts: FunctionCardOptions, saveTemplate: (() => void) | null, extra?: (menu: Menu) => void): void {
     const pos = opts.position ? opts.position() : null;
     menu.addItem((i) => i.setTitle(t('common.duplicate')).setIcon('copy').onClick(() => actions.duplicate()));
     menu.addItem((i) =>
@@ -355,6 +357,7 @@ function fillCardMenu(menu: Menu, actions: CardActions, opts: FunctionCardOption
         const save = saveTemplate;
         menu.addItem((i) => i.setTitle(t('build.card.saveAsTemplate')).setIcon('bookmark-plus').onClick(() => save()));
     }
+    extra?.(menu); // 6.0 C
     menu.addSeparator();
     menu.addItem((i) => i.setTitle(t('common.delete')).setIcon('trash-2').setWarning(true).onClick(() => actions.remove()));
 }
@@ -475,7 +478,8 @@ export function createFunctionCard(
         visible: !fn.hidden,
         onVisibleChange: setVisible,
         // Parametric functions have no template shape (templates store one expression).
-        menu: (m) => fillCardMenu(m, actions, opts, host.plugin && !fn.parametric ? () => void saveTemplate() : null),
+        // 6.0 C: Show in a new step.
+        menu: (m) => fillCardMenu(m, actions, opts, host.plugin && !fn.parametric ? () => void saveTemplate() : null, (mm) => stepMenu(mm, fn, host.settings.serialize(), () => host.commit())),
         collapsed: ui.collapsed,
         onCollapsedChange: (c) => {
             ui.collapsed = c;
@@ -804,10 +808,19 @@ export function createFunctionCard(
         syncDomain();
     }
 
+    // 6.0 C: the step it arrives in.
+    const steps = stepRow(body, {
+        get: () => stepOf(fn),
+        set: (v) => setStep(fn, v),
+        last: () => lastStep(host.settings.serialize()),
+        changed: () => host.requestUpdate(),
+    });
+
     function sync(): void {
         shell.setName(fn.name || '');
         shell.setColor(fn.color);
         shell.setVisible(!fn.hidden);
+        steps.sync(); // 6.0 C
         updateSummary();
         syncKind();
         syncExpr(main.input, fn.expression);

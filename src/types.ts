@@ -70,6 +70,9 @@ export interface FunctionParameters {
     name?: string;
     /** Hidden functions are not drawn but stay callable by name (and are inlined in export). */
     hidden?: boolean;
+    // 6.0 C
+    /** The step it arrives in (a `then` line starts the next step, src/motion6/steps.ts); absent or 0: from the start. */
+    step?: number;
 }
 
 /**
@@ -99,6 +102,9 @@ export interface Function3DParameters {
     /** Optional user-readable name. Mirrors `FunctionParameters.name`. */
     name?: string;
     hidden?: boolean;
+    // 6.0 C
+    /** The step it arrives in (src/motion6/steps.ts). */
+    step?: number;
 }
 
 export interface Annotation {
@@ -112,6 +118,9 @@ export interface Annotation {
     size: AnnotationSize;
     anchor: AnnotationAnchor;
     hidden?: boolean;
+    // 6.0 C
+    /** The step it arrives in (src/motion6/steps.ts). */
+    step?: number;
 }
 
 export type CoordinateSystem = 'cartesian' | 'polar';
@@ -167,6 +176,9 @@ export interface ToolBase {
     /** Hidden tools are not drawn, but are still computed when another tool references them. */
     hidden?: boolean;
     color: string;
+    // 6.0 C
+    /** The step it arrives in (a `then` line starts the next step, src/motion6/steps.ts); absent or 0: from the start. */
+    step?: number;
 }
 
 export interface RegionTool extends ToolBase {
@@ -415,6 +427,65 @@ export interface SolutionTool extends ToolBase {
     dashed: boolean;
 }
 
+// 6.0 C ---------------------------------------------------------------------
+// Motion (6.0): vector fields with their particles and streamlines, the rest
+// points of a field, and the solutions of systems of ODEs in 2D and 3D
+// (src/motion6/).
+// ---------------------------------------------------------------------------
+
+/**
+ * The vector field F(x, y) = (P, Q): short arrows on a grid over the view,
+ * all the same length on screen. The tool's name is the field's name (F).
+ */
+export interface VectorFieldTool extends ToolBase {
+    type: 'vectorField';
+    /** F as a pair of formulas in x and y: `(y, -sin(x) - 0.25y)` (LaTeX allowed). */
+    expression: string;
+    /** About this many arrows across the longer side of the plot (4 to 60). */
+    density: number;
+    thickness: string;
+    /** Coloured by length through a colour map; absent: the tool's colour. */
+    colormap?: Colormap;
+    /** Particles that follow F on the animation clock (the export draws them still). */
+    particles: boolean;
+    /** Still curves along F through a grid of seeds (the export draws them too). */
+    streamlines: boolean;
+}
+
+/**
+ * The rest points of a vector field (its zeros in the view, found
+ * numerically): filled when stable, open when not, from the eigenvalues of
+ * the Jacobian. Publishes RP1_n and RP1_x, RP1_y, RP1_x2, ...
+ */
+export interface RestPointsTool extends ToolBase {
+    type: 'restPoints';
+    /** Name of the vector field. */
+    field: string;
+    size: MarkerSize;
+    /** Each point labelled with its kind (saddle, stable spiral, ...). */
+    valueLabel: boolean;
+}
+
+/**
+ * The solution of a system p' = F(p, t) through a point, for t in [from, to]
+ * (RK4): a curve in a 2D chart, a 3D curve in a 3D chart. The start may be a
+ * points tool, so dragging it moves the solution.
+ */
+export interface TrajectoryTool extends ToolBase {
+    type: 'trajectory';
+    /** The right side: a tuple of 2 (2D) or 3 (3D) formulas in x, y (and z) and t: `(y, -x)`. */
+    expression: string;
+    /** Where it is at t = from, separated by `;`: points tools (`P`) and points (`(1, 1, 1)`). */
+    through: string;
+    from: string;
+    to: string;
+    dim: 2 | 3;
+    thickness: string;
+    dashed: boolean;
+    /** Coloured by time through a colour map; absent: the tool's colour. */
+    colormap?: Colormap;
+}
+
 export type Tool =
     | RegionTool
     | CurveTool
@@ -427,7 +498,11 @@ export type Tool =
     | ProbabilityTool
     | RiemannTool
     | SlopeFieldTool
-    | SolutionTool;
+    | SolutionTool
+    // 6.0 C
+    | VectorFieldTool
+    | RestPointsTool
+    | TrajectoryTool;
 
 export type ToolType = Tool['type'];
 
@@ -478,4 +553,22 @@ export interface RendererConfig {
     /** Paper size of the exported figure in cm (clamped 1..100); the preview typesets its text at this scale. */
     paperWidthCm?: number;
     paperHeightCm?: number;
+    // 6.0 C
+    /** The animation clock and the step shown (src/motion6/clock.ts); absent: the still frame of the export. */
+    motion?: MotionFrame;
+}
+
+// 6.0 C
+/**
+ * What moves in one frame of a chart (src/motion6/clock.ts): the clock's
+ * time, the step shown and how far it has come in. Scene code reads it
+ * through stepProgress and clockTime; the export always draws the still frame.
+ */
+export interface MotionFrame {
+    /** Seconds on the animation clock (the still frame: the chart's stillTime, else 0). */
+    time: number;
+    /** The step shown: objects of later steps are hidden. Infinity: every step (the last one). */
+    step: number;
+    /** How far the shown step has come in, 0..1 (1: settled). */
+    progress: number;
 }

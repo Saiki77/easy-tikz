@@ -14,6 +14,11 @@ import { View } from './geometry';
 import { EXAMPLES, defaultParameter } from './migrate';
 import { showcaseExamples } from './guides';
 import { beyondToolReads, renameInBeyondTool } from './beyond/tools';
+import { motionToolReads, renameInMotionTool } from './motion6/tools'; // 6.0 C
+import { MotionPlayer } from './motion6/player'; // 6.0 C
+import { playerFor } from './motion6/host'; // 6.0 C
+import { atStep, lastStep, movesWithSteps } from './motion6/steps'; // 6.0 C
+import { needsClock } from './motion6/clock'; // 6.0 C
 import type { NoteTable } from './beyond/table';
 import type { ChartDraft } from './templates';
 import type { BlockFormat } from './blockjson';
@@ -401,6 +406,11 @@ export class TikzModal extends Modal implements PanelHost {
     /** Shared by validation, renderers and export; null = rebuild on next use (memoized by structure). */
     private mathCtx: MathContext | null = null;
     private sceneCache = new SceneCache();
+    // 6.0 C: steps and the clock of the preview (src/motion6/player.ts), and the chart at an earlier step.
+    private player: MotionPlayer | null = null;
+    private playerKey = '';
+    private playerBar: HTMLElement | null = null;
+    private stepView: { step: number; from: MathContext; settings: SettingsManager; math: MathContext } | null = null;
     private renderer3d: SVG3DRenderer | null = null;
     private chartMode: '2d' | '3d' | null = null;
     private chartSvg: SVGElement | null = null;
@@ -600,6 +610,7 @@ export class TikzModal extends Modal implements PanelHost {
         this.markChanged();
         // Typing may have changed a function body or a name: the next math() call rebuilds (memoized).
         this.mathCtx = null;
+        this.stepView = null; // 6.0 C: the chart at an earlier step is made again
         this.scheduleUpdate();
     }
 
@@ -706,6 +717,7 @@ export class TikzModal extends Modal implements PanelHost {
                     break;
                 default:
                     renameInBeyondTool(t, { expr, tpl, ref, kind });
+                    renameInMotionTool(t, { expr, tpl, ref, kind }); // 6.0 C
             }
         }
         for (const a of this.list<Annotation>('annotations')) {
@@ -936,6 +948,8 @@ export class TikzModal extends Modal implements PanelHost {
         // A running drag restores its start texts before the draft flush; a keyboard nudge keeps its texts.
         this.abortObjectDrag(false);
         this.dropKeySession();
+        this.player?.destroy(); // 6.0 C
+        this.player = null;
         this.clearSelection();
         this.clearHover();
         // Playing sliders snap back onto their step first, so the flushed draft never stores a sub-step value.
@@ -1342,11 +1356,15 @@ export class TikzModal extends Modal implements PanelHost {
             this.frameRaf = this.fullTimer = this.updateTimer = null;
         }
         this.flushWheel();
+        if (quality === 'full') this.syncPlayer(); // 6.0 C
         let issues: SceneIssue[] = [];
         try {
-            const math = this.math();
+            // 6.0 C: the chart at the step the player shows, at the clock's time.
+            const view = this.previewView();
+            const math = view.math;
             math.setParams(this.list<Parameter>('parameters'));
-            const config = this.settings.toRendererConfig(math);
+            const config = view.settings.toRendererConfig(math);
+            if (this.player) config.motion = this.player.frame();
             issues = config.is3D ? this.render3D(config, math, quality) : this.render2D(config, math, quality);
         } catch (e) {
             // Keep the last good drawing; the problem goes to the status chip, never a Notice.
@@ -1357,6 +1375,50 @@ export class TikzModal extends Modal implements PanelHost {
         this.setIssues(issues);
         this.updatePill();
         this.scheduleCodeRefresh();
+    }
+
+    // ------------------------------------------------------ 6.0 C: motion
+
+    /** A player while the chart has steps or objects that move by themselves; a new one when that changes. */
+    private syncPlayer() {
+        const data = this.settings.serialize();
+        const key = `${lastStep(data)}|${needsClock(data)}|${movesWithSteps(data)}`;
+        if (key === this.playerKey && (this.player !== null) === (key !== '0|false|false')) return;
+        this.playerKey = key;
+        this.player?.destroy();
+        this.playerBar?.remove();
+        this.player = null;
+        this.playerBar = null;
+        this.stepView = null;
+        const player = playerFor(data, {
+            draw: (_frame, clock) => {
+                if (!this.isOpen) return;
+                if (clock) this.renderNow('draft');
+                else this.renderNow('full');
+            },
+            watched: () => this.chartEl,
+        });
+        if (!player || !this.stageEl) return;
+        this.player = player;
+        this.playerBar = this.stageEl.createDiv({ cls: 'etz-motion6-bar' });
+        player.controls(this.playerBar);
+        player.watch();
+    }
+
+    /** The chart the preview draws: at the step the player shows (later objects hidden), else the chart itself. */
+    private previewView(): { settings: SettingsManager; math: MathContext } {
+        const step = this.player ? this.player.shownStep() : null;
+        const math = this.math();
+        if (step === null) {
+            this.stepView = null;
+            return { settings: this.settings, math };
+        }
+        const v = this.stepView;
+        if (v && v.step === step && v.from === math) return v;
+        const settings = SettingsManager.fromJSON(atStep(this.settings.serialize(), step));
+        settings.noteTable = this.settings.noteTable;
+        this.stepView = { step, from: math, settings, math: settings.createMathContext() };
+        return this.stepView;
     }
 
     /**
@@ -3037,7 +3099,7 @@ export class TikzModal extends Modal implements PanelHost {
                     if (reads(t.value)) return true;
                     break;
                 default:
-                    if (beyondToolReads(t, reads)) return true;
+                    if (beyondToolReads(t, reads) || motionToolReads(t, reads)) return true; // motionToolReads: 6.0 C
             }
         }
         for (const a of this.list<Annotation>('annotations')) {

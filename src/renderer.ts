@@ -673,6 +673,8 @@ export class SVGRenderer {
                 // Draft frames are the frames of a slider or drag gesture: labels hold their spots there.
                 // The full frame that follows places them afresh, as the export does.
                 keepLabels: this.quality === 'draft' && !!this.cache,
+                // 6.0 C: the clock's time and the step shown (absent: the still frame).
+                motion: cfg.motion,
             });
             if (this.cache) lastGoodScene.set(this.cache, scene);
         } catch (e) {
@@ -1235,6 +1237,8 @@ export class SVGRenderer {
                   'stroke-linecap': arrow ? 'butt' : 'round',
               };
         if (!guide && s.dashed) attrs['stroke-dasharray'] = '6 4';
+        // 6.0 C: faded lines (the trails of moving particles).
+        if (!guide && typeof s.opacity === 'number' && s.opacity >= 0 && s.opacity < 1) attrs['stroke-opacity'] = String(s.opacity);
         const runs: Pt[][] = [];
         for (const line of s.lines || []) runs.push(...finiteRuns(line));
         if (!runs.length) return;
@@ -1290,6 +1294,12 @@ export class SVGRenderer {
             'stroke-width': this.compact ? '1' : '1.5',
         };
         if (m.dim) attrs.opacity = '0.45';
+        // 6.0 C: an open circle (a rest point that is not stable).
+        if (m.open) {
+            attrs.fill = BACKGROUND;
+            attrs.stroke = this.css(m.color);
+            attrs['stroke-width'] = this.compact ? '1' : '1.75';
+        }
         g.appendChild(this.el('circle', attrs));
     }
 

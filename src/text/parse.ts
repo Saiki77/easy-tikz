@@ -27,6 +27,10 @@ import { stripMathDollars } from '../latex';
 import { FULL_OPTION_HELP, isFullText, mapFull, readFull } from './full';
 import { eventNames } from '../beyond/event';
 import { boxRatioOf } from '../box3d';
+// 6.0 C
+import { MOTION_KINDS, MOTION_KIND_WORDS, MOTION_OPTION_HELP, isMotionOption, motionOption, ownName, readMotionDraw, readMotionMark, thenPrefix } from '../motion6/text';
+import type { MotionRead } from '../motion6/text';
+import { MOTION_PREFIX } from '../motion6/tools';
 
 type Data = Record<string, unknown>;
 
@@ -67,6 +71,8 @@ export const KEYWORDS = new Set([
     'show', 'plot', 'draw', 'mark', 'write', 'with', 'no', 'double',
     // beyond functions (5.0)
     'use', 'data',
+    // motion (6.0 C)
+    'then', 'frames',
 ]);
 
 export const COLORS = new Set(['black', 'gray', 'red', 'orange', 'brown', 'green', 'teal', 'blue', 'purple', 'magenta']);
@@ -75,7 +81,7 @@ export const THICKNESSES = ['very thin', 'very thick', 'thin', 'thick'];
 export const PATTERNS = new Set(['solid', 'horizontal', 'vertical', 'crosshatch', 'dots', 'north-east', 'north-west']);
 export const ANCHORS = new Set(['center', 'above', 'below', 'left', 'right']);
 const AXIS_STYLES: Record<string, string> = { middle: 'middle', centre: 'middle', center: 'middle', box: 'box', edges: 'axes', edge: 'axes', axes: 'axes' };
-export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y' };
+export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', ...MOTION_PREFIX }; // MOTION_PREFIX: 6.0 C
 const NAME = '[A-Za-z][A-Za-z0-9_]*';
 /** A name the block can spell: letters, digits and _. */
 export const NAME_RE = new RegExp(`^${NAME}$`);
@@ -288,6 +294,7 @@ function isOption(raw: string): boolean {
     if (!o || splitTop(o, ',').length > 1) return false;
     if (isColour(lower) || isMapWord(lower) || THICKNESSES.includes(lower) || OPTION_WORDS.has(lower)) return true;
     if (/^(label|labels|legend)\s+"/i.test(o)) return true;
+    if (isMotionOption(o)) return true; // 6.0 C
     if (/^tangent(\s+at)?\s+\S/i.test(o)) return true;
     if (/^((?:opacity|mesh)\s+[-+\d.e]+|pattern\s+[a-z-]+|samples\s+[\d.]+)$/i.test(o)) return true;
     if (/^(domain|t|theta|θ)\s+\S.*\.\..*\S$/i.test(o)) return true;
@@ -388,6 +395,8 @@ class Builder {
      * known once every line is read. `field` is the tool's field that names it.
      */
     readonly nearest: Array<{ tool: Data; type: string; field: string; line: number; at: number; missing: MessageKey; candidates?: string[] }> = [];
+    /** 6.0 C: the step the lines are in now (`then` starts the next one). */
+    step = 0;
 
     problem(at: number, message: string) {
         this.problems.push({ line: this.line, column: at + 1, message });
@@ -455,7 +464,7 @@ class Builder {
 }
 
 /** Lines about the chart itself, and sliders: their words are their own, and they take no options. */
-const CHART_WORDS = new Set(['view', 'show', 'axes', 'no', 'grid', 'with', 'size', 'equal', 'polar', '3d', 'snippet', 'variables', 'set', 'slider']);
+const CHART_WORDS = new Set(['view', 'show', 'axes', 'no', 'grid', 'with', 'size', 'equal', 'polar', '3d', 'snippet', 'variables', 'set', 'slider', 'frames']); // frames: 6.0 C
 
 /** What each kind of object accepts as options, for messages (words of the chart language: they stay English). */
 const OPTION_HELP: Record<string, string> = {
@@ -476,6 +485,7 @@ const OPTION_HELP: Record<string, string> = {
     riemann: 'in a colour, thin, thick, opacity 0.35, labelled, labelled "text", hidden',
     slopeField: 'in a colour, thin, thick, hidden',
     solution: 'in a colour, thin, thick, dashed, hidden',
+    ...MOTION_OPTION_HELP, // 6.0 C
 };
 
 /** Each kind of object in words, for messages. */
@@ -495,6 +505,7 @@ const KIND_WORDS: Record<keyof typeof OPTION_HELP, MessageKey> = {
     riemann: 'beyond.text.kindRiemann',
     slopeField: 'beyond.text.kindSlopeField',
     solution: 'beyond.text.kindSolution',
+    ...MOTION_KIND_WORDS, // 6.0 C
 };
 
 /** A kind of object in the reader's words, for messages. */
@@ -515,12 +526,12 @@ function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, 
         }
         // Colours by height: a surface's option; anything else is told to take a colour.
         if (isMapWord(lower)) {
-            if (kind === 'surface') target.colormap = lower;
+            if (kind === 'surface' || kind === 'vectorField' || kind === 'trajectory') target.colormap = lower; // 6.0 C
             else b.problem(opt.at, msg('problems.text.colormapNotSurface', { map: lower, kind: kindWord(kind) }));
             continue;
         }
         const thick = THICKNESSES.find((t) => lower === t);
-        if (thick && kind !== 'text' && kind !== 'points' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'probability') {
+        if (thick && kind !== 'text' && kind !== 'points' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'probability' && kind !== 'restPoints') {
             target.thickness = thick;
             continue;
         }
@@ -533,7 +544,7 @@ function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, 
             target[raw[1]] = rawValue(raw[2]);
             continue;
         }
-        if (/^label\s/i.test(o) && kind !== 'text' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'distribution' && kind !== 'slopeField' && kind !== 'solution') {
+        if (/^label\s/i.test(o) && kind !== 'text' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'distribution' && kind !== 'slopeField' && kind !== 'solution' && !MOTION_KINDS.has(kind)) {
             target.label = textValue(o.slice(5));
             continue;
         }
@@ -808,7 +819,8 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
     const lines = text.split(LINE_BREAK);
     // Names first, so a line may use a name defined further down; and 3D charts read their tuples as (x, y, z).
     lines.forEach((raw) => {
-        const t = raw.trim();
+        // 6.0 C: `then plot g(x) = ...` names g as `plot g(x) = ...` does.
+        const t = raw.trim().replace(/^then\s+(?=[A-Za-z\\$])/i, '');
         const named = new RegExp(`^(${NAME})\\s*:(?!=)\\s*`).exec(t);
         // plot and draw only say what the line does: `plot z = ...` is a surface as `z = ...` is.
         const body = (named ? t.slice(named[0].length) : t).replace(/^(?:plot|draw)\s+(?:the\s+)?/i, '');
@@ -819,7 +831,7 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
         const def = new RegExp(`^(${NAME})\\s*\\(\\s*[A-Za-zθ]+\\s*(?:,\\s*[A-Za-z]+\\s*)?\\)\\s*=(?!=)`).exec(body);
         const slider = new RegExp(`^slider\\s+(${NAME})\\b`).exec(t);
         const markAt = new RegExp(`^mark\\s+(${NAME})\\s+at\\s+\\(`).exec(body);
-        const explicit = named?.[1] ?? def?.[1] ?? slider?.[1] ?? markAt?.[1] ?? rawName(t);
+        const explicit = named?.[1] ?? def?.[1] ?? slider?.[1] ?? markAt?.[1] ?? rawName(t) ?? ownName(body) ?? undefined; // ownName: 6.0 C
         if (explicit) b.explicit.add(explicit);
     });
     const traces: LineTrace[] = [];
@@ -831,7 +843,7 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
             const line = raw.replace(/\s+$/, '');
             const t = line.trim();
             const before = opts.trace ? b.snapshot() : null;
-            if (t && !t.startsWith('%') && !t.startsWith('//') && !t.startsWith('#')) statement(b, line);
+            if (t && !t.startsWith('%') && !t.startsWith('//') && !t.startsWith('#')) stepped(b, line); // 6.0 C: statement(b, line) in its step
             if (before) traces.push(b.traceSince(before, i + 1));
         });
     } finally {
@@ -982,6 +994,12 @@ function statement(b: Builder, line: string) {
         }
         case 'raw':
             return rawLine(b, rest);
+        // 6.0 C: the export shows every step side by side. Only the word alone: `frames + x = 3` stays a formula.
+        case 'frames':
+            if (rest.text.trim()) return formulaLine(b, name, body, options);
+            if (options.length) b.problem(options[0].at, msg('motion6.text.framesAlone'));
+            b.chart.frames = true;
+            return;
         case 'snippet':
             if (rest.text.trim()) b.problem(rest.at, msg('problems.text.standsAlone', { word: 'snippet' }));
             b.chart.documentSetup = false;
@@ -1169,6 +1187,7 @@ function pointList(b: Builder, name: string | null, rest: Piece, options: Piece[
 
 /** `mark ...`: points, crossings, corners, optima and integer points. */
 function mark(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
+    if (motionLine(b, name, readMotionMark(rest), options)) return; // 6.0 C
     const p = drop(rest, /^the\s+/i);
     const t = p.text;
     let m = /^where\s+(\S+)\s+and\s+(\S+)\s+(?:cross|meet|intersect)$/i.exec(t) ?? /^(?:crossings|intersections|crossing\s+points|intersection\s+points)\s+of\s+(\S+)\s+and\s+(\S+)$/i.exec(t);
@@ -1227,6 +1246,7 @@ function draw(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
     const t = rest.text.trim();
     if (!t) return b.problem(rest.at, msg('problems.text.drawTakes'));
     if (DEFINITION.test(t)) return formulaLine(b, name, rest, options);
+    if (motionLine(b, name, readMotionDraw(rest, b.is3D), options)) return; // 6.0 C
     if (drawBeyond(b, name, rest, options)) return;
     const m = DRAW_NOUN.exec(t);
     if (m) {
@@ -1481,6 +1501,8 @@ function beyondOption(b: Builder, kind: string, target: Data, opt: Piece): boole
         if (m) return patternOption(b, opt, target, m[1]);
         return false;
     }
+    // 6.0 C: vector fields, rest points, solutions of systems
+    if (MOTION_KINDS.has(kind)) return motionOption(kind, target, o, () => badRange(b, opt));
     return false;
 }
 
@@ -1713,4 +1735,49 @@ function bracketsPair(s: string): boolean {
         else if (c === ')' && --depth < 0) return false;
     }
     return depth === 0;
+}
+
+// ------------------------------------------------------------ 6.0 C: motion
+
+/**
+ * A line in its step: `then` before it starts the next step (a bare `then`
+ * only starts it), and every object the line makes arrives in the step the
+ * lines are in, unless it says its own (`step=3`).
+ */
+function stepped(b: Builder, line: string) {
+    const cut = thenPrefix(line);
+    let text = line;
+    if (cut >= 0) {
+        b.step++;
+        // Spaces keep the columns of the line's problems.
+        text = ' '.repeat(cut) + line.slice(cut);
+        if (!text.trim()) return;
+    }
+    const lists = [b.functions, b.surfaces, b.tools, b.annotations];
+    const before = lists.map((l) => l.length);
+    const problems = b.problems.length;
+    statement(b, text);
+    let made = false;
+    lists.forEach((l, k) => {
+        for (let i = before[k]; i < l.length; i++) {
+            made = true;
+            if (b.step > 0 && l[i].step === undefined) l[i].step = b.step;
+        }
+    });
+    if (cut >= 0 && !made && b.problems.length === problems) b.problem(0, msg('motion6.text.thenObject'));
+}
+
+/** A motion line read (src/motion6/text.ts) added as its tool; true when the line was one. */
+function motionLine(b: Builder, name: string | null, read: MotionRead | null, options: Piece[]): boolean {
+    if (!read) return false;
+    if (read.problem) {
+        b.problem(read.problem.at, msg(read.problem.key));
+        return true;
+    }
+    const own = name ?? (read.own ? b.claim(read.own.text, read.own.at) : null);
+    const fields: Data = { ...read.fields };
+    if (read.type === 'trajectory') fields.dim = b.is3D ? 3 : 2;
+    const tool = addTool(b, read.type, own, fields, [...read.extra, ...options], read.type);
+    if (read.nearest) pointAtNearest(b, tool, 'vectorField', 'field', undefined, read.extra[0]?.at ?? 0, 'motion6.text.theFieldMissing');
+    return true;
 }

@@ -8,6 +8,7 @@ import { GRID_OPACITY, opacityValue } from './opacity';
 import { AxisNumbers, TickAxis, numbersKeys, numbersMode } from './ticks';
 import { NoteTable, tableData } from './beyond/table';
 import { boxAspectOf, boxRatioOf } from './box3d';
+import { exportsFrames, framesTikz } from './motion6/frames'; // 6.0 C
 
 /** The six axis range keys. */
 export type RangeKey = 'xmin' | 'xmax' | 'ymin' | 'ymax' | 'zmin' | 'zmax';
@@ -276,6 +277,24 @@ export class SettingsManager {
      */
     generateTikzCode(ctx?: MathContext): string {
         const math = ctx || this.createMathContext();
+        // 6.0 C: `frames` exports every step side by side (src/motion6/frames.ts), each step with the sliders as they are.
+        const data = this.serialize();
+        if (exportsFrames(data)) {
+            return framesTikz(data, (step) => {
+                const settings = SettingsManager.fromJSON(step);
+                settings.noteTable = this.noteTable;
+                const own = settings.createMathContext({ memo: false });
+                // The sliders where they are now in `math`.
+                const env = math.envFor('value');
+                const values: Record<string, number> = {};
+                for (const p of this.parameters()) {
+                    const slot = env.scalar(p.name);
+                    if (slot && slot.kind === 'param') values[p.name] = slot.read();
+                }
+                own.setParamValues(values);
+                return settings.generateTikzCode(own);
+            });
+        }
         return this.getValue('dimension') === true ? generateTikz3D(this, math) : generateTikz2D(this, math);
     }
 

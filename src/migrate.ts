@@ -14,6 +14,8 @@ import { isColormap } from './colormaps';
 import { GRID_OPACITY } from './opacity';
 import { dollarMath, splitDomain } from './expr';
 import { t } from './i18n';
+// 6.0 C
+import { MOTION_PREFIX, completeMotionTool, keptStep, restPointsDefaults, trajectoryDefaults, vectorFieldDefaults } from './motion6/tools';
 import {
     Annotation,
     AnnotationAnchor,
@@ -36,6 +38,9 @@ import {
     RiemannTool,
     SlopeFieldTool,
     SolutionTool,
+    RestPointsTool,
+    TrajectoryTool,
+    VectorFieldTool,
     SegmentStyle,
     SegmentTool,
     Tool,
@@ -111,6 +116,8 @@ const TOOL_PREFIX: Record<ToolType, string> = {
     riemann: 'RS',
     slopeField: 'SF',
     solution: 'Y',
+    // 6.0 C
+    ...MOTION_PREFIX,
 };
 
 const PARAMETER_LETTERS = ['a', 'b', 'c', 'd', 'k', 'm', 'n', 'p', 'q', 'r', 's', 'u', 'v', 'w'];
@@ -865,6 +872,9 @@ function completeFunction(src: Record<string, unknown>): FunctionParameters {
     };
     if (typeof src.legendLabel === 'string') fn.legendLabel = src.legendLabel;
     if (src.hidden === true) fn.hidden = true;
+    // 6.0 C: the step it arrives in
+    const step = keptStep(src);
+    if (step) fn.step = step;
     return fn;
 }
 
@@ -888,6 +898,8 @@ function normalizeSurfaces(raw: unknown): Function3DParameters[] {
         if (typeof src.meshOpacity === 'number' && Number.isFinite(src.meshOpacity)) surface.meshOpacity = clamp(src.meshOpacity, 0, 1);
         if (typeof src.name === 'string') surface.name = src.name;
         if (src.hidden === true) surface.hidden = true;
+        const step = keptStep(src); // 6.0 C
+        if (step) surface.step = step;
         out.push(surface);
     }
     return out;
@@ -913,6 +925,8 @@ function normalizeAnnotations(raw: unknown, legacy: boolean): Annotation[] {
         };
         if (src.z !== undefined && src.z !== null) a.z = str(src.z, '0');
         if (src.hidden === true) a.hidden = true;
+        const step = keptStep(src); // 6.0 C
+        if (step) a.step = step;
         out.push(a);
     }
     return out;
@@ -978,7 +992,7 @@ export function normalizeTools(
         dim: opts.is3D ? 3 : 2,
     };
 
-    const pending: { index: number; type: ToolType; body: ToolBody; hidden: boolean; id: string; name: string }[] = [];
+    const pending: { index: number; type: ToolType; body: ToolBody; hidden: boolean; id: string; name: string; step?: number }[] = [];
     raw.forEach((item, index) => {
         if (!isRecord(item)) return;
         const converted = convertTool(item, ctx);
@@ -990,6 +1004,7 @@ export function normalizeTools(
             hidden: converted.hidden || item.hidden === true,
             id: typeof item.id === 'string' ? item.id : '',
             name: typeof item.name === 'string' ? item.name.trim() : '',
+            step: keptStep(item), // 6.0 C
         });
     });
 
@@ -1023,6 +1038,7 @@ export function normalizeTools(
     return pending.map((p, k) => {
         const tool: Tool = { ...p.body, id: ids[k], name: names[k] };
         if (p.hidden) tool.hidden = true;
+        if (p.step) tool.step = p.step; // 6.0 C
         return tool;
     });
 }
@@ -1080,8 +1096,11 @@ function convertTool(src: Record<string, unknown>, ctx: ConvertContext): { body:
             return legacyPoint3D(src);
         case 'segment3D':
             return legacySegment3D(src);
-        default:
-            return null;
+        default: {
+            // 6.0 C: vector fields, rest points, solutions of systems
+            const motion = completeMotionTool(src, ctx.dim);
+            return motion ? { body: motion, hidden: false } : null;
+        }
     }
 }
 
@@ -1652,6 +1671,13 @@ export function defaultTool(type: ToolType, opts: { is3D: boolean; tools: Tool[]
             return newSlopeField(opts);
         case 'solution':
             return newSolution(opts);
+        // 6.0 C
+        case 'vectorField':
+            return { ...vectorFieldDefaults(), ...identity('vectorField', opts) };
+        case 'restPoints':
+            return { ...restPointsDefaults(), ...identity('restPoints', opts) };
+        case 'trajectory':
+            return { ...trajectoryDefaults(opts.is3D ? 3 : 2), ...identity('trajectory', opts) };
     }
 }
 
@@ -1975,8 +2001,74 @@ function recipes2D(): Recipe[] {
             build: (ctx) => segmentRecipe(ctx, { path: '(1, 1); (4, 1)', style: 'brace', label: 'width' }),
         },
         ...beyondRecipes(in2D),
+        ...motionRecipes(in2D), // 6.0 C
         labelRecipe(in2D),
         sliderRecipe(in2D),
+    ];
+}
+
+// 6.0 C ---------------------------------------------------------- motion
+
+/** A point to drag for a new solution, called P when that name is free. */
+function dragPoint(ctx: RecipeContext, at: string, dim: 2 | 3): PointsTool {
+    const point: PointsTool = { ...newPoints(toolOpts(ctx)), dim, points: at, size: 'large' };
+    if (!chartNames(ctx).includes('P')) point.name = 'P';
+    return point;
+}
+
+/** A new vector field, called F when that name is free. */
+function newField(ctx: RecipeContext, fields: Partial<VectorFieldTool>): VectorFieldTool {
+    const field: VectorFieldTool = { ...vectorFieldDefaults(), ...identity('vectorField', toolOpts(ctx)), expression: '(y, -sin(x) - 0.25y)', ...fields };
+    if (!chartNames(ctx).includes('F')) field.name = 'F';
+    return field;
+}
+
+/** The recipes of vector fields, rest points and solutions of systems (2D). */
+function motionRecipes(in2D: (ctx: RecipeContext) => boolean): Recipe[] {
+    return [
+        {
+            id: 'vector-field',
+            section: 'Motion',
+            label: t('motion6.recipe.vectorField'),
+            hint: t('motion6.recipeHint.vectorField'),
+            available: in2D,
+            build: (ctx) => ({ kind: 'tool', tool: newField(ctx, {}) }),
+        },
+        {
+            id: 'vector-field-particles',
+            section: 'Motion',
+            label: t('motion6.recipe.particles'),
+            hint: t('motion6.recipeHint.particles'),
+            available: in2D,
+            build: (ctx) => ({ kind: 'tool', tool: newField(ctx, { particles: true }) }),
+        },
+        {
+            id: 'rest-points',
+            section: 'Motion',
+            label: t('motion6.recipe.restPoints'),
+            hint: t('motion6.recipeHint.restPoints'),
+            available: in2D,
+            build: (ctx) => {
+                const fields = ctx.tools.filter((x) => x.type === 'vectorField');
+                const field = fields.length ? null : newField(ctx, {});
+                const c = withTools(ctx, field ? [field] : []);
+                const rest: RestPointsTool = { ...restPointsDefaults(), ...identity('restPoints', toolOpts(c)), field: field ? field.name : fields[fields.length - 1].name };
+                return field ? { kind: 'items', tools: [field, rest], reveal: 1 } : { kind: 'tool', tool: rest };
+            },
+        },
+        {
+            id: 'trajectory',
+            section: 'Motion',
+            label: t('motion6.recipe.trajectory'),
+            hint: t('motion6.recipeHint.trajectory'),
+            available: in2D,
+            build: (ctx) => {
+                const point = dragPoint(ctx, '(1, 0)', 2);
+                const c = withTools(ctx, [point]);
+                const solution: TrajectoryTool = { ...trajectoryDefaults(2), ...identity('trajectory', toolOpts(c)), expression: '(y, -x)', through: point.name };
+                return { kind: 'items', tools: [point, solution], reveal: 1 };
+            },
+        },
     ];
 }
 
@@ -2175,6 +2267,26 @@ function recipes3D(): Recipe[] {
             hint: t('build.recipeHint.arrow3D'),
             available: in3D,
             build: (ctx) => segmentRecipe(ctx, { dim: 3, path: '(0, 0, 0); (1, 1, 1)', style: 'forward' }),
+        },
+        // 6.0 C: the solution of a 3D system
+        {
+            id: 'trajectory-3d',
+            section: '3D',
+            label: t('motion6.recipe.trajectory3d'),
+            hint: t('motion6.recipeHint.trajectory3d'),
+            available: in3D,
+            build: (ctx) => ({
+                kind: 'tool',
+                tool: {
+                    ...trajectoryDefaults(3),
+                    ...identity('trajectory', toolOpts(ctx)),
+                    expression: '(10(y - x), x(28 - z) - y, xy - 8z/3)',
+                    through: '(1, 1, 1)',
+                    to: '40',
+                    thickness: 'thin',
+                    colormap: 'viridis',
+                },
+            }),
         },
         labelRecipe(in3D),
         sliderRecipe(in3D),

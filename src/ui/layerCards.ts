@@ -56,6 +56,8 @@ import {
 } from './kit';
 import { t } from '../i18n';
 import type { MessageKey } from '../i18n';
+import { setStep, stepMenu, stepRow } from '../motion6/steprow'; // 6.0 C
+import { lastStep, stepOf } from '../motion6/steps'; // 6.0 C
 
 /** A tool object (mutated in place inside settings 'tools') or a label (index into settings 'annotations'). */
 export type LayerItem = { kind: 'tool'; tool: Tool } | { kind: 'label'; index: number };
@@ -176,6 +178,10 @@ const TOOL_KIND: Record<Tool['type'], MessageKey> = {
     riemann: 'beyond.kind.riemann',
     slopeField: 'beyond.kind.slopeField',
     solution: 'beyond.kind.solution',
+    // 6.0 C
+    vectorField: 'motion6.kind.vectorField',
+    restPoints: 'motion6.kind.restPoints',
+    trajectory: 'motion6.kind.trajectory',
 };
 
 // --------------------------------------------------------------- helpers
@@ -365,6 +371,11 @@ abstract class BaseCard implements LayerCardHandle {
     }
     protected rename(_to: string): void {
         // Labels have no name.
+    }
+    // 6.0 C
+    /** More items for the card's menu (a tool's: Show in a new step). */
+    protected extraMenu(_menu: Menu): void {
+        // Most cards have none.
     }
 
     /** Build the body, then sync everything once. Subclasses call this at the end of their constructor. */
@@ -640,6 +651,7 @@ abstract class BaseCard implements LayerCardHandle {
                 .setDisabled(index < 0 || index >= count - 1)
                 .onClick(() => this.actions.moveDown())
         );
+        this.extraMenu(menu); // 6.0 C
         menu.addSeparator();
         menu.addItem((i) =>
             i
@@ -823,6 +835,22 @@ export abstract class ToolCard<T extends Tool> extends BaseCard {
     protected position(): { index: number; count: number } {
         const tools = this.settingsList<Tool>('tools');
         return { index: tools.indexOf(this.tool), count: tools.length };
+    }
+
+    // 6.0 C: the step the tool arrives in (src/motion6/cards.ts).
+    protected finish(): void {
+        const row = stepRow(this.body, {
+            get: () => stepOf(this.tool),
+            set: (v) => setStep(this.tool, v),
+            last: () => lastStep(this.host.settings.serialize()),
+            changed: () => this.changed(),
+        });
+        this.onSync(() => row.sync());
+        super.finish();
+    }
+
+    protected extraMenu(menu: Menu): void {
+        stepMenu(menu, this.tool, this.host.settings.serialize(), () => this.structural());
     }
 
     protected syncShell(): void {

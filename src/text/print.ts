@@ -26,6 +26,10 @@ import { isColormap } from '../colormaps';
 import { looksLikeLatex } from '../latex';
 import { eventNames } from '../beyond/event';
 import { boxRatioOf } from '../box3d';
+// 6.0 C
+import { MOTION_KINDS, OWN_NAME_TYPES, keepThen, motionHead, motionOptions } from '../motion6/text';
+import { STEP_LISTS, hasSteps, stepsInOrder, withoutStep } from '../motion6/steps';
+import type { StepList } from '../motion6/steps';
 
 // ---------------------------------------------------------------- values
 
@@ -428,6 +432,7 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
             o.mark('axis', 'value');
         }
     } else if (BEYOND_HEADS[type]) head = BEYOND_HEADS[type](full, o, ctx);
+    else if (MOTION_KINDS.has(type)) head = motionHead(full, o, { is3D: ctx.is3D, shown: ctx.shown.has(name) }); // 6.0 C
     // `title: ...` would read as a title line, so such a name only fits a raw line.
     if (!head || !NAME_RE.test(name) || /^(title|xlabel|ylabel|zlabel)$/i.test(name)) return raw('tool', min);
     if (type === 'region') {
@@ -447,11 +452,15 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
         o.take('fillOpacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
     } else if (BEYOND_HEADS[type]) {
         beyondOptions(type, o);
+    } else if (MOTION_KINDS.has(type)) {
+        motionOptions(type, o, full); // 6.0 C
     } else {
         o.common();
         o.label();
     }
     const line = withOptions(head, o.finish());
+    // 6.0 C: a vector field's line holds its name (F(x, y) = ...).
+    if (OWN_NAME_TYPES.has(type)) return line;
     return ctx.shown.has(name) ? `${name}: ${line}` : line;
 }
 
@@ -488,6 +497,8 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
         print: (m) => (m.coordinateSystem === 'polar' ? ['polar'] : 'coordinateSystem' in m ? [`set coordinateSystem = ${JSON.stringify(m.coordinateSystem)}`] : []),
     },
     { keys: ['documentSetup'], print: (m) => (m.documentSetup === false ? ['snippet'] : 'documentSetup' in m ? [`set documentSetup = ${JSON.stringify(m.documentSetup)}`] : []) },
+    // 6.0 C: the export shows every step side by side.
+    { keys: ['frames'], print: (m) => (m.frames === true ? ['frames'] : 'frames' in m ? [`set frames = ${JSON.stringify(m.frames)}`] : []) },
     {
         keys: ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'],
         print: (m, f) => {
@@ -678,6 +689,8 @@ function pairs(min: Data, full: Data, key: ObjectList): Array<{ min: Data; full:
 interface Printed {
     chart: string[];
     objects: Record<ObjectList, string[]>;
+    /** 6.0 C: the step of every object, when `then` lines say them (each list in step order). */
+    steps?: Record<StepList, number[]>;
     /** A printed line in the words the plugin writes (a person's own words, when they set some). */
     say: (line: string) => string;
 }
@@ -690,7 +703,10 @@ function sayer(full: Data, builtin = false): (line: string) => string {
     return (line) => writeWords(line, words, names);
 }
 
-function printParts(data: Data, builtin = false): Printed {
+function printParts(source: Data, builtin = false): Printed {
+    // 6.0 C: with each list in step order, the steps are `then` lines (join), not options.
+    const staged = hasSteps(source) ? stepsInOrder(canonicalData(source)) : null;
+    const data = staged ? withoutSteps(source) : source;
     const min = minimize(data);
     const full = canonicalData(data);
     const is3D = full.dimension === true;
@@ -717,7 +733,27 @@ function printParts(data: Data, builtin = false): Printed {
             annotations: pairs(min, full, 'annotations').map((p) => say(labelLine(p.min, p.full))),
         },
         say,
+        ...(staged ? { steps: staged } : {}),
     };
+}
+
+/** 6.0 C: the chart without the steps of its objects (`then` lines write them). */
+function withoutSteps(data: Data): Data {
+    const out: Data = { ...data };
+    for (const key of STEP_LISTS) if (Array.isArray(data[key])) out[key] = list(data[key]).map(withoutStep);
+    return out;
+}
+
+/** 6.0 C: chart lines and sliders, then the objects step by step, `then` before the first line of every later step. */
+function joinSteps(p: Printed, steps: Record<StepList, number[]>): string {
+    const out = [...p.chart, ...p.objects.parameters];
+    const last = Math.max(0, ...STEP_LISTS.flatMap((k) => steps[k]));
+    for (let s = 0; s <= last; s++) {
+        const lines = STEP_LISTS.flatMap((k) => p.objects[k].filter((_, i) => (steps[k][i] ?? 0) === s));
+        if (s > 0 && !lines.length) out.push('then');
+        lines.forEach((l, i) => out.push(s > 0 && i === 0 ? `then ${l}` : l));
+    }
+    return out.join('\n');
 }
 
 /** A line that would end the code block it sits in (``` or ~~~ at its start). */
@@ -731,7 +767,7 @@ function rawLine(key: ObjectList, item: Data): string {
     return raw(kind, copy);
 }
 
-const join = (p: Printed) => [...p.chart, ...LIST_NAMES.flatMap((k) => p.objects[k])].join('\n');
+const join = (p: Printed) => (p.steps ? joinSteps(p, p.steps) : [...p.chart, ...LIST_NAMES.flatMap((k) => p.objects[k])].join('\n')); // steps: 6.0 C
 
 /** The chart a text reads as, in a form that compares equal whatever order the keys came in; `builtin`: only the built-in words. */
 function readAs(text: string, builtin = false): string {
@@ -921,7 +957,8 @@ function rewrite(oldText: string, data: Data, form: Form): string {
             if (!f || placed.has(k)) continue;
             placed.add(k);
             const was = before.get(t.line);
-            out.push({ text: was && withoutId(was) === withoutId(f.item) ? source : indent + keepForm(source, f.line), list: f.list, key: k });
+            // keepThen: 6.0 C, a changed line stays in its step.
+            out.push({ text: was && withoutId(was) === withoutId(f.item) ? source : indent + keepThen(source, keepForm(source, f.line)), list: f.list, key: k });
             continue;
         }
         if (t.chart.length) {

@@ -36,6 +36,10 @@ import { rewordNote } from './src/text/reword';
 import { ChartWordsModal } from './src/ui/wordsModal';
 import { LANGUAGE_NAMES, languageSetting, resolveLanguage, setLanguage, t } from './src/i18n';
 import type { Extension } from '@codemirror/state';
+// 6.0 C
+import { MotionPlayer } from './src/motion6/player';
+import { playerFor } from './src/motion6/host';
+import { atStep } from './src/motion6/steps';
 
 type FenceTag = 'easy-tikz' | 'tikz';
 type Align = 'left' | 'center' | 'right';
@@ -1142,6 +1146,11 @@ class InlineChart {
     private table: NoteTable | null | undefined = undefined;
     /** Line of the block's opening fence when the table was read (1-based), to find the block again. */
     private blockLine = 0;
+    // 6.0 C
+    /** Steps and the clock (src/motion6/player.ts); null for a chart that does not move. */
+    private player: MotionPlayer | null = null;
+    /** The chart at a step before its last: its own settings and context, made from the chart's. */
+    private stepView: { step: number; from: MathContext; manager: SettingsManager; math: MathContext } | null = null;
 
     constructor(
         plugin: EasyTikzPlugin,
@@ -1229,6 +1238,8 @@ class InlineChart {
         }
         this.issuesEl = this.wrapper.createDiv({ cls: 'etz-inline-issues tikz-hidden' });
 
+        // 6.0 C: a chart with steps or objects that move by themselves gets a player.
+        this.player = playerFor(this.manager.serialize(), { draw: (_frame, clock) => this.drawMotion(clock), watched: () => this.box });
         try {
             this.render('full');
         } catch (e) {
@@ -1240,6 +1251,7 @@ class InlineChart {
 
         if (!this.live) this.buildHoverControls();
         this.buildStrip();
+        this.player?.watch(); // 6.0 C
 
         liveCharts.add(this);
         this.syncNoteLinks();
@@ -1279,11 +1291,14 @@ class InlineChart {
         if (quality === 'full') this.cancelFrames();
         let issues: SceneIssue[];
         try {
-            const math = this.math;
+            // 6.0 C: the chart at the step shown, at the clock's time.
+            const view = this.motionView();
+            const math = view.math;
             math.setParams(this.params);
             // Ranges may use parameters, so the config is rebuilt every frame.
-            const config = this.manager.toRendererConfig(math);
+            const config = view.manager.toRendererConfig(math);
             config.parameters = this.params;
+            if (this.player) config.motion = this.player.frame();
             this.applySize(config);
             issues = config.is3D ? this.render3D(config, math, quality) : this.render2D(config, math, quality);
             // Hidden tools that nothing reads affect nothing: no problem line for them.
@@ -1358,6 +1373,8 @@ class InlineChart {
         this.stopGlide();
         this.cancelFrames();
         this.popIn?.stop();
+        this.player?.destroy(); // 6.0 C
+        this.player = null;
         liveCharts.delete(this);
         this.syncNoteLinks();
         this.renderer3d = null;
@@ -1596,7 +1613,10 @@ class InlineChart {
      * editable value; up to STRIP_ROWS rows, then "Show N more".
      */
     private buildStrip() {
-        if (!this.params.length || this.manager.getValue('showSlidersInNote') === false) return;
+        if (!this.params.length || this.manager.getValue('showSlidersInNote') === false) {
+            this.buildMotionStrip(); // 6.0 C
+            return;
+        }
         const strip = this.wrapper.createDiv({ cls: 'etz-inline-strip etz-tokens' });
         // Keep pointer and key events inside the strip: Live Preview would
         // otherwise move the cursor into the block source mid-drag.
@@ -1609,6 +1629,7 @@ class InlineChart {
         strip.setAttr('aria-labelledby', name.id);
 
         const rows = strip.createDiv({ cls: 'etz-inline-rows' });
+        this.player?.controls(rows); // 6.0 C: Play and steps above the sliders
         const extraRows: HTMLElement[] = [];
         this.sliders = this.params.map((p, i) => {
             const row = rows.createDiv({ cls: 'etz-inline-row' });
@@ -1666,6 +1687,56 @@ class InlineChart {
             onClick: () => this.resetParams(),
         });
         this.updateReset();
+    }
+
+    // ------------------------------------------------------ 6.0 C: motion
+
+    /** A strip of only the player's row, for a chart that moves but shows no sliders (print hides it with the strip). */
+    private buildMotionStrip() {
+        if (!this.player) return;
+        const strip = this.wrapper.createDiv({ cls: 'etz-inline-strip etz-tokens etz-motion6-strip' });
+        for (const type of ['pointerdown', 'mousedown', 'click', 'keydown']) {
+            strip.addEventListener(type, (e) => e.stopPropagation());
+        }
+        this.player.controls(strip.createDiv({ cls: 'etz-inline-rows' }));
+    }
+
+    /** The chart as drawn now: at the step the player shows (objects of later steps hidden), else the chart itself. */
+    private motionView(): { manager: SettingsManager; math: MathContext } {
+        const step = this.player ? this.player.shownStep() : null;
+        if (step === null) {
+            this.stepView = null;
+            return { manager: this.manager, math: this.math };
+        }
+        const v = this.stepView;
+        if (v && v.step === step && v.from === this.math) return v;
+        const manager = SettingsManager.fromJSON(atStep(this.manager.serialize(), step));
+        manager.noteTable = this.table;
+        this.stepView = { step, from: this.math, manager, math: manager.createMathContext() };
+        return this.stepView;
+    }
+
+    /** The player moved: another step (the chart drawn whole), or a frame of the clock (drawn quickly). */
+    private drawMotion(clock: boolean) {
+        if (!this.onPage()) return;
+        if (!clock) {
+            this.stopGlide();
+            this.render('full');
+            return;
+        }
+        try {
+            const view = this.motionView();
+            view.math.setParams(this.params);
+            const config = view.manager.toRendererConfig(view.math);
+            config.parameters = this.params;
+            if (this.player) config.motion = this.player.frame();
+            this.applySize(config);
+            if (config.is3D) this.render3D(config, view.math, 'draft');
+            else this.render2D(config, view.math, 'draft');
+        } catch {
+            // A frame that cannot be drawn is skipped; the last one stays.
+        }
+        this.popIn?.apply(this.chartEl, this.animated());
     }
 
     /** The slider rows again, for the sliders the chart has now. */

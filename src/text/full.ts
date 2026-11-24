@@ -817,7 +817,7 @@ function axisWords(cmd: Command, line: number, problems: TextProblem[]): Mapped[
         const tick = /^([xyz])tick( distance)?$/.exec(o.key);
         const label = /^([xyz])label$/.exec(o.key);
         if (o.value === null) {
-            if (['3d', 'cube', 'polar', 'snippet'].includes(o.key)) say(o.key, o.at);
+            if (['3d', 'cube', 'polar', 'snippet', 'frames'].includes(o.key)) say(o.key, o.at); // frames: 6.0 C
             else if (o.key === 'hide axis') say('no axes', o.at);
             else if (o.key === 'axis equal' || o.key === 'axis equal image') say('equal scale', o.at);
             else unknown(o);
@@ -886,6 +886,13 @@ function axisWords(cmd: Command, line: number, problems: TextProblem[]): Mapped[
 
 /** One line of a Full LaTeX block in words: none, one, or (an \axis line) several. */
 function lineWords(line: string, no: number, problems: TextProblem[]): Mapped[] {
+    // 6.0 C: \then before a command (or alone) starts the next step, as `then` does in words.
+    const then = /^(\s*)\\then(?![A-Za-z])\s*/.exec(line);
+    if (then) {
+        const rest = lineWords(' '.repeat(then[0].length) + line.slice(then[0].length), no, problems);
+        const head = new Mapped().put(rest.length && rest[0].text ? 'then ' : 'then', then[1].length);
+        return [head.append(rest[0] ?? new Mapped()), ...rest.slice(1)];
+    }
     const trimmed = line.trim();
     const lead = line.length - line.trimStart().length;
     if (!trimmed) return [new Mapped()];
@@ -921,6 +928,11 @@ function lineWords(line: string, no: number, problems: TextProblem[]): Mapped[] 
             return [nodeWords(cmd)];
         case 'raw':
             return [rawWords(cmd) ?? genericWords(cmd)];
+        // 6.0 C: vector fields, rest points, solutions of systems
+        case 'vectorfield':
+        case 'restpoints':
+        case 'solution':
+            return [motionWords(cmd)];
         default:
             return [genericWords(cmd)];
     }
@@ -1275,6 +1287,14 @@ function nameOf(body: string): { name: string | null; rest: string } {
 function objectFull(raw: string): string | null {
     const line = stripMathDollars(raw).trim();
     if (!line) return null;
+    // 6.0 C: `then` before an object line is \then before its command; a bare `then` is \then alone.
+    const then = /^then(?![A-Za-z0-9_(])\s*/i.exec(line);
+    if (then && !/^(?:[*/^=<>!]|[-+]\s)/.test(line.slice(then[0].length))) {
+        const rest = line.slice(then[0].length);
+        if (!rest) return '\\then';
+        const inner = objectFull(rest) ?? genericFull(rest);
+        return inner ? `\\then ${inner}` : null;
+    }
     const rawLine = /^raw\s+(tool|function|surface|label|slider)\s+(\{.*\})$/i.exec(line);
     if (rawLine) return command('raw', rawLine[1].toLowerCase(), [], rawLine[2]);
     if (/^slider\s/i.test(line)) return sliderFull(line);
@@ -1282,6 +1302,8 @@ function objectFull(raw: string): string | null {
     const { name, rest } = nameOf(split.body);
     const own = name ? `name=${name}` : '';
     const options = split.options;
+    const motion = motionFull(own, rest, options); // 6.0 C
+    if (motion !== undefined) return motion;
     if (DEFINITION.test(rest)) return command('plot', own, options.map((o) => optionFull(o, SURFACE_HEAD.test(rest) ? 'surface' : 'function')), rest);
     const kw = /^([A-Za-z0-9]+)\b\s*([\s\S]*)$/.exec(rest);
     const word = kw ? kw[1].toLowerCase() : '';
@@ -1332,7 +1354,7 @@ function verbFor(list: ObjectList, item: Data | undefined): string | null {
 }
 
 /** A line that starts a chart line in words (show, axes, title, set, x numbers, ...). */
-const CHART_LINE = /^(?:(?:view|show|axes|no|with|grid|size|equal|polar|3d|cube|box|snippet|variables|set|title|xlabel|ylabel|zlabel)(?![A-Za-z0-9_(])|[xyz]\s+numbers\b)/i;
+const CHART_LINE = /^(?:(?:view|show|axes|no|with|grid|size|equal|polar|3d|cube|box|snippet|frames|variables|set|title|xlabel|ylabel|zlabel)(?![A-Za-z0-9_(])|[xyz]\s+numbers\b)/i; // frames: 6.0 C
 
 const listItems = (v: unknown): Data[] => (Array.isArray(v) ? (v.filter((x) => x && typeof x === 'object' && !Array.isArray(x)) as Data[]) : []);
 
@@ -1389,6 +1411,7 @@ function axisFull(fields: string[], chart: Data): string[] {
     });
     take('coordinateSystem', (v) => (v === 'polar' ? opts.push('polar') : generic('coordinateSystem')));
     take('documentSetup', (v) => (v === false ? opts.push('snippet') : generic('documentSetup')));
+    take('frames', (v) => (v === true ? opts.push('frames') : generic('frames'))); // 6.0 C
     for (const k of ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax']) {
         take(k, (v) => (typeof v === 'string' || typeof v === 'number' ? opts.push(`${k}=${encValue(String(v).trim())}`) : sets.push(setFull(k, v))));
     }
@@ -1619,4 +1642,76 @@ export function guideWithLanguage(guide: string): string {
         'They write new charts in Full LaTeX (Settings, Chart language): write new blocks in that form, `\\begin{chart}` to `\\end{chart}` with one command per line (see "Full LaTeX" above). The plugin reads both forms, and a chart keeps the form its block has.',
         '',
     ].join('\n');
+}
+
+// ------------------------------------------------------------ 6.0 C: motion
+
+/**
+ * \vectorfield[particles, streamlines, colormap/viridis]{F(x, y) = (y, -x)},
+ * \restpoints[labelled]{F} and \solution[through=P, t=0:10]{(y, -x)} in words:
+ * `draw the vector field ...`, `mark the rest points of F`, `draw the
+ * solution of ... through P | for t from 0 to 10`.
+ */
+function motionWords(cmd: Command): Mapped {
+    const m = new Mapped();
+    const opts = cmd.options;
+    namedInto(m, opts);
+    const arg = argOf(cmd);
+    const kind = cmd.name.toLowerCase();
+    if (kind === 'restpoints') {
+        m.put(arg.text ? 'mark the rest points of ' : 'mark the rest points', cmd.at).copy(arg.text, arg.at);
+        barInto(m, opts, 'other', 'x', new Set(['name']));
+        return m;
+    }
+    if (kind === 'vectorfield') {
+        m.put('draw the vector field ', cmd.at);
+        mathInto(m, arg.text, arg.at);
+        barInto(m, opts, 'other', 'x', new Set(['name']));
+        return m;
+    }
+    m.put('draw the solution of ', cmd.at);
+    mathInto(m, arg.text, arg.at);
+    const through = valueOf(opts, 'through');
+    if (through) {
+        const v = inner(through.value ?? '', through.valueAt);
+        const points = splitCommas(v.text, v.at).filter((p) => p.text);
+        m.put(' through ', through.at);
+        points.forEach((p, i) => {
+            if (i) m.put(i === points.length - 1 ? ' and ' : ', ', p.at);
+            m.copy(p.text, p.at);
+        });
+    }
+    const t = valueOf(opts, 't');
+    const extra: Mapped[] = [];
+    const r = t ? rangeOf(t.value ?? '', t.valueAt) : null;
+    if (t && r) extra.push(new Mapped().put('for t from ', t.at).copy(r[0].text, r[0].at).put(' to ', t.valueAt).copy(r[1].text, r[1].at));
+    barInto(m, r ? opts.filter((o) => o !== t) : opts, 'other', 'x', new Set(['name', 'through']), extra);
+    return m;
+}
+
+/** A motion line in words as its Full LaTeX command; undefined for any other line, null when no command fits it. */
+function motionFull(own: string, rest: string, options: string[]): string | null | undefined {
+    const opt = (o: string): string => {
+        const c = /^colou?red\s+by\s+(?:length|size|time)(?:\s+in\s+([a-z]+))?$/i.exec(o.trim());
+        if (c) return `colormap/${(c[1] ?? 'viridis').toLowerCase()}`;
+        if (/^moving\s+particles$/i.test(o.trim())) return 'particles';
+        return optionFull(o, 'other');
+    };
+    const field = /^draw\s+the\s+vector\s+field\s+(?:of\s+)?([\s\S]+)$/i.exec(rest);
+    if (field) return command('vectorfield', own, options.map(opt), field[1].trim());
+    const restPoints = /^mark\s+the\s+rest\s+points(?:\s+of\s+([A-Za-z][A-Za-z0-9_]*))?$/i.exec(rest);
+    if (restPoints) return command('restpoints', own, options.map(opt), restPoints[1] ?? null);
+    const sol = /^draw\s+the\s+solutions?\s+of\s+([\s\S]+?)\s+through\s+([\s\S]+)$/i.exec(rest);
+    if (!sol || NAME_RE.test(sol[1].trim())) return undefined;
+    const points = splitTop(sol[2], ',').flatMap((p) => splitTop(p.text, ' and ')).map((p) => p.text).filter((p) => p);
+    const list = points.length === 1 && bareOk(points[0]) ? points[0] : `{${points.join(', ')}}`;
+    if (!bracedOk(points.join(', '))) return null;
+    const out = [`through=${list}`];
+    for (const o of options) {
+        const r = /^for\s+t\s+from\s+(.+)$/i.exec(o.trim());
+        const range = r ? wordsRange(r[1]) : null;
+        if (range) out.push(`t=${encBound(range[0])}:${encBound(range[1])}`);
+        else out.push(opt(o));
+    }
+    return command('solution', own, out, sol[1].trim());
 }

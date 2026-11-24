@@ -24,6 +24,7 @@ import { cloneData } from '../util';
 import { LayerCardActions, LayerCardHandle, createLayerCard } from './layerCards';
 // The cards of data, probability, Riemann sums and slope fields register themselves with the layer cards (5.0).
 import '../beyond/cards';
+import '../motion6/cards'; // 6.0 C
 import { CardUiState, FunctionCardHandle, createFunctionCard, createSurfaceCard } from './functionCards';
 import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, textButton, trapEscape } from './kit';
 import { PickerContent, PickerGroup, PickerItem, addPicker } from './addPicker';
@@ -112,6 +113,7 @@ const SECTION_ICONS: Record<string, string> = {
     Data: 'table',
     Probability: 'bar-chart-2',
     Calculus: 'sigma',
+    Motion: 'wind', // 6.0 C
 };
 
 /** More words that find a recipe in the + Add picker (English, as people search): vector finds Arrow. */
@@ -147,6 +149,12 @@ const RECIPE_WORDS: Record<string, string> = {
     probability: 'p value area shade',
     'riemann-sum': 'integral rectangles left right midpoint',
     'slope-field': 'ode differential equation direction',
+    // 6.0 C
+    'vector-field': 'quiver flow phase portrait ode system',
+    'vector-field-particles': 'flow animation moving streamlines phase portrait',
+    'rest-points': 'equilibrium equilibria fixed stationary stable saddle',
+    trajectory: 'ode system orbit phase portrait solution path',
+    'trajectory-3d': 'lorenz attractor ode system orbit',
 };
 
 /** Menu heading per recipe section (Functions reads Surfaces in 3D charts). */
@@ -162,6 +170,7 @@ const SECTION_TITLES: Record<string, MessageKey> = {
     Data: 'beyond.section.data',
     Probability: 'beyond.section.probability',
     Calculus: 'beyond.section.calculus',
+    Motion: 'motion6.section', // 6.0 C
 };
 
 /** One-click links under the starter examples: [text key, recipe id]. */

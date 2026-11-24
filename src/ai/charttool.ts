@@ -24,7 +24,7 @@ import { inEnglish } from '../i18n';
 export type { Data };
 export { canonical, clone, minimize };
 
-const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution'];
+const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory']; // vectorField, restPoints, trajectory: 6.0 C
 /** Keys a block may carry that the editor's defaults do not list: how the chart sits in the note. */
 const DISPLAY_KEYS = ['displayWidth', 'displayAlign'];
 
@@ -136,6 +136,13 @@ function knownKeys(part: string, defaults: Record<string, Data>): Set<string> {
         keys.add('colormap');
         keys.add('meshOpacity');
     }
+    // 6.0 C: the step an object arrives in; a chart's frames and still time; colour maps of the motion tools.
+    if (part === 'function' || part === 'surface' || part === 'label' || TOOL_TYPES.includes(part as ToolType)) keys.add('step');
+    if (part === 'chart') {
+        keys.add('frames');
+        keys.add('stillTime');
+    }
+    if (part === 'vectorField' || part === 'trajectory') keys.add('colormap');
     return keys;
 }
 
