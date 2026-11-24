@@ -491,6 +491,15 @@ const SCORES: NoteTable = {
 };
 
 /** Charts of data, probability, Riemann sums and slope fields, written as text, with the note's table where they read one. */
+// 6.0 C: motion: a vector field coloured by length with still particles, streamlines and labelled rest points;
+// every step as a frame (a coloured solution among them); the Lorenz system in 3D coloured by time; frames as a snippet.
+const MOTION6: Record<string, string> = {
+    field: 'show x from -4 to 4 and y from -3 to 3\ndraw the vector field $F(x, y) = (y, -\\sin x - 0.25y)$, coloured by length, with moving particles and streamlines\nmark the rest points of F, labelled',
+    frames: 'frames\nshow x from -4 to 4 and y from -3 to 3\nmark P at (1, 0)\nplot f(x) = sin(x)\nthen draw the solution of $\\dot{p} = (y, -x)$ through P for t from 0 to 6, coloured by time\nthen draw the vector field (y, -x), with streamlines',
+    lorenz: '3d\nshow x from -25 to 25 and y from -30 to 30 and z from 0 to 50\ndraw the solution of $\\dot{p} = (10(y - x), x(28 - z) - y, xy - \\frac{8}{3}z)$ through (1, 1, 1) for t from 0 to 72, coloured by time',
+    framesSnippet: 'snippet\nframes\nplot f(x) = x^2\nthen shade between f and 0 from x = 0 to 1 pattern dots',
+};
+
 const BEYOND: Record<string, { text: string; table?: NoteTable | null }> = {
     // The table's points with labels, bars, a line and the regression line with its equation; the headers name the axes.
     dataTable: {
@@ -676,6 +685,7 @@ if (!hasLatex) {
     cases.push({ name: 'snippet-2d', data: { ...STRESS.pgfmath, documentSetup: false, tools: [...(STRESS.pgfmath.tools as unknown[]), ...(STRESS.hole.tools as unknown[])] } });
     cases.push({ name: 'snippet-3d', data: { ...STRESS.surface3d, documentSetup: false } });
     for (const [k, c] of Object.entries(BEYOND)) cases.push({ name: `beyond-${k}`, data: parseChartText(c.text).data, table: c.table });
+    for (const [k, text] of Object.entries(MOTION6)) cases.push({ name: `motion6-${k}`, data: parseChartText(text).data }); // 6.0 C
 
     const jobs = pool(
         cases.map((c) => ({
