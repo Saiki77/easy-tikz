@@ -1154,7 +1154,8 @@ function rewrite(oldText: string, data: Data, form: Form): string {
     }
     if (stepped) writeSteps(out, fresh, form, printed.say); // 6.0 F1
 
-    keepNames(out, fresh, form);
+    // 6.0 AI: a line that cannot say its object in words is written raw, as the whole print writes it.
+    keepNames(out, fresh, form, (f) => form.object(rawLine(f.list, list(newMin[f.list]).find((m) => m.name === f.item.name) ?? f.item)));
     return out.map((l) => l.text).join('\n');
 }
 
@@ -1251,20 +1252,31 @@ function letSpot(out: OutLine[], fresh: Map<string, Fresh>, fallback: number): n
  * line says what it means: a tool only renamed gets `R2: ` in front, any
  * other line its printed form.
  */
-function keepNames(out: OutLine[], fresh: Map<string, Fresh>, form: Form) {
+function keepNames(out: OutLine[], fresh: Map<string, Fresh>, form: Form, raw: (f: Fresh) => string) {
+    // 6.0 AI: lines written anew once that still read as another object (a shade whose distribution went: the printed line points at the nearest one).
+    const tried = new Set<OutLine>();
     for (let round = 0; round < 3; round++) {
         const parsed = parseChartText(out.map((l) => l.text).join('\n'), { trace: true });
         const read = canonicalData(parsed.data);
         let fixed = false;
-        (parsed.lines ?? []).forEach((trace, i) => {
-            const entry = out[i];
+        // 6.0 AI: the entry each text line starts (an entry may hold several lines: a python block).
+        const entryAt = new Map<number, OutLine>();
+        let at = 1;
+        for (const l of out) {
+            entryAt.set(at, l);
+            at += l.text.split('\n').length;
+        }
+        (parsed.lines ?? []).forEach((trace) => {
+            const entry = entryAt.get(trace.line);
             const f = entry?.key ? fresh.get(entry.key) : undefined;
-            if (!f || !trace.object || trace.object.list !== f.list || f.list === 'annotations' || f.list === 'parameters') return;
+            if (!entry || !f || !trace.object || trace.part || trace.object.list !== f.list || f.list === 'annotations' || f.list === 'parameters') return;
             const item = list(read[f.list])[trace.object.index];
             if (!item || withoutId(item) === withoutId(f.item)) return;
             const indent = /^\s*/.exec(entry.text)?.[0] ?? '';
             const renamed = f.list === 'tools' && withoutId({ ...item, name: f.item.name }) === withoutId(f.item);
-            const line = renamed ? indent + form.named(entry.text.trimStart(), str(f.item.name)) : indent + f.line;
+            let line = renamed ? indent + form.named(entry.text.trimStart(), str(f.item.name)) : indent + f.line;
+            if (tried.has(entry) && !entry.text.includes('\n')) line = indent + raw(f); // 6.0 AI
+            tried.add(entry);
             if (line === entry.text) return;
             entry.text = line;
             fixed = true;

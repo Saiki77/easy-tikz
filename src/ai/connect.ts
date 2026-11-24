@@ -127,6 +127,8 @@ export function agentsSection(configDir: string, port: number, version = 'main')
         `- While Obsidian runs with AI access switched on, the plugin's AI server answers at ${base}. Every request needs the token: \`?token=<aiToken>\` or the header \`Authorization: Bearer <aiToken>\`, with aiToken from \`${configDir}/plugins/easy-tikz/data.json\`.`,
         `- Read the guide first: \`GET ${base}/guide\`. Then check every chart with \`POST ${base}/tools/check_chart\` and add it with \`POST ${base}/tools/add_chart\` (JSON body \`{"chart": "<the block's lines>", "note": "..."}\`).`,
         `- When the server does not answer, follow https://github.com/Saiki77/easy-tikz/blob/${version}/docs/ai.md (the guide of the installed version) and write the block into the note yourself.`,
+        // 6.0 AI
+        '- Since version 6 a chart can also hold let names (vectors, matrices, complex numbers), sums, sets on an axis, steps that play (`then`), vector fields and systems in 2D and 3D, a matrix that moves the grid, orbits, fractals and coloured planes, Fourier circles, GeoGebra input lines and a `python:` block (NumPy and matplotlib style). The guide has a section for each; `check_chart` reports what they compute.',
         '- Never change other blocks than the ones you were asked about.',
         END,
     ].join('\n');

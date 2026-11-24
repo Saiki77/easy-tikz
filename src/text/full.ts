@@ -2026,7 +2026,7 @@ function linearFull(own: string, rest: string, options: string[]): string | null
 /** The commands of part E, by tool type. */
 const ITERATE_COMMANDS: Record<string, string> = { orbit: 'orbit', cobweb: 'cobweb', bifurcation: 'bifurcation', newton: 'newton', colourPlane: 'colourplane', fourierCircles: 'circles' };
 /** Keys of these commands that are no name a recurrence reads. */
-const ITERATE_KEYS = new Set(['name', 'steps', 'from', 'to', 'opacity', 'color', 'colour', 'colormap', 'label', 'thickness', 'size', 'step']);
+const ITERATE_KEYS = new Set(['name', 'steps', 'from', 'to', 'opacity', 'color', 'colour', 'colormap', 'label', 'thickness', 'size', 'step', 'speed']); // 6.0 AI: speed (a traced orbit)
 
 /**
  * \orbit[z_0=0, c=P, steps=40, as a path]{z_{n+1} = z_n^2 + c}, \cobweb[from=0.2, steps=80]{x_{n+1} = f(x_n)},
