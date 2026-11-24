@@ -179,6 +179,9 @@ test('full: the demo chart prints exactly in the approved form, and both forms a
     assert.equal(wordsToFull(DEMO_WORDS), DEMO_FULL);
 });
 
+/** 6.0: the commands of the new lines (src/text/full.ts), commands of their own like \plot. */
+const COMMANDS_6 = ['let', 'then', 'vectorfield', 'restpoints', 'solution', 'transform', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourplane', 'circles'];
+
 test('full: every built-in chart prints in Full LaTeX, a command on every line, and reads back as the same chart', () => {
     const failures: string[] = [];
     const charts = builtInCharts();
@@ -193,7 +196,7 @@ test('full: every built-in chart prints in Full LaTeX, a command on every line, 
             const exact = text.split('\n').filter((l) => /^\\(raw|set)\b/.test(l));
             if (exact.length) failures.push(`${id}: lines written exactly instead of in commands: ${exact.join(' | ')}`);
             // \data{(1, 52), (2, 55)}: the points of a chart's data line (5.0).
-            const other = commands(text).filter((c) => !['axis', 'slider', 'plot', 'shade', 'draw', 'mark', 'node', 'data'].includes(c));
+            const other = commands(text).filter((c) => !['axis', 'slider', 'plot', 'shade', 'draw', 'mark', 'node', 'data', ...COMMANDS_6].includes(c));
             if (other.length) failures.push(`${id}: generic commands ${other.join(', ')}\n${text}`);
         }
     }

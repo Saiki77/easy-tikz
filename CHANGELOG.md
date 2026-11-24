@@ -4,6 +4,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.0.0] - 2026-11-24
+
+Every idea is a picture. Formulas take complex numbers, vectors, matrices and sums; a matrix moves the plane; vector fields flow; orbits, cobwebs and fractals colour the plane; charts play in steps; and a click on a curve asks it questions.
+
+### Added
+
+- **Values in every formula** (`src/values/`). Complex numbers (`-0.8 + 0.156i`, `e^{i\theta}`, `|z|`, `\arg z`, `\bar z`, `\Re z`, `\Im z`), vectors (`(2, 1)`, `\begin{pmatrix} 2 \\ 1 \end{pmatrix}`, `v + w`, `v \cdot w`, `v \times w`), matrices (`[[1, 2], [3, 4]]`, `\begin{pmatrix} ... \end{pmatrix}`, `A v`, `A^{-1}`, `A^T`, `\det A`, `\operatorname{tr} A`), lists (`\{(k, k^2) : k = 1, \dots, 10\}`), sums and products (`\sum_{k=1}^{n}`, `\prod_{k=1}^{n}`, bounds on sliders), `n!`, `\binom{n}{k}` and `\nabla f`. Formulas that use none of them compile exactly as before. The export writes a sum out term by term.
+- **`let` lines:** `let v = (2, 1)`, `let A = [[1.5, 1], [0.5, 2]]`, `let $c = -0.8 + 0.156i$`, `let $f(x, y) = x^2 + 4y^2$`: names every formula of the chart can use, in any order, renamed everywhere from their card.
+- **Vectors as arrows and lists as points:** `draw v and w as arrows, labelled`, `draw v as an arrow from (1, 1)`, `draw v + w tip to tail`, `mark the points $\{e^{2\pi i k / n} : k = 0, \dots, n - 1\}$, joined, labelled`. 2D and 3D.
+- **Sets on an axis** (`src/notes6/`): `mark where $g(x) \le 0$ on the x-axis, labelled` draws the set as a bar with filled and open ends and labels it in set notation, {x ∣ g(x) ≤ 0} = [−2, 2]; `on the y-axis` for a condition in y.
+- **Chords:** `draw the chord of g from -1 to 3 at $\lambda$, labelled` draws the chord, the point at λ on the chord and on the graph, and the gap between them (Jensen's inequality).
+- **Ask the curve.** A click on a function, a region, a curve, a point, an arrow or a transformed grid, in the editor's preview or in the chart under a block in Live Preview, opens a menu of questions built from what the chart holds: where f ≤ 0, where f and g cross, the extrema, the inflection points, the tangent and the value here, a chord, the area to the x-axis or between two functions, a Riemann sum, Newton's method and the cobweb from here, the corners of a region, the eigenvectors of a transform, and more. Pointing at a question shows its answer faintly; choosing it adds it as a line of the chart (with Undo). Keyboard: `?`, the menu key or Shift+F10 in the editor, Enter on a chart under a block.
+- **Hover cards for sets and maps:** sets (`\{x \in \mathbb{R}^n \mid g(x) \le 0\}`), maps (`g: \mathbb{R}^n \to \mathbb{R}`), conditions, intervals, Jensen's inequality, epigraphs, matrices, `A v`, `\det A`, `A v = \lambda v`, recurrences, the logistic map, sums and functions of z. A name a formula uses without defining it comes from the other formulas of the note; without one, the card uses an example and says so.
+- **Steps** (`src/motion6/`). `then` before a line starts the next step. Charts with steps get Previous, Play, Next and "Step k of n" under them in notes and over the preview in the editor; the card menu's **Show in step n** puts an object in a new step. The line `frames` (`\axis[frames]`) exports every step side by side; without it the export draws the last step.
+- **The animation clock:** objects that move by themselves run only while the chart is on screen, with a Pause button, and start paused under reduced motion. The export, print and SVG files draw a still frame (`set stillTime = 1.5`).
+- **Vector fields and rest points:** `draw the vector field $F(x, y) = (y, -\sin x - 0.25y)$, coloured by length, with moving particles and streamlines` and `mark the rest points of F, labelled` (filled when stable, open when not, with their kind).
+- **Solutions of systems:** `draw the solution of $\dot{p} = (y, -x)$ through P for t from 0 to 10` in 2D, and in 3D the Lorenz attractor, `coloured by time`. The option `traced` draws a solution or an orbit over time.
+- **Linear algebra and complex maps** (`src/linear/`): `draw the grid`, `draw the basis vectors`, `transform the plane by A` (a matrix, `$z \mapsto z^2$`, `$(x, y) \mapsto (x + y, y)$`; in 3D `transform space by B`), `draw the eigenvectors of A, labelled`, `shade the unit square, labelled` (with det A) and `draw the span of v and w`. In a step, a transform moves the plane: (1 − t)I + tA. The tips of î and ĵ and of arrows of let vectors can be dragged, and the numbers in the text follow.
+- **Iterate and colour the plane** (`src/iterate/`): `draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps` (gradient descent too), `draw the cobweb of $x_{n+1} = f(x_n)$ from 0.2`, `draw the bifurcation diagram of $x_{n+1} = r x_n (1 - x_n)$ for r from 2.5 to 4`, `draw Newton's method for f from 2.5, 5 steps` and `draw the circles of $\sum_{k=1}^{n} ...$, with its wave` (Fourier circles on the clock).
+- **Colour the plane:** escape time (the Mandelbrot set, Julia sets, Newton basins), domain colouring of f(z) and heat maps of f(x, y), in seven colour maps. The GPU (WebGL) paints it live; the CPU paints it with 64-bit numbers in tiles without WebGL and deep in a zoom. The export writes the picture as a PNG beside the `.tex` file (`\addplot graphics`), and Copy LaTeX saves the PNG in the note's attachment folder.
+- Every new line has its Full LaTeX command (`\let`, `\draw[vector]`, `\mark[list]`, `\mark[x-axis]`, `\draw[chord]`, `\then`, `\vectorfield`, `\restpoints`, `\solution`, `\draw[grid]`, `\draw[basis vectors]`, `\transform`, `\draw[eigenvectors]`, `\shade[unit square]`, `\draw[span]`, `\orbit`, `\cobweb`, `\bifurcation`, `\newton`, `\colourplane`, `\circles`), a Build tab card, recipes in **+ Add** (sections Values, Linear algebra, Motion, Iterate, Colour the plane), the auto-fit, rename, Japanese texts and a pgfplots export that compiles.
+- **Limits** so that no chart freezes a phone: 2000 steps of an orbit, 1000 of a cobweb, 100 of Newton's method, 1000 per pixel of a coloured plane, 60 Fourier terms, 20000 steps of a solution, 100000 terms of a sum. A larger count is drawn at the limit with a note.
+- **What's new** shows 6.0 as a slideshow of live charts: a Julia set on two sliders, a matrix that moves the plane in steps, a pendulum's vector field, a chart you can ask, the card of a set, a Taylor sum, then the rest of 6.0 and versions 5 and 4 in lists.
+
+### Changed
+
+- **y follows what is drawn:** a chart whose text gives x and no y fits y to what it draws, live. Charts with a y range, charts with no range and JSON blocks are as before.
+- **Charts from formulas** keep the note's name of a function (`g(x) = ...` stays g) and write the x range only.
+- The AI guide (`docs/ai.md`) and the AI server's instructions list every new line, its Full LaTeX command, its JSON fields and limits, and new rules (names `let` may not take, real and complex square roots, braces in labels, `then`).
+- The README shows the 6.0 features one at a time, each with a picture.
+
+### Fixed
+
+- `check_chart` and the other AI tools accept sets on an axis and chords (`axisSet`, `chord`).
+- Set labels without MathJax read `\mid` as ∣ and `\mathbb{R}` as ℝ.
+- Rest points on the border of the view keep their marker but no label.
+
 ## [5.2.6] - 2026-11-23
 
 ### Fixed

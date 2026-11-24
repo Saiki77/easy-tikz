@@ -1,13 +1,14 @@
 /*
  * "What's new" popup for people who updated (when it opens: main.ts and
  * src/whatsnew.ts; what it says: src/whatsnew.ts). A slideshow: one feature
- * of 5.0 per slide, shown big with live charts, then version 4 in a list.
+ * of 6.0 per slide, shown big with live charts, then the rest of 6.0, then
+ * versions 5 and 4 in a list.
  *
- *   header      "Easy Graphs Charts and TikZ 5" and one line
- *   slide       icon, title and a sentence, then the feature: a note with
- *               the formula card open on a formula; a chart beside its text;
- *               two charts whose connected sliders move together; the vault
- *               with a chart's SVG file and the picture it holds
+ *   header      "Easy Graphs Charts and TikZ 6" and one line
+ *   slide       icon, title and a sentence, then the feature: a live chart
+ *               beside its text (with the player of steps and of the clock
+ *               when it has them); a chart that asks its questions when a
+ *               curve is clicked; a note with the card open on a set
  *   footer      the dots (one per slide), Open the guides, Try an example
  *               (the slide's chart in the editor), Back and Next (Done on
  *               the last slide); the arrow keys move between the slides
@@ -19,25 +20,29 @@
  */
 import { App, Modal, finishRenderMath, loadMathJax, renderMath, setIcon } from 'obsidian';
 import { localGuideById } from '../guides';
-import { errorText } from '../util';
-import { chartSvgElement } from '../svgFiles';
+import { cloneData, errorText, fitPixelScale } from '../util';
 import { parseChartText } from '../text/parse';
-import { ChartLanguage, chartLanguage, wordsToFull } from '../text/full';
-import { tableAbove } from '../beyond/table';
+import { printChartText } from '../text/print';
+import { SettingsManager } from '../settings';
+import { MathContext } from '../mathcontext';
+import { RenderLayout, DrawnScene, SVGRenderer } from '../renderer';
+import { AskController, svgBoxOf } from '../notes6/askHost';
+import { openAskMenu } from '../notes6/askMenu';
 import {
     WHATS_NEW_AI,
-    WHATS_NEW_CHART_GUIDE,
+    WHATS_NEW_ALSO,
     WHATS_NEW_FORMULA,
     WHATS_NEW_MORE,
+    WHATS_NEW_NOTE_DEFINITION,
     WHATS_NEW_SLIDES,
     WHATS_NEW_TITLE,
+    WHATS_NEW_V5,
     WhatsNewSlide,
-    whatsNewChart,
+    whatsNewCard,
     whatsNewSubtitle,
-    whatsNewText,
     WhatsNewItem,
 } from '../whatsnew';
-import { TextButtonHandle, segmented, textButton, uniqueId } from './kit';
+import { TextButtonHandle, textButton, trapEscape, uniqueId, visuallyHidden } from './kit';
 import { LiveChart, LiveChartOptions } from './liveChart';
 import { t } from '../i18n';
 
@@ -65,6 +70,8 @@ export class WhatsNewModal extends Modal {
     /** The slides built so far (a slide is built when it is first shown), and their live charts. */
     private readonly slideEls = new Map<number, HTMLElement>();
     private readonly lives = new Map<number, LiveChart[]>();
+    /** The chart of the Ask slide, by slide index. */
+    private readonly asks = new Map<number, AskChart>();
     private index = 0;
     private actionsEl: HTMLElement | null = null;
     private dots: HTMLButtonElement[] = [];
@@ -143,6 +150,9 @@ export class WhatsNewModal extends Modal {
     }
 
     onClose() {
+        openAskMenu()?.close();
+        for (const ask of this.asks.values()) ask.destroy();
+        this.asks.clear();
         this.resize?.disconnect();
         this.resize = null;
         for (const lives of this.lives.values()) for (const live of lives) live.destroy();
@@ -160,6 +170,7 @@ export class WhatsNewModal extends Modal {
         if (i < 0 || i >= count) return;
         const from = this.index;
         if (i !== from) {
+            openAskMenu()?.close();
             this.slideEls.get(from)?.addClass('tikz-hidden');
             for (const live of this.lives.get(from) ?? []) live.pause();
         }
@@ -186,8 +197,8 @@ export class WhatsNewModal extends Modal {
 
     /** The chart of the slide on screen as it is now (its slider where the reader left it): what Try an example opens. */
     private currentChart(): Record<string, unknown> | null {
-        const example = WHATS_NEW_SLIDES[this.index]?.example;
-        if (example) return parseChartText(example).data;
+        const ask = this.asks.get(this.index);
+        if (ask) return ask.chart();
         const live = (this.lives.get(this.index) ?? [])[0];
         if (live) return live.chart();
         const first = WHATS_NEW_SLIDES[this.index]?.charts[0];
@@ -214,15 +225,14 @@ export class WhatsNewModal extends Modal {
         }
         codeText(words.createEl('p', { cls: 'etz-whatsnew-slide-text' }), x.text);
 
-        const demo = el.createDiv({ cls: ['etz-whatsnew-demo', `mod-${x.id}`] });
+        const chart = x.id !== 'hover' && x.charts.length > 0;
+        const demo = el.createDiv({ cls: ['etz-whatsnew-demo', `mod-${x.id}`, ...(chart ? ['mod-chart'] : [])] });
         const lives: LiveChart[] = [];
         this.lives.set(i, lives);
         try {
-            if (x.id === 'formulas') this.demoFormula(demo, lives);
-            else if (x.id === 'language') this.demoLanguage(demo, x, lives);
-            else if (x.id === 'connected') this.demoConnected(demo, x, lives);
-            else if (x.id === 'svg') this.demoSvg(demo, x);
-            else if (x.id === 'data') this.demoData(demo, x, lives);
+            if (x.id === 'hover') this.demoHover(demo, x, lives);
+            else if (x.id === 'ask') this.demoAsk(demo, x, i);
+            else if (x.id === 'also') this.demoAlso(demo);
             else if (x.id === 'earlier') this.demoEarlier(demo);
             else this.demoChart(demo, x, lives);
         } catch (e) {
@@ -233,16 +243,39 @@ export class WhatsNewModal extends Modal {
         return el;
     }
 
-    /** Every formula is a chart: a note's sentence with the formula under the pointer, the card that opens on it, and what Insert chart writes. */
-    private demoFormula(demo: HTMLElement, lives: LiveChart[]) {
+    /** A new kind of picture: the chart, live with its sliders (and its player), and the text it is written in. */
+    private demoChart(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
+        const frame = demo.createDiv({ cls: 'etz-whatsnew-frame' });
+        lives.push(new LiveChart(frame, parseChartText(x.charts[0]).data, live({ maxSliders: x.sliders ?? 1 })));
+        const side = demo.createDiv({ cls: 'etz-whatsnew-side' });
+        this.recipe(side, t('panels.whatsNew.languageWords'), ['```easy-tikz', x.charts[0], '```'].join('\n'));
+    }
+
+    /** Ask the curve: a chart that opens its questions when a curve is clicked, and its block as the answers change it. */
+    private demoAsk(demo: HTMLElement, x: WhatsNewSlide, i: number) {
+        const frame = demo.createDiv({ cls: 'etz-whatsnew-frame' });
+        const side = demo.createDiv({ cls: 'etz-whatsnew-side' });
+        const pre = this.recipe(side, t('panels.whatsNew.askLines'), '');
+        const show = (data: Record<string, unknown>) => pre.setText(['```easy-tikz', printChartText(data), '```'].join('\n'));
+        const ask = new AskChart(frame, parseChartText(x.charts[0]).data, this, show);
+        this.asks.set(i, ask);
+        show(ask.chart());
+        const hint = frame.createDiv({ cls: ['etz-whatsnew-caption', 'mod-ask'] });
+        setIcon(hint.createSpan({ cls: 'etz-whatsnew-hint-icon', attr: { 'aria-hidden': 'true' } }), 'mouse-pointer-2');
+        hint.createSpan({ text: t('panels.whatsNew.askHint') });
+    }
+
+    /** Hover reads sets and maps: a note's sentence with a set under the pointer, and the card that opens on it. */
+    private demoHover(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
         const note = demo.createDiv({ cls: 'etz-whatsnew-hero' });
         note.createDiv({ cls: 'etz-whatsnew-recipe-title', text: t('panels.whatsNew.noteTitle') });
         const sentence = note.createEl('p', { cls: 'etz-whatsnew-note-text' });
         // Filled when the sentence places the formula (a holder: TypeScript does not see the callback assign it).
         const marked: { el: HTMLElement | null } = { el: null };
-        appendWithPlaces(sentence, t('panels.whatsNew.note'), {
+        appendWithPlaces(sentence, t('panels.whatsNew.hoverNote'), {
+            definition: (into) => typeset(into.createSpan(), WHATS_NEW_NOTE_DEFINITION),
             formula: (into) => {
-                // Marked as in a note with a chart open on it, and the pointer resting there.
+                // Marked as in a note with a card open on it, and the pointer resting there.
                 const mark = into.createSpan({ cls: 'etz-whatsnew-formula' });
                 marked.el = mark;
                 typeset(mark.createSpan(), WHATS_NEW_FORMULA);
@@ -250,24 +283,21 @@ export class WhatsNewModal extends Modal {
             },
         });
         const stage = note.createDiv({ cls: 'etz-whatsnew-stage' });
-        // The card as it opens on the formula: the formula and what it is, then the chart with its slider.
+        // The card as it opens on the set: the formula and what it is, the chart, where g comes from.
         const card = stage.createDiv({ cls: 'etz-whatsnew-card' });
         const head = card.createDiv({ cls: 'etz-formula-head' });
         typeset(head.createDiv({ cls: 'etz-formula-tex' }), WHATS_NEW_FORMULA);
-        head.createSpan({ cls: 'etz-formula-kind', text: t('plugin.formula.kind.function') });
-        lives.push(new LiveChart(card, whatsNewChart(), live()));
+        head.createSpan({ cls: 'etz-formula-kind', text: t('notes6.hover.kind.set') });
+        lives.push(new LiveChart(card, parseChartText(x.charts[0]).data, live()));
+        const fn = whatsNewCard()?.fn;
+        if (fn) card.createDiv({ cls: 'etz-whatsnew-caption', text: t('notes6.hover.fromNote', { name: fn.name, body: fn.body }) });
 
-        // Beside the card: the block Insert chart writes under the paragraph, and how to play with it.
+        // Beside the card: more formulas that open a chart now.
         const side = stage.createDiv({ cls: 'etz-whatsnew-side' });
-        this.recipe(side, t('panels.whatsNew.recipe'), ['```easy-tikz', whatsNewText(), '```'].join('\n'));
-        const caption = side.createDiv({ cls: 'etz-whatsnew-caption' });
-        const chartGuide = localGuideById(WHATS_NEW_CHART_GUIDE);
-        appendWithPlaces(caption, chartGuide ? t('panels.whatsNew.captionWithGuide') : t('panels.whatsNew.caption'), {
-            slider: (into) => into.createEl('code', { text: 'a' }),
-            guide: (into) => {
-                if (chartGuide) this.guideLink(into, chartGuide.title, WHATS_NEW_CHART_GUIDE);
-            },
-        });
+        const more = side.createDiv({ cls: 'etz-whatsnew-recipe' });
+        more.createDiv({ cls: 'etz-whatsnew-recipe-title', text: t('panels.whatsNew.hoverMore') });
+        const formulas = more.createEl('ul', { cls: 'etz-whatsnew-formulas' });
+        for (const tex of HOVER_MORE) typeset(formulas.createEl('li'), tex);
 
         // The card's tip points at the formula, wherever the sentence puts it.
         const formula = marked.el;
@@ -276,8 +306,8 @@ export class WhatsNewModal extends Modal {
                 const at = formula.getBoundingClientRect();
                 const box = card.getBoundingClientRect();
                 if (!box.width) return;
-                const x = Math.max(18, Math.min(box.width - 18, at.left + at.width / 2 - box.left));
-                card.setCssProps({ '--etz-tip-x': `${Math.round(x)}px` });
+                const left = Math.max(18, Math.min(box.width - 18, at.left + at.width / 2 - box.left));
+                card.setCssProps({ '--etz-tip-x': `${Math.round(left)}px` });
             };
             this.resize?.disconnect();
             this.resize = new ResizeObserver(placeTip);
@@ -286,101 +316,22 @@ export class WhatsNewModal extends Modal {
         }
     }
 
-    /** LaTeX is the chart language: a chart, and the text it is written in, in either chart language (the setting Chart language). */
-    private demoLanguage(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
-        const frame = demo.createDiv({ cls: 'etz-whatsnew-frame' });
-        lives.push(new LiveChart(frame, parseChartText(x.charts[0]).data, live()));
-        const side = demo.createDiv({ cls: 'etz-whatsnew-side' });
-        const forms: Record<ChartLanguage, string> = { words: x.charts[0], full: wordsToFull(x.charts[0]) };
-        const block = (lang: ChartLanguage) => ['```easy-tikz', forms[lang], '```'].join('\n');
-        const start: ChartLanguage = chartLanguage() === 'full' ? 'full' : 'words';
-        segmented<ChartLanguage>(side, {
-            label: t('plugin.settings.chartLanguage.name'),
-            options: [
-                { value: 'words', text: t('plugin.settings.chartLanguage.words') },
-                { value: 'full', text: t('plugin.settings.chartLanguage.full') },
-            ],
-            value: start,
-            onChange: (lang) => pre.setText(block(lang)),
-        });
-        const pre = this.recipe(side, t('panels.whatsNew.languageWords'), block(start));
-        side.createDiv({ cls: 'etz-whatsnew-caption', text: t('panels.whatsNew.languageNote') });
-    }
-
-    /** Connected sliders: two charts of a note with a slider a each; moving one moves the other. */
-    private demoConnected(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
-        const pair = demo.createDiv({ cls: 'etz-whatsnew-pair' });
-        const frames = x.charts.map(() => pair.createDiv({ cls: 'etz-whatsnew-frame' }));
-        const partner: { live: LiveChart | null } = { live: null };
-        const left = new LiveChart(frames[0], parseChartText(x.charts[0]).data, live({ onValue: (v) => partner.live?.follow(v) }));
-        const right = new LiveChart(frames[1], parseChartText(x.charts[1]).data, live({ onValue: (v) => left.follow(v) }));
-        partner.live = right;
-        lives.push(left, right);
-        x.charts.forEach((text, k) => {
-            const lines = text.split('\n').filter((l) => /^(slider|plot)\b/.test(l));
-            frames[k].createEl('pre', { cls: 'etz-whatsnew-text mod-small', text: lines.join('\n') });
-        });
-        // Between the two: they are connected.
-        const link = pair.createDiv({ cls: 'etz-whatsnew-pair-link', attr: { 'aria-hidden': 'true' } });
-        setIcon(link, 'link-2');
-        pair.insertBefore(link, frames[1]);
-    }
-
-    /** Charts as SVG files: the note and its chart's file in the vault, the picture as the file shows it, and the line that embeds it. */
-    private demoSvg(demo: HTMLElement, x: WhatsNewSlide) {
-        const left = demo.createDiv({ cls: 'etz-whatsnew-side' });
-        const files = left.createDiv({ cls: 'etz-whatsnew-files', attr: { role: 'list', 'aria-label': t('panels.whatsNew.svgVault') } });
-        const file = (icon: string, name: string, cls = '') => {
-            const row = files.createDiv({ cls: ['etz-whatsnew-file'].concat(cls ? [cls] : []), attr: { role: 'listitem' } });
-            setIcon(row.createSpan({ cls: 'etz-whatsnew-file-icon', attr: { 'aria-hidden': 'true' } }), icon);
-            row.createSpan({ text: name });
-        };
-        file('folder-open', 'Calculus', 'mod-folder');
-        file('file-text', 'Week 3.md');
-        file('file-image', 'Week 3 · chart 1.svg', 'is-new');
-        this.recipe(left, t('panels.whatsNew.svgEmbed'), '![[Week 3 · chart 1.svg]]');
-        const paper = demo.createDiv({ cls: 'etz-whatsnew-paper' });
-        const svg = chartSvgElement(parseChartText(x.charts[0]).data, this.modalEl.ownerDocument);
-        if (svg) {
-            svg.setAttr('role', 'img');
-            svg.setAttr('aria-label', t('panels.whatsNew.svgPicture'));
-            paper.appendChild(svg);
-        } else paper.createDiv({ cls: 'etz-whatsnew-fallback', text: t('plugin.formula.cannotDraw') });
-    }
-
-    /** Data and a regression line: the note's table and the chart that reads it. */
-    private demoData(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
-        const rows = x.table ?? [];
-        const side = demo.createDiv({ cls: 'etz-whatsnew-side' });
-        const note = side.createDiv({ cls: 'etz-whatsnew-recipe' });
-        note.createDiv({ cls: 'etz-whatsnew-recipe-title', text: t('panels.whatsNew.noteTitle') });
-        // The table as the note shows it: the header row, then the body rows (the separator row is Markdown only).
-        const cells = (row: string) => row.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((c) => c.trim());
-        const table = note.createEl('table', { cls: 'etz-whatsnew-table' });
-        const head = table.createEl('thead').createEl('tr');
-        for (const c of cells(rows[0] ?? '')) head.createEl('th', { text: c });
-        const body = table.createEl('tbody');
-        for (const row of rows.slice(2)) {
-            const tr = body.createEl('tr');
-            for (const c of cells(row)) tr.createEl('td', { text: c });
-        }
-        note.createEl('pre', { cls: 'etz-whatsnew-text', text: ['```easy-tikz', ...x.charts[0].split('\n').filter((l) => !/^(size|show|axes|with)\b/.test(l)), '```'].join('\n') });
-        const frame = demo.createDiv({ cls: 'etz-whatsnew-frame' });
-        lives.push(new LiveChart(frame, parseChartText(x.charts[0]).data, live({ table: tableAbove([...rows, '```easy-tikz'], rows.length + 1) })));
-    }
-
-    /** A new kind of picture: the chart, live with its slider, and the text it is written in. */
-    private demoChart(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
-        const frame = demo.createDiv({ cls: 'etz-whatsnew-frame' });
-        lives.push(new LiveChart(frame, parseChartText(x.charts[0]).data, live()));
-        const side = demo.createDiv({ cls: 'etz-whatsnew-side' });
-        this.recipe(side, t('panels.whatsNew.languageWords'), ['```easy-tikz', x.charts[0], '```'].join('\n'));
-    }
-
-    /** Version 4: one line each. */
-    private demoEarlier(demo: HTMLElement) {
+    /** The rest of 6.0: one line each. */
+    private demoAlso(demo: HTMLElement) {
         const grid = demo.createDiv({ cls: ['etz-whatsnew-list', 'mod-grid'] });
-        for (const item of WHATS_NEW_MORE) this.item(grid, item);
+        for (const item of WHATS_NEW_ALSO) this.item(grid, item);
+    }
+
+    /** Versions 5 and 4: one line each, under a heading per version. */
+    private demoEarlier(demo: HTMLElement) {
+        for (const [title, items] of [
+            [t('panels.whatsNew.v5Title'), WHATS_NEW_V5],
+            [t('panels.whatsNew.v4Title'), WHATS_NEW_MORE],
+        ] as const) {
+            demo.createEl('h4', { cls: 'etz-whatsnew-group-title', text: title });
+            const grid = demo.createDiv({ cls: ['etz-whatsnew-list', 'mod-grid'] });
+            for (const item of items) this.item(grid, item);
+        }
         demo.createDiv({ cls: 'etz-whatsnew-hint', text: t('panels.whatsNew.hint') });
     }
 
@@ -427,7 +378,7 @@ export class WhatsNewModal extends Modal {
     }
 }
 
-/** The live chart of a slide: one slider row, the labels and classes of What's new. */
+/** The live chart of a slide: one slider row (unless more), the labels and classes of What's new. */
 function live(more: Partial<LiveChartOptions> = {}): LiveChartOptions {
     return {
         label: t('panels.whatsNew.chartLabel'),
@@ -439,6 +390,120 @@ function live(more: Partial<LiveChartOptions> = {}): LiveChartOptions {
         maxSliders: 1,
         ...more,
     };
+}
+
+/** More formulas that open a chart in a note now (the hover slide). */
+const HOVER_MORE = [
+    'g: \\mathbb{R}^n \\to \\mathbb{R}',
+    '\\lambda \\in [0, 1]',
+    'g(\\lambda x + (1 - \\lambda) y) \\le \\lambda g(x) + (1 - \\lambda) g(y)',
+    'A v = \\lambda v',
+    'z_{n+1} = z_n^2 + c',
+    '\\sum_{k=1}^{n} \\frac{1}{k^2}',
+];
+
+/**
+ * The chart of the Ask slide: drawn as a live chart is (no sliders), and
+ * asked as the chart under a block is (src/notes6/askHost.ts). A click on a
+ * curve that does not move, or Enter on the chart, opens the questions;
+ * an answer goes into this chart (the popup's own copy) and its block.
+ */
+class AskChart {
+    private data: Record<string, unknown>;
+    private readonly box: HTMLElement;
+    private svg: SVGSVGElement | null = null;
+    private drawn: { layout: RenderLayout; drawn: DrawnScene; pixelScale: number } | null = null;
+    private math: MathContext | null = null;
+    private readonly ask: AskController;
+    private destroyed = false;
+
+    constructor(parent: HTMLElement, data: Record<string, unknown>, keys: Modal, private readonly changed: (data: Record<string, unknown>) => void) {
+        this.data = SettingsManager.fromJSON(cloneData(data)).serialize();
+        this.box = parent.createDiv({ cls: ['etz-live-chart', 'etz-whatsnew-chart', 'etz-askable'], attr: { tabindex: '0', role: 'button', 'aria-haspopup': 'menu' } });
+        const name = visuallyHidden(parent, t('panels.whatsNew.askLabel'));
+        name.id = uniqueId('whatsnew-ask');
+        this.box.setAttr('aria-labelledby', name.id);
+        this.ask = new AskController({
+            data: () => cloneData(this.data),
+            math: () => this.math ?? this.mathOf(SettingsManager.fromJSON(this.data)),
+            drawn: () => {
+                const svg = this.svg;
+                const d = this.drawn;
+                if (!d || !svg || !svg.isConnected) return null;
+                const b = svgBoxOf(svg, d.layout);
+                return b ? { layout: d.layout, drawn: d.drawn, svg, box: b, pixelScale: d.pixelScale } : null;
+            },
+            apply: (next) => {
+                this.data = next;
+                this.render();
+                this.changed(this.chart());
+            },
+            focusEl: () => this.box,
+            trapEscape: (fn) => trapEscape(keys, fn),
+        });
+        let down: { id: number; x: number; y: number; touch: boolean } | null = null;
+        this.box.addEventListener('pointerdown', (e) => {
+            if (e.button === 0) down = { id: e.pointerId, x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch' };
+        });
+        this.box.addEventListener('pointerup', (e) => {
+            const d = down;
+            down = null;
+            // A click that did not move: a drag is no question.
+            if (!d || d.id !== e.pointerId || Math.hypot(e.clientX - d.x, e.clientY - d.y) > (d.touch ? 10 : 5)) return;
+            this.ask.at(e.clientX, e.clientY, d.touch);
+        });
+        this.box.addEventListener('pointercancel', () => (down = null));
+        this.box.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.target !== this.box) return;
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+                if (this.ask.fromKeyboard()) e.preventDefault();
+            }
+        });
+        this.render();
+        // The first drawing does not know the box's size yet: draw again once it does.
+        window.requestAnimationFrame(() => this.render());
+    }
+
+    /** The chart as it is now, with the answers chosen: what Try an example opens. */
+    chart(): Record<string, unknown> {
+        return cloneData(this.data);
+    }
+
+    destroy(): void {
+        this.destroyed = true;
+        this.ask.close();
+        this.svg = null;
+    }
+
+    /** The chart's math, its sliders set. */
+    private mathOf(settings: SettingsManager): MathContext {
+        const math = settings.createMathContext({ memo: false });
+        const params = settings.getValue('parameters');
+        math.setParams(Array.isArray(params) ? params : []);
+        return math;
+    }
+
+    private render(): void {
+        if (this.destroyed) return;
+        try {
+            const settings = SettingsManager.fromJSON(this.data);
+            const math = this.mathOf(settings);
+            const config = settings.toRendererConfig(math);
+            const aspect = config.width > 0 && config.height > 0 ? config.width / config.height : 1.25;
+            this.box.setCssProps({ '--etz-live-aspect': String(Math.round(aspect * 1000) / 1000) });
+            const pixelScale = fitPixelScale(this.box.clientWidth, this.box.clientHeight, config.width, config.height);
+            const renderer = new SVGRenderer(config, { math, quality: 'full', pixelScale });
+            const svg = renderer.render() as SVGSVGElement;
+            svg.addClass('etz-live-svg');
+            if (this.svg && this.svg.parentElement === this.box) this.svg.replaceWith(svg);
+            else this.box.prepend(svg);
+            this.svg = svg;
+            this.math = math;
+            this.drawn = renderer.layout && renderer.drawn ? { layout: renderer.layout, drawn: renderer.drawn, pixelScale } : null;
+        } catch {
+            // The last drawing stays.
+        }
+    }
 }
 
 /** Text with inline `backticks` as code. */

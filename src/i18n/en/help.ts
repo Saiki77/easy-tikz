@@ -7,7 +7,7 @@ export const help = {
     'help.search.guides': '{count, plural, one {# guide} other {# guides}}',
     'help.search.sections': '{count, plural, one {# reference section} other {# reference sections}}',
     'help.search.both': '{guides, plural, one {# guide} other {# guides}}, {sections, plural, one {# reference section} other {# reference sections}}',
-    'help.whatsNew': "What's new in Easy Graphs Charts and TikZ 5",
+    'help.whatsNew': "What's new in Easy Graphs Charts and TikZ 6",
     'help.categories': 'Categories',
     'help.referenceSections': 'Reference sections',
     // Guide categories and levels (the data keeps the English names as identifiers: src/guides/index.ts).

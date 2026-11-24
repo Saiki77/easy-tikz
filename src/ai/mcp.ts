@@ -28,7 +28,7 @@ export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 /** What the server tells an AI app when it connects (MCP `instructions`). */
 export const INSTRUCTIONS = [
-    'Easy Graphs Charts and TikZ draws charts in Obsidian notes from `easy-tikz` code blocks: a few lines of text per chart, one line per object, written the way the math reads (function plots, tangents, areas between curves, feasible regions and linear programs, level curves, 3D, live sliders).',
+    'Easy Graphs Charts and TikZ draws charts in Obsidian notes from `easy-tikz` code blocks: a few lines of text per chart, one line per object, written the way the math reads (function plots, tangents, areas between curves, feasible regions and linear programs, level curves, 3D, live sliders; since 6.0 also vectors and matrices, sums, vector fields and systems, matrices that move the plane, orbits, fractals and charts that play in steps).',
     'Before your first chart, read the guide with get_guide (the sections "Rules that prevent most mistakes" and "The text syntax" at least).',
     'Then: start from get_example, run check_chart until it reports no problems and its computed values match the request, look at it with render_chart, and put it into the note with add_chart (it refuses charts with problems).',
     'Never write easy-tikz blocks into notes by hand while these tools are available. The plugin does not differentiate or integrate: slopes and areas in labels are formulas you work out.',

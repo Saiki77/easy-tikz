@@ -10,7 +10,7 @@ export const help: Messages<typeof en> = {
     'help.search.guides': 'ガイド {count} 件',
     'help.search.sections': 'リファレンスの項目 {count} 件',
     'help.search.both': 'ガイド {guides} 件、リファレンスの項目 {sections} 件',
-    'help.whatsNew': 'Easy Graphs Charts and TikZ 5 の新機能',
+    'help.whatsNew': 'Easy Graphs Charts and TikZ 6 の新機能',
     'help.categories': 'カテゴリ',
     'help.referenceSections': 'リファレンスの項目',
     'help.category.gettingStarted': 'はじめに',

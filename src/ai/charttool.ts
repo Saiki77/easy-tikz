@@ -25,6 +25,8 @@ export type { Data };
 export { canonical, clone, minimize };
 
 const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory', 'value', 'vector', 'listPoints', 'planeGrid', 'basisVectors', 'transform', 'eigenvectors', 'unitSquare', 'span', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourPlane', 'fourierCircles']; // 6.0 C: vectorField, restPoints, trajectory; A: value, vector, listPoints; D: planeGrid to span; E: orbit to fourierCircles
+// 6.0 B: sets on an axis and chords (the merge left them out, so check_chart refused them).
+TOOL_TYPES.push('axisSet', 'chord');
 /** Keys a block may carry that the editor's defaults do not list: how the chart sits in the note. */
 const DISPLAY_KEYS = ['displayWidth', 'displayAlign'];
 

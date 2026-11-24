@@ -153,7 +153,6 @@ const whatsNewState = () =>
         const m = modals[0];
         if (!m) return { count: 0 };
         const svg = m.querySelector('.etz-whatsnew-chart svg');
-        const texts = svg ? Array.from(svg.querySelectorAll('text, foreignObject')).map((t) => (t.textContent || '').trim()) : [];
         const input = m.querySelector('.etz-whatsnew-strip input[type=range]');
         const play = m.querySelector('.etz-live-play');
         return {
@@ -162,7 +161,8 @@ const whatsNewState = () =>
             slides: m.querySelectorAll('.etz-whatsnew-dot').length,
             current: Array.from(m.querySelectorAll('.etz-whatsnew-dot')).findIndex((d) => d.getAttribute('aria-current') === 'step'),
             blankIcons: Array.from(m.querySelectorAll('.etz-whatsnew-icon, .etz-btn-icon, .etz-live-play')).filter((el) => !el.querySelector('svg')).length,
-            extrema: texts.filter((t) => t === 'max' || t === 'min').sort().join(','),
+            // The first slide's live chart paints the plane (a Julia set) on a canvas over the plot.
+            painted: !!(svg && svg.querySelector('foreignObject.etz-pixels canvas')),
             value: input ? Number(input.value) : null,
             playing: play ? play.getAttribute('aria-pressed') === 'true' : null,
         };
@@ -974,12 +974,12 @@ if (started) {
             await obs.waitFor(async () => (await whatsNewState()).count > 0, { timeout: 5000, message: 'the popup to open after the plugin loaded' });
             const state = await whatsNewState();
             assert(state.count === 1, `${state.count} popups are open`);
-            assert(state.title === 'Easy Graphs Charts and TikZ 5', `the title is "${state.title}"`);
+            assert(state.title === WHATS_NEW.WHATS_NEW_TITLE, `the title is "${state.title}"`);
             // A slideshow: one dot per slide, the first one shown.
             assert(state.slides === WHATS_NEW.WHATS_NEW_SLIDES.length && state.current === 0, `${state.slides} slides, slide ${state.current} shown`);
             assert(state.blankIcons === 0, `${state.blankIcons} icons are blank (an icon id Obsidian does not know)`);
-            // f(x) = x^3/3 - a x at a = 1: a maximum and a minimum, labelled.
-            assert(state.extrema === 'max,min', `the live example shows the extrema "${state.extrema}"`);
+            // The Julia set of z^2 + c, c = a + bi: a picture on the plot.
+            assert(state.painted, 'the live example paints no plane');
             // Seen as soon as it opened, and nothing else of the user's data changed.
             await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 3000, message: 'data.json to record the popup' });
             const data = readData();
@@ -994,27 +994,26 @@ if (started) {
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                 }, String(v));
-            // a below 0: f'(x) = x^2 - a has no zero, so no extremum.
             await slide(-0.5);
             await obs.sleep(250);
             let state = await whatsNewState();
-            assert(state.extrema === '', `at a = -0.5 the chart shows the extrema "${state.extrema}"`);
-            await slide(1.5);
+            assert(state.value === -0.5 && state.painted, `at a = -0.5: value ${state.value}, painted ${state.painted}`);
+            await slide(0.25);
             await obs.sleep(250);
             state = await whatsNewState();
-            assert(state.extrema === 'max,min', `at a = 1.5 the chart shows the extrema "${state.extrema}"`);
+            assert(state.value === 0.25 && state.painted, `at a = 0.25: value ${state.value}, painted ${state.painted}`);
             await obs.mouse.click('.modal.etz-whatsnew .etz-live-play');
             await obs.sleep(600);
             state = await whatsNewState();
             assert(state.playing === true, 'play is not pressed');
-            assert(state.value !== 1.5, 'playing did not move the slider');
+            assert(state.value !== 0.25, 'playing did not move the slider');
             await obs.mouse.click('.modal.etz-whatsnew .etz-live-play');
             await obs.sleep(250);
             state = await whatsNewState();
             const a = state.value;
             assert(state.playing === false, 'play is still pressed');
-            assert(Number.isFinite(a) && Math.abs(a * 20 - Math.round(a * 20)) < 1e-9, `after play a = ${a} is not on the slider's step 0.05`);
-            // A typed value outside -1..2 stops at the end (a wider slider would push the extrema out of the view).
+            assert(Number.isFinite(a) && Math.abs(a * 100 - Math.round(a * 100)) < 1e-9, `after play a = ${a} is not on the slider's step 0.01`);
+            // A typed value outside -1..1 stops at the end.
             const typed = await obs.call(() => {
                 const box = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip .etz-slider-number');
                 const range = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip input[type=range]');
@@ -1026,9 +1025,9 @@ if (started) {
             });
             await obs.sleep(250);
             state = await whatsNewState();
-            assert(typed.max === '2' && typed.value === '2' && typed.box === '2', `typing 5: ${JSON.stringify(typed)}`);
-            assert(state.extrema === 'max,min', `at a = 2 the chart shows the extrema "${state.extrema}"`);
-            return `extrema off at -0.5, on at 1.5, play stopped at a = ${a}, typing 5 gives 2`;
+            assert(typed.max === '1' && typed.value === '1' && typed.box === '1', `typing 5: ${JSON.stringify(typed)}`);
+            assert(state.painted, 'at a = 1 the chart paints no plane');
+            return `painted at -0.5 and 0.25, play stopped at a = ${a}, typing 5 gives 1`;
         });
         await check('what\'s new: Close removes it, and reloading the plugin does not show it again', async () => {
             await clickWhatsNewButton('Close');
@@ -1044,7 +1043,7 @@ if (started) {
             await reloadPlugin();
             await obs.waitFor(async () => (await whatsNewState()).count > 0, { timeout: 8000, message: 'the popup to open after the vault check' });
             const state = await whatsNewState();
-            assert(state.count === 1 && state.title === 'Easy Graphs Charts and TikZ 5', `${state.count} popups, title "${state.title}"`);
+            assert(state.count === 1 && state.title === WHATS_NEW.WHATS_NEW_TITLE, `${state.count} popups, title "${state.title}"`);
             await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 3000, message: 'data.json to record the popup' });
             await clickWhatsNewButton('Close');
             await reloadPlugin();
@@ -1096,8 +1095,8 @@ if (started) {
             }), { timeout: 8000, message: 'the editor to open' });
             await obs.waitForRender();
             const chart = await obs.chart();
-            assert(chart.parameters.length === 1 && chart.parameters[0].name === 'a' && chart.parameters[0].value === 1, `sliders: ${JSON.stringify(chart.parameters)}`);
-            assert(chart.functions.length === 1 && chart.functions[0].name === 'f' && chart.functions[0].extrema === true, `functions: ${JSON.stringify(chart.functions)}`);
+            assert(chart.parameters.length === 2 && chart.parameters[0].name === 'a' && chart.parameters[0].value === -0.8 && chart.parameters[1].name === 'b', `sliders: ${JSON.stringify(chart.parameters)}`);
+            assert(chart.tools.length === 1 && chart.tools[0].type === 'colourPlane', `tools: ${JSON.stringify(chart.tools)}`);
             assert((await obs.issues()).length === 0 && (await obs.statusChip()) === null, 'the example has issues in the editor');
             await obs.closeEditor();
         });
@@ -1138,6 +1137,49 @@ if (started) {
             assert(!missing.length, `icons that did not draw (unknown ids?): ${missing.join(', ')}`);
             return `${WHATS_NEW.WHATS_NEW_ICONS.length} icons`;
         });
+        await check('what\'s new: the Ask slide opens the questions of g, and an answer goes into its chart and block', async () => {
+            await obs.call((id) => app.commands.executeCommandById(`${id}:show-whats-new`), PLUGIN_ID);
+            await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the command' });
+            const at = WHATS_NEW.WHATS_NEW_SLIDES.findIndex((x) => x.id === 'ask');
+            await obs.call((i) => document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-dot')[i].click(), at);
+            await obs.sleep(400);
+            // From the keyboard: Enter on the chart opens the questions of the first function, g.
+            const opened = await obs.call(() => {
+                const box = Array.from(document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-chart.etz-askable')).find((b) => b.offsetParent !== null);
+                if (!box) return 'no chart';
+                box.focus();
+                box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                const menu = document.querySelector('.etz-ask-menu');
+                return menu ? Array.from(menu.querySelectorAll('.etz-ask-item')).map((b) => (b.textContent || '').trim()) : 'no menu';
+            });
+            assert(Array.isArray(opened) && opened.some((q) => /g ≤ 0/.test(q)), `the menu: ${JSON.stringify(opened)}`);
+            // Escape closes the menu, not the popup.
+            await obs.key('Escape');
+            await obs.sleep(250);
+            let state = await obs.call(() => ({ menu: !!document.querySelector('.etz-ask-menu'), popup: !!document.querySelector('.modal.etz-whatsnew') }));
+            assert(!state.menu && state.popup, `after Escape: ${JSON.stringify(state)}`);
+            // Choose "Where is g ≤ 0?": the set on the x-axis is drawn and its line is in the block.
+            const chosen = await obs.call(() => {
+                const box = Array.from(document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-chart.etz-askable')).find((b) => b.offsetParent !== null);
+                box.focus();
+                box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                const item = Array.from(document.querySelectorAll('.etz-ask-menu .etz-ask-item')).find((b) => /g ≤ 0/.test(b.textContent || ''));
+                if (!item) return 'no question';
+                item.click();
+                return 'ok';
+            });
+            assert(chosen === 'ok', chosen);
+            await obs.sleep(300);
+            state = await obs.call(() => {
+                const slide = Array.from(document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-slide')).find((x) => !x.classList.contains('tikz-hidden'));
+                const pre = slide ? slide.querySelector('pre.etz-whatsnew-text') : null;
+                const svg = slide ? slide.querySelector('.etz-whatsnew-chart svg') : null;
+                return { text: pre ? pre.textContent : '', labels: svg ? Array.from(svg.querySelectorAll('text, foreignObject')).map((t) => (t.textContent || '').trim()).join(' | ') : '' };
+            });
+            assert(/mark where \$g\(x\) \\le 0\$ on the x-axis, labelled/.test(state.text), `the block: ${state.text}`);
+            await clickWhatsNewButton('Close');
+            return state.labels.slice(0, 120);
+        });
         await check('what\'s new: the link in the Help tab opens it, and its buttons stay in that editor', async () => {
             // An editor with a chart in it: Try an example asks before replacing it.
             await obs.openEditor({ chart: lp.data });
@@ -1158,7 +1200,7 @@ if (started) {
             // Replace: the example is in, on the Build tab.
             [state, chart] = await tryFromHelp('Replace');
             assert(state.tab === 'build', `after Replace the editor shows the ${state.tab} tab`);
-            assert(chart.functions.length === 1 && chart.functions[0].name === 'f' && chart.tools.length === 0, 'the example did not load into this editor');
+            assert(chart.functions.length === 0 && chart.tools.length === 1 && chart.tools[0].type === 'colourPlane', 'the example did not load into this editor');
             const editors = await obs.call(() => document.querySelectorAll('.modal.tikz-modal').length);
             assert(editors === 1, `${editors} editors are open`);
             await obs.closeEditor();

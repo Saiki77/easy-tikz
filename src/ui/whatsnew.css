@@ -1,8 +1,8 @@
 /* "What's new" popup (src/ui/whatsNewModal.ts): title, then a slideshow of
-   what 5.0 brings (one feature per slide, shown big with live charts) and a
-   last slide with version 4, and the footer with the dots, Back and Next.
-   Theme colours only, so light and dark both work (the SVG file's paper is
-   white on purpose); one column when the window is narrow. */
+   what 6.0 brings (one feature per slide, shown big with live charts), a
+   slide with the rest of 6.0 and a last slide with versions 5 and 4, and the
+   footer with the dots, Back and Next. Theme colours only, so light and dark
+   both work; one column when the window is narrow. */
 
 /* Title, scrolling content, and the buttons as a footer that stays in view. */
 .modal.etz-whatsnew {
@@ -118,7 +118,7 @@ p.etz-whatsnew-subtitle {
     min-width: 0;
 }
 
-/* What 5.0 brings: one list per group. */
+/* One list per group. */
 .etz-whatsnew-list.mod-new {
     gap: 14px;
 }
@@ -388,133 +388,62 @@ p.etz-whatsnew-slide-text {
     background-color: var(--background-primary);
 }
 
-.etz-whatsnew-demo.mod-language,
-.etz-whatsnew-demo.mod-probability,
-.etz-whatsnew-demo.mod-riemann,
-.etz-whatsnew-demo.mod-slope {
+.etz-whatsnew-demo.mod-chart {
     display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
     gap: 24px;
     align-items: start;
 }
 
-/* Data: the note's table and the block beside the chart that reads it. */
-.etz-whatsnew-demo.mod-data {
-    display: grid;
-    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-    gap: 24px;
-    align-items: start;
+/* Ask the curve: the chart asks when a curve is clicked. */
+.etz-whatsnew-chart.etz-askable {
+    cursor: pointer;
 }
 
-table.etz-whatsnew-table {
-    width: 100%;
-    margin: 4px 0 12px;
-    border-collapse: collapse;
-    font-size: var(--etz-font);
-    font-variant-numeric: tabular-nums;
+.etz-whatsnew-chart.etz-askable:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
 }
 
-table.etz-whatsnew-table th,
-table.etz-whatsnew-table td {
-    padding: 3px 10px;
-    border: 1px solid var(--background-modifier-border);
-    color: var(--text-normal);
-    text-align: right;
-}
-
-table.etz-whatsnew-table th {
-    background-color: var(--background-secondary);
-    font-weight: 600;
-}
-
-/* Two charts and the link between them. */
-.etz-whatsnew-pair {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: 12px;
+.etz-whatsnew-caption.mod-ask {
+    display: flex;
     align-items: center;
+    gap: 6px;
 }
 
-.etz-whatsnew-pair-link {
+.etz-whatsnew-hint-icon {
     display: flex;
     color: var(--interactive-accent);
 }
 
-.etz-whatsnew-pair-link svg {
-    width: 22px;
-    height: 22px;
-}
-
-pre.etz-whatsnew-text.mod-small {
-    padding: 0 2px;
-    color: var(--text-muted);
-    font-size: 11px;
-}
-
-/* The vault with the note and its chart's file, the line that embeds it, and the picture on white. */
-.etz-whatsnew-demo.mod-svg {
-    display: grid;
-    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-    gap: 24px;
-    align-items: start;
-}
-
-.etz-whatsnew-files {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 10px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--etz-radius-l);
-    background-color: var(--background-primary);
-}
-
-.etz-whatsnew-file {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 8px 5px 28px;
-    border-radius: var(--etz-radius-s);
-    color: var(--text-normal);
-    font-size: var(--etz-font);
-}
-
-.etz-whatsnew-file.mod-folder {
-    padding-left: 8px;
-    font-weight: 600;
-}
-
-.etz-whatsnew-file.is-new {
-    background-color: var(--etz-accent-tint);
-}
-
-.etz-whatsnew-file-icon {
-    display: flex;
-    color: var(--text-muted);
-}
-
-.etz-whatsnew-file.is-new .etz-whatsnew-file-icon {
-    color: var(--interactive-accent);
-}
-
-.etz-whatsnew-file-icon svg {
+.etz-whatsnew-hint-icon svg {
     width: 15px;
     height: 15px;
 }
 
-/* The file's own look: white, whatever the theme. */
-.etz-whatsnew-paper {
-    padding: 14px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--etz-radius-l);
-    background-color: #ffffff;
-    box-shadow: var(--shadow-s);
+/* Hover: the formulas beside the card that open a chart too. */
+ul.etz-whatsnew-formulas {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    color: var(--text-normal);
+    list-style: none;
 }
 
-.etz-whatsnew-paper svg {
-    display: block;
-    width: 100%;
-    height: auto;
+/* Earlier versions: a heading per version. */
+h4.etz-whatsnew-group-title {
+    margin: 0 0 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-variant-caps: all-small-caps;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+.etz-whatsnew-list.mod-grid + h4.etz-whatsnew-group-title {
+    margin-top: 24px;
 }
 
 /* The footer: one dot per slide (the current one long), the slide number, then the buttons. */
@@ -574,20 +503,9 @@ button.etz-whatsnew-dot:focus-visible {
 
 @media (max-width: 760px) {
     .etz-whatsnew-stage,
-    .etz-whatsnew-demo.mod-language,
-    .etz-whatsnew-demo.mod-data,
-    .etz-whatsnew-demo.mod-probability,
-    .etz-whatsnew-demo.mod-riemann,
-    .etz-whatsnew-demo.mod-slope,
-    .etz-whatsnew-demo.mod-svg,
-    .etz-whatsnew-pair,
+    .etz-whatsnew-demo.mod-chart,
     .etz-whatsnew-list.mod-grid {
         grid-template-columns: minmax(0, 1fr);
-    }
-
-    .etz-whatsnew-pair-link {
-        justify-self: center;
-        transform: rotate(90deg);
     }
 
     .etz-whatsnew-actions {
