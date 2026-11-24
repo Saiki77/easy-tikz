@@ -43,6 +43,9 @@ export interface LiveShapes {
     lines: LiveLine[];
     rings: LiveRing[];
     dots: LiveDot[];
+    // 6.0 P: what a script's frame(t) draws besides lines and dots.
+    fills?: Array<{ pts: Pt[]; color: string; opacity: number }>;
+    texts?: Array<{ x: number; y: number; text: string; color: string; size: MarkerSize; anchor: string }>;
 }
 
 /** A flow: particles that follow F and leave fading trails over faint arrows (src/motion6/live.ts). */

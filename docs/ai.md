@@ -316,6 +316,32 @@ c = -0.12 + 0.75ί
 IterationList(z^2 + c, z, {0 + 0ί}, 30), in red
 ```
 
+**Python scripts** (2D charts)
+
+A `python:` line and the lines indented below it are a script (any indent; it ends at the first line that is not indented). It runs inside the plugin (no Python install, on phones too) and is printed back exactly as written. Use it for what formulas cannot say: loops, arrays, an FFT, a computed path. Several blocks run in order and share one scope.
+
+```easy-tikz
+show x from -20 to 20 and y from -15 to 15
+equal scale
+slider n from 1 to 120, starting at 40, in steps of 1
+python:
+    import numpy as np
+    t = np.linspace(0, 2*np.pi, 256, endpoint=False)
+    heart = 16*np.sin(t)**3 + 1j*(13*np.cos(t) - 5*np.cos(2*t) - 2*np.cos(3*t) - np.cos(4*t))
+    c = np.fft.fft(heart) / len(heart)
+draw the circles of c, using n circles, with its path
+```
+
+- **Names it sets are values of the chart**, as `let` names: every line and label can use them (`plot g(x) = f(x)`, `mark the points of P`, `{k:2}` in a label). A number is a number; `1 + 2j` a complex number; a NumPy array of 2 or 3 numbers a vector, a longer one a list; an array of shape (n, 2) a list of points (`mark the points of pts, joined`); a square array a matrix; a complex array a list of complex numbers; `def f(x):` a function of the chart (exported as sampled coordinates). Names a slider, a function or an axis variable has (`x`, `y`, `t`, `z`) stay the chart's: the script may use them, the chart does not see them.
+- **Sliders and computed names are variables of the script** (`a`, `n`, `P1_x`): it runs again when one it reads changes (cached by them).
+- **`draw the circles of c, using n circles, with its path`**: `c` a list of complex coefficients in NumPy's `fft` order (index k is frequency k for k < N/2, else k − N); the circles turn in the order 0, 1, −1, 2, −2, ...; `using n circles` keeps the first n (at most 400); `with its path` draws the path of the tip.
+- **matplotlib calls draw** (`plt.` or `ax.` after `fig, ax = plt.subplots()`), in the chart's theme colours: `plot(x, y, 'r--', color=, linewidth=, linestyle=, marker=, label=, alpha=)`, `scatter(x, y, s=, c=, cmap=)`, `fill_between(x, y1, y2, where=, alpha=)`, `fill`, `bar`, `hist(x, bins, density=)`, `stem`, `step`, `arrow(x, y, dx, dy)`, `quiver(X, Y, U, V)`, `text(x, y, s)`, `annotate`, `axhline`, `axvline`, `hlines`, `vlines`, `contour(X, Y, Z, levels)`, `imshow(Z, extent=, origin=, cmap=)` (a picture: a PNG in the export), `plt.Circle`, `plt.Rectangle`, `plt.Polygon` with `add_patch`, `title`, `xlabel`, `ylabel` (the chart's title and axis names where it has none), `legend()` (a key in the corner that covers the least), `xlim`, `ylim`. Colours: `C0` to `C9`, `b g r c m y k w`, names (`red`, `tab:blue`, ...), `#rrggbb`, grey levels `'0.5'`; colour maps map to the plugin's six. A chart with no `show` line takes the script's `xlim` and `ylim`, else what it draws with matplotlib's margins. `grid`, ticks, `figure`, `show`, `savefig`, `colorbar`, `tight_layout` are accepted and do nothing (the chart's own lines set those).
+- **`def frame(t):`** (t in seconds): what it draws moves on the chart's clock (Play and Pause in the strip); the export, print and SVG files draw `frame(0)` (or the chart's `stillTime`). Draw in it; do not change names outside it.
+- **The language:** assignment (also `+=`, tuple unpacking, `a, *rest = ...`), `if/elif/else`, `for`, `while` (with `else`), `break`, `continue`, `pass`, `def` (defaults, keywords, `*args`, `**kwargs`, closures, `nonlocal`, `global`), `return`, `lambda`, comprehensions (list, dict, set, generator), `try/except/finally`, `raise`, `assert`, `del`, f-strings with format specs, `%` and `str.format`, slicing; int, float, complex (`1j`), bool, None, str, list, tuple, dict, set, range. Built-ins: `len range enumerate zip map filter sum min max abs round sorted reversed list tuple dict set float int complex bool str repr format isinstance any all divmod pow print` and more; `print` shows in the chart's problem line as a note. Imports: `numpy` (`as np`), `math`, `cmath`, `random`, `matplotlib.pyplot` (`as plt`), `matplotlib.patches`.
+- **NumPy:** `array asarray linspace arange zeros ones full eye meshgrid concatenate stack vstack hstack column_stack reshape transpose (.T) flatten sum mean std var min max argmin argmax cumsum cumprod diff dot outer matmul (@) cross sin cos tan arcsin arccos arctan arctan2 sinh cosh tanh exp log log10 log2 sqrt abs angle real imag conj floor ceil round clip where sign maximum minimum hypot mod isnan isfinite sort argsort unique roll flip interp trapz polyfit polyval histogram pi e inf nan`, element-wise operators and comparisons with broadcasting, boolean masks, fancy indexing, `a[:, 0]`, `a[None]`; `np.linalg` (`det inv solve eig eigh eigvals norm matrix_power`), `np.fft` (`fft ifft fftfreq fftshift ifftshift rfft rfftfreq`, any length), `np.random` (`seed rand randn random uniform normal randint choice shuffle permutation default_rng`; every run starts from seed 0, so a chart draws the same each time). Complex arrays work in arithmetic, `exp`, `log`, `sqrt`, `sin`, `cos`, `abs`, `angle`.
+- **Not there:** classes, `with`, generators (`yield`), `async`, decorators, other modules (pandas, scipy, sympy, os, files, internet), 3D plots and subplots (a chart is one plot), slices of an array as views (a slice is a copy: `a[1:3] = 0` works, `b = a[1:3]; b[0] = 9` does not change `a`). Whole floats print without `.0` (`2.0` prints as `2`).
+- **Problems** name the script's line: "Line 4 of the script: name 'np' is not defined". A script stops after 2 000 000 steps, 1.5 seconds or 120 calls deep ("an endless loop?"); a list or array holds at most 4 000 000 items.
+
 **Limits** (so that no chart freezes a phone). Over a limit, steps are drawn at the limit with a note ("Drawn with 2000 steps at most"); too many grid lines are a problem, and a sum of more than 100000 terms has no value.
 
 | What | At most |
@@ -327,6 +353,8 @@ IterationList(z^2 + c, z, {0 + 0ί}, 30), in red
 | Steps per pixel of a coloured plane | 1000 |
 | A bifurcation diagram, per column | 400 steps run in, 300 drawn |
 | Terms of turning circles | 60 |
+| Circles of a list of coefficients (a script's) | 400 |
+| A script run | 2 000 000 steps, 1.5 s, calls 120 deep, 4 000 000 items in one array |
 | A solution of a system | 20000 RK4 steps (a longer range gets a coarser step), 3000 points drawn |
 | Rest points | 40 |
 | Lines of the grid | 401 per direction (3D: 21 values per axis) |
@@ -358,6 +386,7 @@ The linear program of the first section, in Full LaTeX:
 - **Options** are separated by commas: words (`red`, `dashed`, `numbered`) and `key=value`. A value with a comma, a bracket or spaces goes in braces: `label={z = {c}}`, `at={(3, 1.2)}`, `title={Production plan}`. Label templates (`{c}`, `{x:2}`) keep their braces inside.
 - **`\axis[...]`** holds everything about the chart, with the names pgfplots gives them. Write one `\axis` line, after `\begin{chart}`.
 - **Names:** `name=R1` instead of `R1:`. `\mark[corners]`, `\mark[max]{...}` and `\mark[integer]` without `in=R1` use the chart's only region (`the region`).
+- A Python script is `\begin{python}`, its lines as they are, `\end{python}` (`\begin{python}[name=PY2]` names it); `\circles[count=n, path]{c}` draws the circles of a list.
 - `%` starts a comment. A line that is no command is read as a line in words. `\addplot` is `\plot`, a `;` at the end is fine, and TikZ's `\draw[->] (0, 0) -- (3, 2);` and `\node at (1, 2) {A};` work too.
 - **Anything else:** a line in words `<command> <rest>, <options>` is `\<command>[<options>]{<rest>}` (`use the table above, hidden` is `\use[hidden]{the table above}`), `\set{field = value}` sets any chart field as JSON, and `\raw[tool]{...}` (`function`, `surface`, `label`, `slider`) holds one object as JSON.
 
@@ -572,6 +601,10 @@ A line such as `y = x + 1` can be a function (then regions can use it by name, `
 #### `geogebra` (version 6)
 
 `{"type": "geogebra", "name": "c", "command": "Circle(A, 3)", "named": true, "color": "", "thickness": "", "dashed": false, "size": "", "fillOpacity": -1, "nameLabel": "auto", "label": ""}` is the line `c = Circle(A, 3)`; `"named": false` is a bare command (named G1, ...). Empty fields and `fillOpacity: -1` are GeoGebra's look; `nameLabel` is `auto`, `shown` or `hidden`. `a = Slider(0, 5)` is a slider of `parameters` with `"geogebra": true`.
+
+#### `python` (2D)
+
+`{"type": "python", "name": "PY1", "code": "import numpy as np\nc = np.fft.fft(z) / len(z)"}`: the script without the block's indent, lines joined by `\n`. A `fourierCircles` tool of a list has `"sum": "c"`, `"count": "n"` (how many circles, a formula) and `"path": true`.
 
 ## Where labels go
 

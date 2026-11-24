@@ -55,6 +55,7 @@ import { INTERACT_GUIDES } from '../src/guides/interact';
 import { LINEAR_GUIDES } from '../src/guides/linear';
 import { DYNAMICS_GUIDES } from '../src/guides/dynamics';
 import { GEOGEBRA_GUIDES } from '../src/guides/geogebra'; // 6.0 G
+import { PYTHON_GUIDES } from '../src/guides/python'; // 6.0 P
 
 /** The guides SPEC4 section 3 lists, per data file. README, docs/guides and the release posts link to them by id. */
 const DOCUMENTED: Record<string, string[]> = {
@@ -82,6 +83,7 @@ const DOCUMENTED: Record<string, string[]> = {
     dynamics: ['fractals', 'orbits-cobwebs', 'vector-fields', 'systems', 'descent-newton'],
     // 6.0 G
     geogebra: ['geogebra-commands'],
+    python: ['python-chart', 'python-heart', 'python-plot', 'python-wave'], // 6.0 P
 };
 const FILES: Record<string, Guide[]> = {
     start: START_GUIDES,
@@ -101,6 +103,7 @@ const FILES: Record<string, Guide[]> = {
     linear: LINEAR_GUIDES,
     dynamics: DYNAMICS_GUIDES,
     geogebra: GEOGEBRA_GUIDES, // 6.0 G
+    python: PYTHON_GUIDES, // 6.0 P
 };
 
 const EM_DASH = String.fromCharCode(0x2014);
@@ -854,11 +857,12 @@ const V6_SHOWCASE = [
 test('6.0 showcase: the pages of version 6 come first in the Showcase, and early in the gallery', () => {
     assert.deepEqual(guidesIn('Showcase').slice(0, V6_SHOWCASE.length).map((g) => g.id), V6_SHOWCASE);
     // The gallery of the Help (src/ui/helpPanel.ts): every category but Getting started and Reference, in
-    // GUIDE_CATEGORIES order, the tour left out. Its "All" view then shows a page of version 6 in the first row.
+    // GUIDE_CATEGORIES order, the tour left out. Its "All" view then shows pages of version 6 in its first two
+    // rows (the guides of GeoGebra commands and Python in a chart, in Chart language, come before them).
     const gallery = GUIDE_CATEGORIES.filter((c) => c !== 'Getting started' && c !== 'Reference')
         .flatMap((c) => guidesIn(c))
         .filter((g) => g.id !== 'chart-language');
-    const first = gallery.slice(0, 4).map((g) => g.id);
+    const first = gallery.slice(0, 8).map((g) => g.id);
     assert.ok(first.includes(V6_SHOWCASE[0]) && first.includes(V6_SHOWCASE[1]), first.join(', '));
 });
 

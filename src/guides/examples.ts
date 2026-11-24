@@ -12,6 +12,7 @@
 import { language } from '../i18n';
 import type { ChartExample } from '../migrate';
 import { chart } from './chart';
+import { PYTHON_EXAMPLES } from './examplesPython'; // 6.0 P
 
 interface ExampleText {
     title: string;
@@ -190,6 +191,8 @@ const SOURCES: ExampleSource[] = [
             'IterationList(z^2 + c, z, {0 + 0ί}, 30), in red',
         ],
     },
+    // 6.0 P: Python in a chart
+    ...PYTHON_EXAMPLES,
 ];
 
 /** The examples of version 6, their texts in the reader's language. */

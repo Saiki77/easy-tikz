@@ -24,7 +24,7 @@ import { inEnglish } from '../i18n';
 export type { Data };
 export { canonical, clone, minimize };
 
-const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory', 'value', 'vector', 'listPoints', 'planeGrid', 'basisVectors', 'transform', 'eigenvectors', 'unitSquare', 'span', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourPlane', 'fourierCircles', 'axisSet', 'chord', 'geogebra']; // 6.0 C: vectorField, restPoints, trajectory; A: value, vector, listPoints; D: planeGrid to span; E: orbit to fourierCircles; B: axisSet, chord; G: geogebra
+const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory', 'value', 'vector', 'listPoints', 'planeGrid', 'basisVectors', 'transform', 'eigenvectors', 'unitSquare', 'span', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourPlane', 'fourierCircles', 'axisSet', 'chord', 'geogebra', 'python']; // 6.0 C: vectorField, restPoints, trajectory; A: value, vector, listPoints; D: planeGrid to span; E: orbit to fourierCircles; B: axisSet, chord; G: geogebra; P: python
 /** Keys a block may carry that the editor's defaults do not list: how the chart sits in the note. */
 const DISPLAY_KEYS = ['displayWidth', 'displayAlign'];
 
@@ -149,6 +149,11 @@ function knownKeys(part: string, defaults: Record<string, Data>): Set<string> {
     if (part === 'trajectory') keys.add('byTime');
     if (part === 'trajectory' || part === 'orbit') keys.add('traced');
     if (part === 'colourPlane') keys.add('colormap'); // 6.0 E
+    // 6.0 P: circles of a list of coefficients: how many, and the path of the tip.
+    if (part === 'fourierCircles') {
+        keys.add('count');
+        keys.add('path');
+    }
     return keys;
 }
 

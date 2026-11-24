@@ -23,7 +23,9 @@ import { linear } from './linear';
 import { iterate } from './iterate';
 // 6.0 G
 import { geogebra } from './geogebra';
+// 6.0 P
+import { python } from './python';
 
-export const EN = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...motion6, ...notes6, ...values, ...linear, ...iterate, ...geogebra };
+export const EN = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...motion6, ...notes6, ...values, ...linear, ...iterate, ...geogebra, ...python /* 6.0 P */ };
 
 export type MessageKey = keyof typeof EN;

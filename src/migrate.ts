@@ -24,6 +24,9 @@ import { iterateRecipes } from './iterate/recipes';
 // 6.0 G
 import { GEOGEBRA_PREFIX, completeGeoGebraTool, geogebraDefaults } from './geogebra/tools';
 import { geogebraRecipes } from './geogebra/recipes';
+// 6.0 P
+import { PYTHON_PREFIX, completePythonTool, pythonDefaults } from './python/tools';
+import { pythonRecipes } from './python/recipes';
 import { notes6Recipes } from './notes6/recipes';
 // 6.0 D
 import { LINEAR_PREFIX, basisVectorsDefaults, completeLinearTool, eigenvectorsDefaults, planeGridDefaults, spanDefaults, transformDefaults, unitSquareDefaults } from './linear/tools';
@@ -147,6 +150,8 @@ const TOOL_PREFIX: Record<ToolType, string> = {
     ...ITERATE_PREFIX,
     // 6.0 G
     ...GEOGEBRA_PREFIX,
+    // 6.0 P
+    ...PYTHON_PREFIX,
 };
 
 const PARAMETER_LETTERS = ['a', 'b', 'c', 'd', 'k', 'm', 'n', 'p', 'q', 'r', 's', 'u', 'v', 'w'];
@@ -1200,7 +1205,10 @@ function convertTool(src: Record<string, unknown>, ctx: ConvertContext): { body:
             if (iterate) return { body: iterate, hidden: false };
             // 6.0 G: GeoGebra lines
             const geogebra = completeGeoGebraTool(src);
-            return geogebra ? { body: geogebra, hidden: false } : null;
+            if (geogebra) return { body: geogebra, hidden: false };
+            // 6.0 P: a python script
+            const python = completePythonTool(src);
+            return python ? { body: python, hidden: false } : null;
         }
     }
 }
@@ -1830,6 +1838,9 @@ export function defaultTool(type: ToolType, opts: { is3D: boolean; tools: Tool[]
         // 6.0 G
         case 'geogebra':
             return { ...geogebraDefaults(), ...identity('geogebra', opts) };
+        // 6.0 P
+        case 'python':
+            return { ...pythonDefaults(), ...identity('python', opts) };
     }
 }
 
@@ -2174,6 +2185,8 @@ function recipes2D(): Recipe[] {
         }),
         // 6.0 G
         ...geogebraRecipes(in2D, { tool: (type, ctx) => defaultTool(type as ToolType, toolOpts(ctx)), names: chartNames }),
+        // 6.0 P
+        ...pythonRecipes(in2D, (type, ctx) => defaultTool(type as ToolType, toolOpts(ctx)), chartNames),
         labelRecipe(in2D),
         sliderRecipe(in2D),
     ];

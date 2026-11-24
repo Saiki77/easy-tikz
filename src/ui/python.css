@@ -1,0 +1,77 @@
+/* 6.0 P: the code area of a python block's card (src/python/cards.ts). */
+.etz-python-editor {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-m, 6px);
+    background: var(--background-primary-alt);
+    overflow-x: auto;
+}
+
+.etz-python-gutter {
+    flex: 0 0 auto;
+    padding: 6px 6px 6px 8px;
+    min-width: 2.2em;
+    box-sizing: border-box;
+    text-align: right;
+    white-space: pre;
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-mono, 12px);
+    line-height: 1.5;
+    color: var(--text-faint);
+    user-select: none;
+    border-right: 1px solid var(--background-modifier-border);
+    /* The line of a problem: a red band behind its number. */
+    background-image: linear-gradient(var(--background-modifier-error), var(--background-modifier-error));
+    background-repeat: no-repeat;
+    background-size: 100% 1.5em;
+    background-position: 0 calc(6px + var(--etz-python-problem-line, -10) * 1.5em);
+}
+
+textarea.etz-python-code {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    font-family: var(--font-monospace);
+    font-size: var(--etz-font-mono, 12px);
+    line-height: 1.5;
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow: hidden;
+    tab-size: 4;
+    resize: none;
+    color: var(--text-normal);
+}
+
+textarea.etz-python-code:focus {
+    box-shadow: none;
+    outline: none;
+}
+
+.etz-python-editor:focus-within {
+    border-color: var(--interactive-accent);
+}
+
+textarea.etz-python-code.is-invalid {
+    background: transparent;
+}
+
+.etz-python-problem {
+    margin-top: 4px;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-error);
+    font-family: var(--font-monospace);
+    white-space: pre-wrap;
+}
+
+.etz-python-info {
+    margin-top: 4px;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+}

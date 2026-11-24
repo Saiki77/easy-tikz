@@ -205,6 +205,8 @@ const TOOL_KIND: Record<Tool['type'], MessageKey> = {
     fourierCircles: 'iterate.kind.fourierCircles',
     // 6.0 G
     geogebra: 'geogebra.kind.geogebra',
+    // 6.0 P
+    python: 'python.kind.python',
 };
 
 // --------------------------------------------------------------- helpers

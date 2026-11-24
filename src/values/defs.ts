@@ -6,6 +6,7 @@
 import type { ValueDefinition } from './table';
 // 6.0 G: the named GeoGebra lines that are values or functions (src/geogebra/defs.ts).
 import { geogebraDefinitions } from '../geogebra/defs';
+import { pythonDefinitions } from '../python/defs'; // 6.0 P
 
 /** The definitions of the value tools in `tools`, in their order. */
 export function valueDefinitions(tools: unknown): ValueDefinition[] {
@@ -25,5 +26,7 @@ export function valueDefinitions(tools: unknown): ValueDefinition[] {
         });
     }
     out.push(...geogebraDefinitions(tools)); // 6.0 G
+    // 6.0 P: the names the chart's python blocks set.
+    out.push(...pythonDefinitions(tools));
     return out;
 }

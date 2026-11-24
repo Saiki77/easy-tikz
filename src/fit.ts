@@ -29,6 +29,8 @@ import { linearFitShapes } from './linear/scene'; // 6.0 D
 import { fitNotes6Tool, notes6FitShapes } from './notes6/tools';
 // 6.0 A
 import { valuesFitShapes } from './values/scene';
+// 6.0 P
+import { pythonFitShapes } from './python/scene';
 // 6.0 E
 import { iterateFitShapes } from './iterate/scene';
 // 6.0 G
@@ -554,7 +556,7 @@ function fit2D(input: FitInput): FitResult {
             if (item.kind === 'tool' && !tool) continue;
             // Data, probability, Riemann sums and slope fields (5.0): what they hold, or nothing when they cover the view.
             // 6.0 A: values (src/values/scene.ts) hold their arrows and points; 6.0 B, C: their tools.
-            const beyond = tool ? (valuesFitShapes(tool, item) ?? linearFitShapes(tool, item) /* 6.0 D */ ?? beyondFitShapes(tool, item, math) ?? motionFitShapes(tool, item) ?? notes6FitShapes(tool, item) ?? iterateFitShapes(tool, item) /* 6.0 E */ ?? geogebraFitShapes(tool, item) /* 6.0 G */) : null;
+            const beyond = tool ? (valuesFitShapes(tool, item) ?? linearFitShapes(tool, item) /* 6.0 D */ ?? beyondFitShapes(tool, item, math) ?? motionFitShapes(tool, item) ?? notes6FitShapes(tool, item) ?? iterateFitShapes(tool, item) /* 6.0 E */ ?? geogebraFitShapes(tool, item) /* 6.0 G */ ?? pythonFitShapes(tool, item) /* 6.0 P */) : null;
             if (beyond) {
                 for (const p of beyond.points) c.point(p);
                 for (const l of beyond.lines) c.line(l.pts, l.closed);

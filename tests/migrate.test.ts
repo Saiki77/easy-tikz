@@ -1206,7 +1206,7 @@ function assertStructurallyValid(ctx: RecipeContext, id: string): void {
 }
 
 test('recipes: the documented lists, unique ids, sections and plain-language text', () => {
-    const sections = ['Functions', 'Regions', 'Curves and lines', 'Points', 'Segments and arrows', 'Labels', 'Sliders', '3D', 'Data', 'Probability', 'Calculus', 'Motion', 'Values', 'Linear algebra', 'Iterate', 'Colour the plane', 'GeoGebra' /* 6.0 G */];
+    const sections = ['Functions', 'Regions', 'Curves and lines', 'Points', 'Segments and arrows', 'Labels', 'Sliders', '3D', 'Data', 'Probability', 'Calculus', 'Motion', 'Values', 'Linear algebra', 'Iterate', 'Colour the plane', 'GeoGebra' /* 6.0 G */, 'Script' /* 6.0 P */];
     for (const is3D of [false, true]) {
         const list = recipes(is3D);
         assert.equal(new Set(list.map((r) => r.id)).size, list.length);
@@ -1240,6 +1240,8 @@ test('recipes: the documented lists, unique ids, sections and plain-language tex
             'orbit', 'gradient-descent', 'cobweb', 'bifurcation', 'newton-method', 'fourier-circles',
             // 6.0 G
             'geogebra-point', 'geogebra-triangle',
+            // 6.0 P
+            'python-plot', 'python-fourier', 'python-frame',
             'label', 'slider',
         ]
     );

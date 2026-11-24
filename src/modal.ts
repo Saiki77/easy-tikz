@@ -20,6 +20,7 @@ import { iterateToolReads, renameInIterateTool } from './iterate/tools'; // 6.0 
 import { geogebraToolReads, renameInGeoGebraTool } from './geogebra/tools'; // 6.0 G
 import './iterate/ask'; // 6.0 E: the questions of part E in Ask the curve (the editor and the notes)
 import { ExportFile, collectExportFiles } from './iterate/export'; // 6.0 E
+import { renameInPythonTool } from './python/tools'; // 6.0 P
 import { savePictures } from './iterate/files'; // 6.0 E
 import { MotionPlayer } from './motion6/player'; // 6.0 C
 import { playerFor } from './motion6/host'; // 6.0 C
@@ -745,6 +746,7 @@ export class TikzModal extends Modal implements PanelHost {
                     renameInLinearTool(t, { expr, tpl, ref, kind }); // 6.0 D
                     renameInIterateTool(t, { expr, tpl, ref, kind }); // 6.0 E
                     renameInGeoGebraTool(t, { expr, tpl, ref, kind }); // 6.0 G
+                    if (kind === 'parameter') renameInPythonTool(t, from, to); // 6.0 P: a slider the script reads
             }
         }
         for (const a of this.list<Annotation>('annotations')) {

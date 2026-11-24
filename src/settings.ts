@@ -13,6 +13,7 @@ import { boxAspectOf, boxRatioOf } from './box3d';
 import { exportsFrames, framesTikz } from './motion6/frames'; // 6.0 C
 // 6.0 B
 import { FIT_Y, followY } from './notes6/yfit';
+import { pythonAxes, pythonView } from './python/scene'; // 6.0 P
 
 /** The six axis range keys. */
 export type RangeKey = 'xmin' | 'xmax' | 'ymin' | 'ymax' | 'zmin' | 'zmax';
@@ -274,6 +275,11 @@ export class SettingsManager {
             }
         }
         const [xmin, xmax, ymin, ymax, zmin, zmax] = resolved;
+        // 6.0 P: a chart with python blocks and the default range: the scripts' xlim and ylim, else what they draw.
+        if (this.getValue('dimension') !== true && (['xmin', 'xmax', 'ymin', 'ymax'] as const).every((k) => String(this.getValue(k)) === RANGE_DEFAULTS[k]) && this.tools().some((t) => !!t && t.type === 'python')) {
+            const box = pythonView(this.tools(), ctx);
+            if (box) return { view: { ...box, zmin, zmax }, errors };
+        }
         // 6.0 B: y follows what is drawn over the x range.
         if (this.getValue(FIT_Y) === true && this.getValue('dimension') !== true) {
             const style = this.getValue('axis_style');
@@ -377,6 +383,14 @@ export class SettingsManager {
             if (xLabel === 'x' && names.x) xLabel = names.x;
             if (yLabel === 'y' && names.y) yLabel = names.y;
         }
+        // 6.0 P: a script's plt.title, xlabel and ylabel name what the chart leaves empty (or at x and y).
+        let title = stringValue(this.getValue('title'), '');
+        if (!isPolar && this.getValue('dimension') !== true && this.tools().some((t) => !!t && t.type === 'python')) {
+            const axes = pythonAxes(this.tools(), math);
+            if (axes && !title && axes.title) title = axes.title;
+            if (axes && xLabel === 'x' && axes.xlabel) xLabel = axes.xlabel;
+            if (axes && yLabel === 'y' && axes.ylabel) yLabel = axes.ylabel;
+        }
         const axisStyle = this.getValue<AxisStyle | undefined>('axis_style');
         return {
             width,
@@ -386,7 +400,7 @@ export class SettingsManager {
             xmax: view.xmax,
             ymin: view.ymin,
             ymax: view.ymax,
-            title: stringValue(this.getValue('title'), ''),
+            title, // 6.0 P: or the script's
             xLabel,
             yLabel,
             showAxisLabels: this.getValue('show_axis_label') !== false,

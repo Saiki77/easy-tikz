@@ -36,6 +36,8 @@ import { axisSetHead, chordHead } from '../notes6/text';
 import { LINEAR_TYPES, linearHead, linearOptions } from '../linear/text';
 // 6.0 A
 import { letHead, listPointsHead, vectorHead } from '../values/text';
+// 6.0 P
+import { pythonWords } from '../python/text';
 // 6.0 E
 import { ITERATE_KINDS, iterateHead, iterateOptions } from '../iterate/text';
 // 6.0 F1
@@ -425,6 +427,11 @@ function segmentHead(full: Data, o: Options, ctx: Ctx): string | null {
 function toolLine(min: Data, full: Data, ctx: Ctx): string {
     const type = str(full.type);
     const name = str(full.name);
+    // 6.0 P: a python block, its script as written (a name only when something shows it).
+    if (type === 'python') {
+        if (!NAME_RE.test(name) || /^(title|xlabel|ylabel|zlabel)$/i.test(name) || Object.keys(full).some((k) => !['type', 'name', 'id', 'code', 'color'].includes(k))) return raw('tool', min);
+        return pythonWords(str(full.code), ctx.shown.has(name) ? name : null, str(full.color) || null) ?? raw('tool', min);
+    }
     const o = new Options(min, []);
     let head: string | null = null;
     if (type === 'region') head = regionHead(full, o);
@@ -790,7 +797,8 @@ function printParts(source: Data, builtin = false): Printed {
             parameters: list(full.parameters).map(sliderLine).map(say),
             functions: pairs(min, full, 'functions').map((p) => say(functionLine(p.min, p.full, ctx))),
             functions3D: pairs(min, full, 'functions3D').map((p) => say(surfaceLine(p.min, p.full, ctx))),
-            tools: tools.map((p, i) => say(toolLine(p.min, p.full, { ...ctx, index: i }))),
+            // 6.0 P: a python block is not in anyone's words (its script stays as written).
+            tools: tools.map((p, i) => (str(p.full.type) === 'python' ? toolLine(p.min, p.full, { ...ctx, index: i }) : say(toolLine(p.min, p.full, { ...ctx, index: i })))),
             annotations: pairs(min, full, 'annotations').map((p) => say(labelLine(p.min, p.full))),
         },
         say,
@@ -1003,7 +1011,7 @@ function rewrite(oldText: string, data: Data, form: Form): string {
         const used = new Set<string>();
         const leftover: number[] = [];
         for (const t of traces) {
-            if (t.object?.list !== key) continue;
+            if (t.object?.list !== key || t.part) continue; // part: 6.0 P
             const item = olds[t.object.index] ?? {};
             before.set(t.line, item);
             const k = itemKey(key, item, t.object.index);
@@ -1029,9 +1037,18 @@ function rewrite(oldText: string, data: Data, form: Form): string {
 
     const out: OutLine[] = [];
     const placed = new Set<string>();
+    // 6.0 P: the line whose object kept its text: its further lines (a script) stay with it.
+    let kept: OutLine | null = null;
     for (const t of traces) {
         const source = lines[t.line - 1] ?? '';
         const indent = /^\s*/.exec(source)?.[0] ?? '';
+        if (t.part) {
+            if (kept) kept.text += '\n' + source;
+            // A chart comment between the lines of a script written anew (or deleted) stays, after it.
+            else if (/^\s*(?:%|\/\/)/.test(source)) out.push({ text: source, list: null });
+            continue;
+        }
+        kept = null;
         if (t.object) {
             const k = target.get(t.line);
             if (!k) {
@@ -1044,7 +1061,13 @@ function rewrite(oldText: string, data: Data, form: Form): string {
             placed.add(k);
             const was = before.get(t.line);
             // keepThen: 6.0 C, a changed line stays in its step.
-            out.push({ text: was && withoutId(was) === withoutId(f.item) ? source : indent + keepThenIn(source, keepForm(source, f.line), form, printed.say), list: f.list, key: k });
+            const same = !!was && withoutId(was) === withoutId(f.item);
+            // 6.0 P: a python block whose script stayed: its head line anew, its script lines as they were.
+            const script = str(f.item.type) === 'python' && !!was && str(was.code) === str(f.item.code);
+            const pyText = script ? indent + f.line.split('\n')[0].trim() : indent + f.line;
+            const line: OutLine = { text: same ? source : str(f.item.type) === 'python' ? pyText : indent + keepThenIn(source, keepForm(source, f.line), form, printed.say), list: f.list, key: k };
+            out.push(line);
+            if (same || script) kept = line; // 6.0 P
             continue;
         }
         if (t.chart.length) {

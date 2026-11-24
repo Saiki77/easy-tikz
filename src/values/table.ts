@@ -19,6 +19,20 @@ export interface ValueDefinition {
     params: string[];
     /** The formula after `=`, plain or LaTeX. */
     expression: string;
+    // 6.0 P
+    /** A name a script sets (src/python/defs.ts): its value comes from the script; `expression` lists the chart names it reads. */
+    native?: NativeValue;
+}
+
+// 6.0 P
+/** A value a script sets: no formula; it is read with the chart's numbers (sliders, P1_x). */
+export interface NativeValue {
+    /** The script it comes from (part of a context's structure key). */
+    key: string;
+    /** The value now; `read` gives a chart name's number, or undefined. */
+    value: (read: (name: string) => number | undefined) => Value;
+    /** A function of the script: its value for the arguments. */
+    call?: (args: Value[], read: (name: string) => number | undefined) => Value;
 }
 
 /** What the table needs of its MathContext. */
@@ -80,6 +94,9 @@ export class ValueTable implements Definitions {
                 params: Array.isArray(raw.params) ? raw.params.filter((p: unknown): p is string => typeof p === 'string') : [],
                 expression: typeof raw.expression === 'string' ? raw.expression : '',
             };
+            // 6.0 P
+            const native: unknown = Reflect.get(raw, 'native');
+            if (native && typeof native === 'object' && typeof Reflect.get(native, 'value') === 'function') def.native = native as NativeValue;
             const rec: Rec = { def, state: 0, ast: null, part: null, version: -1, cached: NaN, instances: new Map(), building: new Set() };
             this.order.push(rec);
             if (!NAME_RE.test(def.name)) {
@@ -214,6 +231,12 @@ export class ValueTable implements Definitions {
         return { name, fn: { params: rec.def.params, instance: (shapes) => this.instance(rec, shapes) } };
     }
 
+    /** 6.0 P: the chart's numbers by name (sliders, computed names), for the values of scripts. */
+    private reader(): (name: string) => number | undefined {
+        const env = this.host.env();
+        return (name) => env.scalar(name)?.read();
+    }
+
     private read(rec: Rec, part: Part): Value {
         const v = this.host.version();
         if (rec.version !== v) {
@@ -249,6 +272,12 @@ export class ValueTable implements Definitions {
                 }
                 seen.add(p);
             }
+            // 6.0 P: a name a script sets: its value is the script's.
+            const native = rec.def.native;
+            if (native) {
+                if (!params.length) rec.part = { f: () => native.value(this.reader()), shape: ANY, k: false };
+                return;
+            }
             if (!expression.trim()) {
                 rec.error = msg('problems.expr.enterExpression');
                 return;
@@ -274,6 +303,14 @@ export class ValueTable implements Definitions {
         const hit = rec.instances.get(key);
         if (hit instanceof ExprError) throw hit;
         if (hit) return hit;
+        // 6.0 P: a function of a script, called with the values of its arguments.
+        const call = rec.def.native?.call;
+        if (call) {
+            const cells: Cell[] = shapes.map(() => ({ v: NaN }));
+            const out = { cells, body: { f: () => call(cells.map((c) => c.v), this.reader()), shape: ANY, k: false } };
+            rec.instances.set(key, out);
+            return out;
+        }
         if (rec.building.has(key) || !rec.ast) throw new ExprError(msg('problems.math.selfReference', { name: rec.def.name }));
         rec.building.add(key);
         try {

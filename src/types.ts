@@ -802,6 +802,24 @@ export interface FourierCirclesTool extends ToolBase {
     // 6.0 F4
     /** How fast the circles turn, times the usual (`speed 2`). */
     speed?: number;
+    // 6.0 P
+    /** How many circles of a list of coefficients (a formula: a slider n); absent: all of them (at most 400). */
+    count?: string;
+    /** The path the tip draws, in the colour of the circles (`with its path`). */
+    path?: boolean;
+}
+
+// 6.0 P
+/**
+ * A Python script (src/python/): `python:` and its indented lines. The
+ * names it sets are values of the chart (as let lines); its matplotlib
+ * calls draw; `def frame(t)` draws on the clock. Several blocks run in
+ * order and share one scope.
+ */
+export interface PythonTool extends ToolBase {
+    type: 'python';
+    /** The script, without the indent of the block (lines joined by \n). */
+    code: string;
 }
 
 // 6.0 G: GeoGebra input lines (src/geogebra/).
@@ -874,7 +892,9 @@ export type Tool =
     | PlaneColourTool
     | FourierCirclesTool
     // 6.0 G
-    | GeoGebraTool;
+    | GeoGebraTool
+    // 6.0 P
+    | PythonTool;
 
 export type ToolType = Tool['type'];
 

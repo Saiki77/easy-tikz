@@ -47,6 +47,9 @@ import { ITERATE_PREFIX } from '../iterate/tools';
 // 6.0 G
 import { GEOGEBRA_KIND_WORDS, GEOGEBRA_OPTION_HELP, geogebraName, geogebraOption, isGeoGebraOption, readGeoGebraLine } from '../geogebra/text';
 import type { GeoGebraRead } from '../geogebra/text';
+// 6.0 P
+import { pythonBlocks } from '../python/text';
+import { PYTHON_PREFIX } from '../python/tools';
 
 type Data = Record<string, unknown>;
 
@@ -69,6 +72,9 @@ export interface LineTrace {
     object: { list: ObjectList; index: number } | null;
     /** Chart fields the line set (view, title, ...). */
     chart: string[];
+    // 6.0 P
+    /** A further line of the object above (the script lines of a python block): the line with `object` set starts it. */
+    part?: boolean;
 }
 
 export interface TextChart {
@@ -104,7 +110,7 @@ export const PATTERNS = new Set(['solid', 'horizontal', 'vertical', 'crosshatch'
 export const ANCHORS = new Set(['center', 'above', 'below', 'left', 'right']);
 const AXIS_STYLES: Record<string, string> = { middle: 'middle', centre: 'middle', center: 'middle', box: 'box', edges: 'axes', edge: 'axes', axes: 'axes' };
 // 6.0 A: value (L), vector (V), listPoints (LP); 6.0 B: axisSet, chord; 6.0 C: MOTION_PREFIX.
-export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', ...MOTION_PREFIX, axisSet: 'AX', chord: 'CH', value: 'L', vector: 'V', listPoints: 'LP', ...LINEAR_PREFIX /* 6.0 D */, ...ITERATE_PREFIX /* 6.0 E */, geogebra: 'G' /* 6.0 G */ };
+export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', ...MOTION_PREFIX, axisSet: 'AX', chord: 'CH', value: 'L', vector: 'V', listPoints: 'LP', ...LINEAR_PREFIX /* 6.0 D */, ...ITERATE_PREFIX /* 6.0 E */, geogebra: 'G' /* 6.0 G */, ...PYTHON_PREFIX /* 6.0 P */ };
 const NAME = '[A-Za-z][A-Za-z0-9_]*';
 /** A name the block can spell: letters, digits and _. */
 export const NAME_RE = new RegExp(`^${NAME}$`);
@@ -879,14 +885,21 @@ export function definedNames(data: Data): Set<string> {
 function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
     const b = new Builder();
     const lines = text.split(LINE_BREAK);
+    // 6.0 P: python blocks: the script lines are no chart lines (src/python/text.ts).
+    const blocks = pythonBlocks(lines);
+    const scriptLine = new Set<number>();
+    for (const blk of blocks) for (let k = blk.head + 1; k < blk.end; k++) scriptLine.add(k);
+    const blockAt = new Map(blocks.map((blk) => [blk.head, blk]));
     // 6.0 A: the let names first, so `draw f(x, y) = 1` of a let function f is its curve, not a surface.
-    for (const raw of lines) {
+    lines.forEach((raw, i) => {
+        if (scriptLine.has(i)) return; // 6.0 P
         const m = new RegExp(`^let\\s+\\$?\\s*(${NAME})\\s*(?:\\(([^()]*)\\))?\\s*=`).exec(raw.trim());
         if (m) b.lets.add(m[1]);
-    }
+    });
     // Names first, so a line may use a name defined further down; and 3D charts read their tuples as (x, y, z).
     const ggNames = new Set<string>(); // 6.0 G
-    lines.forEach((raw) => {
+    lines.forEach((raw, i) => {
+        if (scriptLine.has(i)) return; // 6.0 P
         // 6.0 C: `then plot g(x) = ...` names g as `plot g(x) = ...` does.
         const t = raw.trim().replace(/^then\s+(?=[A-Za-z\\$])/i, '');
         const named = new RegExp(`^(${NAME})\\s*:(?!=)\\s*`).exec(t);
@@ -918,8 +931,23 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
     const outside = namesNow;
     namesNow = new Set([...b.explicit].map((n) => n.toLowerCase()));
     try {
+        let script: LineTrace['object'] = null; // 6.0 P
         lines.forEach((raw, i) => {
             b.line = i + 1;
+            // 6.0 P: a python block: its head makes the tool, its lines belong to it.
+            if (scriptLine.has(i)) {
+                if (opts.trace) traces.push({ line: i + 1, object: script, chart: [], part: true });
+                return;
+            }
+            const blk = blockAt.get(i);
+            if (blk) {
+                const before = b.snapshot();
+                pythonLine(b, blk);
+                const tr = b.traceSince(before, i + 1);
+                script = tr.object;
+                if (opts.trace) traces.push(tr);
+                return;
+            }
             const line = raw.replace(/\s+$/, '');
             const t = line.trim();
             const before = opts.trace ? b.snapshot() : null;
@@ -2000,4 +2028,15 @@ function iterateLine(b: Builder, name: string | null, read: IterateRead | null):
     }
     addTool(b, read.type, name, { ...read.fields }, read.extra, read.type);
     return true;
+}
+
+// ------------------------------------------------------------ 6.0 P: python
+
+/** A python block (src/python/text.ts) as its tool; a block with no script lines is a problem. */
+function pythonLine(b: Builder, blk: { name: string | null; nameAt: number; color: string | null; code: string }) {
+    if (!blk.code.trim()) return b.problem(blk.nameAt, msg('python.problem.noBlock'));
+    const name = blk.name ? b.claim(blk.name, blk.nameAt) : null;
+    const tool: Data = { type: 'python', name: name ?? b.nextName(TOOL_PREFIX.python), code: blk.code };
+    if (blk.color) tool.color = COLOR_ALIASES[blk.color.toLowerCase()] ?? (COLORS.has(blk.color.toLowerCase()) ? blk.color.toLowerCase() : blk.color);
+    b.tools.push(tool);
 }

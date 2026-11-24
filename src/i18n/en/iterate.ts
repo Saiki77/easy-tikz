@@ -83,7 +83,7 @@ export const iterate = {
     'iterate.text.bifurcationTakes': 'Write: draw the bifurcation diagram of x_{n+1} = r x_n (1 - x_n) for r from 2.5 to 4',
     'iterate.text.newtonTakes': "Write: draw Newton's method for f from 2.5, 5 steps",
     'iterate.text.planeTakes': 'Write: colour the plane by z_{n+1} = z_n^2 + c, z_0 = 0, c = x + iy, 200 steps',
-    'iterate.text.circlesTakes': 'Write: draw the circles of \\sum_{k=1}^{n} e^{ikt}/k, with its wave',
+    'iterate.text.circlesTakes': 'Write: draw the circles of \\sum_{k=1}^{n} e^{ikt}/k, with its wave (or of a list c, using n circles)', // list: 6.0 P
 
     // ---- Ask the curve
     'iterate.ask.group': 'Iterate',

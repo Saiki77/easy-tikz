@@ -546,6 +546,15 @@ const GEOGEBRA: Record<string, string> = {
     ].join('\n'),
 };
 
+// 6.0 P: Python blocks: the Fourier heart (a list of coefficients, its path), a matplotlib-style plot with a
+// legend, a fill, texts with $ math $, a contour and an imshow picture, and a script with frame(t) (its still frame).
+const PYTHON: Record<string, string> = {
+    heart: 'show x from -20 to 20 and y from -15 to 15\nequal scale\nslider n from 1 to 120, starting at 40, in steps of 1\npython:\n    import numpy as np\n    t = np.linspace(0, 2*np.pi, 256, endpoint=False)\n    heart = 16*np.sin(t)**3 + 1j*(13*np.cos(t) - 5*np.cos(2*t) - 2*np.cos(3*t) - np.cos(4*t))\n    c = np.fft.fft(heart) / len(heart)\ndraw the circles of c, using n circles, with its path',
+    plot: 'show x from -3.5 to 3.5 and y from -1.5 to 1.5\nslider a from -3 to 3, starting at 0.5\npython:\n    import numpy as np\n    import matplotlib.pyplot as plt\n    x = np.linspace(-np.pi, np.pi, 200)\n    for k in range(1, 4):\n        plt.plot(x, np.sin(k * x + a) / k, label=f"$k = {k}$")\n    plt.fill_between(x, 0, np.sin(x + a), alpha=0.2)\n    plt.scatter([0, 1], [0, 0.5], c="C3")\n    plt.text(1.5, 1, "50% of $x^2$")\n    plt.axhline(0.5, color="k", linestyle="--")\n    plt.title("Waves")\n    plt.legend()',
+    picture: 'show x from -2 to 2 and y from -2 to 2\npython:\n    import numpy as np\n    import matplotlib.pyplot as plt\n    X, Y = np.meshgrid(np.linspace(-2, 2, 40), np.linspace(-2, 2, 40))\n    Z = np.exp(-(X**2 + Y**2))\n    plt.imshow(Z, extent=[-2, 2, -2, 2], origin="lower", cmap="viridis")\n    plt.contour(X, Y, Z, levels=[0.2, 0.5, 0.8], colors="white")',
+    frame: 'show x from 0 to 7 and y from -1.5 to 1.5\npython:\n    import numpy as np\n    import matplotlib.pyplot as plt\n    x = np.linspace(0, 2 * np.pi, 120)\n    def frame(t):\n        plt.plot(x, np.sin(x - t), color="C0")\n        plt.arrow(1, 0, 1, np.cos(t))',
+};
+
 const BEYOND: Record<string, { text: string; table?: NoteTable | null }> = {
     // The table's points with labels, bars, a line and the regression line with its equation; the headers name the axes.
     dataTable: {
@@ -828,6 +837,7 @@ if (!hasLatex) {
     for (const [k, text] of Object.entries(LINEAR)) cases.push({ name: `linear-${k}`, data: parseChartText(text).data });
     for (const [k, text] of Object.entries(ITERATE)) cases.push({ name: `iterate-${k}`, data: parseChartText(text).data }); // 6.0 E
     for (const [k, text] of Object.entries(GEOGEBRA)) cases.push({ name: `geogebra-${k}`, data: parseChartText(text).data }); // 6.0 G
+    for (const [k, text] of Object.entries(PYTHON)) cases.push({ name: `python-${k}`, data: parseChartText(text).data }); // 6.0 P
 
     const jobs = pool(
         cases.map((c) => ({

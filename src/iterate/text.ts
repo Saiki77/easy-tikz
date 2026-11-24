@@ -41,7 +41,7 @@ export const ITERATE_OPTION_HELP: Record<string, string> = {
     bifurcation: 'for r from a to b, x_0 = a start, in a colour, hidden',
     newton: 'from x_0, 5 steps, in a colour, thin, thick, labelled, hidden',
     colourPlane: 'z_0 = a start, c = a value, 200 steps, in a colour map (viridis, heat, cool, diverging, rainbow, greyscale, cyclic), opacity 0.5, hidden',
-    fourierCircles: 'with its wave, in a colour, thin, thick, speed 1, hidden',
+    fourierCircles: 'with its wave, using n circles, with its path, in a colour, thin, thick, speed 1, hidden', // using, path: 6.0 P
 };
 
 export const ITERATE_KIND_WORDS: Record<string, MessageKey> = {
@@ -54,7 +54,7 @@ export const ITERATE_KIND_WORDS: Record<string, MessageKey> = {
 };
 
 /** The fields of each kind: `steps = 40` with such a name is a field, not a name the recurrence reads. */
-const FIELDS = new Set(['type', 'name', 'id', 'color', 'hidden', 'step', 'recurrence', 'start', 'given', 'steps', 'path', 'size', 'thickness', 'valueLabel', 'parameter', 'from', 'to', 'function', 'formula', 'colormap', 'opacity', 'sum', 'wave', 'traced', 'speed']); // traced, speed: 6.0 F4
+const FIELDS = new Set(['type', 'name', 'id', 'color', 'hidden', 'step', 'recurrence', 'start', 'given', 'steps', 'path', 'size', 'thickness', 'valueLabel', 'parameter', 'from', 'to', 'function', 'formula', 'colormap', 'opacity', 'sum', 'wave', 'traced', 'speed', 'count']); // traced, speed: 6.0 F4; count: 6.0 P
 
 // --------------------------------------------------------------- pieces
 
@@ -105,11 +105,14 @@ function speedOption(o: string): number | undefined {
     return m ? optionValue('speed', m[1]) : undefined;
 }
 
+/** 6.0 P: `using n circles` (a formula). */
+const USING = /^using\s+(\S[\s\S]*?)\s+circles?$/i;
+
 /** An option of this part in the words (already in its short form: no leading with/the/its). */
 export function isIterateOption(o: string): boolean {
     const t = o.trim().toLowerCase();
     // `40 steps` is part of the statement: a line ends with it before its options.
-    return t === 'as a path' || t === 'path' || t === 'wave' || t === 'in cyclic' || t === 'cyclic' || t === 'traced' || speedOption(t) !== undefined; // traced, speed: 6.0 F4
+    return t === 'as a path' || t === 'path' || t === 'wave' || t === 'in cyclic' || t === 'cyclic' || t === 'traced' || speedOption(t) !== undefined || USING.test(t); // traced, speed: 6.0 F4; using: 6.0 P
 }
 
 /** Apply an option of this part to `target` of `kind`; true when it was one. */
@@ -152,6 +155,10 @@ export function iterateOption(kind: string, target: Data, o: string, problem: (k
     }
     if (kind === 'fourierCircles') {
         if (lower === 'wave' || lower === 'its wave' || lower === 'the wave') return set(target, 'wave', true);
+        // 6.0 P: a list of coefficients from a script: how many circles, and the path of the tip.
+        if (lower === 'path' || lower === 'its path' || lower === 'the path') return set(target, 'path', true);
+        const using = USING.exec(t);
+        if (using) return set(target, 'count', using[1].trim());
         return false;
     }
     return false;
@@ -276,7 +283,8 @@ export function readIterateDraw(rest: Piece, options: Piece[]): IterateRead | nu
             body = body.slice(0, wave.index).trim();
             fields.wave = true;
         }
-        if (!/^\\sum(?![A-Za-z])|^sum\s*\(/.test(body)) return { type: 'fourierCircles', fields: {}, extra: [], problem: { at: head.at, key: 'iterate.text.circlesTakes' } };
+        // 6.0 P: also a list of coefficients: a name (a script's c) or a list written out.
+        if (!/^\\sum(?![A-Za-z])|^sum\s*\(/.test(body) && !/^[A-Za-z][A-Za-z0-9_]*$/.test(body) && !/^(?:\[[\s\S]*\]|\\\{[\s\S]*\\\})$/.test(body)) return { type: 'fourierCircles', fields: {}, extra: [], problem: { at: head.at, key: 'iterate.text.circlesTakes' } };
         fields.sum = body;
         return { type: 'fourierCircles', fields, extra: after };
     }
@@ -406,6 +414,8 @@ export function iterateHead(full: Data, o: LineOptions): string | null {
         const sum = strOf(full.sum).trim();
         if (!clean(sum, [' with ']) || sum !== strOf(full.sum)) return null;
         o.mark('sum');
+        // 6.0 P: a list a script sets is its name as it is (draw the circles of c).
+        if (/^[A-Za-z][A-Za-z0-9_]*$/.test(sum)) return `draw the circles of ${sum}`;
         return `draw the circles of ${inMath(sum)}`;
     }
     return null;
@@ -427,6 +437,9 @@ export function iterateOptions(type: string, o: LineOptions): void {
         if (type === 'newton') o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
         if (type === 'fourierCircles') o.take('wave', (v) => (v === true ? 'with its wave' : null));
         if (type === 'fourierCircles') o.take('speed', (v) => (typeof v === 'number' ? `speed ${v}` : null)); // 6.0 F4
+        // 6.0 P
+        if (type === 'fourierCircles') o.take('count', (v) => (typeof v === 'string' && v.trim() && !/,|\scircles?\b/.test(v) ? `using ${v.trim()} circles` : null));
+        if (type === 'fourierCircles') o.take('path', (v) => (v === true ? 'with its path' : null));
     } else if (type === 'colourPlane') {
         o.take('colormap', (v) => (isPlaneColormap(v) ? `in ${v}` : null));
         o.take('opacity', (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? `opacity ${v}` : null));
