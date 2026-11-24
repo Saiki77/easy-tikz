@@ -2,8 +2,8 @@
  * Guides of the category Showcase (5.2): charts whose parts follow each
  * other. A slider moves a point, a tangent, a region or a label, and what
  * depends on it moves along. The editor offers their finished charts as
- * examples too (src/ui/buildPanel.ts, src/modal.ts). 6.0 adds six pictures
- * of version 6 in front.
+ * examples too (src/ui/buildPanel.ts, src/modal.ts). 6.0 adds eleven
+ * pictures of version 6 in front, one for each prototype of its plan page.
  */
 import type { Guide } from './types';
 import { chart } from './chart';
@@ -427,27 +427,27 @@ const MATRIX_GRID: Guide = {
 };
 
 // ------------------------------------------------------------------ two paths of the Lorenz system
-// 6.0 F4: the butterfly turns by itself.
+// 6.0 F4: the butterfly turns by itself. 6.0 showcase: and every path is traced, so the two part while you watch.
 const LZ_WINDOW = ['3d', 'turning', 'show x from -25 to 25, y from -30 to 30 and z from 0 to 50'];
 const LZ_SYSTEM = 'draw the solution of $\\dot{p} = (10(y - x), x(28 - z) - y, xy - \\frac{8}{3}z)$';
 const lzTime = (end: number) => `slider T from 5 to 40, starting at ${end}`;
-const LZ_TWO = [`${LZ_SYSTEM} through (1, 1, 1) for t from 0 to T in blue`, `${LZ_SYSTEM} through (1.001, 1, 1) for t from 0 to T in red`];
+const LZ_TWO = [`${LZ_SYSTEM} through (1, 1, 1) for t from 0 to T in blue, traced`, `${LZ_SYSTEM} through (1.001, 1, 1) for t from 0 to T in red, traced`];
 
 const LORENZ_BUTTERFLY: Guide = {
     id: 'lorenz-butterfly',
     title: 'Two paths of the Lorenz system',
-    summary: 'Start the Lorenz system twice, a thousandth apart: the two paths stay together for a while, then part for good.',
+    summary: 'Start the Lorenz system twice, a thousandth apart: the two paths draw themselves together for a while, then part for good.',
     category: 'Showcase',
     level: 'advanced',
     minutes: 2,
-    outcomes: ['Draw the solution of a system in 3D', 'Start two solutions side by side', 'Put the end time on a slider'],
+    outcomes: ['Draw the solution of a system in 3D', 'Let a path draw itself and the chart turn', 'Start two solutions side by side'],
     next: ['systems'],
     chart: chart(...LZ_WINDOW, lzTime(40), ...LZ_TWO),
     steps: [
         {
             title: 'Draw one path',
-            body: 'The Lorenz system from (1, 1, 1), coloured by time. It winds round two wings and never repeats.',
-            chart: chart(...LZ_WINDOW, `${LZ_SYSTEM} through (1, 1, 1) for t from 0 to 40, coloured by time`),
+            body: 'The Lorenz system from (1, 1, 1), coloured by time. `traced` lets it draw itself: it winds round two wings and never repeats. `turning` turns the chart slowly.',
+            chart: chart(...LZ_WINDOW, `${LZ_SYSTEM} through (1, 1, 1) for t from 0 to 40, coloured by time, traced`),
         },
         {
             title: 'Start a second path close by',
@@ -456,7 +456,7 @@ const LORENZ_BUTTERFLY: Guide = {
         },
         {
             title: 'Let time run on',
-            body: 'Drag `T` past 18: the paths part and go round the wings each in its own way. A small change at the start grows until it is all that counts.',
+            body: 'Now `T` is 40. Watch them draw: past t = 18 the paths part and go round the wings each in its own way. A small change at the start grows until it is all that counts.',
             chart: chart(...LZ_WINDOW, lzTime(40), ...LZ_TWO),
         },
     ],
@@ -540,21 +540,23 @@ const DOMAIN_COLOURING: Guide = {
 };
 
 // ------------------------------------------------------------------ circles that draw a square wave
+// 6.0 showcase: five circles first, as on the plan page, and a sawtooth as the last step.
 const FC_WINDOW = ['size 12 x 8', 'show x from -2 to 8 and y from -2 to 2', 'equal scale'];
 const FC_TITLE = 'title n = {n}';
 const fcCount = (n: number) => `slider n from 1 to 20, starting at ${n}, in steps of 1`;
 const FC_CIRCLES = 'draw the circles of $\\sum_{k=1}^{n} \\frac{4}{\\pi (2k - 1)} e^{i(2k - 1)t}$, with its wave';
+const FC_SAWTOOTH = 'draw the circles of $\\sum_{k=1}^{n} \\frac{2(-1)^{k+1}}{\\pi k} e^{ikt}$, with its wave';
 
 const FOURIER_CIRCLES: Guide = {
     id: 'fourier-circles',
-    title: 'Circles that draw a square wave',
-    summary: 'Circles turn on each other: the tip of the last draws a wave, and more circles make it more square.',
+    title: 'Circles that draw square and sawtooth waves',
+    summary: 'Circles turn on each other: the tip of the last draws a wave. More circles make it more square, other circles draw a sawtooth.',
     category: 'Showcase',
     level: 'core',
     minutes: 2,
-    outcomes: ['Draw the turning circles of a sum', 'Draw the wave of the tip', 'Add terms with a slider'],
+    outcomes: ['Draw the turning circles of a sum', 'Draw the wave of the tip', 'Add terms with a slider', 'Change the sum for another wave'],
     next: ['sums-series'],
-    chart: chart(...FC_WINDOW, FC_TITLE, fcCount(3), FC_CIRCLES),
+    chart: chart(...FC_WINDOW, FC_TITLE, fcCount(5), FC_CIRCLES),
     steps: [
         {
             title: 'Turn one circle',
@@ -563,19 +565,275 @@ const FOURIER_CIRCLES: Guide = {
         },
         {
             title: 'Add circles',
-            body: 'Each new circle turns on the tip of the one before, faster and smaller. With three of them the wave gets corners.',
-            chart: chart(...FC_WINDOW, FC_TITLE, fcCount(3), FC_CIRCLES),
+            body: 'Each new circle turns on the tip of the one before, faster and smaller. With five of them the wave gets corners.',
+            chart: chart(...FC_WINDOW, FC_TITLE, fcCount(5), FC_CIRCLES),
         },
         {
             title: 'Use twenty circles',
             body: 'Drag `n` to 20: the wave is nearly square, with small spikes at its corners.',
             chart: chart(...FC_WINDOW, FC_TITLE, fcCount(20), FC_CIRCLES),
         },
+        {
+            title: 'Draw a sawtooth',
+            body: 'Other circles, another wave: circle k turns k times as fast, with the radius 2/(πk) and its sign changing each time. The tip draws a sawtooth that climbs and drops.',
+            chart: chart(...FC_WINDOW, FC_TITLE, fcCount(10), FC_SAWTOOTH),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ 6.0 showcase: the other prototypes of the plan page
+// Complex functions both ways, gradient descent in two valleys, Julia sets and Newton basins,
+// the logistic map, the roots of unity.
+
+// ------------------------------------------------------------------ complex functions, seen two ways
+const CT_WINDOW = ['size 12 x 8', 'show x from -3 to 3 and y from -2 to 2', 'equal scale'];
+const CT_GRID = 'draw the grid from -1.5 to 1.5 in steps of 0.25';
+const ctMove = (f: string, grid = CT_GRID) => [grid, `then transform the plane by $z \\mapsto ${f}$`];
+/** For e^z: y from -π to π, so the grid wraps once round 0. */
+const CT_GRID_PI = 'draw the grid from -pi to pi in steps of pi/8';
+const ctColour = (f: string) => `colour the plane by $f(z) = ${f}$`;
+
+const COMPLEX_TWO_WAYS: Guide = {
+    id: 'complex-two-ways',
+    title: 'Complex functions, seen two ways',
+    summary: 'A function of z bends a grid in a step you can play, and colours the plane: z², 1/z and e^z, each both ways.',
+    category: 'Showcase',
+    level: 'advanced',
+    minutes: 3,
+    outcomes: ['Bend a grid with a function of z', 'Play the move in a step', 'Colour the plane by the same function', 'Find zeros and poles by their colours'],
+    next: ['domain-colouring', 'complex-maps'],
+    chart: chart(...CT_WINDOW, ...ctMove('z^2')),
+    steps: [
+        {
+            title: 'Bend a grid with z²',
+            body: 'Draw a small grid, then `then transform the plane by $z \\mapsto z^2$`. Press Play: each point z slides to z². The lines bend into parabolas and still cross at right angles.',
+            chart: chart(...CT_WINDOW, ...ctMove('z^2')),
+        },
+        {
+            title: 'Colour the plane by the same z²',
+            body: 'Now each point z takes the colour of z². The hue is its angle, so the colours go round 0 twice: z² turns twice as fast as z. The zero at 0 is dark.',
+            chart: chart(...CT_WINDOW, ctColour('z^2')),
+        },
+        {
+            title: 'Turn the grid inside out with 1/z',
+            body: '`\\frac{1}{z}` sends the points near 0 far out and brings far points in. Each line that misses 0 becomes a circle through 0.',
+            chart: chart(...CT_WINDOW, ...ctMove('\\frac{1}{z}')),
+        },
+        {
+            title: 'Find the pole of 1/z',
+            body: 'Coloured, 1/z turns the colours round 0 the other way, and 0 is white: a pole. Zeros are dark, poles are light.',
+            chart: chart(...CT_WINDOW, ctColour('\\frac{1}{z}')),
+        },
+        {
+            title: 'Wrap the grid round with e^z',
+            body: '`e^z` turns the lines up into circles round 0 and the lines across into rays from 0. This grid runs from -π to π, so it wraps once round.',
+            chart: chart(...CT_WINDOW, ...ctMove('e^z', CT_GRID_PI)),
+        },
+        {
+            title: 'Colour the plane by e^z',
+            body: 'The colour changes only upward, as e^z has the angle y. It fades to dark on the left, but the colours never meet in a point: e^z is never 0.',
+            chart: chart(...CT_WINDOW, ctColour('e^z')),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ gradient descent in a bowl and in two valleys
+const GD_WINDOW = ['size 12 x 8', 'show x from -3 to 3 and y from -2 to 2', 'equal scale'];
+const GD_HEAT = 'colour the plane by $f(x, y)$, in cool, opacity 0.35';
+const GD_BOWL = ['let $f(x, y) = \\frac{1}{2}x^2 + 4y^2$', GD_HEAT, 'draw the level curves of $f(x, y)$ at 0.25, 0.5, 1, 2, 4 and 8 in gray'];
+const GD_VALLEYS = ['let $f(x, y) = \\frac{(x^2 - 2)^2}{4} + y^2 + 0.3x$', GD_HEAT, 'draw the level curves of $f(x, y)$ at -0.3, 0, 0.5, 1, 1.5, 2.5 and 4 in gray'];
+const gdEta = (eta: number) => `slider eta from 0.01 to 0.3, starting at ${eta}`;
+const GD_P = 'mark P at (-2.6, 1.4), large, labelled "P"';
+const gdStart = (a: number) => [`slider a from -2.5 to 2.5, starting at ${a}`, 'P: mark (a, 1.6), large, labelled "P"'];
+const GD_WALK = 'draw the orbit of $p_{n+1} = p_n - \\eta \\nabla f(p_n)$, $p_0 = P$, 25 steps, traced';
+
+const TWO_VALLEYS: Guide = {
+    id: 'two-valleys',
+    title: 'Gradient descent in a bowl and two valleys',
+    summary: 'Walk downhill with the step size on a slider: a step too large zigzags away, and the start picks the valley you end in.',
+    category: 'Showcase',
+    level: 'advanced',
+    minutes: 3,
+    outcomes: ['Draw gradient descent as a path that draws itself', 'Find a step size that is too large', 'See the start decide the minimum'],
+    next: ['descent-newton', 'gradient-levels'],
+    chart: chart(...GD_WINDOW, ...GD_VALLEYS, gdEta(0.08), ...gdStart(0.05), GD_WALK),
+    steps: [
+        {
+            title: 'Draw a bowl',
+            body: '`let` names f(x, y) = x²/2 + 4y², a long bowl: steep in y, flat in x. Its level curves and a light heat map show the shape.',
+            chart: chart(...GD_WINDOW, ...GD_BOWL),
+        },
+        {
+            title: 'Walk downhill from P',
+            body: 'Each step goes against the gradient `\\nabla f`, times the step size `eta`. `traced` lets the path draw itself: it zigzags across the steep side and settles at 0.',
+            chart: chart(...GD_WINDOW, ...GD_BOWL, gdEta(0.2), GD_P, GD_WALK),
+            tip: 'In the editor, drag P: the path starts again from there.',
+        },
+        {
+            title: 'Make the step too large',
+            body: 'Drag `eta` past 0.25. Each step now jumps further across the bowl than the one before: the zigzag grows and the path leaves the chart.',
+            chart: chart(...GD_WINDOW, ...GD_BOWL, gdEta(0.27), GD_P, GD_WALK),
+        },
+        {
+            title: 'Go to two valleys',
+            body: 'This f has a deep valley on the left, a shallow one on the right and a ridge between them at x = 0.15. P starts right of the ridge and finds the shallow valley.',
+            chart: chart(...GD_WINDOW, ...GD_VALLEYS, gdEta(0.08), ...gdStart(0.25), GD_WALK),
+        },
+        {
+            title: 'Let the start pick the valley',
+            body: 'Drag `a` to move P across the ridge. Left of 0.15 the path runs into the deep valley instead: where you start decides which minimum you find.',
+            chart: chart(...GD_WINDOW, ...GD_VALLEYS, gdEta(0.08), ...gdStart(0.05), GD_WALK),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ Julia sets and Newton basins
+const JN_WINDOW = ['size 12 x 8', 'show x from -1.8 to 1.8 and y from -1.2 to 1.2', 'equal scale'];
+const JN_TITLE = 'title c = {a} + {b}i';
+const jnSliders = (a: number, b: number) => [`slider a from -1 to 1, starting at ${a}`, `slider b from -1 to 1, starting at ${b}`];
+const JN_JULIA = 'colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = x + iy$, $c = a + bi$, 200 steps';
+const JN_RULE = '$z_{n+1} = z_n - \\frac{z_n^3 - 1}{3z_n^2}$';
+const JN_NEWTON = `colour the plane by ${JN_RULE}, $z_0 = x + iy$, 40 steps`;
+const jnStart = (a: number, b: number) => [
+    `slider a from -1.8 to 1.8, starting at ${a}, in steps of 0.01`,
+    `slider b from -1.2 to 1.2, starting at ${b}, in steps of 0.01`,
+    'P: mark (a, b), large, labelled "P"',
+];
+const JN_ORBIT = `draw the orbit of ${JN_RULE}, $z_0 = P$, 20 steps, traced`;
+
+const JULIA_NEWTON: Guide = {
+    id: 'julia-newton',
+    title: 'Julia sets and Newton basins',
+    summary: "Put c of a Julia set on two sliders, then colour the plane by Newton's method and watch one point find its root.",
+    category: 'Showcase',
+    level: 'advanced',
+    minutes: 3,
+    outcomes: ['Colour the plane by a Julia set on sliders', "Colour Newton's method by the root it reaches", 'Trace the orbit of a point'],
+    next: ['mandelbrot-orbit', 'fractals'],
+    chart: chart(...JN_WINDOW, JN_NEWTON, ...jnStart(-0.6, 0.05), JN_ORBIT),
+    steps: [
+        {
+            title: 'Colour the plane by a Julia set',
+            body: 'Every point is a start `$z_0 = x + iy$` of z² + c, and c = a + bi stays fixed. The dark points never escape. This c lies in the Mandelbrot set, so they hang together.',
+            chart: chart(...JN_WINDOW, JN_TITLE, ...jnSliders(-0.12, 0.75), JN_JULIA),
+        },
+        {
+            title: 'Move c with the sliders',
+            body: 'Drag `a` and `b`: each c gives another set. At -0.8 + 0.156i, near the border of the Mandelbrot set, it turns into thin spirals.',
+            chart: chart(...JN_WINDOW, JN_TITLE, ...jnSliders(-0.8, 0.156), JN_JULIA),
+        },
+        {
+            title: 'Move c out of the Mandelbrot set',
+            body: 'At 0.45 + 0.45i, c lies outside. The set falls apart into dust: nearly every orbit flies away.',
+            chart: chart(...JN_WINDOW, JN_TITLE, ...jnSliders(0.45, 0.45), JN_JULIA),
+        },
+        {
+            title: "Colour the plane by Newton's method",
+            body: "Newton's method for z³ - 1 runs from every point. Each point takes the colour of the root it reaches, darker the more steps it needs.",
+            chart: chart(...JN_WINDOW, JN_NEWTON),
+        },
+        {
+            title: 'Follow one point to its root',
+            body: 'P sits at (a, b), and its orbit draws itself. From the border between the colours it jumps far across before it settles at the root 1.',
+            chart: chart(...JN_WINDOW, JN_NEWTON, ...jnStart(-0.6, 0.05), JN_ORBIT),
+            tip: 'Drag `a` and `b`, or P in the editor: near a border every small move picks another root.',
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ the logistic map
+const LM_DIAGRAM = ['size 12 x 8', 'show x from 2.5 to 4 and y from 0 to 1', 'xlabel r'];
+const LM_BIFURCATION = 'draw the bifurcation diagram of $x_{n+1} = r x_n (1 - x_n)$ for r from 2.5 to 4';
+const lmSlider = (r: number) => `slider r from 2.5 to 4, starting at ${r}`;
+const LM_LINE = 'draw $x = r$ in orange, dashed, thick';
+const LM_WEB_WINDOW = ['size 12 x 8', 'show x from 0 to 1 and y from 0 to 1', 'equal scale'];
+const LM_MAP = 'plot $f(x) = r x (1 - x)$ in blue, thick';
+const LM_COBWEB = 'draw the cobweb of $x_{n+1} = f(x_n)$ from 0.2, 100 steps';
+
+const LOGISTIC_MAP: Guide = {
+    id: 'logistic-map',
+    title: 'The logistic map: bifurcation and cobweb',
+    summary: 'x ↦ r x (1 - x) for every r at once, then for one r on a slider: it settles, swaps between two values, four, and turns chaotic.',
+    category: 'Showcase',
+    level: 'advanced',
+    minutes: 3,
+    outcomes: ['Draw a bifurcation diagram', 'Mark the r of a slider in it', 'Follow one r on a cobweb'],
+    next: ['orbits-cobwebs'],
+    chart: chart(...LM_DIAGRAM, lmSlider(3.2), LM_BIFURCATION, LM_LINE),
+    steps: [
+        {
+            title: 'Draw the bifurcation diagram',
+            body: 'For each r from 2.5 to 4 the diagram marks where x ↦ r x (1 - x) settles: one value, then two, four, eight, then chaos past r = 3.57.',
+            chart: chart(...LM_DIAGRAM, LM_BIFURCATION),
+        },
+        {
+            title: 'Put r on a slider',
+            body: 'The dashed line is `x = r`. At r = 3.2 it crosses two branches: the map swaps between two values for ever. Drag `r` along the diagram.',
+            chart: chart(...LM_DIAGRAM, lmSlider(3.2), LM_BIFURCATION, LM_LINE),
+        },
+        {
+            title: 'Follow r = 3.2 on a cobweb',
+            body: 'The cobweb runs the map from 0.2: up to the graph, across to the line y = x, up again. It closes into a square: the same two values.',
+            chart: chart(...LM_WEB_WINDOW, lmSlider(3.2), LM_MAP, LM_COBWEB),
+        },
+        {
+            title: 'Split the values again',
+            body: 'At r = 3.5 the square splits: the path visits four values. Drag `r` slowly up and they double faster and faster.',
+            chart: chart(...LM_WEB_WINDOW, lmSlider(3.5), LM_MAP, LM_COBWEB),
+        },
+        {
+            title: 'Find chaos',
+            body: 'At r = 3.9 the path never settles: it fills a whole band, as the cloud in the diagram does.',
+            chart: chart(...LM_WEB_WINDOW, lmSlider(3.9), LM_MAP, LM_COBWEB),
+        },
+    ],
+};
+
+// ------------------------------------------------------------------ the roots of unity
+const RU_WINDOW = ['size 12 x 8', 'show x from -1.95 to 1.95 and y from -1.3 to 1.3', 'equal scale'];
+const ruCount = (n: number) => `slider n from 2 to 10, starting at ${n}, in steps of 1`;
+const RU_CIRCLE = 'draw $x^2 + y^2 = 1$ in gray';
+const RU_ROOTS = 'mark the points $\\{e^{2\\pi i k / n} : k = 0, \\dots, n - 1\\}$, joined, in blue, labelled "$\\omega^ {i - 1}$"';
+const RU_TURN = 'draw the orbit of $z_{n+1} = \\omega z_n$, $z_0 = 1$, $\\omega = e^{2\\pi i / n}$, n steps, traced';
+const RU_COLOUR = 'colour the plane by $f(z) = z^n - 1$';
+
+const ROOTS_OF_UNITY: Guide = {
+    id: 'unity-roots',
+    title: 'Roots of unity on a slider',
+    summary: 'The n numbers with zⁿ = 1 make a regular polygon on the unit circle, and multiplying by ω turns each one to the next.',
+    category: 'Showcase',
+    level: 'core',
+    minutes: 2,
+    outcomes: ['Mark a list of complex numbers', 'Change their count with a slider', 'Trace an orbit that multiplies by ω'],
+    next: ['complex-two-ways', 'complex-maps'],
+    chart: chart(...RU_WINDOW, ruCount(7), RU_CIRCLE, RU_ROOTS, RU_TURN),
+    steps: [
+        {
+            title: 'Mark the roots of unity',
+            body: 'The n numbers e^(2πik/n) solve zⁿ = 1. `mark the points` takes their list, and `joined` draws the polygon through them. Each one is a power of ω, the first after 1.',
+            chart: chart(...RU_WINDOW, ruCount(5), RU_CIRCLE, RU_ROOTS),
+        },
+        {
+            title: 'Change n with a slider',
+            body: 'Drag `n`: the polygon gains corners and comes closer to the circle. ω is always a turn by 1/n of the circle.',
+            chart: chart(...RU_WINDOW, ruCount(9), RU_CIRCLE, RU_ROOTS),
+        },
+        {
+            title: 'Turn by ω, step by step',
+            body: 'The orbit of z ↦ ωz from 1 draws itself: each step multiplies by ω and moves the dot one corner on. After n steps it is back at 1.',
+            chart: chart(...RU_WINDOW, ruCount(7), RU_CIRCLE, RU_ROOTS, RU_TURN),
+        },
+        {
+            title: 'Colour the plane by zⁿ - 1',
+            body: 'The roots are the zeros of zⁿ - 1, so all colours meet at each of them, on the circle. Drag `n`: there are always n such points.',
+            chart: chart(...RU_WINDOW, ruCount(7), RU_COLOUR, RU_CIRCLE),
+        },
     ],
 };
 
 export const SHOWCASE_GUIDES: Guide[] = [
-    // 6.0 F2: the pictures of version 6 first
-    MANDELBROT_ORBIT, MATRIX_GRID, LORENZ_BUTTERFLY, PENDULUM_FIELD, DOMAIN_COLOURING, FOURIER_CIRCLES,
+    // 6.0: the pictures of version 6 first (F2, and the other prototypes of the plan page); the ones that move lead
+    LORENZ_BUTTERFLY, COMPLEX_TWO_WAYS, FOURIER_CIRCLES, TWO_VALLEYS, MANDELBROT_ORBIT, PENDULUM_FIELD,
+    JULIA_NEWTON, MATRIX_GRID, LOGISTIC_MAP, DOMAIN_COLOURING, ROOTS_OF_UNITY,
     TANGENT_TRIANGLE, LARGEST_RECTANGLE, MEAN_VALUE, TAYLOR_SINE, GRADIENT_LEVELS, CROSSING_LINES, SLIDING_LADDER, THROW,
 ];

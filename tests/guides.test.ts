@@ -63,6 +63,8 @@ const DOCUMENTED: Record<string, string[]> = {
         'tangent-triangle', 'largest-rectangle', 'mean-value', 'taylor-sine', 'gradient-levels', 'crossing-lines', 'sliding-ladder', 'throw-angle',
         // 6.0 F2
         'mandelbrot-orbit', 'matrix-grid', 'lorenz-butterfly', 'pendulum-field', 'domain-colouring', 'fourier-circles',
+        // 6.0 showcase: the other prototypes of the plan page
+        'complex-two-ways', 'two-valleys', 'julia-newton', 'logistic-map', 'unity-roots',
     ],
     functions: ['sliders', 'parametric-polar', 'animate-play'],
     calculus: ['tangents-extrema', 'secant-tangent', 'area-accumulation', 'riemann-sums', 'slope-fields'],
@@ -835,4 +837,89 @@ test('6.0 guides: the numbers the steps name are the ones the charts compute', (
     assert.deepEqual(shown(stepOf('vector-fields', 3)).texts.slice().sort(), ['saddle', 'stable spiral', 'stable spiral']);
     // matrix-grid: det A = 2 - k, below 0 at the last step.
     assert.ok(shown(stepOf('matrix-grid', 4)).texts.includes('$\\det A = -1$'), shown(stepOf('matrix-grid', 4)).texts.join(' | '));
+});
+
+// ------------------------------------------------ 6.0 showcase: the pages of the plan page's prototypes
+
+/** The Showcase pages of version 6, in the order the Showcase shows them. */
+const V6_SHOWCASE = [
+    'lorenz-butterfly', 'complex-two-ways', 'fourier-circles', 'two-valleys', 'mandelbrot-orbit', 'pendulum-field',
+    'julia-newton', 'matrix-grid', 'logistic-map', 'domain-colouring', 'unity-roots',
+];
+
+test('6.0 showcase: the pages of version 6 come first in the Showcase, and early in the gallery', () => {
+    assert.deepEqual(guidesIn('Showcase').slice(0, V6_SHOWCASE.length).map((g) => g.id), V6_SHOWCASE);
+    // The gallery of the Help (src/ui/helpPanel.ts): every category but Getting started and Reference, in
+    // GUIDE_CATEGORIES order, the tour left out. Its "All" view then shows a page of version 6 in the first row.
+    const gallery = GUIDE_CATEGORIES.filter((c) => c !== 'Getting started' && c !== 'Reference')
+        .flatMap((c) => guidesIn(c))
+        .filter((g) => g.id !== 'chart-language');
+    const first = gallery.slice(0, 4).map((g) => g.id);
+    assert.ok(first.includes(V6_SHOWCASE[0]) && first.includes(V6_SHOWCASE[1]), first.join(', '));
+});
+
+test('6.0 showcase: the moving parts move (traced, turning, steps)', () => {
+    const tools = (chart: ChartData) => (chart.tools ?? []) as Array<Tool & { traced?: boolean }>;
+    const lorenz = guideById('lorenz-butterfly');
+    assert.ok(lorenz);
+    for (const { where, chart } of chartsOf(lorenz)) {
+        assert.equal(chart.turning, true, `${where}: turning`);
+        for (const t of tools(chart).filter((t) => t.type === 'trajectory')) assert.equal(t.traced, true, `${where}: traced`);
+    }
+    for (const id of ['two-valleys', 'unity-roots']) {
+        const g = guideById(id);
+        assert.ok(g);
+        assert.ok(tools(g.chart).some((t) => t.type === 'orbit' && t.traced === true), `${id}: a traced orbit`);
+    }
+    // Complex functions: each grid step moves in a `then` step, each colour step colours by f(z).
+    const complex = guideById('complex-two-ways');
+    assert.ok(complex);
+    complex.steps.forEach((step, i) => {
+        const kinds = tools(step.chart as ChartData).map((t) => t.type);
+        assert.ok(i % 2 === 0 ? kinds.includes('transform') && Number((tools(step.chart as ChartData).find((t) => t.type === 'transform') as { step?: number }).step) === 1 : kinds.includes('colourPlane'), `complex-two-ways step ${i + 1}: ${kinds.join(', ')}`);
+    });
+    // Fourier circles: a square wave, then a sawtooth.
+    const fourier = guideById('fourier-circles');
+    assert.ok(fourier);
+    const sums = fourier.steps.map((s) => String((tools(s.chart as ChartData)[0] as unknown as { sum?: string }).sum ?? ''));
+    assert.ok(sums.slice(0, 3).every((sum) => sum.includes('2k - 1')) && /\(-1\)\^\{k\+1\}/.test(sums[3]), sums.join(' | '));
+});
+
+test('6.0 showcase: the numbers the new pages name are the ones the charts compute', () => {
+    // two-valleys: the bowl settles at 0 for eta = 0.2 and runs away at 0.27; the ridge at x = 0.15 splits the valleys.
+    const end = (chart: ChartData) => shown(chart).derived;
+    assert.ok(Math.hypot(end(stepOf('two-valleys', 2)).OR1_x, end(stepOf('two-valleys', 2)).OR1_y) < 0.05);
+    assert.ok(Math.abs(end(stepOf('two-valleys', 3)).OR1_y) > 10);
+    assert.ok(end(stepOf('two-valleys', 4)).OR1_x > 1, 'right of the ridge: the shallow valley on the right');
+    assert.ok(end(stepOf('two-valleys', 5)).OR1_x < -1, 'left of the ridge: the deep valley on the left');
+    // Near the ridge the path leaves it slowly, but on its own side: right of 0.15 to the right, left of it to the left.
+    assert.ok(end(stepOf('two-valleys', 5, { a: 0.16 })).OR1_x > 0.3 && end(stepOf('two-valleys', 5, { a: 0.14 })).OR1_x < 0, 'the ridge at 0.15');
+    // julia-newton: the titles print the c the steps name, inside the Mandelbrot set at step 1, outside at step 3; P reaches the root 1.
+    const escapes = (re: number, im: number): boolean => {
+        let x = 0;
+        let y = 0;
+        for (let k = 0; k < 1000; k++) {
+            [x, y] = [x * x - y * y + re, 2 * x * y + im];
+            if (x * x + y * y > 4) return true;
+        }
+        return false;
+    };
+    assert.equal(shown(stepOf('julia-newton', 1)).title, 'c = -0.12 + 0.75i');
+    assert.equal(escapes(-0.12, 0.75), false);
+    assert.equal(shown(stepOf('julia-newton', 2)).title, 'c = -0.8 + 0.156i');
+    assert.equal(shown(stepOf('julia-newton', 3)).title, 'c = 0.45 + 0.45i');
+    assert.equal(escapes(0.45, 0.45), true);
+    const newton = end(stepOf('julia-newton', 5));
+    assert.ok(Math.hypot(newton.OR1_x - 1, newton.OR1_y) < 1e-6, `P ends at (${newton.OR1_x}, ${newton.OR1_y})`);
+    // logistic-map: at r = 3.2 the cobweb swaps between (r + 1 ± √((r - 3)(r + 1))) / 2r.
+    const r = 3.2;
+    const two = [1, -1].map((s) => (r + 1 + s * Math.sqrt((r - 3) * (r + 1))) / (2 * r));
+    const web = end(stepOf('logistic-map', 3)).CW1_x;
+    assert.ok(two.some((v) => Math.abs(v - web) < 1e-6), `${web} is not one of ${two.join(', ')}`);
+    // unity-roots: n steps of z -> ωz from 1 come back to 1.
+    for (const n of [2, 5, 7, 10]) {
+        const back = end(stepOf('unity-roots', 3, { n }));
+        assert.equal(back.OR1_n, n + 1, `n = ${n}`);
+        assert.ok(Math.hypot(back.OR1_x - 1, back.OR1_y) < 1e-9, `n = ${n}: ends at (${back.OR1_x}, ${back.OR1_y})`);
+    }
 });
