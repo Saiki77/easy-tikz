@@ -92,6 +92,7 @@ export function buildShape(input: ShapeInput): ShapeModel {
         case 'vertex':
         case 'label':
         case 'path':
+        case 'tip': // 6.0 D: never solved (src/linear/drag.ts writes the numbers itself)
             return new PointShape(input);
     }
 }

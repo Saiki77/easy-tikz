@@ -14,6 +14,7 @@ import { SettingsManager } from '../settings';
 import { t } from '../i18n';
 import { AskTarget, Question, answerPresent, applyAnswer, askContext, askQuestions, pickTarget, removeAnswer } from './ask';
 import { markNew, openAskMenu, showAskMenu } from './askMenu';
+import '../linear/ask'; // 6.0 D: the questions about arrows and transforms
 
 type Data = Record<string, unknown>;
 
@@ -61,6 +62,9 @@ export function askTitle(target: AskTarget, data: Data): string {
         const f = (Array.isArray(data.functions) ? (data.functions as FunctionParameters[]) : []).find((x) => x.name === target.name);
         return f ? `${target.name}(x) = ${f.expression.trim()}` : target.name;
     }
+    // 6.0 D
+    if (target.kind === 'vector') return t('linear.ask.title.vector', { name: target.name });
+    if (target.kind === 'transform') return t('linear.ask.title.transform', { name: target.name });
     const key = target.kind === 'region' ? 'notes6.ask.group.region' : target.kind === 'curve' ? 'notes6.ask.group.curve' : 'notes6.ask.group.point';
     return t(key, { name: target.name });
 }

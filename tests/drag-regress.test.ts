@@ -8,7 +8,7 @@
  */
 import { test, assert } from './_lib';
 import { EXAMPLES } from '../src/migrate';
-import { DragSession, nudge, prepareDrag, preparedServes } from '../src/drag/session';
+import { DragSession, EditSession, nudge, prepareDrag, preparedServes } from '../src/drag/session';
 import type { PreparedDrag } from '../src/drag/session';
 import { resolveTarget } from '../src/drag/targets';
 import type { DragContext, DragFrame, DragTarget, Gesture, Pt } from '../src/drag/types';
@@ -292,7 +292,7 @@ test('keyboard nudges land on the pixel step every press (no swallowed presses)'
     const hit = hitByKey(lp.ctx, 't0#clause:1:0:0', { x: 1.5, y: 1.5 });
     const t = resolveTarget(hit, lp.ctx);
     const p = prepared(lp.ctx, t, hit.at, 'move');
-    let s: DragSession | null = null;
+    let s: EditSession | null = null;
     const seq: string[] = [];
     for (let i = 0; i < 5; i++) {
         const r = nudge(s, p, { x: 0.05, y: 0 }, { shift: false, alt: false }, lp.ctx);

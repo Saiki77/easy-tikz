@@ -25,6 +25,8 @@ import { liveSlider, textButton } from './kit';
 import { MessageKey, t } from '../i18n';
 // 6.0 B: sets, maps, conditions, intervals, Jensen and epigraphs (src/notes6/hover.ts).
 import { HoverCard, HoverKind, hoverCard, hoverKind, noteDefinitions, variableName } from '../notes6/hover';
+// 6.0 D: matrices, A v, det A and A v = λ v (src/linear/hover.ts).
+import { LinearHoverKind, linearHoverCard, linearHoverKind, noteValues } from '../linear/hover';
 
 export interface FormulaHoverHost {
     /** The setting Charts for formulas. */
@@ -61,6 +63,14 @@ const NOTES6_KIND: Record<HoverKind, MessageKey> = {
     interval: 'notes6.hover.kind.interval',
     jensen: 'notes6.hover.kind.jensen',
     epigraph: 'notes6.hover.kind.epigraph',
+};
+
+/** 6.0 D: what a card of src/linear/hover.ts is. */
+const LINEAR_KIND: Record<LinearHoverKind, MessageKey> = {
+    matrix: 'linear.hover.kind.matrix',
+    product: 'linear.hover.kind.product',
+    det: 'linear.hover.kind.det',
+    eigen: 'linear.hover.kind.eigen',
 };
 
 /** The note under a card of this part: where its function comes from, what n = 2 means, what the x-axis is. */
@@ -281,6 +291,11 @@ export class FormulaHover {
                 void this.openNotes6(math, row, pick, drawnRows, found, tex);
                 return;
             }
+            // 6.0 D: a matrix, A v, det A, A v = λ v.
+            if (found && !(byRow && pick === undefined) && linearHoverKind(tex)) {
+                void this.openLinear(math, row, pick, drawnRows, found, tex);
+                return;
+            }
             // A row without a chart: the card of another row of the block closes.
             if (this.pop && this.target === math) this.scheduleClose();
             return;
@@ -313,6 +328,23 @@ export class FormulaHover {
         const one = read(card.lines);
         if (!one) return;
         this.show(math, row, pick, drawnRows, found, tex, t(NOTES6_KIND[card.kind]), one, { note: cardNote(card), two: card.lines2 ? read(card.lines2) : null });
+    }
+
+    /** 6.0 D: the card of a formula of src/linear/hover.ts, with the note's matrices and vectors. */
+    private async openLinear(math: HTMLElement, row: number | undefined, pick: number | undefined, drawnRows: HTMLElement[], found: Found, tex: string) {
+        let note = '';
+        try {
+            note = await found.note();
+        } catch {
+            note = '';
+        }
+        if (!math.isConnected || (this.pop && this.target !== math && this.held)) return;
+        const card = linearHoverCard(tex, noteValues(formulasIn(note).map((f) => f.tex).filter((f) => f !== found.tex)));
+        if (!card) return;
+        const parsed = parseChartText(card.lines.join('\n'));
+        if (parsed.problems.length) return;
+        const text = [card.example ? t('linear.hover.note.example', { name: card.name }) : '', t('linear.hover.note.t', { name: card.name })].filter((x) => x).join(' ');
+        this.show(math, row, pick, drawnRows, found, tex, t(LINEAR_KIND[card.kind]), parsed.data, { note: text, two: null });
     }
 
     /** The card: the formula, what it is, its chart with sliders, and Open in the editor and Insert chart. */
@@ -594,7 +626,7 @@ function markMath(math: HTMLElement, tex: string | null): void {
     if (rows.length > 1 && drawn.length === rows.length) {
         let any = false;
         drawn.forEach((tr, i) => {
-            const ok = chartable(tex, i) || !!hoverKind(rows[i]); // 6.0 B
+            const ok = chartable(tex, i) || !!hoverKind(rows[i]) || !!linearHoverKind(rows[i]); // 6.0 B, D
             tr.dataset.etzMark = ok ? '1' : '0';
             any = any || ok;
         });
@@ -602,7 +634,7 @@ function markMath(math: HTMLElement, tex: string | null): void {
         return;
     }
     // 6.0 B: sets, maps, conditions, intervals, Jensen and epigraphs open a card too.
-    math.dataset.etzMark = chartable(tex) || hoverKind(tex) ? '1' : '0';
+    math.dataset.etzMark = chartable(tex) || hoverKind(tex) || linearHoverKind(tex) ? '1' : '0'; // 6.0 D: matrices too
 }
 
 /** The formula a rendered formula of the editor shows: its TeX, and the end of the line where it ends. */

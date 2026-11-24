@@ -8,6 +8,7 @@ import { Node, linearForm, parse, parseTuples, tokenize, formatNumber, identifie
 import { MathContext, conditionClauseNodes } from '../mathcontext';
 import type { Annotation, CurveTool, FunctionParameters, Parameter, PointsTool, RegionTool, SegmentTool, Tool } from '../types';
 import { conditionName, labelName, levelName, lockFor, pointName, tangentName } from './describe';
+import { tipTarget } from '../linear/drag'; // 6.0 D
 import type { DragContext, DragTarget, FieldRef, Hit, HitShape, Lock, Pt, UnitSpec, VirtualKind } from './types';
 
 export interface ChartData {
@@ -53,6 +54,11 @@ export function fieldText(ref: FieldRef, data: ChartData): string | null {
             return t.type === 'points' ? str(t.objective) : null;
         case 'path':
             return t.type === 'segment' ? str(t.path) : null;
+        // 6.0 D
+        case 'expression':
+            return t.type === 'value' ? str(t.expression) : null;
+        case 'map':
+            return t.type === 'transform' ? str(t.map) : null;
     }
     return null;
 }
@@ -99,6 +105,15 @@ export function setFieldText(ref: FieldRef, data: ChartData, text: string): bool
         case 'path':
             if (t.type !== 'segment') return false;
             t.path = text;
+            return true;
+        // 6.0 D
+        case 'expression':
+            if (t.type !== 'value') return false;
+            t.expression = text;
+            return true;
+        case 'map':
+            if (t.type !== 'transform') return false;
+            t.map = text;
             return true;
     }
     return false;
@@ -162,6 +177,9 @@ function shapeTarget(hit: Hit, ctx: DragContext): DragTarget {
             return vertexTarget(shape, part.index, part.item, ctx);
         case 'leg':
             return legTarget(shape, hit, ctx);
+        // 6.0 D: the tip of an arrow whose numbers are a let value's (src/linear/drag.ts).
+        case 'tip':
+            return tipTarget(shape, part, ctx);
     }
     return locked(baseFrom(shape, shape.source), lockFor({ kind: 'nothing', subject: shape.source }));
 }

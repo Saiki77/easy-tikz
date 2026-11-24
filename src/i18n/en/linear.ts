@@ -76,6 +76,8 @@ export const linear = {
     'linear.card.empty': 'Not set yet',
 
     // ---- Ask the curve
+    'linear.ask.title.vector': 'Arrow {name}',
+    'linear.ask.title.transform': 'Transform {name}',
     'linear.ask.group': 'Linear algebra',
     'linear.ask.eigenvectors': 'Its eigenvectors',
     'linear.ask.unitSquare': 'The image of the unit square, with det',
@@ -94,7 +96,7 @@ export const linear = {
     'linear.hover.kind.product': 'Matrix times vector',
     'linear.hover.kind.det': 'Determinant',
     'linear.hover.kind.eigen': 'Eigenvectors',
-    'linear.hover.note.t': 'Move t from 0 to 1: the grid goes from I to {name}.',
+    'linear.hover.note.t': 'Move s from 0 to 1: the grid goes from I to {name}.',
     'linear.hover.note.example': 'The note does not define {name}: the card uses an example.',
     'linear.hover.note.fromNote': '{name} as the note defines it.',
 

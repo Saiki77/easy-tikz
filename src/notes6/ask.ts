@@ -27,11 +27,12 @@ import { niceStep, stepDecimals } from '../fit';
 import { decimal } from '../beyond/maths';
 import { t } from '../i18n';
 import { solveSet } from './sets';
+import { linearCandidates } from '../linear/pick'; // 6.0 D
 
 type Data = Record<string, unknown>;
 
-/** What a question is about. */
-export type AskKind = 'function' | 'region' | 'curve' | 'point';
+/** What a question is about. 6.0 D: an arrow (vector), a transform (or a grid that has none). */
+export type AskKind = 'function' | 'region' | 'curve' | 'point' | 'vector' | 'transform';
 
 /** What was clicked: its kind and name, and where (math coordinates; for a function, the point on it). */
 export interface AskTarget {
@@ -81,7 +82,7 @@ export interface AskContext {
 
 export type QuestionProvider = (ctx: AskContext) => Question[];
 
-const PROVIDERS: Record<AskKind, QuestionProvider[]> = { function: [], region: [], curve: [], point: [] };
+const PROVIDERS: Record<AskKind, QuestionProvider[]> = { function: [], region: [], curve: [], point: [], vector: [], transform: [] };
 
 /** Add questions for a kind of object; returns a function that takes them away again. */
 export function registerQuestions(kind: AskKind, provider: QuestionProvider): () => void {
@@ -227,6 +228,11 @@ export function pickTarget(drawn: DrawnChart, tools: Tool[], p: Pt, sx: number, 
         if (item.kind !== 'tool' || type(item.source) !== 'curve') continue;
         const n = nearest(item.strokes.flatMap((s) => s.lines), p, sx, sy);
         if (n) offer(n.d, { kind: 'curve', name: item.source, x: n.at.x, y: n.at.y });
+    }
+    // 6.0 D: arrows, and the grid and functions a transform moves (src/linear/pick.ts).
+    for (const c of linearCandidates(drawn.items, tools)) {
+        const n = nearest(c.lines, p, sx, sy);
+        if (n) offer(n.d, { kind: c.kind, name: c.name, x: n.at.x, y: n.at.y }, c.bias);
     }
     if (best.target) return best.target;
     // A region: the click inside its fill (the last one drawn is on top).

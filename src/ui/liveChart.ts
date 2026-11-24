@@ -4,7 +4,9 @@
  * (5.1). It owns a private MathContext and SceneCache, so nothing it does
  * reaches the memoized contexts of the editor or of notes. A 2D chart draws
  * a draft on each slider frame and the full picture after a pause; a 3D
- * chart is drawn by the 3D renderer and zoomed onto what it draws.
+ * chart is drawn by the 3D renderer and zoomed onto what it draws. 6.0 D: a
+ * chart with steps or moving objects gets the player of charts in notes
+ * (Previous, Play, Next, step k of n; Pause for moving objects).
  */
 import { NoteTable } from '../beyond/table';
 import { MathContext } from '../mathcontext';
@@ -16,6 +18,10 @@ import { SettingsManager } from '../settings';
 import { Parameter } from '../types';
 import { cloneData, fitPixelScale } from '../util';
 import { IconButtonHandle, LiveSliderHandle, formatDecimals, iconButton, liveSlider, uniqueId, visuallyHidden } from './kit';
+// 6.0 D: the player of steps and of the clock (src/motion6/player.ts), as in notes.
+import { MotionPlayer } from '../motion6/player';
+import { playerFor } from '../motion6/host';
+import { atStep } from '../motion6/steps';
 
 /** After the last slider frame, the full-quality picture follows this much later. */
 const FULL_RENDER_DELAY_MS = 150;
@@ -121,6 +127,9 @@ export class LiveChart {
     private destroyed = false;
     /** Redraws in a row that a new `$...$` label asked for. */
     private mathRedraws = 0;
+    /** 6.0 D: the player of a chart with steps or moving objects, and the chart at an earlier step. */
+    private player: MotionPlayer | null = null;
+    private stepView: { step: number; manager: SettingsManager; math: MathContext } | null = null;
 
     constructor(
         parent: HTMLElement,
@@ -138,8 +147,14 @@ export class LiveChart {
         const name = visuallyHidden(parent, opts.label);
         name.id = uniqueId('live-chart');
         this.box.setAttr('aria-labelledby', name.id);
+        // 6.0 D: steps and the clock, drawn as in notes.
+        this.player = playerFor(this.manager.serialize(), {
+            draw: (_frame, clock) => this.safeRender(clock && !this.is3D ? 'draft' : 'full'),
+            watched: () => this.box,
+        });
         this.render('full');
         this.buildStrip(parent);
+        this.player?.watch();
     }
 
     /** The chart as it is now, the sliders back on their steps: what Open in the editor and Try an example take. */
@@ -171,6 +186,8 @@ export class LiveChart {
 
     destroy(): void {
         this.destroyed = true;
+        this.player?.destroy(); // 6.0 D
+        this.player = null;
         this.stopPlay(false);
         if (this.frameRaf !== null) window.cancelAnimationFrame(this.frameRaf);
         if (this.fullTimer !== null) window.clearTimeout(this.fullTimer);
@@ -187,9 +204,12 @@ export class LiveChart {
             if (this.fullTimer !== null) window.clearTimeout(this.fullTimer);
             this.frameRaf = this.fullTimer = null;
         }
-        this.math.setParams(this.params);
-        const config = this.manager.toRendererConfig(this.math);
+        // 6.0 D: the chart at the step the player shows, at the clock's time.
+        const view = this.view();
+        view.math.setParams(this.params);
+        const config = view.manager.toRendererConfig(view.math);
         config.parameters = this.params;
+        if (this.player) config.motion = this.player.frame();
         const aspect = config.width > 0 && config.height > 0 ? config.width / config.height : 1.25;
         this.box.setCssProps({ '--etz-live-aspect': String(Math.round(aspect * 1000) / 1000) });
         // Measured on full renders only, never per drag frame.
@@ -201,7 +221,7 @@ export class LiveChart {
             config.width = width;
             config.height = Math.round(width / aspect);
             const renderer = new SVG3DRenderer();
-            renderer.renderSvg(config, { math: this.math });
+            renderer.renderSvg(config, { math: view.math });
             const svg = detach3D(renderer);
             if (!svg) return;
             this.place(fluid(svg));
@@ -209,7 +229,7 @@ export class LiveChart {
             return;
         }
         const renderer = new SVGRenderer(config, {
-            math: this.math,
+            math: view.math,
             cache: this.cache,
             quality,
             pixelScale: fitPixelScale(this.boxSize.w, this.boxSize.h, config.width, config.height),
@@ -224,6 +244,17 @@ export class LiveChart {
                 this.safeRender('full');
             }
         });
+    }
+
+    /** 6.0 D: the chart as drawn now: at the step the player shows (later objects hidden), else the chart itself. */
+    private view(): { manager: SettingsManager; math: MathContext } {
+        const step = this.player ? this.player.shownStep() : null;
+        if (step === null) return { manager: this.manager, math: this.math };
+        if (this.stepView && this.stepView.step === step) return this.stepView;
+        const manager = SettingsManager.fromJSON(atStep(this.manager.serialize(), step));
+        if (this.opts.table) manager.noteTable = this.opts.table;
+        this.stepView = { step, manager, math: manager.createMathContext({ memo: false }) };
+        return this.stepView;
     }
 
     private place(svg: SVGSVGElement) {
@@ -261,8 +292,13 @@ export class LiveChart {
     /** The slider strip of a chart in a note (same classes, so it looks the same): a row per slider, play on the first. */
     private buildStrip(parent: HTMLElement) {
         const shown = this.params.slice(0, this.opts.maxSliders ?? 3);
-        if (!shown.length) return;
+        if (!shown.length && !this.player) return;
         const strip = parent.createDiv({ cls: ['etz-inline-strip', 'etz-live-strip', ...(this.opts.stripCls ? [this.opts.stripCls] : [])] });
+        // 6.0 D: Previous, Play, Next and "Step k of n" (Pause for moving objects) above the sliders, as in notes.
+        if (this.player) {
+            this.player.controls(strip.createDiv({ cls: 'etz-inline-rows' }));
+            if (!shown.length) return;
+        }
         const name = visuallyHidden(strip, this.opts.sliders);
         name.id = uniqueId('live-sliders');
         strip.setAttr('role', 'group');

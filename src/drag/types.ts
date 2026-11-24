@@ -34,6 +34,8 @@ export interface ScreenMap {
 export type FieldRef =
     | { kind: 'function'; name: string; field: 'expression' | 'tangentPoint' }
     | { kind: 'tool'; id: string; field: 'equation' | 'levels' | 'points' | 'path' | 'objective' }
+    /** 6.0 D: a let value's formula, a transform's matrix (the tips of arrows, src/linear/drag.ts). */
+    | { kind: 'tool'; id: string; field: 'expression' | 'map' }
     | { kind: 'tool'; id: string; field: 'condition'; entry: number }
     | { kind: 'label'; index: number; field: 'x' | 'y' };
 
@@ -137,7 +139,7 @@ export interface HitIndex {
 
 // ---------------------------------------------------------------- targets
 
-export type TargetKind = 'graph' | 'clause' | 'curve' | 'level' | 'point' | 'vertex' | 'path' | 'tangent' | 'label';
+export type TargetKind = 'graph' | 'clause' | 'curve' | 'level' | 'point' | 'vertex' | 'path' | 'tangent' | 'label' | 'tip' /* 6.0 D */;
 export type ShiftKind = 'turn' | 'stretch' | 'resize' | 'straight' | 'none';
 
 export interface Lock {

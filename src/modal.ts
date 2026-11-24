@@ -55,7 +55,7 @@ import type {
 } from './drag/types';
 import { buildHitIndex } from './drag/hits';
 import { axisSliders, fieldText, refKey, resolveTarget, setFieldText } from './drag/targets';
-import { DragSession, PreparedDrag, nudge, prepareDrag, preparedServes } from './drag/session';
+import { EditSession, PreparedDrag, nudge, prepareDrag, preparedServes, startSession } from './drag/session'; // EditSession, startSession: 6.0 D
 import {
     chartLabel,
     lockChip,
@@ -228,7 +228,7 @@ type DragState =
      * re-run it); `offset` (math) is the grab point minus the press point, added to every pointer position
      * so the grabbed point moves by the pointer's motion (a press 5 px off a line never jumps onto it).
      */
-    | { kind: 'object'; pointerId: number; touch: boolean; session: DragSession; lastX: number; lastY: number; releaseEscape: () => void; mods: Mods; cursor: Pt; offset: Pt };
+    | { kind: 'object'; pointerId: number; touch: boolean; session: EditSession; lastX: number; lastY: number; releaseEscape: () => void; mods: Mods; cursor: Pt; offset: Pt };
 
 /**
  * A press that did not start an object drag (pan path): released without
@@ -548,7 +548,7 @@ export class TikzModal extends Modal implements PanelHost {
     private history = new EditHistory(HISTORY_SIZE);
     private spaceHeld = false;
     private stageHovered = false;
-    private keySession: { session: DragSession; prepared: PreparedDrag; timer: number } | null = null;
+    private keySession: { session: EditSession; prepared: PreparedDrag; timer: number } | null = null;
     /** Visually hidden aria-live span in the stage. */
     private announcer: HTMLElement | null = null;
     private announceTimer: number | null = null;
@@ -2501,7 +2501,10 @@ export class TikzModal extends Modal implements PanelHost {
         const name = sel.target.source;
         if (this.list<FunctionParameters>('functions').some((f) => f.name === name)) return { kind: 'function', name, x: sel.grab.x, y: sel.grab.y };
         const tool = this.list<Tool>('tools').find((x) => x.name === name);
-        const kind = tool?.type === 'region' ? 'region' : tool?.type === 'curve' ? 'curve' : tool?.type === 'points' ? 'point' : null;
+        const kind =
+            tool?.type === 'region' ? 'region' : tool?.type === 'curve' ? 'curve' : tool?.type === 'points' ? 'point'
+            // 6.0 D
+            : tool?.type === 'vector' || tool?.type === 'basisVectors' ? 'vector' : tool?.type === 'transform' || tool?.type === 'planeGrid' ? 'transform' : null;
         return kind ? { kind, name, x: sel.grab.x, y: sel.grab.y } : undefined;
     }
 
@@ -2592,9 +2595,9 @@ export class TikzModal extends Modal implements PanelHost {
             else this.releaseCapture(drag.pointerId);
             return;
         }
-        let session: DragSession;
+        let session: EditSession;
         try {
-            session = DragSession.start(plan, mods, ctx);
+            session = startSession(plan, mods, ctx); // 6.0 D: a tip drag too
         } catch (err) {
             logError(err);
             this.drag = null;
@@ -2834,7 +2837,7 @@ export class TikzModal extends Modal implements PanelHost {
         if (commit) this.commit();
     }
 
-    private restoreStart(session: DragSession) {
+    private restoreStart(session: EditSession) {
         this.liveFrame = null;
         let start: { edits: FieldEdit[]; params: ParamEdit[] };
         try {
@@ -2900,7 +2903,7 @@ export class TikzModal extends Modal implements PanelHost {
             }
             prepared = plan;
         }
-        let result: { session: DragSession; frame: DragFrame };
+        let result: { session: EditSession; frame: DragFrame };
         try {
             // Shift and Alt scale the step here; they never turn or stop snapping.
             result = nudge(ks ? ks.session : null, prepared, delta, { shift: false, alt: false }, ctx);

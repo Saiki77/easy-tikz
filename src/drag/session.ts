@@ -44,6 +44,7 @@ import type {
     ScreenMap,
     UnitSpec,
 } from './types';
+import { TipSession, isTipPlan, prepareTip } from '../linear/drag'; // 6.0 D
 
 // ------------------------------------------------------------- constants
 
@@ -734,6 +735,23 @@ function touchTwins(core: Core, unit: number, pos: number, out: Set<number>): vo
 // --------------------------------------------------------------- prepare
 
 /** Everything planned for one (target, gesture, pivot): reused by hover and by the drag. */
+/** 6.0 D: what the modal drives: the solver's DragSession, or the tip drag of src/linear/drag.ts. */
+export interface EditSession {
+    readonly target: DragTarget;
+    readonly ghost: Pt[][];
+    readonly done: boolean;
+    update(cursor: Pt, mods: Mods): DragFrame;
+    commit(): DragCommit | null;
+    cancel(): { edits: FieldEdit[]; params: ParamEdit[] };
+    nudgeBy(delta: Pt, mods: Mods): DragFrame;
+}
+
+/** 6.0 D: start the session a plan asks for. */
+export function startSession(prepared: PreparedDrag, mods: Mods, ctx: DragContext): EditSession {
+    if (isTipPlan(prepared)) return new TipSession(prepared, ctx);
+    return DragSession.start(prepared, mods, ctx);
+}
+
 export interface PreparedDrag {
     readonly target: DragTarget;
     readonly gesture: Gesture;
@@ -790,6 +808,7 @@ export function prepareDrag(
     ctx: DragContext,
     opts?: { pivot?: Pt }
 ): PreparedDrag | { lock: Lock } {
+    if (target.kind === 'tip') return prepareTip(target, grab, gesture, ctx); // 6.0 D
     try {
         const derived = ctx.math.derivedValues();
         const res = buildCore(target, grab, gesture, ctx, { pivot: opts && opts.pivot, derived });
@@ -1579,9 +1598,9 @@ export class DragSession {
 }
 
 /** Keyboard nudge: Move by `delta` (math) from the target's grab point; reuse `session` within 1 s. */
-export function nudge(session: DragSession | null, prepared: PreparedDrag, delta: Pt, mods: Mods, ctx: DragContext): { session: DragSession; frame: DragFrame } {
+export function nudge(session: EditSession | null, prepared: PreparedDrag, delta: Pt, mods: Mods, ctx: DragContext): { session: EditSession; frame: DragFrame } {
     let s = session;
-    if (!s || s.done || s.target.key !== prepared.target.key) s = DragSession.start(prepared, { shift: false, alt: mods.alt }, ctx);
+    if (!s || s.done || s.target.key !== prepared.target.key) s = startSession(prepared, { shift: false, alt: mods.alt }, ctx); // 6.0 D: any session
     return { session: s, frame: s.nudgeBy(delta, mods) };
 }
 

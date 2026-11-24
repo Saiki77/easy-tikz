@@ -79,6 +79,8 @@ export const linear: Messages<typeof en> = {
     'linear.card.empty': 'まだ設定されていません',
 
     // ---- Ask the curve
+    'linear.ask.title.vector': '矢印 {name}',
+    'linear.ask.title.transform': '変換 {name}',
     'linear.ask.group': '線形代数',
     'linear.ask.eigenvectors': '固有ベクトル',
     'linear.ask.unitSquare': '単位正方形の像と det',
@@ -97,7 +99,7 @@ export const linear: Messages<typeof en> = {
     'linear.hover.kind.product': '行列とベクトルの積',
     'linear.hover.kind.det': '行列式',
     'linear.hover.kind.eigen': '固有ベクトル',
-    'linear.hover.note.t': 't を 0 から 1 に動かすと、格子が I から {name} へ動きます。',
+    'linear.hover.note.t': 's を 0 から 1 に動かすと、格子が I から {name} へ動きます。',
     'linear.hover.note.example': 'このノートには {name} の定義がないので、例を使っています。',
     'linear.hover.note.fromNote': 'ノートで定義された {name} です。',
 
