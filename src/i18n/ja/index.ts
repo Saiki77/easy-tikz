@@ -14,5 +14,7 @@ import { problems } from './problems';
 import { help } from './help';
 import { beyond } from './beyond';
 import { motion6 } from './motion6'; // 6.0 C
+// 6.0 B
+import { notes6 } from './notes6';
 
-export const JA: Messages<typeof EN> = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...motion6 };
+export const JA: Messages<typeof EN> = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...motion6, ...notes6 };

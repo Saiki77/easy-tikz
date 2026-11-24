@@ -25,6 +25,8 @@ import { LayerCardActions, LayerCardHandle, createLayerCard } from './layerCards
 // The cards of data, probability, Riemann sums and slope fields register themselves with the layer cards (5.0).
 import '../beyond/cards';
 import '../motion6/cards'; // 6.0 C
+// 6.0 B: sets on an axis and chords.
+import '../notes6/cards';
 import { CardUiState, FunctionCardHandle, createFunctionCard, createSurfaceCard } from './functionCards';
 import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, textButton, trapEscape } from './kit';
 import { PickerContent, PickerGroup, PickerItem, addPicker } from './addPicker';
@@ -155,6 +157,9 @@ const RECIPE_WORDS: Record<string, string> = {
     'rest-points': 'equilibrium equilibria fixed stationary stable saddle',
     trajectory: 'ode system orbit phase portrait solution path',
     'trajectory-3d': 'lorenz attractor ode system orbit',
+    // 6.0 B
+    'axis-set': 'interval sublevel set number line where below zero',
+    chord: 'jensen convex secant lambda',
 };
 
 /** Menu heading per recipe section (Functions reads Surfaces in 3D charts). */

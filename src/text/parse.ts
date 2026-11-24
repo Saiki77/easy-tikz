@@ -31,6 +31,8 @@ import { boxRatioOf } from '../box3d';
 import { MOTION_KINDS, MOTION_KIND_WORDS, MOTION_OPTION_HELP, isMotionOption, motionOption, ownName, readMotionDraw, readMotionMark, thenPrefix } from '../motion6/text';
 import type { MotionRead } from '../motion6/text';
 import { MOTION_PREFIX } from '../motion6/tools';
+// 6.0 B
+import { looksLikeAxisSet, looksLikeChord, readAxisSet, readChord } from '../notes6/text';
 
 type Data = Record<string, unknown>;
 
@@ -81,7 +83,7 @@ export const THICKNESSES = ['very thin', 'very thick', 'thin', 'thick'];
 export const PATTERNS = new Set(['solid', 'horizontal', 'vertical', 'crosshatch', 'dots', 'north-east', 'north-west']);
 export const ANCHORS = new Set(['center', 'above', 'below', 'left', 'right']);
 const AXIS_STYLES: Record<string, string> = { middle: 'middle', centre: 'middle', center: 'middle', box: 'box', edges: 'axes', edge: 'axes', axes: 'axes' };
-export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', ...MOTION_PREFIX }; // MOTION_PREFIX: 6.0 C
+export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', ...MOTION_PREFIX, axisSet: 'AX', chord: 'CH' }; // MOTION_PREFIX: 6.0 C; axisSet, chord: 6.0 B
 const NAME = '[A-Za-z][A-Za-z0-9_]*';
 /** A name the block can spell: letters, digits and _. */
 export const NAME_RE = new RegExp(`^${NAME}$`);
@@ -486,6 +488,9 @@ const OPTION_HELP: Record<string, string> = {
     slopeField: 'in a colour, thin, thick, hidden',
     solution: 'in a colour, thin, thick, dashed, hidden',
     ...MOTION_OPTION_HELP, // 6.0 C
+    // 6.0 B
+    axisSet: 'in a colour, thin, thick, labelled, labelled "text", hidden',
+    chord: 'in a colour, thin, thick, dashed, labelled, labelled "text", hidden',
 };
 
 /** Each kind of object in words, for messages. */
@@ -506,6 +511,9 @@ const KIND_WORDS: Record<keyof typeof OPTION_HELP, MessageKey> = {
     slopeField: 'beyond.text.kindSlopeField',
     solution: 'beyond.text.kindSolution',
     ...MOTION_KIND_WORDS, // 6.0 C
+    // 6.0 B
+    axisSet: 'notes6.text.kindAxisSet',
+    chord: 'notes6.text.kindChord',
 };
 
 /** A kind of object in the reader's words, for messages. */
@@ -647,6 +655,12 @@ function applyKindOption(b: Builder, kind: string, target: Data, opt: Piece): bo
     if (kind === 'plane') {
         const m = word(/^opacity\s+(.+)$/i);
         if (m) return numberOption(b, opt, target, 'fillOpacity', m[1]);
+        return false;
+    }
+    // 6.0 B: sets on an axis and chords.
+    if (kind === 'axisSet' || kind === 'chord') {
+        if (lower === 'labelled' || lower === 'labeled') return set(target, 'valueLabel', true);
+        if (kind === 'chord' && lower === 'dashed') return set(target, 'dashed', true);
         return false;
     }
     return beyondOption(b, kind, target, opt);
@@ -860,6 +874,9 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
     }
     resolveNearest(b);
     b.problems.sort((p, q) => p.line - q.line || p.column - q.column);
+    // 6.0 B: a 2D chart that gives x and no y: y follows what is drawn (src/notes6/yfit.ts).
+    const c = b.chart;
+    if (!b.is3D && c.dimension !== true && c.coordinateSystem !== 'polar' && ('xmin' in c || 'xmax' in c) && !('ymin' in c) && !('ymax' in c) && !('fitY' in c)) c.fitY = true;
     if (b.is3D) b.chart.dimension = true;
     const out: TextChart = { data: b.data(), problems: b.problems };
     if (opts.trace) out.lines = traces;
@@ -1211,6 +1228,17 @@ function mark(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
         addTool(b, 'points', own, { dim: dims(b, [point]), source: 'list', points: point.text }, options, 'points');
         return;
     }
+    // 6.0 B: mark where g(x) <= 0 on the x-axis, a set on an axis.
+    if (/^where\s/i.test(rest.text.trim()) && looksLikeAxisSet(rest.text)) {
+        // Options the words did not catch (`..., sparkly`) are named, not read as part of the condition.
+        const f = formulaOptions(p, options);
+        const set = readAxisSet(f.formula.text);
+        if (set) {
+            addTool(b, 'axisSet', name, set, f.options, 'axisSet');
+            return;
+        }
+    }
+    if (/^where\s/i.test(rest.text.trim()) && looksLikeAxisSet(rest.text)) return b.problem(p.at, msg('notes6.text.axisSetTakes'));
     // 5.0: mark the data (of D2); options the words did not catch are named.
     if (/^the\s+data\b/i.test(rest.text.trim())) {
         const f = formulaOptions(p, options);
@@ -1247,6 +1275,13 @@ function draw(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
     if (!t) return b.problem(rest.at, msg('problems.text.drawTakes'));
     if (DEFINITION.test(t)) return formulaLine(b, name, rest, options);
     if (motionLine(b, name, readMotionDraw(rest, b.is3D), options)) return; // 6.0 C
+    // 6.0 B: draw the chord of g from a to b (at λ).
+    const chord = readChord(t);
+    if (chord) {
+        addTool(b, 'chord', name, chord, options, 'chord');
+        return;
+    }
+    if (looksLikeChord(t)) return b.problem(rest.at, msg('notes6.text.chordTakes'));
     if (drawBeyond(b, name, rest, options)) return;
     const m = DRAW_NOUN.exec(t);
     if (m) {

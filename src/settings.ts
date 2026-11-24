@@ -9,6 +9,8 @@ import { AxisNumbers, TickAxis, numbersKeys, numbersMode } from './ticks';
 import { NoteTable, tableData } from './beyond/table';
 import { boxAspectOf, boxRatioOf } from './box3d';
 import { exportsFrames, framesTikz } from './motion6/frames'; // 6.0 C
+// 6.0 B
+import { FIT_Y, followY } from './notes6/yfit';
 
 /** The six axis range keys. */
 export type RangeKey = 'xmin' | 'xmax' | 'ymin' | 'ymax' | 'zmin' | 'zmax';
@@ -77,6 +79,8 @@ function defaultValues(): Record<string, unknown> {
         majorTickNum: 8,
         // Axis ranges are expressions (sliders allowed), resolved by resolveView.
         ...RANGE_DEFAULTS,
+        // 6.0 B: y follows what is drawn (a chart whose text gives x and no y), see src/notes6/yfit.ts.
+        [FIT_Y]: false,
         axis_style: 'box',
         // Polar treats function expressions as r(theta).
         coordinateSystem: 'cartesian',
@@ -150,6 +154,8 @@ export class SettingsManager {
 
     /** Store a value for a setting id. Callers are responsible for type safety. */
     setValue(id: string, value: unknown) {
+        // 6.0 B: a y range written (Chart tab, pan, zoom, fit) ends "y follows what is drawn".
+        if ((id === 'ymin' || id === 'ymax') && this.values.get(FIT_Y) === true && this.values.get(id) !== value) this.values.set(FIT_Y, false);
         this.values.set(id, value);
     }
 
@@ -177,7 +183,8 @@ export class SettingsManager {
         const mgr = new SettingsManager();
         const migrated = migrateSettings(data && typeof data === 'object' ? data : {});
         for (const [key, value] of Object.entries(migrated)) {
-            if (value !== undefined) mgr.setValue(key, value);
+            // 6.0 B: stored as they are (setValue would let a stored y range end fitY, whatever the order of the keys).
+            if (value !== undefined) mgr.values.set(key, value);
         }
         return mgr;
     }
@@ -263,6 +270,23 @@ export class SettingsManager {
             }
         }
         const [xmin, xmax, ymin, ymax, zmin, zmax] = resolved;
+        // 6.0 B: y follows what is drawn over the x range.
+        if (this.getValue(FIT_Y) === true && this.getValue('dimension') !== true) {
+            const style = this.getValue('axis_style');
+            const y = followY(
+                this,
+                {
+                    functions: arrayValue<FunctionParameters>(this.getValue('functions')),
+                    tools: this.tools(),
+                    annotations: arrayValue<Annotation>(this.getValue('annotations')),
+                    axisStyle: style === 'middle' || style === 'axes' ? style : 'box',
+                    polar: this.getValue('coordinateSystem') === 'polar',
+                },
+                ctx,
+                { xmin, xmax, ymin, ymax }
+            );
+            if (y) return { view: { xmin, xmax, ymin: y[0], ymax: y[1], zmin, zmax }, errors };
+        }
         return { view: { xmin, xmax, ymin, ymax, zmin, zmax }, errors };
     }
 

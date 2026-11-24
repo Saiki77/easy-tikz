@@ -30,6 +30,8 @@ import { boxRatioOf } from '../box3d';
 import { MOTION_KINDS, OWN_NAME_TYPES, keepThen, motionHead, motionOptions } from '../motion6/text';
 import { STEP_LISTS, hasSteps, stepsInOrder, withoutStep } from '../motion6/steps';
 import type { StepList } from '../motion6/steps';
+// 6.0 B
+import { axisSetHead, chordHead } from '../notes6/text';
 
 // ---------------------------------------------------------------- values
 
@@ -431,7 +433,8 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
             head = `draw the plane ${axis} = ${value}`;
             o.mark('axis', 'value');
         }
-    } else if (BEYOND_HEADS[type]) head = BEYOND_HEADS[type](full, o, ctx);
+    } else if (type === 'axisSet' || type === 'chord') head = notes6Head(full, o); // 6.0 B
+    else if (BEYOND_HEADS[type]) head = BEYOND_HEADS[type](full, o, ctx);
     else if (MOTION_KINDS.has(type)) head = motionHead(full, o, { is3D: ctx.is3D, shown: ctx.shown.has(name) }); // 6.0 C
     // `title: ...` would read as a title line, so such a name only fits a raw line.
     if (!head || !NAME_RE.test(name) || /^(title|xlabel|ylabel|zlabel)$/i.test(name)) return raw('tool', min);
@@ -450,6 +453,13 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
     } else if (type === 'plane3D') {
         o.colour();
         o.take('fillOpacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
+    } else if (type === 'axisSet' || type === 'chord') {
+        // 6.0 B
+        o.colour();
+        o.take('thickness', (v) => (typeof v === 'string' && THICKNESSES.includes(v) ? v : null));
+        if (type === 'chord') o.take('dashed', (v) => (v === true ? 'dashed' : null));
+        o.take('label', (v) => (typeof v === 'string' ? `labelled ${quote(v)}` : null));
+        o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
     } else if (BEYOND_HEADS[type]) {
         beyondOptions(type, o);
     } else if (MOTION_KINDS.has(type)) {
@@ -500,8 +510,17 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
     // 6.0 C: the export shows every step side by side.
     { keys: ['frames'], print: (m) => (m.frames === true ? ['frames'] : 'frames' in m ? [`set frames = ${JSON.stringify(m.frames)}`] : []) },
     {
-        keys: ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'],
+        keys: ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'fitY'],
         print: (m, f) => {
+            // 6.0 B: y follows what is drawn: x only (a y range of its own, which it does not draw, as set lines).
+            if (m.fitY === true) {
+                const flat = f.dimension !== true && f.coordinateSystem !== 'polar';
+                const x = [str(f.xmin), str(f.xmax)];
+                const out = flat && x.every((p) => bound(p)) ? [`show x from ${x[0]} to ${x[1]}`] : ['set fitY = true', ...(['xmin', 'xmax'] as const).filter((k) => k in m).map((k) => `set ${k} = ${JSON.stringify(m[k])}`)];
+                for (const k of ['ymin', 'ymax', 'zmin', 'zmax']) if (k in m) out.push(`set ${k} = ${JSON.stringify(m[k])}`);
+                return out;
+            }
+            if ('fitY' in m) return [`set fitY = ${JSON.stringify(m.fitY)}`];
             if (!['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'].some((k) => k in m)) return [];
             const axes = ['x', 'y'];
             if (f.dimension === true || 'zmin' in m || 'zmax' in m) axes.push('z');
@@ -1233,6 +1252,29 @@ function beyondOptions(type: string, o: Options) {
         o.take('label', (v) => (v === '({x:2}, {y:2})' ? 'with coordinates' : typeof v === 'string' ? `labelled ${quote(v)}` : null));
         o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
     }
+}
+
+// ------------------------------------------------------------- 6.0 B
+
+/** The statement of a set on an axis or a chord (null: no line form fits, the tool is written raw). */
+function notes6Head(full: Data, o: Options): string | null {
+    if (str(full.type) === 'axisSet') {
+        const cond = str(full.condition).trim();
+        const latex = looksLikeLatex(cond);
+        // The condition stands between `where` and `on the x-axis`: no comma or bar of the line, no `on the` of its own.
+        if (!cond || hasControl(cond) || (!latex && hasBar(cond)) || parts(cond, ',').length !== 1 || /\son\s+the\s/i.test(cond)) return null;
+        const axis = str(full.axis) === 'y' ? 'y' : 'x';
+        o.mark('condition', 'axis');
+        return axisSetHead(mathText(cond), axis);
+    }
+    const fn = str(full.function);
+    const from = part(full.from);
+    const to = part(full.to);
+    const atRaw = str(full.at).trim();
+    const at = atRaw ? part(atRaw) : '';
+    if (!NAME_RE.test(fn) || from === null || to === null || at === null || /\s(?:to|at)\s/i.test(to) || /\sat\s/i.test(from) || /\sat\s/i.test(at)) return null;
+    o.mark('function', 'from', 'to', 'at');
+    return chordHead(fn, from, to, at);
 }
 
 /**

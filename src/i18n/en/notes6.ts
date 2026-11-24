@@ -1,0 +1,107 @@
+/* Notes and interaction (6.0 B): sets on an axis, chords, Ask the curve, the new hover cards and charts from formulas. Owner: src/notes6/. */
+export const notes6 = {
+    // ---- the kinds of cards
+    'notes6.kind.axisSet': 'Set on an axis',
+    'notes6.kind.chord': 'Chord',
+
+    // ---- + Add menu
+    'notes6.recipe.axisSet': 'Set on the x-axis',
+    'notes6.recipeHint.axisSet': 'Where a function is at most 0, as a bar on the x-axis with its ends and its label in set notation.',
+    'notes6.recipe.chord': 'Chord (Jensen)',
+    'notes6.recipeHint.chord': 'The chord of a function between two points, and the points at λ on the chord and on the graph, λ on a slider.',
+
+    // ---- set on an axis card
+    'notes6.axisSet.condition': 'Condition',
+    'notes6.axisSet.conditionPlaceholder': 'g(x) <= 0',
+    'notes6.axisSet.axis': 'Axis',
+    'notes6.axisSet.xAxis': 'x-axis',
+    'notes6.axisSet.yAxis': 'y-axis',
+    'notes6.axisSet.valueLabel': 'Set notation',
+    'notes6.axisSet.labelPlaceholder': 'own label, e.g. g ≤ 0',
+    'notes6.axisSet.summary': 'Where {condition}, on the {axis}',
+    'notes6.axisSet.empty': 'Type a condition in x',
+
+    // ---- chord card
+    'notes6.chord.function': 'Function',
+    'notes6.chord.from': 'From',
+    'notes6.chord.to': 'To',
+    'notes6.chord.at': 'At λ',
+    'notes6.chord.atPlaceholder': 'empty: the chord alone',
+    'notes6.chord.valueLabel': 'Values',
+    'notes6.chord.labelPlaceholder': 'own label, e.g. gap {gap:2}',
+    'notes6.chord.noFunction': 'Needs a function y = f(x).',
+    'notes6.chord.chooseFunction': 'Choose the function',
+    'notes6.chord.summary': 'Chord of {function} from {from} to {to}',
+    'notes6.chord.summaryAt': 'Chord of {function} from {from} to {to} at {at}',
+
+    // ---- problems
+    'notes6.problem.notInX': 'The condition has no value on the x-axis: write it in x',
+    'notes6.problem.notInY': 'The condition has no value on the y-axis: write it in y',
+    'notes6.problem.noValueAt': '{name} has no value at x = {x}',
+
+    // ---- chart language
+    'notes6.text.kindAxisSet': 'set on an axis',
+    'notes6.text.kindChord': 'chord',
+    'notes6.text.axisSetTakes': 'Write: mark where $g(x) \\le 0$ on the x-axis (or on the y-axis, with a condition in y)',
+    'notes6.text.chordTakes': 'Write: draw the chord of g from -1 to 3 (or: ... at $\\lambda$)',
+
+    // ---- Ask the curve
+    'notes6.ask.menu': 'Questions for {name}',
+    'notes6.ask.hint': 'Point at a question to see its answer; choose it to add it to the chart.',
+    'notes6.ask.none': 'No questions for this yet',
+    'notes6.ask.added': 'Added: {question}',
+    'notes6.ask.removed': 'Taken away: {question}',
+    'notes6.ask.group.axis': 'On the x-axis',
+    'notes6.ask.le': 'Where is {f} ≤ 0?',
+    'notes6.ask.ge': 'Where is {f} ≥ 0?',
+    'notes6.ask.lt': 'Where is {f} < 0?',
+    'notes6.ask.gt': 'Where is {f} > 0?',
+    'notes6.ask.zeros': 'Where does {f} cross the x-axis?',
+    'notes6.ask.group.shape': 'Its shape',
+    'notes6.ask.extrema': 'Its maxima and minima',
+    'notes6.ask.inflection': '{count, plural, one {Its inflection point} other {Its inflection points}}',
+    'notes6.ask.group.here': 'Here, at x = {x}',
+    'notes6.ask.tangent': 'The tangent here',
+    'notes6.ask.value': 'The value here, with its coordinates',
+    'notes6.ask.chord': 'A chord from here, with a slider λ',
+    'notes6.ask.group.area': 'Areas',
+    'notes6.ask.area': 'The area to the x-axis, from {a} to {b}',
+    'notes6.ask.riemann': 'A Riemann sum from {a} to {b}',
+    'notes6.ask.group.with': 'With {g}',
+    'notes6.ask.cross': 'Where do {f} and {g} cross?',
+    'notes6.ask.below': 'Where is {f} ≤ {g}? Mark it on the x-axis',
+    'notes6.ask.between': 'The area between {f} and {g}',
+    'notes6.ask.group.region': 'Region {name}',
+    'notes6.ask.corners': 'Its corners, with their coordinates',
+    'notes6.ask.outline': 'Outline its border',
+    'notes6.ask.conditionLines': 'The lines of its conditions',
+    'notes6.ask.highest': 'Its highest point',
+    'notes6.ask.lowest': 'Its lowest point',
+    'notes6.ask.rightmost': 'Its point farthest right',
+    'notes6.ask.leftmost': 'Its point farthest left',
+    'notes6.ask.group.curve': 'Curve {name}',
+    'notes6.ask.curveX': 'Where does it cross the x-axis?',
+    'notes6.ask.curveY': 'Where does it cross the y-axis?',
+    'notes6.ask.group.point': 'Point {name}',
+    'notes6.ask.dropLines': 'Lines to the axes',
+    'notes6.ask.coordinates': 'Its coordinates',
+    'notes6.ask.liveLabel': 'Chart of this block. Click a curve, a region or a point for its questions, or press Enter.',
+
+    // ---- hover cards
+    'notes6.hover.kind.set': 'Set',
+    'notes6.hover.kind.map': 'Map',
+    'notes6.hover.kind.condition': 'Condition',
+    'notes6.hover.kind.interval': 'Interval',
+    'notes6.hover.kind.jensen': 'Inequality (Jensen)',
+    'notes6.hover.kind.epigraph': 'Epigraph',
+    'notes6.hover.fromNote': '{name}(x) = {body} comes from this note.',
+    'notes6.hover.example': 'This note does not define {name}, so the card shows an example: {name}(x) = {body}. Define {name} in the note and the card uses yours.',
+    'notes6.hover.variable': 'The x-axis is {variable}.',
+    'notes6.hover.plane': 'For n = 2, {name}(x) reads as {name}(|x|): x² is x₁² + x₂².',
+    'notes6.hover.dimension': 'Dimension n',
+    'notes6.hover.n1': 'n = 1',
+    'notes6.hover.n2': 'n = 2',
+
+    // ---- Chart tab
+    'notes6.chart.fitY': 'The text of this chart gives no y range: y follows what the chart draws. Type a y range, pan or zoom to fix it.',
+};

@@ -14,7 +14,7 @@ const LANGS: Record<string, Readonly<Record<string, string>>> = { ja: JA };
 const keys = Object.keys(EN) as MessageKey[];
 
 test('every key starts with the name of its part', () => {
-    const parts = new Set(['common', 'editor', 'build', 'panels', 'plugin', 'problems', 'help', 'beyond', 'motion6']);
+    const parts = new Set(['common', 'editor', 'build', 'panels', 'plugin', 'problems', 'help', 'beyond', 'motion6', 'notes6']);
     for (const k of keys) assert.ok(parts.has(k.split('.')[0]), `${k}: no part of that name`);
 });
 

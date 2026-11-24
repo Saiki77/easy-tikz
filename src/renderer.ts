@@ -1294,11 +1294,11 @@ export class SVGRenderer {
             'stroke-width': this.compact ? '1' : '1.5',
         };
         if (m.dim) attrs.opacity = '0.45';
-        // 6.0 C: an open circle (a rest point that is not stable).
+        // 6.0 B, C: an open dot (an end a set does not hold, a rest point that is not stable) is a ring in the colour around the background.
         if (m.open) {
             attrs.fill = BACKGROUND;
             attrs.stroke = this.css(m.color);
-            attrs['stroke-width'] = this.compact ? '1' : '1.75';
+            attrs['stroke-width'] = this.compact ? '1.2' : '2';
         }
         g.appendChild(this.el('circle', attrs));
     }

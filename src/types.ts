@@ -486,6 +486,50 @@ export interface TrajectoryTool extends ToolBase {
     colormap?: Colormap;
 }
 
+// 6.0 B: notes and interaction (src/notes6/): sets on an axis and chords, 2D only.
+
+/**
+ * The set where a condition in one variable holds, as a bar on an axis
+ * (`mark where $g(x) \le 0$ on the x-axis`): filled end dots where the end
+ * belongs to the set, open ones where it does not, arrows where it runs off
+ * the view, an equation's zeros as dots. Publishes AX1_n (the number of
+ * pieces), AX1_x / AX1_y (the first end) and indexed ends.
+ */
+export interface AxisSetTool extends ToolBase {
+    type: 'axisSet';
+    /** The condition: `g(x) <= 0`, `|x - 1| < 2`, `x < -1 or x > 2`, `0 <= x <= 1`, `g(x) = 0` (its zeros). */
+    condition: string;
+    /** The axis the set lies on; the condition is in its variable. */
+    axis: 'x' | 'y';
+    thickness: string;
+    /** Template drawn by the bar ('' = none). */
+    label: string;
+    /** The set in set notation as the label (when `label` is empty): {x | g(x) ≤ 0} = [-2, 2]. */
+    valueLabel: boolean;
+}
+
+/**
+ * The chord of a function between (a, g(a)) and (b, g(b)); with `at`, the
+ * point x = λa + (1 - λ)b on the chord and on the graph and the gap between
+ * them (Jensen's inequality). Publishes CH1_x (that x) and CH1_val (the gap,
+ * chord minus graph).
+ */
+export interface ChordTool extends ToolBase {
+    type: 'chord';
+    /** Name of the function (a cartesian function of the chart). */
+    function: string;
+    from: string;
+    to: string;
+    /** λ, a formula (a slider); '' = the chord alone. */
+    at: string;
+    thickness: string;
+    dashed: boolean;
+    /** Template at the point on the chord; locals lambda, x, chord, graph, gap. '' = none. */
+    label: string;
+    /** The two values as labels (when `label` is empty). */
+    valueLabel: boolean;
+}
+
 export type Tool =
     | RegionTool
     | CurveTool
@@ -502,7 +546,10 @@ export type Tool =
     // 6.0 C
     | VectorFieldTool
     | RestPointsTool
-    | TrajectoryTool;
+    | TrajectoryTool
+    // 6.0 B
+    | AxisSetTool
+    | ChordTool;
 
 export type ToolType = Tool['type'];
 

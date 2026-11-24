@@ -24,6 +24,8 @@ import type { SettingsManager } from './settings';
 import { computeScene2D, computeScene3D } from './scene';
 import { beyondFitShapes, fitBeyondTool } from './beyond/fit';
 import { fitMotionTool, motionFitShapes } from './motion6/fit'; // 6.0 C
+// 6.0 B
+import { fitNotes6Tool, notes6FitShapes } from './notes6/tools';
 
 // ------------------------------------------------------------------ rules
 
@@ -420,7 +422,7 @@ function fitTools(tools: Tool[]): Tool[] {
         if (t.type === 'region') return { ...t, fill: true, outline: 'none', constraintLines: false, label: '', conditionLabels: [] };
         if (t.type === 'points') return { ...t, label: '', dropLines: false };
         if (t.type === 'curve' || t.type === 'segment') return { ...t, label: '' };
-        return fitMotionTool(fitBeyondTool(t)); // fitMotionTool: 6.0 C
+        return fitNotes6Tool(fitMotionTool(fitBeyondTool(t))); // 6.0 B, C
     });
 }
 
@@ -544,7 +546,7 @@ function fit2D(input: FitInput): FitResult {
             const tool = item.kind === 'tool' ? original.get(item.key) : undefined;
             if (item.kind === 'tool' && !tool) continue;
             // Data, probability, Riemann sums and slope fields (5.0): what they hold, or nothing when they cover the view.
-            const beyond = tool ? beyondFitShapes(tool, item, math) ?? motionFitShapes(tool, item) : null; // motionFitShapes: 6.0 C
+            const beyond = tool ? (beyondFitShapes(tool, item, math) ?? motionFitShapes(tool, item) ?? notes6FitShapes(tool, item)) : null; // 6.0 B, C
             if (beyond) {
                 for (const p of beyond.points) c.point(p);
                 for (const l of beyond.lines) c.line(l.pts, l.closed);

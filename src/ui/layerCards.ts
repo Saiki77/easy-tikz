@@ -182,6 +182,9 @@ const TOOL_KIND: Record<Tool['type'], MessageKey> = {
     vectorField: 'motion6.kind.vectorField',
     restPoints: 'motion6.kind.restPoints',
     trajectory: 'motion6.kind.trajectory',
+    // 6.0 B
+    axisSet: 'notes6.kind.axisSet',
+    chord: 'notes6.kind.chord',
 };
 
 // --------------------------------------------------------------- helpers

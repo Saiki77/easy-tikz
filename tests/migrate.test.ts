@@ -1230,6 +1230,8 @@ test('recipes: the documented lists, unique ids, sections and plain-language tex
             'riemann-sum', 'slope-field', 'solution',
             // 6.0 C
             'vector-field', 'vector-field-particles', 'rest-points', 'trajectory',
+            // 6.0 B
+            'axis-set', 'chord',
             'label', 'slider',
         ]
     );

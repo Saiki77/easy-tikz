@@ -49,6 +49,8 @@ import { language, t as msg } from './i18n';
 import { BEYOND_TYPES, BeyondOutput, beyondSources, computeBeyond } from './beyond/scene';
 // 6.0 C
 import { MOTION_3D_TYPES, MOTION_TYPES, MotionOutput, computeMotion, computeMotion3D, motionSources, motionStrokes } from './motion6/scene';
+// 6.0 B
+import { NOTES6_TYPES, computeNotes6, notes6Sources } from './notes6/scene';
 
 export type ArrowHeads = 'forward' | 'backward' | 'both';
 
@@ -84,8 +86,8 @@ export interface MarkerPrim {
     size: MarkerSize;
     /** Drawn with reduced opacity (e.g. optimum of an unbounded problem within the view). */
     dim?: boolean;
-    // 6.0 C
-    /** An open circle (a rest point that is not stable): the background inside a ring of `color`. */
+    // 6.0 B, C
+    /** An open dot: a ring in `color` filled with the background (an end a set does not hold, a rest point that is not stable). */
     open?: boolean;
 }
 
@@ -838,6 +840,11 @@ function toolNode(t: Tool, math: MathContext): SceneNode {
             break;
         case 'plane3D':
             scan(t.value, 'value');
+            break;
+        // 6.0 B
+        case 'axisSet':
+        case 'chord':
+            notes6Sources(t, scan);
             break;
         default:
             beyondSources(t, scan, refs);
@@ -2285,6 +2292,10 @@ function compute2D(node: SceneNode, ctx: Ctx): Output {
             return computePointsTool(t, ctx);
         case 'segment':
             return computeSegmentTool(t, ctx);
+        // 6.0 B
+        case 'axisSet':
+        case 'chord':
+            return computeNotes6(t, ctx) ?? newOutput();
         default:
             return computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? newOutput(); // 6.0 C
     }
@@ -3707,7 +3718,7 @@ function scene3D(input: SceneInput3D): Scene3D {
     }
     // Data, probability, Riemann sums and slope fields are drawn in 2D charts only (5.0).
     const only2D: SceneIssue[] = tools
-        .filter((t) => (BEYOND_TYPES.has(t.type) || (MOTION_TYPES.has(t.type) && !MOTION_3D_TYPES.has(t.type))) && !t.hidden) // 6.0 C
+        .filter((t) => (BEYOND_TYPES.has(t.type) || NOTES6_TYPES.has(t.type) || (MOTION_TYPES.has(t.type) && !MOTION_3D_TYPES.has(t.type))) && !t.hidden) // 6.0 B, C
         .map((t) => ({ source: str(t.name), message: msg('beyond.problem.only2D', { name: str(t.name) }), severity: 'error' as const }));
     if (!nodes.length) {
         math.setDerived({});
