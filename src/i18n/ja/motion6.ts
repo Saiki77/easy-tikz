@@ -87,4 +87,16 @@ export const motion6: Messages<typeof en> = {
     'motion6.player.step': 'ステップ {step} / {count}',
     'motion6.player.clockPlay': '動きを再生',
     'motion6.player.clockPause': '動きを一時停止',
+
+    // ---- 6.0 F1: chart words, what each piece is (Settings, Chart words)
+    'motion6.words.what.then': '行：ここから次のステップ：then plot g(x) = cos(x)',
+    'motion6.words.what.frames': '行：エクスポートですべてのステップを横に並べる',
+    'motion6.words.what.theVectorField': 'ベクトル場：draw the vector field (y, -x)',
+    'motion6.words.what.theRestPointsOf': 'ベクトル場の平衡点：mark the rest points of F',
+    'motion6.words.what.theSolutionOf': "連立微分方程式の解：draw the solution of p' = (y, -x) through P",
+    'motion6.words.what.through': '解が通る点の前',
+    'motion6.words.what.withMovingParticles': 'ベクトル場に沿って流れる粒子',
+    'motion6.words.what.withStreamlines': 'ベクトル場に沿った静止した流線',
+    'motion6.words.what.colouredByLength': '長さで色分けした矢印',
+    'motion6.words.what.colouredByTime': '時間で色分けした解',
 };

@@ -400,7 +400,11 @@ export class FormulaHover {
         close.addEventListener('click', () => this.close());
 
         const chartBox = pop.createDiv({ cls: 'etz-formula-chart' });
+        // 6.0 F1: a new $...$ label is measured before MathJax styled it: draw once more when it has (at most twice).
+        let redraws = 0;
+        let drawn = 0;
         const draw = () => {
+            const pass = ++drawn;
             chartBox.empty();
             const view = cloneData(data);
             Object.assign(view, { previewSize: 340, parameters: params, size_x_cm: 8, size_y_cm: is3D ? 6 : 5.5 });
@@ -414,7 +418,11 @@ export class FormulaHover {
                     chartBox.appendChild(r.getElement());
                     r.renderCanvas(config, { math: ctx });
                 } else {
-                    chartBox.appendChild(new SVGRenderer(config, { math: ctx }).render());
+                    const renderer = new SVGRenderer(config, { math: ctx });
+                    chartBox.appendChild(renderer.render());
+                    void renderer.mathSettled?.then((again) => {
+                        if (again && pass === drawn && pop.isConnected && redraws++ < 2) draw();
+                    });
                 }
             } catch {
                 chartBox.setText(t('plugin.formula.cannotDraw'));

@@ -28,11 +28,12 @@ import { decimal } from '../beyond/maths';
 import { t } from '../i18n';
 import { solveSet } from './sets';
 import { linearCandidates } from '../linear/pick'; // 6.0 D
+import { orbitCandidates, planeAt } from '../iterate/pick'; // 6.0 F1
 
 type Data = Record<string, unknown>;
 
-/** What a question is about. 6.0 D: an arrow (vector), a transform (or a grid that has none). */
-export type AskKind = 'function' | 'region' | 'curve' | 'point' | 'vector' | 'transform';
+/** What a question is about. 6.0 D: an arrow (vector), a transform (or a grid that has none). 6.0 F1: an orbit, a coloured plane. */
+export type AskKind = 'function' | 'region' | 'curve' | 'point' | 'vector' | 'transform' | 'orbit' | 'plane';
 
 /** What was clicked: its kind and name, and where (math coordinates; for a function, the point on it). */
 export interface AskTarget {
@@ -82,7 +83,7 @@ export interface AskContext {
 
 export type QuestionProvider = (ctx: AskContext) => Question[];
 
-const PROVIDERS: Record<AskKind, QuestionProvider[]> = { function: [], region: [], curve: [], point: [], vector: [], transform: [] };
+const PROVIDERS: Record<AskKind, QuestionProvider[]> = { function: [], region: [], curve: [], point: [], vector: [], transform: [], orbit: [], plane: [] };
 
 /** Add questions for a kind of object; returns a function that takes them away again. */
 export function registerQuestions(kind: AskKind, provider: QuestionProvider): () => void {
@@ -234,6 +235,12 @@ export function pickTarget(drawn: DrawnChart, tools: Tool[], p: Pt, sx: number, 
         const n = nearest(c.lines, p, sx, sy);
         if (n) offer(n.d, { kind: c.kind, name: c.name, x: n.at.x, y: n.at.y }, c.bias);
     }
+    // 6.0 F1: orbits, their path and their dots (src/iterate/pick.ts).
+    for (const c of orbitCandidates(drawn.items, tools)) {
+        const n = nearest(c.lines, p, sx, sy);
+        if (n) offer(n.d, { kind: 'orbit', name: c.name, x: n.at.x, y: n.at.y });
+        for (const m of c.dots) offer(Math.hypot((m.x - p.x) * sx, (m.y - p.y) * sy), { kind: 'orbit', name: c.name, x: m.x, y: m.y });
+    }
     if (best.target) return best.target;
     // A region: the click inside its fill (the last one drawn is on top).
     for (let i = drawn.items.length - 1; i >= 0; i--) {
@@ -241,6 +248,9 @@ export function pickTarget(drawn: DrawnChart, tools: Tool[], p: Pt, sx: number, 
         if (item.kind !== 'tool' || type(item.source) !== 'region') continue;
         if (item.fills.some((f) => inside(f.rings, p))) return { kind: 'region', name: item.source, x: p.x, y: p.y };
     }
+    // 6.0 F1: a coloured plane, anywhere on its picture.
+    const plane = planeAt(drawn.items, tools);
+    if (plane) return { kind: 'plane', name: plane, x: p.x, y: p.y };
     return null;
 }
 

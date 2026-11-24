@@ -20,15 +20,15 @@
 import { Data, canonicalData, minimize, stableJson } from '../chartdata';
 import { quote } from './quote';
 import { ANCHORS, COLORS, NAME_RE, ObjectList, PATTERNS, THICKNESSES, TOOL_PREFIX, definedNames, isSignCondition, niceStep, parseChartText, splitStatement, splitTop } from './parse';
-import { NO_WORDS, chartWords, hasWords, writeWords } from './words';
+import { NO_WORDS, chartWords, hasWords, readWords, typedColumn, writeWords } from './words';
 import { FULL_END, axisLines, chartLanguage, exactFull, fullLine, isFullText, withName, wordsToFull } from './full';
 import { isColormap } from '../colormaps';
 import { looksLikeLatex } from '../latex';
 import { eventNames } from '../beyond/event';
 import { boxRatioOf } from '../box3d';
 // 6.0 C
-import { MOTION_KINDS, OWN_NAME_TYPES, keepThen, motionHead, motionOptions } from '../motion6/text';
-import { STEP_LISTS, hasSteps, stepsInOrder, withoutStep } from '../motion6/steps';
+import { MOTION_KINDS, OWN_NAME_TYPES, keepThen, motionHead, motionOptions, thenPrefix } from '../motion6/text';
+import { STEP_LISTS, hasSteps, stepOf, stepsInOrder, withoutStep } from '../motion6/steps';
 import type { StepList } from '../motion6/steps';
 // 6.0 B
 import { axisSetHead, chordHead } from '../notes6/text';
@@ -38,6 +38,8 @@ import { LINEAR_TYPES, linearHead, linearOptions } from '../linear/text';
 import { letHead, listPointsHead, vectorHead } from '../values/text';
 // 6.0 E
 import { ITERATE_KINDS, iterateHead, iterateOptions } from '../iterate/text';
+// 6.0 F1
+import { letLines } from '../values/order';
 
 // ---------------------------------------------------------------- values
 
@@ -727,6 +729,8 @@ interface Printed {
     objects: Record<ObjectList, string[]>;
     /** 6.0 C: the step of every object, when `then` lines say them (each list in step order). */
     steps?: Record<StepList, number[]>;
+    /** 6.0 F1: per tool, a let line that prints right after the sliders (src/values/order.ts). */
+    lets?: boolean[];
     /** A printed line in the words the plugin writes (a person's own words, when they set some). */
     say: (line: string) => string;
 }
@@ -770,7 +774,20 @@ function printParts(source: Data, builtin = false): Printed {
         },
         say,
         ...(staged ? { steps: staged } : {}),
+        ...lets(full, staged), // 6.0 F1
     };
+}
+
+/** 6.0 F1: which tool lines are let lines that print right after the sliders. */
+function lets(full: Data, staged: Record<StepList, number[]> | null): { lets?: boolean[] } {
+    const lines = letLines(list(full.tools), staged?.tools);
+    return lines ? { lets: lines } : {};
+}
+
+/** 6.0 F1: the object lines of a list, let lines out of the tools (they print after the sliders). */
+function linesOf(p: Printed, key: ObjectList, lets: boolean): string[] {
+    if (key !== 'tools' || !p.lets) return lets ? [] : p.objects[key];
+    return p.objects.tools.filter((_, i) => !!p.lets?.[i] === lets);
 }
 
 /** 6.0 C: the chart without the steps of its objects (`then` lines write them). */
@@ -785,9 +802,12 @@ function joinSteps(p: Printed, steps: Record<StepList, number[]>): string {
     const out = [...p.chart, ...p.objects.parameters];
     const last = Math.max(0, ...STEP_LISTS.flatMap((k) => steps[k]));
     for (let s = 0; s <= last; s++) {
-        const lines = STEP_LISTS.flatMap((k) => p.objects[k].filter((_, i) => (steps[k][i] ?? 0) === s));
-        if (s > 0 && !lines.length) out.push('then');
-        lines.forEach((l, i) => out.push(s > 0 && i === 0 ? `then ${l}` : l));
+        // 6.0 F1: the let lines of a step first.
+        const inStep = (k: StepList, lets: boolean) => (_: string, i: number) => (steps[k][i] ?? 0) === s && (k !== 'tools' || !!p.lets?.[i] === lets);
+        const lines = [...p.objects.tools.filter(inStep('tools', true)), ...STEP_LISTS.flatMap((k) => p.objects[k].filter(inStep(k, false)))];
+        const then = p.say('then'); // 6.0 F1: in a person's own word for then
+        if (s > 0 && !lines.length) out.push(then);
+        lines.forEach((l, i) => out.push(s > 0 && i === 0 ? `${then} ${l}` : l));
     }
     return out.join('\n');
 }
@@ -803,7 +823,8 @@ function rawLine(key: ObjectList, item: Data): string {
     return raw(kind, copy);
 }
 
-const join = (p: Printed) => (p.steps ? joinSteps(p, p.steps) : [...p.chart, ...LIST_NAMES.flatMap((k) => p.objects[k])].join('\n')); // steps: 6.0 C
+// steps: 6.0 C; let lines after the sliders: 6.0 F1
+const join = (p: Printed) => (p.steps ? joinSteps(p, p.steps) : [...p.chart, ...p.objects.parameters, ...linesOf(p, 'tools', true), ...LIST_NAMES.filter((k) => k !== 'parameters').flatMap((k) => linesOf(p, k, false))].join('\n'));
 
 /** The chart a text reads as, in a form that compares equal whatever order the keys came in; `builtin`: only the built-in words. */
 function readAs(text: string, builtin = false): string {
@@ -918,6 +939,8 @@ interface OutLine {
     key?: string;
     /** A line about the chart itself (view, title, set, ...). */
     chart?: boolean;
+    /** 6.0 F1: the `then` of a deleted line that started a step. */
+    bare?: boolean;
 }
 
 /** A new object with its printed line. */
@@ -925,6 +948,8 @@ interface Fresh {
     list: ObjectList;
     line: string;
     item: Data;
+    /** 6.0 F1: the printed line in words (before the block's form), for a step written out. */
+    words: string;
 }
 
 function rewrite(oldText: string, data: Data, form: Form): string {
@@ -943,7 +968,7 @@ function rewrite(oldText: string, data: Data, form: Form): string {
         order[key] = [];
         list(newFull[key]).forEach((item, i) => {
             const k = itemKey(key, item, i);
-            fresh.set(k, { list: key, line: form.object(printed.objects[key][i]), item });
+            fresh.set(k, { list: key, line: form.object(printed.objects[key][i]), item, words: printed.objects[key][i] });
             order[key].push(k);
         });
     }
@@ -988,13 +1013,17 @@ function rewrite(oldText: string, data: Data, form: Form): string {
         const indent = /^\s*/.exec(source)?.[0] ?? '';
         if (t.object) {
             const k = target.get(t.line);
-            if (!k) continue; // deleted in the editor
+            if (!k) {
+                // Deleted in the editor. 6.0 F1: a line that started a step leaves its `then`, so the steps below keep their numbers.
+                if (startsStep(source, form.full)) out.push({ text: indent + (form.full ? '\\then' : printed.say('then')), list: null, bare: true });
+                continue;
+            }
             const f = fresh.get(k);
             if (!f || placed.has(k)) continue;
             placed.add(k);
             const was = before.get(t.line);
             // keepThen: 6.0 C, a changed line stays in its step.
-            out.push({ text: was && withoutId(was) === withoutId(f.item) ? source : indent + keepThen(source, keepForm(source, f.line)), list: f.list, key: k });
+            out.push({ text: was && withoutId(was) === withoutId(f.item) ? source : indent + keepThenIn(source, keepForm(source, f.line), form, printed.say), list: f.list, key: k });
             continue;
         }
         if (t.chart.length) {
@@ -1039,6 +1068,12 @@ function rewrite(oldText: string, data: Data, form: Form): string {
     }
 
     // New objects: after the last line of their kind, else before the first line of a later kind, else at the end.
+    // 6.0 F1: the `then` of a deleted line goes onto the object line right below it, when that starts no step.
+    for (let i = out.length - 2; i >= 0; i--) {
+        if (out[i].bare && out[i + 1].list !== null && !startsStep(out[i + 1].text, form.full)) out.splice(i, 2, withThen(out[i + 1], true, form, printed.say));
+    }
+    // 6.0 F1: in a chart with steps, at the end of their step (stepSpot).
+    const stepped = hasSteps(newFull) || out.some((l) => startsStep(l.text, form.full));
     for (const key of LIST_NAMES) {
         for (const k of order[key]) {
             if (placed.has(k)) continue;
@@ -1056,7 +1091,10 @@ function rewrite(oldText: string, data: Data, form: Form): string {
                 const i = out.findIndex((l) => l.list !== null && later.includes(l.list));
                 at = i < 0 ? end() : i;
             }
-            out.splice(at, 0, { text: f.line, list: key, key: k });
+            // 6.0 F1: a new let line that leads the tools goes after the let lines, else after the sliders.
+            if (key === 'tools' && order.tools.slice(0, order.tools.indexOf(k) + 1).every((x) => fresh.get(x)?.item.type === 'value') && !stepOf(f.item)) at = letSpot(out, fresh, at);
+            const put = stepped ? stepSpot(out, at, k, f, order[key], form, printed.say, end()) : { at, text: f.line }; // 6.0 F1
+            out.splice(put.at, 0, { text: put.text, list: key, key: k });
             placed.add(k);
         }
     }
@@ -1066,11 +1104,99 @@ function rewrite(oldText: string, data: Data, form: Form): string {
         const slots = out.map((l, i) => (l.list === key ? i : -1)).filter((i) => i >= 0);
         const byKey = new Map(slots.map((i) => [out[i].key, out[i]]));
         const wanted = order[key].map((k) => byKey.get(k)).filter((l): l is OutLine => !!l);
-        if (wanted.length === slots.length) slots.forEach((slot, j) => (out[slot] = wanted[j]));
+        // 6.0 F1: in a chart with steps a step starts where it started: the `then` stays with the place, not the line.
+        const starts = stepped ? slots.map((i) => startsStep(out[i].text, form.full)) : [];
+        if (wanted.length === slots.length) slots.forEach((slot, j) => (out[slot] = stepped && wanted[j] !== out[slot] ? withThen(wanted[j], starts[j], form, printed.say) : wanted[j]));
     }
+    if (stepped) writeSteps(out, fresh, form, printed.say); // 6.0 F1
 
     keepNames(out, fresh, form);
     return out.map((l) => l.text).join('\n');
+}
+
+/** 6.0 F1: keepThen for a line that may start with a person's own word for then: the new line starts with the word the plugin writes. */
+function keepThenIn(source: string, printed: string, form: Form, say: (line: string) => string): string {
+    const words = chartWords();
+    if (form.full || !hasWords(words)) return keepThen(source, printed);
+    const out = keepThen(readWords(source, words).text, printed);
+    if (out === printed) return out;
+    const lead = /^\s*/.exec(out)?.[0] ?? '';
+    return `${lead}${say('then')}${out.slice(lead.length + 'then'.length)}`;
+}
+
+/** 6.0 F1: does a line of the block start a step (`then ...`, a person's word for then, `\\then`)? */
+function startsStep(text: string, full: boolean): boolean {
+    if (full) return /^\s*\\then\b/.test(text);
+    const words = chartWords();
+    return thenPrefix(hasWords(words) ? readWords(text, words).text : text) >= 0;
+}
+
+/**
+ * 6.0 F1: where a new line goes in a chart with steps, and its text: at the
+ * end of its step (before the line that starts the next one, or at the end;
+ * `then` before it when it starts a new last step), when the order of its
+ * list allows that; else where its list puts it, with its step written out.
+ */
+function stepSpot(out: OutLine[], at: number, k: string, f: Fresh, order: string[], form: Form, say: (line: string) => string, last: number): { at: number; text: string } {
+    const step = stepOf(f.item);
+    const starts = out.map((l) => startsStep(l.text, form.full));
+    const stepAt = (i: number) => starts.slice(0, i).filter(Boolean).length;
+    const idx = order.indexOf(k);
+    // The lines of its list above the spot hold the objects before it, those below the ones after it.
+    const fits = (c: number) => out.every((l, i) => l.list !== f.list || !l.key || (i < c ? order.indexOf(l.key) < idx : order.indexOf(l.key) > idx));
+    if (stepAt(at) === step && fits(at)) return { at, text: f.line };
+    const total = stepAt(out.length);
+    if (step <= total) {
+        let c = last;
+        for (let i = 0; i < out.length; i++) {
+            if (starts[i] && stepAt(i) === step) {
+                c = i;
+                break;
+            }
+        }
+        if (fits(c)) return { at: c, text: f.line };
+    } else if (step === total + 1 && fits(last)) {
+        return { at: last, text: form.full ? `\\then ${f.line}` : `${say('then')} ${f.line}` };
+    }
+    return { at, text: /\bstep=/.test(f.words) ? f.line : form.object(`${f.words}, step=${step}`) };
+}
+
+/** 6.0 F1: a line with or without the `then` that starts a step (in the words the block uses). */
+function withThen(l: OutLine, then: boolean, form: Form, say: (line: string) => string): OutLine {
+    if (startsStep(l.text, form.full) === then) return l;
+    const indent = /^\s*/.exec(l.text)?.[0] ?? '';
+    const body = l.text.slice(indent.length);
+    if (then) return { ...l, text: `${indent}${form.full ? '\\then' : say('then')} ${body}` };
+    if (form.full) return { ...l, text: indent + body.replace(/^\\then\b\s*/, '') };
+    const words = chartWords();
+    if (!hasWords(words)) return { ...l, text: indent + body.slice(Math.max(0, thenPrefix(body))) };
+    const read = readWords(body, words);
+    return { ...l, text: indent + body.slice(typedColumn(read.maps, 1, thenPrefix(read.text) + 1) - 1) };
+}
+
+/** 6.0 F1: an object line whose place gives it another step than its own (it moved, or a `then` above it went): its step written out. */
+function writeSteps(out: OutLine[], fresh: Map<string, Fresh>, form: Form, say: (line: string) => string) {
+    let step = 0;
+    out.forEach((l, i) => {
+        const then = startsStep(l.text, form.full);
+        if (then) step++;
+        const f = l.key ? fresh.get(l.key) : undefined;
+        if (!f || l.list === 'parameters' || stepOf(f.item) === step || /\bstep=/.test(l.text)) return;
+        const line = /\bstep=/.test(f.words) ? f.line : form.object(`${f.words}, step=${stepOf(f.item)}`);
+        const indent = /^\s*/.exec(l.text)?.[0] ?? '';
+        out[i] = withThen({ ...l, text: indent + line }, then, form, say);
+    });
+}
+
+/** 6.0 F1: where a new let line goes: after the last let line, else after the last slider line, else before the first object line (`fallback` when none). */
+function letSpot(out: OutLine[], fresh: Map<string, Fresh>, fallback: number): number {
+    for (let i = out.length - 1; i >= 0; i--) {
+        const item = out[i].list === 'tools' && out[i].key ? fresh.get(out[i].key ?? '')?.item : undefined;
+        if (item && item.type === 'value' && !stepOf(item)) return i + 1;
+    }
+    for (let i = out.length - 1; i >= 0; i--) if (out[i].list === 'parameters') return i + 1;
+    const first = out.findIndex((l) => l.list !== null);
+    return first < 0 ? fallback : Math.min(first, fallback);
 }
 
 /**

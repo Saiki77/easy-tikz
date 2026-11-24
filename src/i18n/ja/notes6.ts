@@ -107,4 +107,9 @@ export const notes6: Messages<typeof en> = {
 
     // ---- Chart tab
     'notes6.chart.fitY': 'このグラフのテキストには y の範囲がありません。y は描くものに合わせて決まります。y の範囲を入力するか、移動や拡大をすると固定されます。',
+
+    // ---- 6.0 F1: chart words, what each piece is (Settings, Chart words)
+    'notes6.words.what.onTheXAxis': 'x 軸上の集合：mark where g(x) <= 0 on the x-axis',
+    'notes6.words.what.onTheYAxis': 'y 軸上の集合：mark where y > 1 on the y-axis',
+    'notes6.words.what.theChordOf': '関数の弦：draw the chord of g from -1 to 3',
 };

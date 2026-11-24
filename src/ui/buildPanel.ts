@@ -37,6 +37,7 @@ import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, textBu
 import { PickerContent, PickerGroup, PickerItem, addPicker } from './addPicker';
 import { t } from '../i18n';
 import type { MessageKey } from '../i18n';
+import { insertTool } from '../values/order'; // 6.0 F1
 
 export interface BuildPanelHandle {
     el: HTMLElement;
@@ -864,7 +865,7 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
                 options.onStartAdded?.();
                 return;
             case 'tool':
-                tools().push(result.tool);
+                insertTool(tools(), result.tool); // 6.0 F1: a let definition goes before the other tools
                 addItem(result.tool);
                 options.onStartAdded?.();
                 return;
@@ -874,7 +875,7 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
                     host.settings.setValue('parameters', [...(Array.isArray(params) ? params : []), ...result.parameters]);
                 }
                 for (const fn of result.functions ?? []) functions().push(fn);
-                for (const tool of result.tools) tools().push(tool);
+                for (const tool of result.tools) insertTool(tools(), tool); // 6.0 F1
                 const shown = result.tools[result.reveal ?? 0] ?? result.tools[0] ?? (result.functions ?? [])[0];
                 if (shown) addItem(shown);
                 options.onStartAdded?.();

@@ -433,7 +433,8 @@ export function stripMathDollars(line: string, names?: ReadonlySet<string>): str
             continue;
         }
         // A bar in a formula is an absolute value, never the option bar of the 4.4 short form.
-        if (math) formula += c === '|' ? '\\vert ' : c;
+        // 6.0 F1: `\|` (a norm, \|v\|) is \Vert, not a backslash before \vert.
+        if (math) formula = c !== '|' ? formula + c : /(^|[^\\])(\\\\)*\\$/.test(formula) ? `${formula.slice(0, -1)}\\Vert ` : `${formula}\\vert `;
         else out += c;
     }
     if (math) out += formula;

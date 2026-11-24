@@ -27,6 +27,7 @@ import { needsClock } from './motion6/clock'; // 6.0 C
 // 6.0 B
 import { notes6ToolReads, renameInNotes6Tool } from './notes6/tools';
 import { AskController } from './notes6/askHost';
+import { LongPress } from './notes6/press'; // 6.0 F1
 import type { AskTarget } from './notes6/ask';
 // 6.0 A
 import { renameInValueTool, valueToolReads } from './values/tools';
@@ -427,6 +428,8 @@ export class TikzModal extends Modal implements PanelHost {
     private chartSvg: SVGElement | null = null;
     // 6.0 B: Ask the curve (src/notes6/askHost.ts) and what the last full 2D render drew.
     private ask: AskController | null = null;
+    /** 6.0 F1: a long press of a finger asks, as a tap does. */
+    private readonly longPress = new LongPress((x, y) => this.longPressAsk(x, y));
     private askDrawn: SVGRenderer['drawn'] = null;
     private layout: RenderLayout | null = null;
 
@@ -1647,6 +1650,10 @@ export class TikzModal extends Modal implements PanelHost {
         chart.addEventListener('pointermove', (e) => this.onPointerMove(e));
         chart.addEventListener('pointerup', (e) => this.endDrag(e, false));
         chart.addEventListener('pointercancel', (e) => this.endDrag(e, true));
+        // 6.0 F1: the platform's own long-press menu stays away while a long press asks.
+        chart.addEventListener('contextmenu', (e) => {
+            if (this.longPress.busy()) e.preventDefault();
+        });
         // The capture can go without a pointerup reaching the chart (released in another app after
         // Cmd+Tab): an object drag ends as on release, a press as on cancel. Our own releases come after
         // the drag state is gone and change nothing.
@@ -1748,6 +1755,7 @@ export class TikzModal extends Modal implements PanelHost {
         chart.addClass('is-pointer-focus');
         chart.focus({ preventScroll: true });
         this.pendingClick = null;
+        if (!this.is3D()) this.longPress.down(e); // 6.0 F1
         if (this.is3D()) {
             this.drag = {
                 kind: 'rotate',
@@ -1844,6 +1852,7 @@ export class TikzModal extends Modal implements PanelHost {
             return;
         }
         if (e.pointerType !== 'touch') this.lastPointer = { clientX: e.clientX, clientY: e.clientY, pointerType: e.pointerType };
+        this.longPress.move(e); // 6.0 F1
         const click = this.pendingClick;
         if (click && click.pointerId === e.pointerId && !click.moved && Math.hypot(e.clientX - click.startX, e.clientY - click.startY) >= this.threshold(click.touch)) {
             click.moved = true;
@@ -1863,6 +1872,11 @@ export class TikzModal extends Modal implements PanelHost {
     }
 
     private endDrag(e: PointerEvent, cancelled: boolean) {
+        // 6.0 F1: a long press asked already; lifting the finger does nothing more.
+        if (this.longPress.end(e)) {
+            if (this.pendingClick && this.pendingClick.pointerId === e.pointerId) this.pendingClick = null;
+            return;
+        }
         const click = this.pendingClick;
         if (click && click.pointerId === e.pointerId) {
             this.pendingClick = null;
@@ -2477,6 +2491,20 @@ export class TikzModal extends Modal implements PanelHost {
             return;
         }
         if (!asked) this.clearSelection();
+    }
+
+    /** 6.0 F1: a finger rested on the chart: ask what is there, and end the press (no pan, drag or tap after it). */
+    private longPressAsk(x: number, y: number): boolean {
+        const drag = this.drag;
+        if (this.is3D() || (drag && drag.kind === 'object') || this.pendingClick?.moved) return false;
+        if (!this.asker().at(x, y, true)) return false;
+        this.pendingClick = null;
+        if (drag && (drag.kind === 'press' || drag.kind === 'pan')) {
+            this.drag = null;
+            this.releaseCapture(drag.pointerId);
+            this.chartEl?.removeClass('is-dragging');
+        }
+        return true;
     }
 
     // 6.0 B: Ask the curve.
