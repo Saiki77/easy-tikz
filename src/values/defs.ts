@@ -4,6 +4,8 @@
  * Obsidian.
  */
 import type { ValueDefinition } from './table';
+// 6.0 G: the named GeoGebra lines that are values or functions (src/geogebra/defs.ts).
+import { geogebraDefinitions } from '../geogebra/defs';
 
 /** The definitions of the value tools in `tools`, in their order. */
 export function valueDefinitions(tools: unknown): ValueDefinition[] {
@@ -22,5 +24,6 @@ export function valueDefinitions(tools: unknown): ValueDefinition[] {
             expression: typeof expression === 'string' ? expression : '',
         });
     }
+    out.push(...geogebraDefinitions(tools)); // 6.0 G
     return out;
 }

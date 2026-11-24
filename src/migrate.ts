@@ -21,6 +21,9 @@ import { axisSetDefaults, chordDefaults, completeAxisSet, completeChord } from '
 // 6.0 E
 import { ITERATE_PREFIX, completeIterateTool, iterateDefaults } from './iterate/tools';
 import { iterateRecipes } from './iterate/recipes';
+// 6.0 G
+import { GEOGEBRA_PREFIX, completeGeoGebraTool, geogebraDefaults } from './geogebra/tools';
+import { geogebraRecipes } from './geogebra/recipes';
 import { notes6Recipes } from './notes6/recipes';
 // 6.0 D
 import { LINEAR_PREFIX, basisVectorsDefaults, completeLinearTool, eigenvectorsDefaults, planeGridDefaults, spanDefaults, transformDefaults, unitSquareDefaults } from './linear/tools';
@@ -142,6 +145,8 @@ const TOOL_PREFIX: Record<ToolType, string> = {
     ...LINEAR_PREFIX,
     // 6.0 E
     ...ITERATE_PREFIX,
+    // 6.0 G
+    ...GEOGEBRA_PREFIX,
 };
 
 const PARAMETER_LETTERS = ['a', 'b', 'c', 'd', 'k', 'm', 'n', 'p', 'q', 'r', 's', 'u', 'v', 'w'];
@@ -1192,7 +1197,10 @@ function convertTool(src: Record<string, unknown>, ctx: ConvertContext): { body:
             if (linear) return { body: linear, hidden: false };
             // 6.0 E: orbits, cobwebs, bifurcation diagrams, Newton's method, coloured planes, turning circles
             const iterate = completeIterateTool(src);
-            return iterate ? { body: iterate, hidden: false } : null;
+            if (iterate) return { body: iterate, hidden: false };
+            // 6.0 G: GeoGebra lines
+            const geogebra = completeGeoGebraTool(src);
+            return geogebra ? { body: geogebra, hidden: false } : null;
         }
     }
 }
@@ -1590,7 +1598,9 @@ export function normalizeParameters(raw: unknown): Parameter[] {
         max = Math.max(max, value);
         let step = num(src.step, NaN);
         if (!(step > 0)) step = niceStep(max - min);
-        out.push(src.connected === true ? { name, value, min, max, step, connected: true } : { name, value, min, max, step });
+        const p: Parameter = src.connected === true ? { name, value, min, max, step, connected: true } : { name, value, min, max, step };
+        if (src.geogebra === true) p.geogebra = true; // 6.0 G: `a = Slider(0, 5)`
+        out.push(p);
     }
     return out;
 }
@@ -1817,6 +1827,9 @@ export function defaultTool(type: ToolType, opts: { is3D: boolean; tools: Tool[]
         case 'colourPlane':
         case 'fourierCircles':
             return { ...(iterateDefaults(type) as Omit<Tool, 'id' | 'name' | 'hidden'>), ...identity(type, opts) } as Tool;
+        // 6.0 G
+        case 'geogebra':
+            return { ...geogebraDefaults(), ...identity('geogebra', opts) };
     }
 }
 
@@ -2159,6 +2172,8 @@ function recipes2D(): Recipe[] {
             callable: callableFunctions,
             names: chartNames,
         }),
+        // 6.0 G
+        ...geogebraRecipes(in2D, { tool: (type, ctx) => defaultTool(type as ToolType, toolOpts(ctx)), names: chartNames }),
         labelRecipe(in2D),
         sliderRecipe(in2D),
     ];

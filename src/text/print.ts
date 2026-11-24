@@ -40,6 +40,8 @@ import { letHead, listPointsHead, vectorHead } from '../values/text';
 import { ITERATE_KINDS, iterateHead, iterateOptions } from '../iterate/text';
 // 6.0 F1
 import { letLines } from '../values/order';
+// 6.0 G
+import { geogebraHead, geogebraOptions } from '../geogebra/text';
 
 // ---------------------------------------------------------------- values
 
@@ -217,6 +219,11 @@ interface Ctx {
 
 /** `slider c from 0 to 15, starting at 6, connected`: the start left out when it is the low end, the step when it is the usual one. */
 function sliderLine(p: Data): string {
+    // 6.0 G: `a = Slider(0, 5)`, the step after them when it is not 0.1; moved off its low end, `, starting at 2` (GeoGebra's slider has no start).
+    if (p.geogebra === true) {
+        const head = `${str(p.name)} = Slider(${str(p.min)}, ${str(p.max)}${Number(p.step) === 0.1 ? '' : `, ${str(p.step)}`})`;
+        return Number(p.value) === Number(p.min) ? head : `${head}, starting at ${str(p.value)}`;
+    }
     const parts = [`slider ${str(p.name)} from ${str(p.min)} to ${str(p.max)}`];
     const [value, min, max, step] = [p.value, p.min, p.max, p.step].map(Number);
     if (value !== min) parts.push(`starting at ${str(p.value)}`);
@@ -446,6 +453,7 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
     else if (MOTION_KINDS.has(type)) head = motionHead(full, o, { is3D: ctx.is3D, shown: ctx.shown.has(name) }); // 6.0 C
     else if (LINEAR_TYPES.has(type)) head = linearHead(full, o, ctx.is3D); // 6.0 D
     else if (ITERATE_KINDS.has(type)) head = iterateHead(full, o); // 6.0 E
+    else if (type === 'geogebra') head = geogebraHead(full, o); // 6.0 G
     // `title: ...` would read as a title line, so such a name only fits a raw line.
     if (!head || !NAME_RE.test(name) || /^(title|xlabel|ylabel|zlabel)$/i.test(name)) return raw('tool', min);
     if (type === 'region') {
@@ -478,6 +486,8 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
         linearOptions(type, o); // 6.0 D
     } else if (ITERATE_KINDS.has(type)) {
         iterateOptions(type, o); // 6.0 E
+    } else if (type === 'geogebra') {
+        geogebraOptions(o); // 6.0 G
     } else {
         o.common();
         o.label();
@@ -490,6 +500,8 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
     const line = withOptions(head, o.finish());
     // 6.0 C: a vector field's line holds its name (F(x, y) = ...).
     if (OWN_NAME_TYPES.has(type)) return line;
+    // 6.0 G: so does a GeoGebra line written with its name (A = (1, 2)).
+    if (type === 'geogebra' && full.named === true) return line;
     return ctx.shown.has(name) ? `${name}: ${line}` : line;
 }
 

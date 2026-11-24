@@ -158,6 +158,38 @@ const SOURCES: ExampleSource[] = [
         ja: { title: 'ニュートン法の吸引域', description: 'すべての点から z³ - 1 にニュートン法を使います。色は行き着く根を表します。' },
         lines: ['show x from -1.8 to 1.8 and y from -1.2 to 1.2', 'equal scale', 'colour the plane by $z_{n+1} = z_n - \\frac{z_n^3 - 1}{3z_n^2}$, $z_0 = x + iy$, 40 steps'],
     },
+    // 6.0 G: GeoGebra commands
+    {
+        id: 'geogebra-construction',
+        en: { title: 'A GeoGebra construction', description: 'GeoGebra input lines as they are: points, a triangle, its circumcircle, a median, a list from Sequence and a slider.' },
+        ja: { title: 'GeoGebra の作図', description: 'GeoGebra の入力行をそのまま使います：点、三角形、外接円、中線、Sequence のリスト、スライダー。' },
+        lines: [
+            'show x from -1 to 7 and y from -2 to 5',
+            'equal scale',
+            'h = Slider(2, 5)',
+            'A = (1, 1)',
+            'B = (5, 1)',
+            'C = (2.5, h)',
+            'p = Polygon(A, B, C)',
+            'c = Circle(A, B, C)',
+            'M = Midpoint(A, B)',
+            's = Segment(C, M), dashed',
+            'L = Sequence((k, -1 + k^2 / 25), k, 0, 6)',
+        ],
+    },
+    {
+        id: 'geogebra-mandelbrot',
+        en: { title: 'Mandelbrot set from GeoGebra', description: 'IterationList and KeepIf as in GeoGebra: the points c of a grid whose orbit stays near 0, and the orbit of one c.' },
+        ja: { title: 'GeoGebra で書くマンデルブロ集合', description: 'GeoGebra と同じ IterationList と KeepIf です。格子の点 c のうち、軌道が 0 の近くに残る点と、1 つの c の軌道を描きます。' },
+        lines: [
+            'show x from -2.2 to 0.8 and y from -1.3 to 1.3',
+            'equal scale',
+            'P = Flatten(Sequence(Sequence(a + b ί, a, -2.2, 0.8, 0.03), b, -1.3, 1.3, 0.03)), hidden',
+            'M = KeepIf(abs(Element(IterationList(z^2 + c, z, {0 + 0ί}, 20), 21)) <= 2, c, P)',
+            'c = -0.12 + 0.75ί',
+            'IterationList(z^2 + c, z, {0 + 0ί}, 30), in red',
+        ],
+    },
 ];
 
 /** The examples of version 6, their texts in the reader's language. */

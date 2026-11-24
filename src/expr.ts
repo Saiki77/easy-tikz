@@ -32,6 +32,7 @@ import type { Affine, IssueFix } from './mathcontext';
 import { Language, language, t as msg } from './i18n';
 import { latexToPlain } from './latex';
 import { binom, factorial, termRange } from './values/special';
+import { isGeoGebraFormula } from './geogebra/syntax'; // 6.0 G
 
 /**
  * Compile-time problem in user math (syntax, unknown name, wrong variable,
@@ -2308,7 +2309,8 @@ export function isLatexFormula(src: string): boolean {
 }
 
 export function identifierTokens(src: string, template = false): Token[] | null {
-    if (template || ((src.indexOf('{') >= 0 || src.indexOf('}') >= 0) && !isLatexFormula(src))) {
+    // 6.0 G: a GeoGebra formula's braces are lists (src/geogebra/syntax.ts), no placeholders.
+    if (template || ((src.indexOf('{') >= 0 || src.indexOf('}') >= 0) && !isLatexFormula(src) && !isGeoGebraFormula(src))) {
         const out: Token[] = [];
         for (const part of scanTemplate(src).parts) {
             if (part.kind !== 'expr') continue;

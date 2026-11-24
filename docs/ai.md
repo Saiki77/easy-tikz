@@ -285,6 +285,37 @@ mark P at (-0.12, 0.75), large
 draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps, as a path
 ```
 
+**GeoGebra commands** (version 6)
+
+GeoGebra input lines are chart lines: paste a construction as it is, or write one when the person knows GeoGebra. One object per line, `name = command` or a bare command; each draws in GeoGebra's look (free points blue with their names, dependent points and lists black, polygons brown with a light fill, the rest black) and prints back as written. A named value (a point, a number, a list, a matrix) or a function of x is usable by name in every formula of the chart, as a let name.
+
+| Line | Means |
+| --- | --- |
+| `A = (1, 2)`, `z_1 = 1 + 2ί` | A point (a complex number is a point too). A lower case name of a pair, `u = (3, 1)`, is a vector: an arrow from the origin. |
+| `c = Circle(A, 3)`, `Circle(A, B)`, `Circle(A, B, C)` | A circle by center and radius, center and point, or through three points. |
+| `s = Segment(A, B)`, `l = Line(A, B)`, `Ray(A, B)`, `v = Vector(A, B)` | Segment, line through the view, ray, arrow from A to B (its value is B - A). |
+| `p = Polygon(A, B, C)`, `Polygon(L)`, `Polygon(A, B, 6)`, `Polyline(A, B, C)` | A polygon through points or a list of points; with a number, the regular polygon on A B. |
+| `C = Curve(cos(t), sin(2t), t, 0, 2pi)` | A parametric curve (3 formulas in a 3D chart). |
+| `f = x^2 - 2`, `g = Derivative(f)`, `h = Function(f, 0, 2)` | Functions of x, drawn as graphs; `f(x) = x^2` is the chart's own function line. |
+| `L = Sequence((k, k^2), k, 1, 10)`, `M = {{1, 2}, {3, 4}}` | A list (of points: dots) and a matrix (draws nothing). |
+| `Text("d = " + Distance(A, B), (0, 5))` | A text at a point; values after `+` are written with 2 decimals. |
+| `B_1 = Translate(B, v)`, `Rotate(p, pi/3, A)`, `Dilate(c, 2, A)`, `Reflect(p, l)` | Transforms of points and of objects (GeoGebra's `B'` is no name here: write `B_1`). |
+| `a = Slider(0, 5)`, `a = Slider(0, 5, 0.5)` | A slider (it starts at its low end). |
+| `IterationList(z^2 + c, z, {0 + 0ί}, 20)` | A bare command: named G1, G2, ...; a list of complex numbers draws as points. |
+
+Commands in every formula field, with GeoGebra's names, argument orders and 1-based positions: `Sequence(expr, k, a, b[, step])`, `Sequence(n)`, `IterationList(expr, z, {start}, n)` (also `IterationList(f, start, n)`), `Iteration(...)` (the last value), `KeepIf(condition, list)` (the items are `x`), `KeepIf(condition, var, list)`, `CountIf`, `Element(list, i)`, `Element(M, i, j)`, `Zip(expr, var, list, ...)`, `Sum`, `Product` (of a list, or `Sum(expr, k, a, b)`), `Length`, `First(list[, n])`, `Last`, `Append`, `Join`, `Reverse`, `Sort`, `Unique`, `Flatten`, `Take(list, m[, n])`, `Max`, `Min`, `Mean`, `If(condition, a[, b])`, `x(P)`, `y(P)`, `z(P)`, `abs`, `arg`, `conjugate`, `real`, `imaginary`, `Vector`, `UnitVector`, `Dot`, `Cross`, `Determinant`, `Transpose`, `Invert`, `Root(f, a)` and `Root(f, a, b)` (numeric), `Integral(f, a, b)` (numeric), `Derivative(f[, n])` (numeric, at x), `Midpoint`, `Distance`, `Point({x, y})`. Lists are `{1, 2, 3}`, matrices `{{1, 2}, {3, 4}}`; `ί` and `i` are both the imaginary unit. A chart's own name wins over a command of the same name (a slider called `Sum` stays the slider).
+
+Options of a GeoGebra line go after it: `c = Circle(A, 3) in red, dashed`; a colour, `thin`, `thick`, `dashed`, `small`, `large`, `opacity 0.3` (a polygon's or circle's fill), `labelled` (its name), `no label`, `labelled "text"`, `hidden` (a value stays usable). Not GeoGebra lines: names `x`, `y`, `z`, `r` and `t` (`y = 2x` stays a function, `r = 2` a polar curve), a name the chart has already (`a = x^2 + y^2` with a slider a stays a curve), a formula in x and y without a command (a curve), and names with `'`. Lists are worked out at most 100000 items long.
+
+```easy-tikz
+show x from -2.2 to 0.8 and y from -1.3 to 1.3
+equal scale
+P = Flatten(Sequence(Sequence(a + b ί, a, -2.2, 0.8, 0.04), b, -1.3, 1.3, 0.04)), hidden
+M = KeepIf(abs(Element(IterationList(z^2 + c, z, {0 + 0ί}, 20), 21)) <= 2, c, P)
+c = -0.12 + 0.75ί
+IterationList(z^2 + c, z, {0 + 0ί}, 30), in red
+```
+
 **Limits** (so that no chart freezes a phone). Over a limit, steps are drawn at the limit with a note ("Drawn with 2000 steps at most"); too many grid lines are a problem, and a sum of more than 100000 terms has no value.
 
 | What | At most |
@@ -390,6 +421,7 @@ The linear program of the first section, in Full LaTeX:
 | `colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 200 steps` | `\colourplane[z_0=0, c=x + iy, steps=200]{z_{n+1} = z_n^2 + c}` (also `\colorplane`) |
 | `colour the plane by $f(x, y) = \sin x \cos y$, in viridis, opacity 0.8` | `\colourplane[colormap/viridis, opacity=0.8]{f(x, y) = \sin x \cos y}` |
 | `draw the circles of $\sum_{k=1}^{n} \frac{4}{\pi (2k - 1)} e^{i(2k - 1)t}$, with its wave` | `\circles[wave]{\sum_{k=1}^{n} \frac{4}{\pi (2k - 1)} e^{i(2k - 1)t}}` |
+| `c = Circle(A, 3) in red, dashed`, `IterationList(z^2 + c, z, {0}, 20)` | `\geogebra[red, dashed]{c = Circle(A, 3)}`, `\geogebra{IterationList(z^2 + c, z, {0}, 20)}` (the GeoGebra line as it is) |
 
 ## Fields
 
@@ -537,6 +569,10 @@ A line such as `y = x + 1` can be a function (then regions can use it by name, `
 
 `{"type": "orbit", "name": "OR1", "recurrence": "z_{n+1} = z_n^2 + c", "start": "0", "given": "c = P", "steps": "40", "path": false, "size": "small", "thickness": "thin", "valueLabel": false}` (`given`: the names it reads, `c = P; eta = 0.1`). `{"type": "cobweb", "name": "CW1", "recurrence": "x_{n+1} = f(x_n)", "start": "0.2", "steps": "40", "thickness": "thin"}`. `{"type": "bifurcation", "name": "BD1", "recurrence": "x_{n+1} = r x_n (1 - x_n)", "parameter": "r", "from": "2.5", "to": "4", "start": "0.5"}`. `{"type": "newton", "name": "NM1", "function": "f", "start": "2.5", "steps": "5", "thickness": "thin", "valueLabel": false}`. `{"type": "colourPlane", "name": "CP1", "formula": "z_{n+1} = z_n^2 + c", "start": "0", "given": "c = x + iy", "steps": "200", "colormap": "cyclic", "opacity": 1}` (a function of z or of x and y needs no `start`, `given` or `steps`). `{"type": "fourierCircles", "name": "FC1", "sum": "\\sum_{k=1}^{n} \\frac{4}{\\pi (2k - 1)} e^{i(2k - 1)t}", "wave": true, "thickness": "thick"}`.
 
+#### `geogebra` (version 6)
+
+`{"type": "geogebra", "name": "c", "command": "Circle(A, 3)", "named": true, "color": "", "thickness": "", "dashed": false, "size": "", "fillOpacity": -1, "nameLabel": "auto", "label": ""}` is the line `c = Circle(A, 3)`; `"named": false` is a bare command (named G1, ...). Empty fields and `fillOpacity: -1` are GeoGebra's look; `nameLabel` is `auto`, `shown` or `hidden`. `a = Slider(0, 5)` is a slider of `parameters` with `"geogebra": true`.
+
 ## Where labels go
 
 The labels of points, curves, regions and constraint lines are placed by the plugin: it tries the spots around each point and picks one that does not cover lines, points or other labels. There is no field to choose the side. When a label must sit somewhere exact, use a text label instead.
@@ -578,6 +614,7 @@ Version 6 objects publish values the same way: sets on an axis (`AX1_n`, `AX1_x`
 - Constants: `pi` (`π`), `e`.
 - Variables: `x` in functions; `x` and `y` in regions, curves and surfaces; `t` in parametric curves; `theta` in polar charts.
 - Values (version 6), plain or LaTeX: complex numbers (`i`, `-0.8 + 0.156i`, `e^{i\theta}`, `|z|`, `\arg z`, `\bar z`, `\Re z`, `\Im z`; plain `abs`, `arg`, `conj`, `re`, `im`), vectors (`(2, 1)`, `\begin{pmatrix} 2 \\ 1 \end{pmatrix}`, `v + w`, `2v`, `v \cdot w`, `|v|`, `v \times w`, `v_x`; plain `dot`, `cross`, `norm`, `unit`, `angle(v, w)`), matrices (`[[1, 2], [3, 4]]`, `\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}`, `A v`, `AB`, `A^{-1}`, `A^T`, `\det A`, `\operatorname{tr} A`; plain `det`, `tr`, `inv`, `transpose`), lists (`\{1, 2, 3\}`, `\{(k, k^2) : k = 1, \dots, 10\}`; plain `[1, 2, 3]`, `[(k, k^2) : k = 1..10]`, `len`), sums and products (`\sum_{k=1}^{n} \frac{1}{k^2}`, `\prod_{k=1}^{n} k`; plain `sum(1/k^2, k, 1, n)`, `prod(k, k, 1, n)`), `n!`, `\binom{n}{k}` and `\nabla f(p)` (plain `grad(f, p)`). The export writes a sum out term by term at the sliders' values.
+- GeoGebra commands (version 6) in every formula: `Sequence`, `IterationList`, `KeepIf`, `Element` (1-based), `Zip`, `Sum`, `Length`, `x(P)`, `Root`, `Integral`, ..., with lists in braces `{1, 2, 3}`; see GeoGebra commands in [The text syntax](#the-text-syntax).
 
 ## 3D
 
