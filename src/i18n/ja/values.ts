@@ -1,0 +1,93 @@
+/* 日本語: Values (6.0 A): complex numbers, vectors, matrices, lists, sums, let definitions, vector arrows and points of a list. */
+import type { Messages } from '../types';
+import type { values as en } from '../en/values';
+
+export const values: Messages<typeof en> = {
+    // ---- the kinds of cards
+    'values.kind.value': '定義',
+    'values.kind.vector': 'ベクトルの矢印',
+    'values.kind.listPoints': 'リストの点',
+
+    // ---- + Add menu
+    'values.section.values': '値',
+    'values.recipe.let': '定義 (let)',
+    'values.recipeHint.let': 'ベクトル、行列、複素数、リスト、多変数の関数に名前を付け、すべての式で使えるようにします: let v = (2, 1)。',
+    'values.recipe.vector': 'ベクトルの矢印',
+    'values.recipeHint.vector': 'let で定義したベクトルを原点からの矢印として描き、その名前をラベルにします。',
+    'values.recipe.listPoints': 'リストの点',
+    'values.recipeHint.listPoints': '1 の n 乗根をリストの点として描き、多角形で結びます。n はスライダーです。',
+
+    // ---- cards
+    'values.card.name': '名前',
+    'values.card.params': '引数',
+    'values.card.paramsHint': '関数のときだけ: x, y',
+    'values.card.formula': '式',
+    'values.card.formulaPlaceholder': '(2, 1)',
+    'values.card.value': '値',
+    'values.card.summary': '{name} = {formula}',
+    'values.card.empty': 'まだ式がありません',
+    'values.card.vectors': 'ベクトル',
+    'values.card.vectorsPlaceholder': 'v; w',
+    'values.card.from': '始点',
+    'values.card.fromPlaceholder': '原点',
+    'values.card.tipToTail': 'つなげて描く',
+    'values.card.labels': 'ラベル',
+    'values.card.list': 'リスト',
+    'values.card.listPlaceholder': 'S',
+    'values.card.joined': '線で結ぶ',
+    'values.card.pointsSummary': '{count, plural, other {# 個の点}}',
+
+    // ---- chart text
+    'values.text.letTakes': '定義は let v = (2, 1) または let f(x, y) = x^2 + y^2 のように書きます',
+    'values.text.letOptions': '定義にはオプションを付けられません: {option}',
+    'values.text.kindVector': 'ベクトルの矢印',
+    'values.text.kindListPoints': 'リストの点',
+    'values.text.drawTakes': 'ベクトルは draw v as an arrow、draw v and w as arrows、draw v + w tip to tail のように書きます',
+
+    // ---- what a value is, in messages
+    'values.shape.number': '数',
+    'values.shape.complex': '複素数',
+    'values.shape.vector': 'ベクトル',
+    'values.shape.vectorN': '{n} 個の数のベクトル',
+    'values.shape.matrix': '行列',
+    'values.shape.matrixRC': '{rows} x {cols} 行列',
+    'values.shape.list': 'リスト',
+    'values.shape.value': '値',
+
+    // ---- problems
+    'values.problem.noPgf': '{what} はここでは pgfplots の式にできません',
+    'values.problem.missingBracket': '] がありません',
+    'values.problem.rangeTakes': '範囲からのリストは [k^2 : k = 1..n] のように書きます',
+    'values.problem.rowLengths': '行列のすべての行に同じ数の成分が必要です',
+    'values.problem.notNumber': 'ここには数が必要です（{what} ではありません）',
+    'values.problem.notANumber': 'この式の値は {what} で、数ではありません',
+    'values.problem.compare': '比較できるのは数だけです（{what} は比較できません）',
+    'values.problem.realEntries': 'ベクトルや行列の成分は実数です（{what} ではありません）',
+    'values.problem.needsArguments': '{name} は関数です: {name}( ) に{count, plural, other {# 個の引数}}を書きます',
+    'values.problem.noComponent': '{name}: このベクトルの数は {n} 個だけです',
+    'values.problem.transpose': '転置があるのは行列とベクトルだけです（{what} にはありません）',
+    'values.problem.add': '{left} と {right} は足せません',
+    'values.problem.subtract': '{left} から {right} は引けません',
+    'values.problem.multiply': '{left} と {right} は掛けられません',
+    'values.problem.divide': '{left} を {right} で割れません',
+    'values.problem.power': '{left} を {right} 乗できません',
+    'values.problem.cross': '外積には 2 個か 3 個の数のベクトルが 2 つ必要です（{left} と {right} ではありません）',
+    'values.problem.chartFunction': '{name} は数を受け取ります（{what} ではありません）',
+    'values.problem.function': '{name} は {what} を受け取りません',
+    'values.problem.square': 'これがあるのは正方行列だけです（{what} にはありません）',
+    'values.problem.inFunction': '{name} の中: {message}',
+    'values.problem.gradTakes': '勾配には let で定義した関数が必要です: grad(f, p) または \\nabla f(p)',
+    'values.problem.gradNumber': '勾配には値が数の関数が必要です: {name} の値は数ではありません',
+    'values.problem.gradPoint': '{name} は{count, plural, other {# 個の数}}を受け取りますが、点には {got} 個あります',
+    'values.problem.badName': '{name} は名前になりません: 文字、数字、_ で、最初は文字です',
+    'values.problem.duplicate': '{name} という定義が 2 つあります',
+    'values.problem.badParameter': '{name} は引数にできません',
+    'values.problem.parameterTwice': '引数 {name} が 2 回あります',
+    'values.problem.sliderName': '{name} という名前のスライダーがすでにあります',
+    'values.problem.functionName': '{name} という名前の関数がすでにあります',
+    'values.problem.notAVector': '{text} は {what} で、ベクトルではありません',
+    'values.problem.notPoints': '点が {what} です: 複素数か点のリストを書きます',
+    'values.problem.tipToTail': 'つなげて描くには v + w のような和が必要です',
+    'values.problem.fromPoint': '始点が {what} です: (1, 1) のような点を書きます',
+    'values.problem.dimension': '{text} には {n} 個の数がありますが、このグラフのベクトルは {dim} 個です',
+};

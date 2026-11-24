@@ -14,6 +14,8 @@ import { View } from './geometry';
 import { EXAMPLES, defaultParameter } from './migrate';
 import { showcaseExamples } from './guides';
 import { beyondToolReads, renameInBeyondTool } from './beyond/tools';
+// 6.0 A
+import { renameInValueTool, valueToolReads } from './values/tools';
 import type { NoteTable } from './beyond/table';
 import type { ChartDraft } from './templates';
 import type { BlockFormat } from './blockjson';
@@ -705,7 +707,8 @@ export class TikzModal extends Modal implements PanelHost {
                     t.value = expr(t.value);
                     break;
                 default:
-                    renameInBeyondTool(t, { expr, tpl, ref, kind });
+                    // 6.0 A: values (src/values/tools.ts), then the tools beyond functions.
+                    if (!renameInValueTool(t, { expr, tpl, ref, kind }, from)) renameInBeyondTool(t, { expr, tpl, ref, kind });
             }
         }
         for (const a of this.list<Annotation>('annotations')) {
@@ -3036,8 +3039,13 @@ export class TikzModal extends Modal implements PanelHost {
                 case 'plane3D':
                     if (reads(t.value)) return true;
                     break;
-                default:
-                    if (beyondToolReads(t, reads)) return true;
+                default: {
+                    // 6.0 A
+                    const value = valueToolReads(t, name, reads);
+                    if (value !== null) {
+                        if (value) return true;
+                    } else if (beyondToolReads(t, reads)) return true;
+                }
             }
         }
         for (const a of this.list<Annotation>('annotations')) {

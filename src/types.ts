@@ -415,6 +415,62 @@ export interface SolutionTool extends ToolBase {
     dashed: boolean;
 }
 
+// 6.0 A: values (src/values/).
+
+/**
+ * A let definition: a name for a value (a number, a complex number, a
+ * vector, a matrix or a list) or for a function of one or more variables,
+ * usable in every formula field of the chart. Draws nothing; the tool's
+ * name is the defined name. Text: `let v = (2, 1)`, `let f(x, y) = x^2 + 4y^2`.
+ */
+export interface ValueTool extends ToolBase {
+    type: 'value';
+    /** The parameters of a function, `x, y`; empty for a value. */
+    params: string;
+    /** The formula after =, plain or LaTeX: `(2, 1)`, `\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}`, `-0.8 + 0.156i`. */
+    expression: string;
+}
+
+/**
+ * Vectors drawn as arrows, from the origin, from a point, or tip to tail
+ * (the terms of a sum end to end, then the sum). 2D or 3D as the chart is.
+ * Text: `draw v as an arrow`, `draw v and w as arrows, labelled`,
+ * `draw v from (1, 1)`, `draw v + w tip to tail`.
+ */
+export interface VectorTool extends ToolBase {
+    type: 'vector';
+    /** The vectors, `;` between them: names or formulas (`v; w`, `(2, 1)`, `A v`); tip to tail: one sum. */
+    vectors: string;
+    /** Where the arrows start: a point (`(1, 1)`, a points tool P); empty for the origin. */
+    from: string;
+    tipToTail: boolean;
+    thickness: string;
+    dashed: boolean;
+    /** Template, one per arrow with `;`; locals x, y, z (the vector) and i. '' = none. */
+    label: string;
+    /** Each arrow labelled with its vector in LaTeX (when `label` is empty): $\vec{v}$, $\vec{v} + \vec{w}$. */
+    valueLabel: boolean;
+}
+
+/**
+ * The points of a list: complex numbers or points, such as the n-th roots
+ * of unity `\{e^{2\pi i k / n} : k = 0, \dots, n - 1\}`, optionally
+ * joined into a closed polygon. Publishes LP1_n, LP1_x, LP1_y, LP1_x2, ...
+ */
+export interface ListPointsTool extends ToolBase {
+    type: 'listPoints';
+    /** The list: a formula, or the name of a let list. */
+    points: string;
+    /** The closed polygon through the points, in their order. */
+    joined: boolean;
+    size: MarkerSize;
+    thickness: string;
+    /** Template per point; locals x, y, z and i. '' = none. */
+    label: string;
+    /** Each point labelled with its value (when `label` is empty): 0.309 + 0.951i, (1, 2). */
+    valueLabel: boolean;
+}
+
 export type Tool =
     | RegionTool
     | CurveTool
@@ -427,7 +483,11 @@ export type Tool =
     | ProbabilityTool
     | RiemannTool
     | SlopeFieldTool
-    | SolutionTool;
+    | SolutionTool
+    // 6.0 A
+    | ValueTool
+    | VectorTool
+    | ListPointsTool;
 
 export type ToolType = Tool['type'];
 

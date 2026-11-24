@@ -1,5 +1,7 @@
 import { RendererConfig, Colormap, Function3DParameters, MarkerSize, AnnotationSize } from './types';
 import { LABEL_LOCALS, MathContext, labelDisplayText } from './mathcontext';
+// 6.0 A
+import { valueDefinitions } from './values/defs';
 import { ArrowHeads, Scene3D, SceneIssue, computeScene3D, edgeLabelSide3D } from './scene';
 import { COLOR_MAP, THICKNESS_MAP, resolveCssColor } from './colors';
 import { colormapCss, colormapRange, colormapRgb, isColormap, rgbCss } from './colormaps';
@@ -225,6 +227,8 @@ function contextFromConfig(config: RendererConfig): MathContext {
         functions: config.functions,
         variables: config.variables,
         toolNames: (Array.isArray(config.tools) ? config.tools : []).map((t) => t.name),
+        // 6.0 A: let definitions.
+        values: valueDefinitions(config.tools),
     });
 }
 

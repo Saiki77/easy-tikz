@@ -27,6 +27,8 @@ import { stripMathDollars } from '../latex';
 import { FULL_OPTION_HELP, isFullText, mapFull, readFull } from './full';
 import { eventNames } from '../beyond/event';
 import { boxRatioOf } from '../box3d';
+// 6.0 A
+import { readLet, readListPoints, readVectors } from '../values/text';
 
 type Data = Record<string, unknown>;
 
@@ -75,7 +77,8 @@ export const THICKNESSES = ['very thin', 'very thick', 'thin', 'thick'];
 export const PATTERNS = new Set(['solid', 'horizontal', 'vertical', 'crosshatch', 'dots', 'north-east', 'north-west']);
 export const ANCHORS = new Set(['center', 'above', 'below', 'left', 'right']);
 const AXIS_STYLES: Record<string, string> = { middle: 'middle', centre: 'middle', center: 'middle', box: 'box', edges: 'axes', edge: 'axes', axes: 'axes' };
-export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y' };
+// 6.0 A: value (L), vector (V), listPoints (LP).
+export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', value: 'L', vector: 'V', listPoints: 'LP' };
 const NAME = '[A-Za-z][A-Za-z0-9_]*';
 /** A name the block can spell: letters, digits and _. */
 export const NAME_RE = new RegExp(`^${NAME}$`);
@@ -279,6 +282,8 @@ const OPTION_WORDS = new Set([
     'coordinates', 'drop lines', 'small', 'large', 'normal', 'wireframe', 'backwards', 'above', 'below', 'left', 'right', 'center',
     // 5.0: labelled with the value it computes (a regression line's equation, a probability, a sum)
     'labelled', 'labeled',
+    // 6.0 A: points of a list joined into a polygon, vectors end to end
+    'joined', 'tip to tail',
 ]);
 
 /** Is this piece an option, in either form (`red`, `in red`, `with its tangent at a`, `numbered`, `key=value`)? */
@@ -380,6 +385,8 @@ class Builder {
     readonly explicit = new Set<string>();
     line = 0;
     is3D = false;
+    /** 6.0 A: the names of the let lines of the block (known before any line is read). */
+    readonly lets = new Set<string>();
     /** Tools that point at "the region": the one region of the chart, known once every line is read. */
     readonly theRegion: Array<{ tool: Data; line: number; at: number }> = [];
     /**
@@ -476,6 +483,10 @@ const OPTION_HELP: Record<string, string> = {
     riemann: 'in a colour, thin, thick, opacity 0.35, labelled, labelled "text", hidden',
     slopeField: 'in a colour, thin, thick, hidden',
     solution: 'in a colour, thin, thick, dashed, hidden',
+    // 6.0 A
+    value: 'hidden',
+    vector: 'in a colour, thin, thick, dashed, labelled, labelled "text", tip to tail, hidden',
+    listPoints: 'in a colour, small, large, thin, thick, joined, labelled, labelled "text", hidden',
 };
 
 /** Each kind of object in words, for messages. */
@@ -495,6 +506,10 @@ const KIND_WORDS: Record<keyof typeof OPTION_HELP, MessageKey> = {
     riemann: 'beyond.text.kindRiemann',
     slopeField: 'beyond.text.kindSlopeField',
     solution: 'beyond.text.kindSolution',
+    // 6.0 A
+    value: 'values.kind.value',
+    vector: 'values.text.kindVector',
+    listPoints: 'values.text.kindListPoints',
 };
 
 /** A kind of object in the reader's words, for messages. */
@@ -821,6 +836,13 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
         const markAt = new RegExp(`^mark\\s+(${NAME})\\s+at\\s+\\(`).exec(body);
         const explicit = named?.[1] ?? def?.[1] ?? slider?.[1] ?? markAt?.[1] ?? rawName(t);
         if (explicit) b.explicit.add(explicit);
+        // 6.0 A: `let v = ...`, `let $f(rate) = ...$`: the name and its parameters stay whole in $...$.
+        const letName = new RegExp(`^let\\s+\\$?\\s*(${NAME})\\s*(?:\\(([^()]*)\\))?\\s*=`).exec(t);
+        if (letName) {
+            b.explicit.add(letName[1]);
+            b.lets.add(letName[1]);
+            for (const p of (letName[2] ?? '').split(',')) if (/^[A-Za-z]{2,}$/.test(p.trim())) b.explicit.add(p.trim());
+        }
     });
     const traces: LineTrace[] = [];
     const outside = namesNow;
@@ -894,6 +916,8 @@ function statement(b: Builder, line: string) {
         } else b.problem(at, msg('problems.text.numbersTakes', { axis }));
         return;
     }
+    // 6.0 A: a definition, `let v = (2, 1)`, `let f(x, y) = x^2 + 4y^2` (src/values/text.ts): its formula is the rest of the line.
+    if (/^\s*let\s+[A-Za-z]/.test(line)) return letLine(b, line);
     const split = splitOptions(line, isEnglish(line));
     const options = split.options;
     let body = split.body;
@@ -1171,6 +1195,12 @@ function pointList(b: Builder, name: string | null, rest: Piece, options: Piece[
 function mark(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
     const p = drop(rest, /^the\s+/i);
     const t = p.text;
+    // 6.0 A: the points of a list, `mark the points $\{e^{2\pi i k / n} : k = 0, \dots, n - 1\}$`, `mark the points of S`.
+    const list = readListPoints(t, b.lets);
+    if (list !== null) {
+        addTool(b, 'listPoints', name, { points: list }, options, 'listPoints');
+        return;
+    }
     let m = /^where\s+(\S+)\s+and\s+(\S+)\s+(?:cross|meet|intersect)$/i.exec(t) ?? /^(?:crossings|intersections|crossing\s+points|intersection\s+points)\s+of\s+(\S+)\s+and\s+(\S+)$/i.exec(t);
     if (m) {
         addTool(b, 'points', name, { source: 'intersections', ref1: m[1], ref2: m[2] }, options, 'points');
@@ -1227,6 +1257,15 @@ function draw(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
     const t = rest.text.trim();
     if (!t) return b.problem(rest.at, msg('problems.text.drawTakes'));
     if (DEFINITION.test(t)) return formulaLine(b, name, rest, options);
+    // 6.0 A: vector arrows, `draw v and w as arrows`, `draw v + w tip to tail`.
+    const vectors = readVectors(t, b.lets);
+    if (vectors) {
+        const fields: Data = { vectors: vectors.vectors.join('; ') };
+        if (vectors.from) fields.from = vectors.from;
+        if (vectors.tipToTail) fields.tipToTail = true;
+        addTool(b, 'vector', name, fields, options, 'vector');
+        return;
+    }
     if (drawBeyond(b, name, rest, options)) return;
     const m = DRAW_NOUN.exec(t);
     if (m) {
@@ -1481,7 +1520,31 @@ function beyondOption(b: Builder, kind: string, target: Data, opt: Piece): boole
         if (m) return patternOption(b, opt, target, m[1]);
         return false;
     }
+    // 6.0 A: vector arrows and the points of a list.
+    if (kind === 'vector') {
+        if (lower === 'dashed') return set(target, 'dashed', true);
+        if (lower === 'labelled' || lower === 'labeled') return set(target, 'valueLabel', true);
+        if (lower === 'tip to tail') return set(target, 'tipToTail', true);
+        return false;
+    }
+    if (kind === 'listPoints') {
+        if (lower === 'joined') return set(target, 'joined', true);
+        if (lower === 'labelled' || lower === 'labeled' || lower === 'coordinates') return set(target, 'valueLabel', true);
+        if (lower === 'small' || lower === 'large' || lower === 'normal') return set(target, 'size', lower);
+        return false;
+    }
     return false;
+}
+
+/** 6.0 A: `let v = (2, 1)`, `let f(x, y) = x^2 + 4y^2`: a value tool named by the definition. */
+function letLine(b: Builder, line: string) {
+    const lead = /^\s*let\s+/.exec(line);
+    const at = lead ? lead[0].length : 0;
+    const parts = readLet(line.slice(at), at, (o) => isOption(o));
+    if (!parts || !parts.expression) return b.problem(at, msg('values.text.letTakes'));
+    const name = b.claim(parts.name, parts.nameAt);
+    if (!name) return;
+    addTool(b, 'value', name, { params: parts.params.join(', '), expression: parts.expression }, parts.options, 'value');
 }
 
 /**

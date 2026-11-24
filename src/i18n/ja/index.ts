@@ -13,5 +13,7 @@ import { plugin } from './plugin';
 import { problems } from './problems';
 import { help } from './help';
 import { beyond } from './beyond';
+// 6.0 A
+import { values } from './values';
 
-export const JA: Messages<typeof EN> = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond };
+export const JA: Messages<typeof EN> = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...values };

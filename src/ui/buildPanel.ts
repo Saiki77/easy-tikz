@@ -24,6 +24,8 @@ import { cloneData } from '../util';
 import { LayerCardActions, LayerCardHandle, createLayerCard } from './layerCards';
 // The cards of data, probability, Riemann sums and slope fields register themselves with the layer cards (5.0).
 import '../beyond/cards';
+// 6.0 A
+import '../values/cards';
 import { CardUiState, FunctionCardHandle, createFunctionCard, createSurfaceCard } from './functionCards';
 import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, textButton, trapEscape } from './kit';
 import { PickerContent, PickerGroup, PickerItem, addPicker } from './addPicker';
@@ -112,6 +114,8 @@ const SECTION_ICONS: Record<string, string> = {
     Data: 'table',
     Probability: 'bar-chart-2',
     Calculus: 'sigma',
+    // 6.0 A
+    Values: 'braces',
 };
 
 /** More words that find a recipe in the + Add picker (English, as people search): vector finds Arrow. */
@@ -147,6 +151,10 @@ const RECIPE_WORDS: Record<string, string> = {
     probability: 'p value area shade',
     'riemann-sum': 'integral rectangles left right midpoint',
     'slope-field': 'ode differential equation direction',
+    // 6.0 A
+    'let-definition': 'let define vector matrix complex function variable',
+    'vector-arrow': 'vector arrow let tip tail',
+    'list-points': 'list roots unity complex polygon',
 };
 
 /** Menu heading per recipe section (Functions reads Surfaces in 3D charts). */
@@ -162,6 +170,8 @@ const SECTION_TITLES: Record<string, MessageKey> = {
     Data: 'beyond.section.data',
     Probability: 'beyond.section.probability',
     Calculus: 'beyond.section.calculus',
+    // 6.0 A
+    Values: 'values.section.values',
 };
 
 /** One-click links under the starter examples: [text key, recipe id]. */

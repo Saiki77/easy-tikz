@@ -46,6 +46,8 @@ import { findExtrema1D } from './math';
 import { errorText } from './util';
 import { language, t as msg } from './i18n';
 import { BEYOND_TYPES, BeyondOutput, beyondSources, computeBeyond } from './beyond/scene';
+// 6.0 A
+import { VALUE_TYPES, computeValues, computeValues3D, valuesSources } from './values/scene';
 
 export type ArrowHeads = 'forward' | 'backward' | 'both';
 
@@ -825,7 +827,8 @@ function toolNode(t: Tool, math: MathContext): SceneNode {
             scan(t.value, 'value');
             break;
         default:
-            beyondSources(t, scan, refs);
+            // 6.0 A: values (src/values/scene.ts), then the tools beyond functions.
+            if (!valuesSources(t, scan)) beyondSources(t, scan, refs);
     }
     return { id: `tool:${t.id}`, name: str(t.name) || str(t.id), tool: t, refs, sources, base: toolBase(t) };
 }
@@ -2267,7 +2270,8 @@ function compute2D(node: SceneNode, ctx: Ctx): Output {
         case 'segment':
             return computeSegmentTool(t, ctx);
         default:
-            return computeBeyond(t, ctx) ?? newOutput();
+            // 6.0 A: values (src/values/scene.ts).
+            return computeValues(t, ctx) ?? computeBeyond(t, ctx) ?? newOutput();
     }
 }
 
@@ -3494,6 +3498,8 @@ function labelFormatter(node: SceneNode, math: MathContext, issues: SceneIssue[]
 /** Scene internals the tools beyond functions are computed with (5.0). */
 export type { Output as SceneOutput, Ctx as SceneCtx, TextSpec as SceneTextSpec };
 export { newOutput, addIssue, fail, publish, labelSpot, towardCenter, midSpot, UP_RIGHT };
+/** 6.0 A: for src/values/scene.ts. */
+export { normDir };
 
 // --------------------------------------------------------------- 3D scene
 
@@ -3681,6 +3687,8 @@ function scene3D(input: SceneInput3D): Scene3D {
     const nodes: SceneNode[] = [];
     for (const t of tools) {
         if (t.type === 'plane3D' || ((t.type === 'points' || t.type === 'segment') && t.dim === 3)) nodes.push(toolNode(t, math));
+        // 6.0 A: definitions, vector arrows and points of a list (src/values/scene.ts).
+        else if (VALUE_TYPES.has(t.type)) nodes.push(toolNode(t, math));
     }
     // Data, probability, Riemann sums and slope fields are drawn in 2D charts only (5.0).
     const only2D: SceneIssue[] = tools
@@ -3702,7 +3710,8 @@ function scene3D(input: SceneInput3D): Scene3D {
             if (t.type === 'points') return computePoints3D(t, ctx);
             if (t.type === 'segment') return computeSegment3D(t, ctx);
             if (t.type === 'plane3D') return computePlane(t, ctx);
-            return newOutput();
+            // 6.0 A
+            return computeValues3D(t, ctx) ?? newOutput();
         },
         new Set()
     );

@@ -176,6 +176,10 @@ const TOOL_KIND: Record<Tool['type'], MessageKey> = {
     riemann: 'beyond.kind.riemann',
     slopeField: 'beyond.kind.slopeField',
     solution: 'beyond.kind.solution',
+    // 6.0 A
+    value: 'values.kind.value',
+    vector: 'values.kind.vector',
+    listPoints: 'values.kind.listPoints',
 };
 
 // --------------------------------------------------------------- helpers

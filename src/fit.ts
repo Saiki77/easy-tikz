@@ -23,6 +23,8 @@ import type { Scene2D, SceneItem2D } from './scene';
 import type { SettingsManager } from './settings';
 import { computeScene2D, computeScene3D } from './scene';
 import { beyondFitShapes, fitBeyondTool } from './beyond/fit';
+// 6.0 A
+import { valuesFitShapes } from './values/scene';
 
 // ------------------------------------------------------------------ rules
 
@@ -543,7 +545,8 @@ function fit2D(input: FitInput): FitResult {
             const tool = item.kind === 'tool' ? original.get(item.key) : undefined;
             if (item.kind === 'tool' && !tool) continue;
             // Data, probability, Riemann sums and slope fields (5.0): what they hold, or nothing when they cover the view.
-            const beyond = tool ? beyondFitShapes(tool, item, math) : null;
+            // 6.0 A: values (src/values/scene.ts) hold their arrows and points.
+            const beyond = tool ? (valuesFitShapes(tool, item) ?? beyondFitShapes(tool, item, math)) : null;
             if (beyond) {
                 for (const p of beyond.points) c.point(p);
                 for (const l of beyond.lines) c.line(l.pts, l.closed);
