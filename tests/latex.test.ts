@@ -23,6 +23,7 @@ import { Function3DParameters, FunctionParameters } from '../src/types';
 import { COLORMAPS } from '../src/colormaps';
 import { parseChartText } from '../src/text/parse';
 import type { NoteTable } from '../src/beyond/table';
+import { collectExportFiles } from '../src/iterate/export'; // 6.0 E
 
 const TIMEOUT_MS = 30000;
 const PARALLEL = 4;
@@ -500,6 +501,20 @@ const MOTION6: Record<string, string> = {
     framesSnippet: 'snippet\nframes\nplot f(x) = x^2\nthen shade between f and 0 from x = 0 to 1 pattern dots',
 };
 
+// 6.0 E: iterate and colour the plane: the Mandelbrot set (\addplot graphics) with an orbit, a grid and a legend; a Julia set
+// and domain colouring as frames (a PNG per step); a heat map under gradient descent; a cobweb, a bifurcation diagram
+// (a picture too), Newton's method and still turning circles with their wave; a plane in a snippet.
+const ITERATE: Record<string, string> = {
+    mandelbrot: 'show x from -2.5 to 1 and y from -1.25 to 1.25\ngrid\nplot f(x) = x^2 - 1 in red, with a legend\nmark P at (-0.12, 0.75)\ncolour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 150 steps\ndraw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps, labelled',
+    frames: 'frames\nshow x from -2 to 2 and y from -1.5 to 1.5\nslider a from -1 to 1, starting at -0.8\ncolour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = x + iy$, $c = a + 0.156i$, 200 steps\nthen colour the plane by $f(z) = \\frac{z^2 - 1}{z^2 + 1}$, opacity 0.6',
+    gradient: 'show x from -3 to 3 and y from -2 to 2\nslider eta from 0 to 0.5, starting at 0.1\nlet $f(x, y) = x^2 + 4y^2$\nmark P at (2.5, 1.5)\ncolour the plane by $f(x, y)$, in viridis, opacity 0.5\ndraw the orbit of $p_{n+1} = p_n - \\eta \\nabla f(p_n)$, $p_0 = P$, 25 steps, labelled',
+    lines: 'show x from 0 to 1 and y from 0 to 1\nslider r from 2.5 to 4, starting at 3.7\nplot $f(x) = r x (1 - x)$ in blue, thick\ndraw the cobweb of $x_{n+1} = f(x_n)$ from 0.2, 80 steps',
+    bifurcation: 'show x from 2.5 to 4 and y from 0 to 1\ndraw the bifurcation diagram of $x_{n+1} = r x_n (1 - x_n)$ for r from 2.5 to 4\nplot g(x) = 0.5 in orange, dashed',
+    newton: "show x from -1 to 3 and y from -3 to 6\nplot f(x) = x^2 - 2\ndraw Newton's method for f from 2.5, 5 steps, labelled",
+    circles: 'show x from -3 to 9 and y from -2 to 2\nequal scale\nslider n from 1 to 20, starting at 5, in steps of 1\ndraw the circles of $\\sum_{k=1}^{n} \\frac{4}{\\pi (2k - 1)} e^{i(2k - 1)t}$, with its wave',
+    snippet: 'snippet\naxes in the middle\nshow x from -2 to 2 and y from -2 to 2\ncolour the plane by $f(z) = z^3 - 1$',
+};
+
 const BEYOND: Record<string, { text: string; table?: NoteTable | null }> = {
     // The table's points with labels, bars, a line and the regression line with its equation; the headers name the axes.
     dataTable: {
@@ -679,10 +694,12 @@ const LINEAR: Record<string, string> = {
 // --------------------------------------------------------------- compile
 
 /** The block's export as a complete document. Snippets are wrapped using their own `% Needs:` lines. */
-function documentFor(data: Record<string, unknown>, table?: NoteTable | null): string {
+function documentFor(data: Record<string, unknown>, table?: NoteTable | null, filesDir?: string): string {
     const settings = SettingsManager.fromJSON(JSON.parse(JSON.stringify(data)));
     if (table !== undefined) settings.noteTable = table;
-    const code = settings.generateTikzCode();
+    // 6.0 E: the pictures of coloured planes go beside the .tex file.
+    const { result: code, files } = collectExportFiles(() => settings.generateTikzCode());
+    if (filesDir) for (const f of files) fs.writeFileSync(path.join(filesDir, f.name), f.bytes);
     if (code.startsWith('\\documentclass')) return code;
     const needs = code
         .split('\n')
@@ -778,12 +795,13 @@ if (!hasLatex) {
     for (const [k, text] of Object.entries(VALUES)) cases.push({ name: `values-${k}`, data: parseChartText(text).data });
     // 6.0 D
     for (const [k, text] of Object.entries(LINEAR)) cases.push({ name: `linear-${k}`, data: parseChartText(text).data });
+    for (const [k, text] of Object.entries(ITERATE)) cases.push({ name: `iterate-${k}`, data: parseChartText(text).data }); // 6.0 E
 
     const jobs = pool(
         cases.map((c) => ({
             name: c.name,
             run: () => {
-                const tex = documentFor(c.data, c.table);
+                const tex = documentFor(c.data, c.table, dir);
                 // Labels keep their LaTeX: nothing typed is printed as a literal backslash.
                 assert.ok(!tex.includes('\\textbackslash'), `${c.name} prints a literal backslash`);
                 return compile(dir, c.name, tex);

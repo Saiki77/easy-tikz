@@ -27,6 +27,8 @@ import { MessageKey, t } from '../i18n';
 import { HoverCard, HoverKind, hoverCard, hoverKind, noteDefinitions, variableName } from '../notes6/hover';
 // 6.0 D: matrices, A v, det A and A v = λ v (src/linear/hover.ts).
 import { LinearHoverKind, linearHoverCard, linearHoverKind, noteValues } from '../linear/hover';
+// 6.0 E: recurrences, sums and functions of z (src/iterate/hover.ts).
+import { IterateHoverKind, iterateHoverCard, iterateHoverKind } from '../iterate/hover';
 
 export interface FormulaHoverHost {
     /** The setting Charts for formulas. */
@@ -71,6 +73,13 @@ const LINEAR_KIND: Record<LinearHoverKind, MessageKey> = {
     product: 'linear.hover.kind.product',
     det: 'linear.hover.kind.det',
     eigen: 'linear.hover.kind.eigen',
+};
+
+/** 6.0 E: what each card of src/iterate/hover.ts is. */
+const ITERATE_KIND: Record<IterateHoverKind, MessageKey> = {
+    recurrence: 'iterate.hover.recurrence',
+    sum: 'iterate.hover.sum',
+    domain: 'iterate.hover.domain',
 };
 
 /** The note under a card of this part: where its function comes from, what n = 2 means, what the x-axis is. */
@@ -287,6 +296,15 @@ export class FormulaHover {
         if (!found || (byRow && pick === undefined) || !chartable(found.tex, pick)) {
             // 6.0 B: a set, a map, a condition, an interval, Jensen's inequality, an epigraph: its card, with the note's definitions.
             const tex = found ? (pick !== undefined ? rows[pick] : found.tex) : '';
+            // 6.0 E: a recurrence, a sum, a function of z.
+            const iterate = found && !(byRow && pick === undefined) ? iterateHoverCard(tex) : null;
+            if (found && iterate) {
+                const parsed = parseChartText(iterate.lines.join('\n'));
+                if (!parsed.problems.length) {
+                    this.show(math, row, pick, drawnRows, found, tex, t(ITERATE_KIND[iterate.kind]), parsed.data, { note: t(iterate.note), two: null });
+                    return;
+                }
+            }
             if (found && !(byRow && pick === undefined) && hoverKind(tex)) {
                 void this.openNotes6(math, row, pick, drawnRows, found, tex);
                 return;
@@ -626,7 +644,7 @@ function markMath(math: HTMLElement, tex: string | null): void {
     if (rows.length > 1 && drawn.length === rows.length) {
         let any = false;
         drawn.forEach((tr, i) => {
-            const ok = chartable(tex, i) || !!hoverKind(rows[i]) || !!linearHoverKind(rows[i]); // 6.0 B, D
+            const ok = chartable(tex, i) || !!hoverKind(rows[i]) || !!linearHoverKind(rows[i]) || !!iterateHoverKind(rows[i]); // 6.0 B, D, E
             tr.dataset.etzMark = ok ? '1' : '0';
             any = any || ok;
         });
@@ -634,7 +652,7 @@ function markMath(math: HTMLElement, tex: string | null): void {
         return;
     }
     // 6.0 B: sets, maps, conditions, intervals, Jensen and epigraphs open a card too.
-    math.dataset.etzMark = chartable(tex) || hoverKind(tex) || linearHoverKind(tex) ? '1' : '0'; // 6.0 D: matrices too
+    math.dataset.etzMark = chartable(tex) || hoverKind(tex) || linearHoverKind(tex) || iterateHoverKind(tex) ? '1' : '0'; // 6.0 D: matrices; 6.0 E: recurrences, sums, functions of z
 }
 
 /** The formula a rendered formula of the editor shows: its TeX, and the end of the line where it ends. */

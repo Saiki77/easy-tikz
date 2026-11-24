@@ -39,6 +39,10 @@ import { readLet, readListPoints, readVectors } from '../values/text';
 import { LINEAR_KIND_WORDS, LINEAR_OPTION_HELP, LINEAR_TYPES, linearOption, readLinearDraw, readLinearShade, readTransform } from '../linear/text';
 import type { LinearRead } from '../linear/text';
 import { LINEAR_PREFIX } from '../linear/tools';
+// 6.0 E
+import { ITERATE_KINDS, ITERATE_KIND_WORDS, ITERATE_OPTION_HELP, isIterateOption, iterateOption, readIterateDraw, readIteratePlane } from '../iterate/text';
+import type { IterateRead } from '../iterate/text';
+import { ITERATE_PREFIX } from '../iterate/tools';
 
 type Data = Record<string, unknown>;
 
@@ -83,6 +87,8 @@ export const KEYWORDS = new Set([
     'then', 'frames',
     // 6.0 D
     'transform',
+    // colour the plane (6.0 E)
+    'colour', 'color',
 ]);
 
 export const COLORS = new Set(['black', 'gray', 'red', 'orange', 'brown', 'green', 'teal', 'blue', 'purple', 'magenta']);
@@ -92,7 +98,7 @@ export const PATTERNS = new Set(['solid', 'horizontal', 'vertical', 'crosshatch'
 export const ANCHORS = new Set(['center', 'above', 'below', 'left', 'right']);
 const AXIS_STYLES: Record<string, string> = { middle: 'middle', centre: 'middle', center: 'middle', box: 'box', edges: 'axes', edge: 'axes', axes: 'axes' };
 // 6.0 A: value (L), vector (V), listPoints (LP); 6.0 B: axisSet, chord; 6.0 C: MOTION_PREFIX.
-export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', ...MOTION_PREFIX, axisSet: 'AX', chord: 'CH', value: 'L', vector: 'V', listPoints: 'LP', ...LINEAR_PREFIX /* 6.0 D */ };
+export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', ...MOTION_PREFIX, axisSet: 'AX', chord: 'CH', value: 'L', vector: 'V', listPoints: 'LP', ...LINEAR_PREFIX /* 6.0 D */, ...ITERATE_PREFIX /* 6.0 E */ };
 const NAME = '[A-Za-z][A-Za-z0-9_]*';
 /** A name the block can spell: letters, digits and _. */
 export const NAME_RE = new RegExp(`^${NAME}$`);
@@ -308,6 +314,7 @@ function isOption(raw: string): boolean {
     if (isColour(lower) || isMapWord(lower) || THICKNESSES.includes(lower) || OPTION_WORDS.has(lower)) return true;
     if (/^(label|labels|legend)\s+"/i.test(o)) return true;
     if (isMotionOption(o)) return true; // 6.0 C
+    if (isIterateOption(o)) return true; // 6.0 E
     if (/^tangent(\s+at)?\s+\S/i.test(o)) return true;
     if (/^((?:opacity|mesh)\s+[-+\d.e]+|pattern\s+[a-z-]+|samples\s+[\d.]+)$/i.test(o)) return true;
     if (/^(domain|t|theta|θ)\s+\S.*\.\..*\S$/i.test(o)) return true;
@@ -509,6 +516,7 @@ const OPTION_HELP: Record<string, string> = {
     vector: 'in a colour, thin, thick, dashed, labelled, labelled "text", tip to tail, hidden',
     listPoints: 'in a colour, small, large, thin, thick, joined, labelled, labelled "text", hidden',
     ...LINEAR_OPTION_HELP, // 6.0 D
+    ...ITERATE_OPTION_HELP, // 6.0 E
 };
 
 /** Each kind of object in words, for messages. */
@@ -537,6 +545,7 @@ const KIND_WORDS: Record<keyof typeof OPTION_HELP, MessageKey> = {
     vector: 'values.text.kindVector',
     listPoints: 'values.text.kindListPoints',
     ...LINEAR_KIND_WORDS, // 6.0 D
+    ...ITERATE_KIND_WORDS, // 6.0 E
 };
 
 /** A kind of object in the reader's words, for messages. */
@@ -557,7 +566,7 @@ function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, 
         }
         // Colours by height: a surface's option; anything else is told to take a colour.
         if (isMapWord(lower)) {
-            if (kind === 'surface' || kind === 'vectorField' || kind === 'trajectory') target.colormap = lower; // 6.0 C
+            if (kind === 'surface' || kind === 'vectorField' || kind === 'trajectory' || kind === 'colourPlane') target.colormap = lower; // 6.0 C, E
             else b.problem(opt.at, msg('problems.text.colormapNotSurface', { map: lower, kind: kindWord(kind) }));
             continue;
         }
@@ -575,7 +584,7 @@ function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, 
             target[raw[1]] = rawValue(raw[2]);
             continue;
         }
-        if (/^label\s/i.test(o) && kind !== 'text' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'distribution' && kind !== 'slopeField' && kind !== 'solution' && !MOTION_KINDS.has(kind) && !(LINEAR_TYPES.has(kind) && kind !== 'unitSquare') /* 6.0 D */) {
+        if (/^label\s/i.test(o) && kind !== 'text' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'distribution' && kind !== 'slopeField' && kind !== 'solution' && !MOTION_KINDS.has(kind) && !(LINEAR_TYPES.has(kind) && kind !== 'unitSquare') /* 6.0 D */ && !ITERATE_KINDS.has(kind) /* 6.0 E */) {
             target.label = textValue(o.slice(5));
             continue;
         }
@@ -983,7 +992,7 @@ function statement(b: Builder, line: string) {
     const restAt = kw ? body.at + t.length - kw[2].length : body.at;
     const rest: Piece = { text: kw ? kw[2] : '', at: restAt };
     // A formula that starts with a name like a word of the syntax (`mark + x = 3`, a slider called mark) is a formula.
-    if (/^(show|no|with|plot|draw|mark|write|double|use|data|transform)$/.test(word) && /^(?:[*/^=<>!]|[-+]\s)/.test(rest.text)) return formulaLine(b, name, body, options); // transform: 6.0 D
+    if (/^(show|no|with|plot|draw|mark|write|double|use|data|transform|colour|color)$/.test(word) && /^(?:[*/^=<>!]|[-+]\s)/.test(rest.text)) return formulaLine(b, name, body, options); // transform: 6.0 D; colour, color: 6.0 E
 
     switch (word) {
         case 'view':
@@ -1121,6 +1130,11 @@ function statement(b: Builder, line: string) {
             return useTable(b, name, rest, options);
         case 'data':
             return dataList(b, name, rest, options);
+        // 6.0 E: colour the plane by ...
+        case 'colour':
+        case 'color':
+            if (iterateLine(b, name, readIteratePlane(rest, options))) return;
+            return formulaLine(b, name, body, options);
         default:
             return formulaLine(b, name, body, options);
     }
@@ -1327,6 +1341,7 @@ function draw(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
     if (letCall && b.lets.has(letCall[1])) return curve(b, name, rest, options);
     if (DEFINITION.test(t)) return formulaLine(b, name, rest, options);
     if (motionLine(b, name, readMotionDraw(rest, b.is3D), options)) return; // 6.0 C
+    if (iterateLine(b, name, readIterateDraw(rest, options))) return; // 6.0 E
     // 6.0 B: draw the chord of g from a to b (at λ).
     const chord = readChord(t);
     if (chord) {
@@ -1601,6 +1616,8 @@ function beyondOption(b: Builder, kind: string, target: Data, opt: Piece): boole
     }
     // 6.0 C: vector fields, rest points, solutions of systems
     if (MOTION_KINDS.has(kind)) return motionOption(kind, target, o, () => badRange(b, opt));
+    // 6.0 E: orbits, cobwebs, bifurcation diagrams, Newton's method, coloured planes, turning circles
+    if (ITERATE_KINDS.has(kind)) return iterateOption(kind, target, o, () => b.problem(opt.at, msg('problems.text.needsFraction', { option: o })));
     // 6.0 A: vector arrows and the points of a list.
     if (kind === 'vector') {
         if (lower === 'dashed') return set(target, 'dashed', true);
@@ -1914,5 +1931,18 @@ function linearLine(b: Builder, name: string | null, read: LinearRead | null, op
         return true;
     }
     addTool(b, read.type, name, read.fields, options, read.type);
+    return true;
+}
+
+// ------------------------------------------------------------ 6.0 E: iterate
+
+/** A line of part E read (src/iterate/text.ts) added as its tool; true when the line was one. */
+function iterateLine(b: Builder, name: string | null, read: IterateRead | null): boolean {
+    if (!read) return false;
+    if (read.problem) {
+        b.problem(read.problem.at, msg(read.problem.key));
+        return true;
+    }
+    addTool(b, read.type, name, { ...read.fields }, read.extra, read.type);
     return true;
 }

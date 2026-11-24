@@ -342,7 +342,7 @@ if (started) {
         }
 
         // The + Add picker (5.1): a search finds an item by another word, Enter adds it and closes the picker.
-        // 6.0 A, C: "vector" also finds Vector arrow and the vector fields; "gradient" finds only Arrow.
+        // 6.0 A, C: "vector" also finds Vector arrow and the vector fields; "gradient" finds Arrow (6.0 E: and Gradient descent, after it).
         await check('Build: + Add searches (gradient finds Arrow) and Enter adds it', async () => {
             await obs.showTab('build');
             const before = await obs.call(() => document.querySelectorAll('.modal.tikz-modal .etz-card').length);
@@ -354,7 +354,7 @@ if (started) {
                 input.dispatchEvent(new Event('input'));
                 return Array.from(document.querySelectorAll('.etz-picker .etz-picker-item .etz-picker-label')).map((e) => e.textContent);
             });
-            assert(found.length === 1 && found[0] === 'Arrow', `gradient finds ${JSON.stringify(found)}`);
+            assert(found[0] === 'Arrow' && found.every((f) => f === 'Arrow' || f === 'Gradient descent'), `gradient finds ${JSON.stringify(found)}`);
             await obs.key('Enter');
             await obs.sleep(300);
             const after = await obs.call(() => ({ cards: document.querySelectorAll('.modal.tikz-modal .etz-card').length, open: !!document.querySelector('.etz-picker') }));
@@ -380,6 +380,44 @@ if (started) {
             await obs.showTab('build');
             const kinds = await obs.call(() => Array.from(document.querySelectorAll('.modal.tikz-modal .etz-layer-card.mod-value, .modal.tikz-modal .etz-layer-card.mod-vector, .modal.tikz-modal .etz-layer-card.mod-listPoints')).length);
             assert(kinds === 6, `${kinds} cards of values`);
+            return `${info.shapes} shapes, ${kinds} cards`;
+        });
+
+        // 6.0 E: iterate and colour the plane: the new lines draw with no problem and their cards show; the plane is a
+        // picture that a slider paints again; the LaTeX code draws it with \addplot graphics and Copy LaTeX saves its PNG.
+        await check('iterate: orbits, cobwebs, Newton, circles and a coloured plane draw, with their cards; a slider repaints the plane', async () => {
+            const text = [
+                'show x from -2 to 2 and y from -1.5 to 1.5',
+                'slider a from -1 to 1, starting at -0.8',
+                'plot f(x) = x^2 - 1',
+                'mark P at (-0.12, 0.75)',
+                'colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = x + iy$, $c = a + 0.156i$, 100 steps',
+                'draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 30 steps',
+                "draw Newton's method for f from 1.8, 4 steps",
+                'draw the cobweb of $x_{n+1} = \\cos(x_n)$ from 0.2, 20 steps',
+                'draw the circles of $\\sum_{k=1}^{3} \\frac{e^{ikt}}{k}$',
+            ].join('\n');
+            const info = await loadClean(TEXT.parseChartText(text).data, false);
+            const picture = () =>
+                obs.call(() => {
+                    const c = document.querySelector('.modal.tikz-modal foreignObject.etz-pixels canvas');
+                    if (!c) return null;
+                    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+                    let sum = 0;
+                    for (let k = 0; k < d.length; k += 97) sum = (sum * 31 + d[k]) % 1000000007;
+                    return sum;
+                });
+            const before = await picture();
+            assert(before !== null, 'no picture layer in the preview');
+            await obs.setSlider('a', 0.25);
+            await obs.waitForRender({ settle: 300 });
+            const after = await picture();
+            assert(after !== null && after !== before, 'the slider did not paint the plane again');
+            await obs.showTab('build');
+            const kinds = await obs.call(() => ['colourPlane', 'orbit', 'newton', 'cobweb', 'fourierCircles'].filter((k) => document.querySelector(`.modal.tikz-modal .etz-layer-card.mod-${k}`)).length);
+            assert(kinds === 5, `${kinds} cards of part E`);
+            const code = await obs.call(() => window.__etzMedia.editor().generateCode());
+            assert(/\\addplot\[on layer=axis background, forget plot\] graphics\[[^\]]+\] \{plane-[0-9a-f]{8}\.png\};/.test(code), 'the LaTeX code has no \\addplot graphics');
             return `${info.shapes} shapes, ${kinds} cards`;
         });
 

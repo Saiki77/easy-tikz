@@ -30,6 +30,7 @@ import '../linear/cards'; // 6.0 D
 import '../notes6/cards';
 // 6.0 A
 import '../values/cards';
+import '../iterate/cards'; // 6.0 E
 import { CardUiState, FunctionCardHandle, createFunctionCard, createSurfaceCard } from './functionCards';
 import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, textButton, trapEscape } from './kit';
 import { PickerContent, PickerGroup, PickerItem, addPicker } from './addPicker';
@@ -122,6 +123,9 @@ const SECTION_ICONS: Record<string, string> = {
     // 6.0 A
     Values: 'braces',
     'Linear algebra': 'grid', // 6.0 D
+    // 6.0 E
+    Iterate: 'repeat',
+    'Colour the plane': 'palette',
 };
 
 /** More words that find a recipe in the + Add picker (English, as people search): vector finds Arrow. */
@@ -175,6 +179,18 @@ const RECIPE_WORDS: Record<string, string> = {
     eigenvectors: 'eigenvalue eigenvector lambda matrix invariant line',
     'grid-basis': 'basis vectors i hat j hat grid lattice',
     'complex-map': 'complex function conformal z squared mapsto warp',
+    // 6.0 E
+    mandelbrot: 'fractal escape time complex iterate',
+    julia: 'fractal complex iterate sliders',
+    'newton-basins': 'fractal roots basins attraction complex',
+    'domain-colouring': 'complex function colour color phase portrait zeros poles',
+    'heat-map': 'colour color map density two variables',
+    orbit: 'iterate recurrence sequence complex points path',
+    'gradient-descent': 'optimisation optimization minimum learning rate step downhill',
+    cobweb: 'logistic map iterate fixed point staircase',
+    bifurcation: 'logistic map chaos period doubling',
+    'newton-method': 'root tangent iterate zero',
+    'fourier-circles': 'epicycles series square wave animation sum',
 };
 
 /** Menu heading per recipe section (Functions reads Surfaces in 3D charts). */
@@ -194,6 +210,9 @@ const SECTION_TITLES: Record<string, MessageKey> = {
     // 6.0 A
     Values: 'values.section.values',
     'Linear algebra': 'linear.section', // 6.0 D
+    // 6.0 E
+    Iterate: 'iterate.section.iterate',
+    'Colour the plane': 'iterate.section.plane',
 };
 
 /** One-click links under the starter examples: [text key, recipe id]. */

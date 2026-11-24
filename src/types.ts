@@ -665,6 +665,116 @@ export interface SpanTool extends ToolBase {
     valueLabel: boolean;
 }
 
+// 6.0 E: iterate and colour the plane (src/iterate/).
+
+/**
+ * The orbit of a recurrence z_{n+1} = F(z_n), from z_0, as its points
+ * joined by lines: complex numbers and 2D vectors in the plane, numbers as
+ * (n, x_n). The start and the names F reads (`c = P`) may be points tools,
+ * so dragging P moves the orbit. Publishes OR1_n and OR1_x, OR1_y (the last
+ * point).
+ */
+export interface OrbitTool extends ToolBase {
+    type: 'orbit';
+    /** The recurrence: `z_{n+1} = z_n^2 + c`, `p_{n+1} = p_n - \eta \nabla f(p_n)` (LaTeX allowed). */
+    recurrence: string;
+    /** z_0: a formula, a point `(1, 2)` or a points tool `P`. */
+    start: string;
+    /** The names F reads, `c = P; eta = 0.1` (a formula, a point or a points tool each). */
+    given: string;
+    /** How many steps (a formula; at most 2000). */
+    steps: string;
+    /** Lines only, no dots. */
+    path: boolean;
+    size: MarkerSize;
+    thickness: string;
+    /** The first points labelled z_0, z_1, ... */
+    valueLabel: boolean;
+}
+
+/**
+ * The cobweb of x_{n+1} = f(x_n) from x_0: the line y = x, the graph of the
+ * map, and the path (x_0, 0), (x_0, x_1), (x_1, x_1), (x_1, x_2), ...
+ * Publishes CW1_x (the last x_n).
+ */
+export interface CobwebTool extends ToolBase {
+    type: 'cobweb';
+    recurrence: string;
+    start: string;
+    steps: string;
+    thickness: string;
+}
+
+/**
+ * The bifurcation diagram of x_{n+1} = F(x_n, r) for r from a to b: for
+ * each r on the x-axis, where the orbit of x_0 settles (after a run-in), as
+ * a pixel picture.
+ */
+export interface BifurcationTool extends ToolBase {
+    type: 'bifurcation';
+    recurrence: string;
+    /** The name of the parameter on the x-axis: r. */
+    parameter: string;
+    from: string;
+    to: string;
+    /** x_0 (0.5 by default). */
+    start: string;
+}
+
+/**
+ * Newton's method for a function f of the chart from x_0: each tangent
+ * down to the x-axis, the lines up to the graph, the points x_0, x_1, ...
+ * Publishes NM1_x (the last x_k) and NM1_val (f there).
+ */
+export interface NewtonTool extends ToolBase {
+    type: 'newton';
+    /** Name of the function (a cartesian function of the chart). */
+    function: string;
+    start: string;
+    steps: string;
+    thickness: string;
+    /** The points labelled x_0, x_1, ... */
+    valueLabel: boolean;
+}
+
+/** The colour maps of a coloured plane: the six of surfaces and one that goes round (for fractals). */
+export type PlaneColormap = Colormap | 'cyclic';
+
+/**
+ * The plane coloured pixel by pixel: by the orbit of a recurrence (escape
+ * time; orbits that settle take the colour of the point they reach), by a
+ * function of z (domain colouring: hue = arg, bands = log |f|) or by a real
+ * function of x and y (a heat map through a colour map).
+ */
+export interface PlaneColourTool extends ToolBase {
+    type: 'colourPlane';
+    /** `z_{n+1} = z_n^2 + c`, `f(z) = \frac{z^2 - 1}{z^2 + 1}`, `f(x, y) = x^2 - y^2` (LaTeX allowed). */
+    formula: string;
+    /** z_0 of a recurrence ('' = 0). */
+    start: string;
+    /** The names the recurrence reads, `c = x + iy`. */
+    given: string;
+    /** Steps of a recurrence (a formula; at most 1000). */
+    steps: string;
+    /** The colour map (absent: cyclic for a recurrence, viridis for a heat map; domain colouring has none). */
+    colormap?: PlaneColormap;
+    opacity: number;
+}
+
+/**
+ * The turning circles of a sum of rotations, \sum_{k=1}^{n} c_k e^{i w_k t}:
+ * each term a circle on the tip of the one before, turning on the animation
+ * clock, the curve the last tip draws, and (with its wave) the imaginary
+ * part over time to the right. The export draws a still frame.
+ */
+export interface FourierCirclesTool extends ToolBase {
+    type: 'fourierCircles';
+    /** A sum in t: `\sum_{k=1}^{n} \frac{4}{\pi (2k - 1)} e^{i(2k - 1)t}`. */
+    sum: string;
+    wave: boolean;
+    thickness: string;
+}
+
 export type Tool =
     | RegionTool
     | CurveTool
@@ -695,7 +805,14 @@ export type Tool =
     | TransformTool
     | EigenvectorsTool
     | UnitSquareTool
-    | SpanTool;
+    | SpanTool
+    // 6.0 E
+    | OrbitTool
+    | CobwebTool
+    | BifurcationTool
+    | NewtonTool
+    | PlaneColourTool
+    | FourierCirclesTool;
 
 export type ToolType = Tool['type'];
 

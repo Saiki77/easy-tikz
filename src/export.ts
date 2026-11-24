@@ -34,6 +34,7 @@ import { sampleCurve } from './util';
 import { boxFactors } from './box3d';
 import { TickAxis, axisTicks, tickOptions } from './ticks';
 import { stillFrame } from './motion6/clock'; // 6.0 C
+import { pixelsTikz } from './iterate/export'; // 6.0 E
 
 // ------------------------------------------------------------------ tuning
 
@@ -578,6 +579,8 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
     const colors = new ColorSet();
     const libs: Libraries = { patterns: false, braces: false };
     const layers = new Layers();
+    // 6.0 E: pictures over the plot (a coloured plane, a bifurcation diagram): PNGs under the grid, with \addplot graphics.
+    const pictures = items.flatMap((item) => pixelsTikz(item, view, labelMetricsFor(paperCm.w, paperCm.h)));
 
     for (const item of items) addFills(layers, item, colors, libs);
     const legends = addFunctions(layers, config, ctx, view, colors, new Set(scene.movedFunctions ?? [])); // 6.0 D: a transform draws the functions it moves
@@ -618,10 +621,10 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
     // `axis equal` would change the limits; `axis equal image` keeps them and shrinks the box.
     if (config.equalScale || polar) opts.push('axis equal image');
     // Layers put the fills under the grid and axis lines (see Layers.render).
-    if (anyFill) opts.push('set layers');
+    if (anyFill || pictures.length) opts.push('set layers'); // pictures: 6.0 E
     if (legends) opts.push(`legend pos=north east, legend cell align=left, legend style={font=${LEGEND_FONT}}`);
 
-    const picture = ['\\begin{tikzpicture}', ...colors.lines(), ...layers.boxes, ...axisBlock(opts), ...layers.render(view), '\\end{axis}', '\\end{tikzpicture}'];
+    const picture = ['\\begin{tikzpicture}', ...colors.lines(), ...layers.boxes, ...axisBlock(opts), ...pictures, ...layers.render(view), '\\end{axis}', '\\end{tikzpicture}']; // pictures: 6.0 E
     return wrap(settings.isStandalone(), libs, picture);
 }
 

@@ -36,6 +36,7 @@ import {
 import { Grid, Pt, View, pointInRings } from './geometry';
 import { t as msg } from './i18n';
 import { GRID_OPACITY, opacityValue } from './opacity';
+import { pixelLayer } from './iterate/paint'; // 6.0 E
 
 /** CONTRACT (v4): options for one render. */
 export interface SVGRendererOptions {
@@ -438,6 +439,7 @@ export class SVGRenderer {
         this.reportFunctionIssues(fns);
         const items = this.sceneItems(fns);
 
+        this.drawPixels(svg, items); // 6.0 E
         this.drawGrid(svg);
         this.drawFills(svg, items);
         this.drawAxes(svg);
@@ -997,6 +999,18 @@ export class SVGRenderer {
         if (cfg.gridMinor && minor >= 1) draw(minorOf(xT, v.xmin, v.xmax, stepX), minorOf(yT, v.ymin, v.ymax, stepY), '0.5', opacity / 2);
         draw(xT.grid, yT.grid, '1', opacity);
         this.attach(svg, g);
+    }
+
+    /** 6.0 E: pictures over the plot (a coloured plane, a bifurcation diagram), under the grid (src/iterate/paint.ts). */
+    private drawPixels(svg: SVGElement, items: SceneItem2D[]): void {
+        const rect = this.plot;
+        for (const item of items) {
+            for (const prim of item.pixels ?? []) {
+                const fo = pixelLayer(prim, { ...this.view }, rect, this.quality === 'draft');
+                fo.setAttribute('data-etz-item', item.source);
+                svg.appendChild(fo);
+            }
+        }
     }
 
     /** Layer 2: function fills and region fills in item order; patterns over the tint like the export. */

@@ -56,6 +56,9 @@ import { VALUE_TYPES, computeValues, computeValues3D, valuesSources } from './va
 // 6.0 D
 import { LINEAR_TYPES, computeLinear, computeLinear3D, linearSources, transformItems, transformScene3D } from './linear/scene';
 import type { LinearOutput, Span3D } from './linear/scene';
+// 6.0 E
+import { IterateOutput, computeIterate, iterateMotion, iterateSources } from './iterate/scene';
+import type { PixelPrim } from './iterate/pixels';
 
 export type ArrowHeads = 'forward' | 'backward' | 'both';
 
@@ -202,6 +205,9 @@ export interface SceneItem2D {
      * hit, never mutated); not drawn and never exported.
      */
     handles?: HandlePrim[];
+    // 6.0 E
+    /** Pictures over the plot (a coloured plane, a bifurcation diagram), under the grid: src/iterate/pixels.ts. */
+    pixels?: PixelPrim[];
 }
 
 export interface SceneIssue {
@@ -434,6 +440,10 @@ interface Output {
     // 6.0 D
     /** What a transform hands the pass after the memo: its map (src/linear/scene.ts). */
     linear?: LinearOutput;
+    // 6.0 E
+    /** Pictures over the plot, and what turning circles hand the clock (src/iterate/scene.ts). */
+    pixels?: PixelPrim[];
+    iterate?: IterateOutput;
 }
 
 /** A function's decorations or a tool, as a node of the dependency graph. */
@@ -871,8 +881,8 @@ function toolNode(t: Tool, math: MathContext): SceneNode {
             notes6Sources(t, scan);
             break;
         default:
-            // 6.0 A: values (src/values/scene.ts), then the tools beyond functions; 6.0 C: motion.
-            if (!valuesSources(t, scan) && !linearSources(t, scan) /* 6.0 D */) beyondSources(t, scan, refs);
+            // 6.0 A: values (src/values/scene.ts), then the tools beyond functions; 6.0 C: motion; 6.0 D: linear; 6.0 E: iterate.
+            if (!valuesSources(t, scan) && !linearSources(t, scan) && !iterateSources(t, scan)) beyondSources(t, scan, refs);
             motionSources(t, scan, refs); // 6.0 C
     }
     return { id: `tool:${t.id}`, name: str(t.name) || str(t.id), tool: t, refs, sources, base: toolBase(t) };
@@ -2211,6 +2221,13 @@ function scene2D(input: SceneInput2D): Scene2D {
         // 6.0 C: moving particles follow the clock, after the memo (never into the cached arrays).
         const moving = motionStrokes(node.tool, out, ctx, input.motion);
         if (moving && moving.length) item.strokes = out.strokes.concat(moving);
+        // 6.0 E: pictures over the plot; turning circles follow the clock, after the memo too.
+        if (out.pixels && out.pixels.length) item.pixels = out.pixels;
+        const turning = iterateMotion(node.tool, out, ctx, input.motion);
+        if (turning) {
+            item.strokes = item.strokes.concat(turning.strokes);
+            item.markers = out.markers.concat(turning.markers);
+        }
         items.push(item);
         itemSpecs.push({ item, node, out });
     });
@@ -2327,8 +2344,8 @@ function compute2D(node: SceneNode, ctx: Ctx): Output {
         case 'chord':
             return computeNotes6(t, ctx) ?? newOutput();
         default:
-            // 6.0 A: values (src/values/scene.ts); 6.0 C: motion.
-            return computeValues(t, ctx) ?? computeLinear(t, ctx) /* 6.0 D */ ?? computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? newOutput();
+            // 6.0 A: values (src/values/scene.ts); 6.0 C: motion; 6.0 D: linear; 6.0 E: iterate.
+            return computeValues(t, ctx) ?? computeLinear(t, ctx) ?? computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? computeIterate(t, ctx) ?? newOutput();
     }
 }
 

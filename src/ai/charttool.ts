@@ -24,7 +24,7 @@ import { inEnglish } from '../i18n';
 export type { Data };
 export { canonical, clone, minimize };
 
-const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory', 'value', 'vector', 'listPoints', 'planeGrid', 'basisVectors', 'transform', 'eigenvectors', 'unitSquare', 'span']; // 6.0 C: vectorField, restPoints, trajectory; 6.0 A: value, vector, listPoints; 6.0 D: the rest
+const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory', 'value', 'vector', 'listPoints', 'planeGrid', 'basisVectors', 'transform', 'eigenvectors', 'unitSquare', 'span', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourPlane', 'fourierCircles']; // 6.0 C: vectorField, restPoints, trajectory; A: value, vector, listPoints; D: planeGrid to span; E: orbit to fourierCircles
 /** Keys a block may carry that the editor's defaults do not list: how the chart sits in the note. */
 const DISPLAY_KEYS = ['displayWidth', 'displayAlign'];
 
@@ -143,6 +143,7 @@ function knownKeys(part: string, defaults: Record<string, Data>): Set<string> {
         keys.add('stillTime');
     }
     if (part === 'vectorField' || part === 'trajectory') keys.add('colormap');
+    if (part === 'colourPlane') keys.add('colormap'); // 6.0 E
     return keys;
 }
 

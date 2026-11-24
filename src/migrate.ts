@@ -18,6 +18,9 @@ import { t } from './i18n';
 import { MOTION_PREFIX, completeMotionTool, keptStep, restPointsDefaults, trajectoryDefaults, vectorFieldDefaults } from './motion6/tools';
 // 6.0 B
 import { axisSetDefaults, chordDefaults, completeAxisSet, completeChord } from './notes6/tools';
+// 6.0 E
+import { ITERATE_PREFIX, completeIterateTool, iterateDefaults } from './iterate/tools';
+import { iterateRecipes } from './iterate/recipes';
 import { notes6Recipes } from './notes6/recipes';
 // 6.0 D
 import { LINEAR_PREFIX, basisVectorsDefaults, completeLinearTool, eigenvectorsDefaults, planeGridDefaults, spanDefaults, transformDefaults, unitSquareDefaults } from './linear/tools';
@@ -137,6 +140,8 @@ const TOOL_PREFIX: Record<ToolType, string> = {
     listPoints: 'LP',
     // 6.0 D
     ...LINEAR_PREFIX,
+    // 6.0 E
+    ...ITERATE_PREFIX,
 };
 
 const PARAMETER_LETTERS = ['a', 'b', 'c', 'd', 'k', 'm', 'n', 'p', 'q', 'r', 's', 'u', 'v', 'w'];
@@ -1184,7 +1189,10 @@ function convertTool(src: Record<string, unknown>, ctx: ConvertContext): { body:
             if (motion) return { body: motion, hidden: false };
             // 6.0 D: grids, basis vectors, transforms, eigenvectors, unit squares, spans
             const linear = completeLinearTool(src);
-            return linear ? { body: linear, hidden: false } : null;
+            if (linear) return { body: linear, hidden: false };
+            // 6.0 E: orbits, cobwebs, bifurcation diagrams, Newton's method, coloured planes, turning circles
+            const iterate = completeIterateTool(src);
+            return iterate ? { body: iterate, hidden: false } : null;
         }
     }
 }
@@ -1801,6 +1809,14 @@ export function defaultTool(type: ToolType, opts: { is3D: boolean; tools: Tool[]
             return { ...unitSquareDefaults(), ...identity('unitSquare', opts) };
         case 'span':
             return { ...spanDefaults(), ...identity('span', opts) };
+        // 6.0 E
+        case 'orbit':
+        case 'cobweb':
+        case 'bifurcation':
+        case 'newton':
+        case 'colourPlane':
+        case 'fourierCircles':
+            return { ...(iterateDefaults(type) as Omit<Tool, 'id' | 'name' | 'hidden'>), ...identity(type, opts) } as Tool;
     }
 }
 
@@ -2136,6 +2152,13 @@ function recipes2D(): Recipe[] {
         ...valueRecipes(in2D, false),
         // 6.0 D
         ...linearRecipes(in2D, { identity: (type, ctx) => identity(type, toolOpts(ctx)), names: chartNames }, false),
+        // 6.0 E
+        ...iterateRecipes(in2D, {
+            tool: (type, ctx) => defaultTool(type as ToolType, toolOpts(ctx)),
+            newFunction: (ctx, expression) => ({ ...defaultFunction(chartNames(ctx), nextFunctionColor(ctx.functions)), expression }),
+            callable: callableFunctions,
+            names: chartNames,
+        }),
         labelRecipe(in2D),
         sliderRecipe(in2D),
     ];
