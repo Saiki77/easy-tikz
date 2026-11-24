@@ -152,7 +152,7 @@ const RECIPE_WORDS: Record<string, string> = {
     'riemann-sum': 'integral rectangles left right midpoint',
     'slope-field': 'ode differential equation direction',
     // 6.0 A
-    'let-definition': 'let define vector matrix complex function variable',
+    'let-definition': 'let define matrix complex function variable name',
     'vector-arrow': 'vector arrow let tip tail',
     'list-points': 'list roots unity complex polygon',
 };

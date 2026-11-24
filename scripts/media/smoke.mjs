@@ -342,23 +342,45 @@ if (started) {
         }
 
         // The + Add picker (5.1): a search finds an item by another word, Enter adds it and closes the picker.
-        await check('Build: + Add searches (vector finds Arrow) and Enter adds it', async () => {
+        // 6.0 A: vector also finds Vector arrow (values); gradient is a word of Arrow alone.
+        await check('Build: + Add searches (gradient finds Arrow) and Enter adds it', async () => {
             await obs.showTab('build');
             const before = await obs.call(() => document.querySelectorAll('.modal.tikz-modal .etz-card').length);
             await obs.call(() => document.querySelector('.modal.tikz-modal .etz-build-add').click());
             await obs.waitFor(async () => obs.call(() => !!document.querySelector('.etz-picker .etz-picker-input')), { timeout: 2000, interval: 50, message: 'the picker to open' });
             const found = await obs.call(() => {
                 const input = document.querySelector('.etz-picker .etz-picker-input');
-                input.value = 'vector';
+                input.value = 'gradient';
                 input.dispatchEvent(new Event('input'));
                 return Array.from(document.querySelectorAll('.etz-picker .etz-picker-item .etz-picker-label')).map((e) => e.textContent);
             });
-            assert(found.length === 1 && found[0] === 'Arrow', `vector finds ${JSON.stringify(found)}`);
+            assert(found.length === 1 && found[0] === 'Arrow', `gradient finds ${JSON.stringify(found)}`);
             await obs.key('Enter');
             await obs.sleep(300);
             const after = await obs.call(() => ({ cards: document.querySelectorAll('.modal.tikz-modal .etz-card').length, open: !!document.querySelector('.etz-picker') }));
             assert(!after.open && after.cards === before + 1, `after Enter: ${JSON.stringify(after)}, ${before} cards before`);
             return `${before} -> ${after.cards} cards`;
+        });
+
+        // 6.0 A: values: let lines, vector arrows and the points of a list draw with no problem, and their cards show.
+        await check('values: let, vector arrows and points of a list draw, with their cards', async () => {
+            const text = [
+                'show x from -3 to 3 and y from -3 to 3',
+                'slider n from 3 to 12, starting at 6, in steps of 1',
+                'let v = (2, 1)',
+                'let $w = \\begin{pmatrix} -1 \\\\ 1.5 \\end{pmatrix}$',
+                'let $f(x, y) = x^2 + 4y^2$',
+                'draw v and w as arrows, labelled',
+                'draw v + w tip to tail in red',
+                'mark the points $\\{e^{2\\pi i k / n} : k = 0, \\dots, n - 1\\}$, joined',
+                'plot $T(x) = \\sum_{k=0}^{n} \\frac{(-1)^k x^{2k+1}}{(2k+1)!}$',
+                'draw the curve f(x, y) = 4',
+            ].join('\n');
+            const info = await loadClean(TEXT.parseChartText(text).data, false);
+            await obs.showTab('build');
+            const kinds = await obs.call(() => Array.from(document.querySelectorAll('.modal.tikz-modal .etz-layer-card.mod-value, .modal.tikz-modal .etz-layer-card.mod-vector, .modal.tikz-modal .etz-layer-card.mod-listPoints')).length);
+            assert(kinds === 6, `${kinds} cards of values`);
+            return `${info.shapes} shapes, ${kinds} cards`;
         });
 
         // Every example, through the modal's loadChart (the second load also answers the Replace dialog).
