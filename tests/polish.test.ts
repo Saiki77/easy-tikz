@@ -465,3 +465,28 @@ test('polish: an object added to a chart with steps goes into its step; every ot
     assert.equal(canonical(read(out)), canonical(data), out);
     assert.ok(out.startsWith('% note\n\\begin{chart}'), out);
 });
+
+test('polish: moving or deleting objects of a chart with steps keeps every comment and every step', () => {
+    const base = ['% a', 'let A = [[1, 1], [0, 1]]', 'draw the grid', '% b', 'then transform the plane by A', '% c', 'then draw the basis vectors', 'shade the unit square', '% d'].join('\n');
+    const edit = (fn: (tools: Data[]) => Data[]) => {
+        const data = JSON.parse(JSON.stringify(read(base))) as Data;
+        data.tools = fn(data.tools as Data[]);
+        const out = writeChartText(base, data);
+        assert.equal(canonical(read(out)), canonical(data), out);
+        for (const c of ['% a', '% b', '% c', '% d']) assert.ok(out.split('\n').includes(c), `${c} lost:\n${out}`);
+        return out.split('\n');
+    };
+    // Reversed: the steps stay where they start; lines that moved out of their step say it.
+    const moved = edit((tools) => [...tools].reverse());
+    assert.ok(moved.includes('then transform the plane by A'), moved.join('\n'));
+    assert.ok(moved.includes('then draw the grid, step=0'), moved.join('\n'));
+    // The line that started a step goes: its then goes onto the next line of the step, or stays alone.
+    assert.deepEqual(
+        edit((tools) => tools.filter((x) => x.type !== 'basisVectors')),
+        ['% a', 'let A = [[1, 1], [0, 1]]', 'draw the grid', '% b', 'then transform the plane by A', '% c', 'then shade the unit square', '% d']
+    );
+    assert.deepEqual(
+        edit((tools) => tools.filter((x) => x.type !== 'transform')),
+        ['% a', 'let A = [[1, 1], [0, 1]]', 'draw the grid', '% b', 'then', '% c', 'then draw the basis vectors', 'shade the unit square', '% d']
+    );
+});

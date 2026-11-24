@@ -20,7 +20,7 @@
 import { Data, canonicalData, minimize, stableJson } from '../chartdata';
 import { quote } from './quote';
 import { ANCHORS, COLORS, NAME_RE, ObjectList, PATTERNS, THICKNESSES, TOOL_PREFIX, definedNames, isSignCondition, niceStep, parseChartText, splitStatement, splitTop } from './parse';
-import { NO_WORDS, chartWords, hasWords, readWords, writeWords } from './words';
+import { NO_WORDS, chartWords, hasWords, readWords, typedColumn, writeWords } from './words';
 import { FULL_END, axisLines, chartLanguage, exactFull, fullLine, isFullText, withName, wordsToFull } from './full';
 import { isColormap } from '../colormaps';
 import { looksLikeLatex } from '../latex';
@@ -939,6 +939,8 @@ interface OutLine {
     key?: string;
     /** A line about the chart itself (view, title, set, ...). */
     chart?: boolean;
+    /** 6.0 F1: the `then` of a deleted line that started a step. */
+    bare?: boolean;
 }
 
 /** A new object with its printed line. */
@@ -1011,7 +1013,11 @@ function rewrite(oldText: string, data: Data, form: Form): string {
         const indent = /^\s*/.exec(source)?.[0] ?? '';
         if (t.object) {
             const k = target.get(t.line);
-            if (!k) continue; // deleted in the editor
+            if (!k) {
+                // Deleted in the editor. 6.0 F1: a line that started a step leaves its `then`, so the steps below keep their numbers.
+                if (startsStep(source, form.full)) out.push({ text: indent + (form.full ? '\\then' : printed.say('then')), list: null, bare: true });
+                continue;
+            }
             const f = fresh.get(k);
             if (!f || placed.has(k)) continue;
             placed.add(k);
@@ -1062,6 +1068,10 @@ function rewrite(oldText: string, data: Data, form: Form): string {
     }
 
     // New objects: after the last line of their kind, else before the first line of a later kind, else at the end.
+    // 6.0 F1: the `then` of a deleted line goes onto the object line right below it, when that starts no step.
+    for (let i = out.length - 2; i >= 0; i--) {
+        if (out[i].bare && out[i + 1].list !== null && !startsStep(out[i + 1].text, form.full)) out.splice(i, 2, withThen(out[i + 1], true, form, printed.say));
+    }
     // 6.0 F1: in a chart with steps, at the end of their step (stepSpot).
     const stepped = hasSteps(newFull) || out.some((l) => startsStep(l.text, form.full));
     for (const key of LIST_NAMES) {
@@ -1094,8 +1104,11 @@ function rewrite(oldText: string, data: Data, form: Form): string {
         const slots = out.map((l, i) => (l.list === key ? i : -1)).filter((i) => i >= 0);
         const byKey = new Map(slots.map((i) => [out[i].key, out[i]]));
         const wanted = order[key].map((k) => byKey.get(k)).filter((l): l is OutLine => !!l);
-        if (wanted.length === slots.length) slots.forEach((slot, j) => (out[slot] = wanted[j]));
+        // 6.0 F1: in a chart with steps a step starts where it started: the `then` stays with the place, not the line.
+        const starts = stepped ? slots.map((i) => startsStep(out[i].text, form.full)) : [];
+        if (wanted.length === slots.length) slots.forEach((slot, j) => (out[slot] = stepped && wanted[j] !== out[slot] ? withThen(wanted[j], starts[j], form, printed.say) : wanted[j]));
     }
+    if (stepped) writeSteps(out, fresh, form, printed.say); // 6.0 F1
 
     keepNames(out, fresh, form);
     return out.map((l) => l.text).join('\n');
@@ -1146,6 +1159,33 @@ function stepSpot(out: OutLine[], at: number, k: string, f: Fresh, order: string
         return { at: last, text: form.full ? `\\then ${f.line}` : `${say('then')} ${f.line}` };
     }
     return { at, text: /\bstep=/.test(f.words) ? f.line : form.object(`${f.words}, step=${step}`) };
+}
+
+/** 6.0 F1: a line with or without the `then` that starts a step (in the words the block uses). */
+function withThen(l: OutLine, then: boolean, form: Form, say: (line: string) => string): OutLine {
+    if (startsStep(l.text, form.full) === then) return l;
+    const indent = /^\s*/.exec(l.text)?.[0] ?? '';
+    const body = l.text.slice(indent.length);
+    if (then) return { ...l, text: `${indent}${form.full ? '\\then' : say('then')} ${body}` };
+    if (form.full) return { ...l, text: indent + body.replace(/^\\then\b\s*/, '') };
+    const words = chartWords();
+    if (!hasWords(words)) return { ...l, text: indent + body.slice(Math.max(0, thenPrefix(body))) };
+    const read = readWords(body, words);
+    return { ...l, text: indent + body.slice(typedColumn(read.maps, 1, thenPrefix(read.text) + 1) - 1) };
+}
+
+/** 6.0 F1: an object line whose place gives it another step than its own (it moved, or a `then` above it went): its step written out. */
+function writeSteps(out: OutLine[], fresh: Map<string, Fresh>, form: Form, say: (line: string) => string) {
+    let step = 0;
+    out.forEach((l, i) => {
+        const then = startsStep(l.text, form.full);
+        if (then) step++;
+        const f = l.key ? fresh.get(l.key) : undefined;
+        if (!f || l.list === 'parameters' || stepOf(f.item) === step || /\bstep=/.test(l.text)) return;
+        const line = /\bstep=/.test(f.words) ? f.line : form.object(`${f.words}, step=${stepOf(f.item)}`);
+        const indent = /^\s*/.exec(l.text)?.[0] ?? '';
+        out[i] = withThen({ ...l, text: indent + line }, then, form, say);
+    });
 }
 
 /** 6.0 F1: where a new let line goes: after the last let line, else after the last slider line, else before the first object line (`fallback` when none). */
