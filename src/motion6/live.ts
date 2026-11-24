@@ -470,6 +470,17 @@ export class LiveLayer {
         const geo = this.geo;
         if (!geo) return;
         const { ax, bx, ay, by } = geo;
+        // 6.0 P: fills of a script's frame(t), under its lines.
+        for (const f of s.fills ?? []) {
+            if (f.pts.length < 3) continue;
+            ctx.beginPath();
+            f.pts.forEach((p, i) => (i ? ctx.lineTo(ax + bx * p.x, ay + by * p.y) : ctx.moveTo(ax + bx * p.x, ay + by * p.y)));
+            ctx.closePath();
+            ctx.globalAlpha = f.opacity;
+            ctx.fillStyle = this.chartColor(f.color);
+            ctx.fill('evenodd');
+        }
+        ctx.globalAlpha = 1;
         for (const r of s.rings) {
             if (!(r.r > 0)) continue;
             ctx.beginPath();
@@ -513,6 +524,18 @@ export class LiveLayer {
             ctx.lineWidth = dot.open ? 2 : 1.5;
             ctx.strokeStyle = dot.open ? c : this.background;
             ctx.stroke();
+        }
+        // 6.0 P: texts of a script's frame(t), beside their point as the anchor says.
+        for (const t of s.texts ?? []) {
+            if (!Number.isFinite(t.x) || !Number.isFinite(t.y) || !t.text) continue;
+            const px = t.size === 'large' ? 15 : t.size === 'small' ? 10 : 12;
+            ctx.font = `${px}px var(--font-text, sans-serif)`;
+            ctx.fillStyle = this.chartColor(t.color);
+            ctx.textAlign = t.anchor.includes('right') ? 'left' : t.anchor.includes('left') ? 'right' : 'center';
+            ctx.textBaseline = t.anchor.includes('above') ? 'bottom' : t.anchor.includes('below') ? 'top' : 'middle';
+            const dx = ctx.textAlign === 'left' ? 4 : ctx.textAlign === 'right' ? -4 : 0;
+            const dy = ctx.textBaseline === 'bottom' ? -4 : ctx.textBaseline === 'top' ? 4 : 0;
+            ctx.fillText(t.text, ax + bx * t.x + dx, ay + by * t.y + dy);
         }
     }
 

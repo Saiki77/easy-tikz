@@ -21,7 +21,9 @@ import { values } from './values';
 import { linear } from './linear';
 // 6.0 E
 import { iterate } from './iterate';
+// 6.0 P
+import { python } from './python';
 
-export const EN = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...motion6, ...notes6, ...values, ...linear, ...iterate };
+export const EN = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...motion6, ...notes6, ...values, ...linear, ...iterate, ...python /* 6.0 P */ };
 
 export type MessageKey = keyof typeof EN;

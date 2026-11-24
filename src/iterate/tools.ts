@@ -162,6 +162,9 @@ export function completeIterateTool(src: Data): IterateBody | null {
                 wave: bool(src.wave, d.wave),
                 thickness: thicknessOf(src.thickness, d.thickness),
                 ...kept(src, ['speed']), // 6.0 F4
+                // 6.0 P
+                ...(typeof src.count === 'string' && src.count.trim() ? { count: src.count.trim() } : typeof src.count === 'number' && Number.isFinite(src.count) ? { count: String(src.count) } : {}),
+                ...(src.path === true ? { path: true } : {}),
             };
         }
         default:

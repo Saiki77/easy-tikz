@@ -43,6 +43,8 @@ import { LINEAR_FULL_HELP, readLinearDraw, readLinearShade, readTransform } from
 import { readIterateDraw, readIteratePlane } from '../iterate/text';
 import { givenParts, isPlaneColormap } from '../iterate/tools';
 import { readRecurrence } from '../values/recurrence';
+// 6.0 P
+import { FULL_PY_END, fullPythonHead, pythonFull, readPythonWords } from '../python/text';
 
 /** 6.0 A: the lines of values in Full LaTeX need no let names: they are written in the forms that say what they are. */
 const NO_LETS: ReadonlySet<string> = new Set();
@@ -1072,6 +1074,9 @@ export interface FullRead {
     columns: number[][];
     /** What the block itself gets wrong: a bracket not closed, an option \axis does not know. */
     problems: TextProblem[];
+    // 6.0 P
+    /** Lines (1-based) of the block that close a python block (\end{python}): they belong to its tool. */
+    pythonEnds?: number[];
 }
 
 /**
@@ -1083,7 +1088,25 @@ export interface FullRead {
 export function readFull(text: string): FullRead {
     const out: FullRead = { text: '', lines: [], columns: [], problems: [] };
     const words: string[] = [];
+    let script = false; // 6.0 P: inside \begin{python} ... \end{python}
     text.split(LINE_BREAK).forEach((line, i) => {
+        // 6.0 P: a python block in words: `python:` and its lines 4 spaces in; \end{python} a blank line of the block.
+        if (script || fullPythonHead(line) !== null) {
+            let m: Mapped;
+            if (!script) {
+                const name = fullPythonHead(line);
+                m = new Mapped().put(name ? `${name}: python:` : 'python:', line.length - line.trimStart().length);
+                script = true;
+            } else if (FULL_PY_END.test(line)) {
+                m = new Mapped();
+                script = false;
+                (out.pythonEnds ??= []).push(i + 1);
+            } else m = line.trim() ? new Mapped().put('    ', 0).copy(line, 0) : new Mapped();
+            words.push(m.text);
+            out.lines.push(i + 1);
+            out.columns.push(m.cols);
+            return;
+        }
         const made = lineWords(line, i + 1, out.problems);
         for (const m of made.length ? made : [new Mapped()]) {
             words.push(m.text);
@@ -1117,7 +1140,17 @@ export function mapFull(read: FullRead, parsed: TextChart, lineCount: number, tr
             const into = lines[(read.lines[tr.line - 1] ?? tr.line) - 1];
             if (!into) continue;
             if (tr.object) into.object = tr.object;
+            if (tr.part) into.part = true; // 6.0 P
             for (const k of tr.chart) if (!into.chart.includes(k)) into.chart.push(k);
+        }
+        // 6.0 P: \end{python} belongs to the block above it.
+        for (const at of read.pythonEnds ?? []) {
+            const into = lines[at - 1];
+            const above = lines[at - 2];
+            if (into && above?.object) {
+                into.object = above.object;
+                into.part = true;
+            }
         }
         out.lines = lines;
     }
@@ -1591,12 +1624,17 @@ export function axisLines(lines: string[]): string[] {
 
 /** One object line in words (built-in words) as a Full LaTeX line: its command, else the generic one, else as it is. */
 export function fullLine(line: string): string {
+    // 6.0 P: a python block.
+    const py = readPythonWords(line);
+    if (py) return pythonFull(py.code, py.name);
     return objectFull(line) ?? genericFull(line) ?? line.trim();
 }
 
 /** A Full LaTeX line with its object's name spelled out (name=R2 first in its options). */
 export function withName(line: string, name: string): string {
     const lead = /^\s*/.exec(line)?.[0] ?? '';
+    // 6.0 P
+    if (fullPythonHead(line.split('\n')[0]) !== null) return line.replace(/^(\s*\\begin\s*\{\s*python\s*\})(?:\[[^\]]*\])?/, `$1[name=${name}]`);
     const cmd = lexCommand(line);
     if (!cmd || BEGIN.test(line.trim()) || END.test(line.trim())) return `${lead}${name}: ${line.trim()}`;
     const known = cmd.options.find((o) => o.key === 'name');
@@ -1662,6 +1700,8 @@ export function wordsToFull(text: string, opts: { builtin?: boolean } = {}): str
         const t = line.trim();
         const tr = traces[i];
         if (i < first || i > last) return;
+        // 6.0 P: the lines of a python block go with its head (written whole by render).
+        if (tr?.part) return;
         if (!t) entries.push({ from: -1, text: '', level: 0 });
         else if (/^(%|\/\/|#)/.test(t)) entries.push({ from: -1, text: t.startsWith('%') ? t : `% ${t.replace(/^(\/\/|#)\s?/, '')}`, level: 0 });
         else if (tr && !tr.object && tr.chart.length && !bad.has(i + 1) && CHART_LINE.test(t)) {
@@ -1679,6 +1719,9 @@ export function wordsToFull(text: string, opts: { builtin?: boolean } = {}): str
     };
     const render = (e: Entry): string => {
         const line = lines[e.from];
+        // 6.0 P: a python block from its tool.
+        const obj0 = objectAt(e.from);
+        if (obj0 && obj0.item.type === 'python' && e.level < 2) return pythonFull(typeof obj0.item.code === 'string' ? obj0.item.code : '', null);
         for (;;) {
             let out: string | null = null;
             if (e.level === 0) {
@@ -1708,7 +1751,7 @@ export function wordsToFull(text: string, opts: { builtin?: boolean } = {}): str
             origin.push(...sets.map(() => -1));
         }
         entries.forEach((e, k) => {
-            const made = k === axisAt ? [...axis, ...sets] : [e.from < 0 ? e.text : render(e)];
+            const made = k === axisAt ? [...axis, ...sets] : (e.from < 0 ? e.text : render(e)).split('\n'); // split: 6.0 P, a python block is several lines
             for (const s of made) {
                 out.push(s);
                 origin.push(k);
@@ -2016,6 +2059,13 @@ function iterateWords(cmd: Command): Mapped {
             m.put(', $', o.at).copy(o.name, o.at).put(' = ', o.valueAt).copy(v.text, v.at).put('$', o.valueAt + o.value.length - 1);
         }
     }
+    // 6.0 P: \circles[count=n, path]{c}: `using n circles`.
+    const count = kind === 'circles' ? valueOf(opts, 'count') : undefined;
+    if (count) {
+        taken.add(count);
+        const v = inner(count.value ?? '', count.valueAt);
+        m.put(', using ', count.at).copy(v.text, v.at).put(' circles', count.at);
+    }
     if (steps && kind !== 'circles' && kind !== 'bifurcation') {
         taken.add(steps);
         const v = inner(steps.value ?? '', steps.valueAt);
@@ -2056,6 +2106,9 @@ function iterateFull(own: string, rest: string, options: string[]): string | nul
         const lower = o.toLowerCase();
         if (read.type === 'colourPlane' && isPlaneColormap(lower)) opts.push(`colormap/${lower}`);
         else if (lower === 'wave') opts.push('wave');
+        // 6.0 P
+        else if (read.type === 'fourierCircles' && /^using\s+\S[\s\S]*?\s+circles?$/i.test(o)) opts.push(`count=${encValue(o.replace(/^using\s+/i, '').replace(/\s+circles?$/i, '').trim())}`);
+        else if (read.type === 'fourierCircles' && (lower === 'path' || lower === 'its path')) opts.push('path');
         else opts.push(optionFull(o, 'other'));
     }
     const arg = read.type === 'newton' ? str(f.function) : read.type === 'fourierCircles' ? str(f.sum) : formula;

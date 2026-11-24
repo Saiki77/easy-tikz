@@ -444,7 +444,10 @@ export class MathContext {
         this.toolSet = new Set((Array.isArray(input.toolNames) ? input.toolNames : []).filter((t) => typeof t === 'string'));
         this.table = input.table;
         // 6.0 A: let definitions (src/values/table.ts), before the functions, which may call them.
-        this.letTable = new ValueTable(Array.isArray(input.values) ? input.values : [], {
+        // 6.0 P: a name a script sets that a slider, an axis or a function of the chart has stays the chart's.
+        const fnNames = new Set((Array.isArray(input.functions) ? input.functions : []).map((f) => (f && typeof f.name === 'string' ? f.name : '')));
+        const lets = (Array.isArray(input.values) ? input.values : []).filter((d) => !d || !d.native || !(this.paramIndex.has(d.name) || this.allVariableNames.has(d.name) || isReservedName(d.name) || fnNames.has(d.name)));
+        this.letTable = new ValueTable(lets, {
             env: () => this.env('value', 'cartesian', null),
             version: () => this._version,
             conflict: (name) => this.letConflict(name),
@@ -1617,7 +1620,7 @@ function structureKey(input: MathContextInput): string {
         Array.isArray(input.toolNames) ? input.toolNames : [],
         tableKey(input.table),
         // 6.0 A: let definitions.
-        Array.isArray(input.values) ? input.values.map((d) => (d ? [d.name, d.params, d.expression] : null)) : [],
+        Array.isArray(input.values) ? input.values.map((d) => (d ? (d.native ? [d.name, d.params, d.expression, d.native.key] /* 6.0 P */ : [d.name, d.params, d.expression]) : null)) : [],
     ]);
 }
 

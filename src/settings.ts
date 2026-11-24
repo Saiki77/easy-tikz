@@ -13,6 +13,7 @@ import { boxAspectOf, boxRatioOf } from './box3d';
 import { exportsFrames, framesTikz } from './motion6/frames'; // 6.0 C
 // 6.0 B
 import { FIT_Y, followY } from './notes6/yfit';
+import { pythonView } from './python/scene'; // 6.0 P
 
 /** The six axis range keys. */
 export type RangeKey = 'xmin' | 'xmax' | 'ymin' | 'ymax' | 'zmin' | 'zmax';
@@ -274,6 +275,11 @@ export class SettingsManager {
             }
         }
         const [xmin, xmax, ymin, ymax, zmin, zmax] = resolved;
+        // 6.0 P: a chart with python blocks and the default range: the scripts' xlim and ylim, else what they draw.
+        if (this.getValue('dimension') !== true && (['xmin', 'xmax', 'ymin', 'ymax'] as const).every((k) => String(this.getValue(k)) === RANGE_DEFAULTS[k]) && this.tools().some((t) => !!t && t.type === 'python')) {
+            const box = pythonView(this.tools(), ctx);
+            if (box) return { view: { ...box, zmin, zmax }, errors };
+        }
         // 6.0 B: y follows what is drawn over the x range.
         if (this.getValue(FIT_Y) === true && this.getValue('dimension') !== true) {
             const style = this.getValue('axis_style');

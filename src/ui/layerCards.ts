@@ -203,6 +203,8 @@ const TOOL_KIND: Record<Tool['type'], MessageKey> = {
     newton: 'iterate.kind.newton',
     colourPlane: 'iterate.kind.colourPlane',
     fourierCircles: 'iterate.kind.fourierCircles',
+    // 6.0 P
+    python: 'python.kind.python',
 };
 
 // --------------------------------------------------------------- helpers

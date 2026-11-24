@@ -20,7 +20,7 @@ import { clockTime, registerClockType } from '../motion6/clock';
 import { givenParts, isPlaneColormap, topEquals } from './tools';
 import { formulaParts, planeKind, readsLetter } from './forms';
 import { PixelPrim, bifurcationPrim, bifurcationStep, domainPrim, escapePrim, heatPrim, heatRange, recurrenceStep } from './pixels';
-import { FourierTerms, compileFourier, FOURIER_SPEED } from './fourier';
+import { FourierTerms, compileFourier, FOURIER_SPEED, MAX_COEFFICIENTS } from './fourier';
 // 6.0 F4: what moves on the preview's live canvas.
 import type { LiveShapes, TraceRun } from '../motion6/liveprims';
 import { emptyShapes, orbitSeconds, speedOf, tracedAt } from '../motion6/liveprims';
@@ -48,7 +48,7 @@ const FAR = 1e6;
 /** What a tool of this part hands the clock and the fit (kept on its scene output). */
 export interface IterateOutput {
     /** The turning circles: the terms at a time, the curve of the tip over one turn, the size of the chain. */
-    circles?: { terms: FourierTerms; trace: Pt[]; reach: number; color: string; width: string; wave: boolean; speed: number };
+    circles?: { terms: FourierTerms; trace: Pt[]; reach: number; color: string; width: string; wave: boolean; speed: number; path?: boolean }; // path: 6.0 P
     /** What the fit holds of a line tool (the points it reaches; the lines across the view do not count). */
     fit?: Pt[];
 }
@@ -596,12 +596,19 @@ function computeCircles(t: FourierCirclesTool, ctx: SceneCtx): SceneOutput {
     const src = str(t.sum).trim();
     if (!src) return out;
     let terms: FourierTerms;
+    // 6.0 P: how many circles of a list of coefficients (`using n circles`).
+    let count: number | undefined;
+    if (str(t.count).trim()) {
+        const v = fieldValue(str(t.count), 'count', t.name, ctx, out);
+        if (v === null) return out;
+        count = v;
+    }
     try {
-        terms = compileFourier(ctx.math, src, MAX_TERMS);
+        terms = compileFourier(ctx.math, src, MAX_TERMS, count);
     } catch (e) {
         return fail(out, t.name, 'sum', errorText(e));
     }
-    if (terms.capped) addIssue(out, t.name, 'sum', msg('iterate.problem.terms', { count: MAX_TERMS }), 'info');
+    if (terms.capped) addIssue(out, t.name, 'sum', msg('iterate.problem.terms', { count: count === undefined && terms.count < MAX_COEFFICIENTS ? MAX_TERMS : MAX_COEFFICIENTS }), 'info');
     // The curve of the tip over one turn (t from 0 to 2 pi), and how far the chain reaches.
     const trace: Pt[] = [];
     let reach = 0;
@@ -623,11 +630,11 @@ function computeCircles(t: FourierCirclesTool, ctx: SceneCtx): SceneOutput {
     const width = str(t.thickness) || 'thick';
     // The curve of the tip, faint: the wave and the circles are what moves (6.0 F4: fainter still).
     if (trace.length > 1) out.strokes.push({ lines: [trace], color, width: 'thin', dashed: false, opacity: 0.25 });
-    const circles = { terms, trace, reach, color, width, wave: !!t.wave, speed: FOURIER_SPEED * speedOf(t) };
+    const circles = { terms, trace, reach, color, width, wave: !!t.wave, speed: FOURIER_SPEED * speedOf(t), path: t.path === true }; // path: 6.0 P
     hold(out, { circles, fit: trace });
     // 6.0 F4: the circles turn on the preview's live canvas.
     const view = { ...ctx.view };
-    out.live = [{ key: `${str(t.id)}:circles`, at: (time) => circleShapes(circlesAt(circles, time * circles.speed, view), circles) }];
+    out.live = [{ key: `${str(t.id)}:circles`, at: (time) => circleShapes(circlesAt(circles, time * circles.speed, view), circles, time * circles.speed) }]; // tau: 6.0 P
     return out;
 }
 
@@ -680,8 +687,17 @@ function circlesAt(c: Circles, tau: number, view: View): CircleParts {
 }
 
 /** The parts as live shapes: faint circles, the arms in the tool's colour, the wave in red with a dashed line to the tip. */
-function circleShapes(p: CircleParts, c: Circles): LiveShapes {
+function circleShapes(p: CircleParts, c: Circles, tau = 0): LiveShapes {
     const out = emptyShapes();
+    // 6.0 P: `with its path`: the path the tip has drawn this turn, in the colour of the circles.
+    if (c.path && c.trace.length > 1) {
+        const turn = 2 * Math.PI;
+        const done = ((tau % turn) + turn) % turn;
+        const k = Math.round((done / turn) * (c.trace.length - 1));
+        const pts = c.trace.slice(0, k + 1);
+        pts.push(p.tip);
+        if (pts.length > 1) out.lines.push({ pts, color: c.color, width: c.width });
+    }
     for (const r of p.rings) out.rings.push({ ...r, color: 'gray', opacity: 0.4 });
     if (p.arms.length > 1) out.lines.push({ pts: p.arms, color: c.color, width: 'thin' });
     if (p.wave) {
@@ -715,6 +731,8 @@ export function iterateMotion(tool: Tool | undefined, out: SceneOutput, ctx: Sce
     });
     if (circles.length) strokes.push({ lines: circles, color: 'gray', width: 'thin', dashed: false, opacity: 0.4, still: true });
     if (p.arms.length > 1) strokes.push({ lines: [p.arms], color: c.color, width: 'thin', dashed: false, exact: true, still: true });
+    // 6.0 P: `with its path`: the export draws the whole path (the preview draws it as the tip goes).
+    if (c.path && c.trace.length > 1) strokes.push({ lines: [c.trace], color: c.color, width: c.width, dashed: false, still: true });
     const markers: MarkerPrim[] = [{ x: p.tip.x, y: p.tip.y, color: c.color, size: 'small', still: true }];
     if (p.wave) {
         if (p.wave.pts.length > 1) strokes.push({ lines: [p.wave.pts], color: WAVE_COLOR, width: c.width, dashed: false, still: true });

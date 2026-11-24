@@ -61,6 +61,8 @@ import { ITERATE_SCENE_TYPES, IterateOutput, computeIterate, iterateMotion, iter
 import type { PixelPrim } from './iterate/pixels';
 // 6.0 F4
 import type { LivePrim } from './motion6/liveprims';
+// 6.0 P
+import { addPythonMotion, computePython, pythonSources } from './python/scene';
 
 export type ArrowHeads = 'forward' | 'backward' | 'both';
 
@@ -899,7 +901,7 @@ function toolNode(t: Tool, math: MathContext): SceneNode {
             break;
         default:
             // 6.0 A: values (src/values/scene.ts), then the tools beyond functions; 6.0 C: motion; 6.0 D: linear; 6.0 E: iterate.
-            if (!valuesSources(t, scan) && !linearSources(t, scan) && !iterateSources(t, scan)) beyondSources(t, scan, refs);
+            if (!valuesSources(t, scan) && !linearSources(t, scan) && !iterateSources(t, scan) && !pythonSources(t, scan, math) /* 6.0 P */) beyondSources(t, scan, refs);
             motionSources(t, scan, refs); // 6.0 C
     }
     return { id: `tool:${t.id}`, name: str(t.name) || str(t.id), tool: t, refs, sources, base: toolBase(t) };
@@ -2244,6 +2246,7 @@ function scene2D(input: SceneInput2D): Scene2D {
             item.markers = out.markers.concat(turning.markers);
         }
         if (out.live && out.live.length) item.live = out.live; // 6.0 F4
+        if (node.tool && node.tool.type === 'python') addPythonMotion(item, out, input.motion, (message) => issues.push({ source: node.name, field: 'code', message, severity: 'error' })); // 6.0 P
         items.push(item);
         itemSpecs.push({ item, node, out });
     });
@@ -2361,7 +2364,7 @@ function compute2D(node: SceneNode, ctx: Ctx): Output {
             return computeNotes6(t, ctx) ?? newOutput();
         default:
             // 6.0 A: values (src/values/scene.ts); 6.0 C: motion; 6.0 D: linear; 6.0 E: iterate.
-            return computeValues(t, ctx) ?? computeLinear(t, ctx) ?? computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? computeIterate(t, ctx) ?? newOutput();
+            return computeValues(t, ctx) ?? computeLinear(t, ctx) ?? computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? computeIterate(t, ctx) ?? computePython(t, ctx) /* 6.0 P */ ?? newOutput();
     }
 }
 

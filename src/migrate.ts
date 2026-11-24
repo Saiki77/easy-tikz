@@ -21,6 +21,9 @@ import { axisSetDefaults, chordDefaults, completeAxisSet, completeChord } from '
 // 6.0 E
 import { ITERATE_PREFIX, completeIterateTool, iterateDefaults } from './iterate/tools';
 import { iterateRecipes } from './iterate/recipes';
+// 6.0 P
+import { PYTHON_PREFIX, completePythonTool, pythonDefaults } from './python/tools';
+import { pythonRecipes } from './python/recipes';
 import { notes6Recipes } from './notes6/recipes';
 // 6.0 D
 import { LINEAR_PREFIX, basisVectorsDefaults, completeLinearTool, eigenvectorsDefaults, planeGridDefaults, spanDefaults, transformDefaults, unitSquareDefaults } from './linear/tools';
@@ -142,6 +145,8 @@ const TOOL_PREFIX: Record<ToolType, string> = {
     ...LINEAR_PREFIX,
     // 6.0 E
     ...ITERATE_PREFIX,
+    // 6.0 P
+    ...PYTHON_PREFIX,
 };
 
 const PARAMETER_LETTERS = ['a', 'b', 'c', 'd', 'k', 'm', 'n', 'p', 'q', 'r', 's', 'u', 'v', 'w'];
@@ -1192,7 +1197,10 @@ function convertTool(src: Record<string, unknown>, ctx: ConvertContext): { body:
             if (linear) return { body: linear, hidden: false };
             // 6.0 E: orbits, cobwebs, bifurcation diagrams, Newton's method, coloured planes, turning circles
             const iterate = completeIterateTool(src);
-            return iterate ? { body: iterate, hidden: false } : null;
+            if (iterate) return { body: iterate, hidden: false };
+            // 6.0 P: a python script
+            const python = completePythonTool(src);
+            return python ? { body: python, hidden: false } : null;
         }
     }
 }
@@ -1817,6 +1825,9 @@ export function defaultTool(type: ToolType, opts: { is3D: boolean; tools: Tool[]
         case 'colourPlane':
         case 'fourierCircles':
             return { ...(iterateDefaults(type) as Omit<Tool, 'id' | 'name' | 'hidden'>), ...identity(type, opts) } as Tool;
+        // 6.0 P
+        case 'python':
+            return { ...pythonDefaults(), ...identity('python', opts) };
     }
 }
 
@@ -2159,6 +2170,8 @@ function recipes2D(): Recipe[] {
             callable: callableFunctions,
             names: chartNames,
         }),
+        // 6.0 P
+        ...pythonRecipes(in2D, (type, ctx) => defaultTool(type as ToolType, toolOpts(ctx)), chartNames),
         labelRecipe(in2D),
         sliderRecipe(in2D),
     ];

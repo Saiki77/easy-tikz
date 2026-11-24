@@ -4,6 +4,7 @@
  * Obsidian.
  */
 import type { ValueDefinition } from './table';
+import { pythonDefinitions } from '../python/defs'; // 6.0 P
 
 /** The definitions of the value tools in `tools`, in their order. */
 export function valueDefinitions(tools: unknown): ValueDefinition[] {
@@ -22,5 +23,7 @@ export function valueDefinitions(tools: unknown): ValueDefinition[] {
             expression: typeof expression === 'string' ? expression : '',
         });
     }
+    // 6.0 P: the names the chart's python blocks set.
+    out.push(...pythonDefinitions(tools));
     return out;
 }
