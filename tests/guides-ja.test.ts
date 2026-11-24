@@ -21,6 +21,7 @@ import {
     localGuideById,
     localGuides,
     searchGuides,
+    V6_EXAMPLES, // 6.0 F2
 } from '../src/guides';
 import { GuideText, JA_GUIDES, overlayGuide } from '../src/guides/ja';
 import { EN, MessageKey } from '../src/i18n/en';
@@ -271,7 +272,8 @@ test('categories and levels: English names as identifiers, shown in the reader\'
     inJapanese(() => {
         assert.deepEqual(
             GUIDE_CATEGORIES.map(guideCategoryLabel),
-            ['はじめに', 'グラフの言語', 'ショーケース', '関数とスライダー', '微分積分', '領域と最適化', 'データと確率', '点・線・ラベル', '3D', 'ノートと出力', 'リファレンス']
+            // 6.0 F2: 線形代数と複素数, 力学系とフラクタル
+            ['はじめに', 'グラフの言語', 'ショーケース', '関数とスライダー', '微分積分', '領域と最適化', '線形代数と複素数', '力学系とフラクタル', 'データと確率', '点・線・ラベル', '3D', 'ノートと出力', 'リファレンス']
         );
         assert.deepEqual(
             (['start', 'core', 'advanced'] as const).map(guideLevelLabel),
@@ -314,4 +316,20 @@ test('help texts: the Japanese has the code spans of the English and the Japanes
         if (bold(EN[k]) !== bold(JA[k])) problems.push(`${k}: **bold** runs differ`);
     }
     assert.deepEqual(problems, [], problems.join('\n'));
+});
+
+// 6.0 F2
+test('6.0 examples: a Japanese title and line for each, in the Japanese style, the English for the AI tools', () => {
+    const english = V6_EXAMPLES.map((e) => [e.title, e.description]);
+    const problems: string[] = [];
+    inJapanese(() => {
+        V6_EXAMPLES.forEach((e, i) => {
+            for (const [at, ja, en] of [['title', e.title, english[i][0]], ['description', e.description, english[i][1]]]) {
+                if (ja === en || !new RegExp(`[${JP}]`).test(ja)) problems.push(`${e.id} ${at}: not translated`);
+                for (const problem of styleProblems(ja)) problems.push(`${e.id} ${at}: ${problem}`);
+            }
+        });
+    });
+    assert.deepEqual(problems, [], problems.join('\n'));
+    assert.deepEqual(V6_EXAMPLES.map((e) => [e.title, e.description]), english, 'back in English');
 });

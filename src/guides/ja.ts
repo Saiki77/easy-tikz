@@ -27,6 +27,11 @@ import { SHAPES_JA } from './shapes.ja';
 import { SPACE_JA } from './space.ja';
 import { NOTES_JA } from './notes.ja';
 import { REFERENCE_JA } from './reference.ja';
+// 6.0 F2
+import { VALUES_JA } from './values.ja';
+import { INTERACT_JA } from './interact.ja';
+import { LINEAR_JA } from './linear.ja';
+import { DYNAMICS_JA } from './dynamics.ja';
 
 /** The Japanese texts of one guide. */
 export interface GuideText {
@@ -70,6 +75,11 @@ export const JA_GUIDES: Readonly<Record<string, GuideText>> = {
     ...SPACE_JA,
     ...NOTES_JA,
     ...REFERENCE_JA,
+    // 6.0 F2
+    ...VALUES_JA,
+    ...INTERACT_JA,
+    ...LINEAR_JA,
+    ...DYNAMICS_JA,
 };
 
 export function localGuide(guide: Guide): Guide {

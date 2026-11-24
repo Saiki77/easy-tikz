@@ -26,6 +26,9 @@ export type GuideCategory =
     | 'Functions and sliders'
     | 'Calculus'
     | 'Regions and optimisation'
+    // 6.0 F2: two categories for version 6
+    | 'Linear algebra and complex numbers'
+    | 'Dynamics and fractals'
     | 'Data and probability'
     | 'Points, lines and labels'
     | '3D'

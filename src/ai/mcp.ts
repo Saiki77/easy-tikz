@@ -294,7 +294,8 @@ const TOOLS: ToolDef[] = [
     {
         name: 'list_examples',
         title: 'List example charts',
-        description: 'Ready-made charts to start from: id, title and what each shows (linear program, areas between curves, tangent, level curves, market surplus, 3D, and the finished chart of every guide).',
+        // 6.0 F2: and the examples of version 6
+        description: 'Ready-made charts to start from: id, title and what each shows (linear program, areas between curves, tangent, level curves, market surplus, 3D, vectors, sums, fractals, orbits, systems, and the finished chart of every guide).',
         inputSchema: { type: 'object', properties: {} },
         annotations: { readOnlyHint: true },
         async run() {
