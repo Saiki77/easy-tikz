@@ -35,6 +35,11 @@ import { NO_WORDS, chartWords, hasWords, readWords } from './words';
 import { boxRatioOf } from '../box3d';
 // 6.0 B
 import { AXIS_FLAGS, readAxisSet, readChord } from '../notes6/text';
+// 6.0 A
+import { readListPoints, vectorFull, vectorWords } from '../values/text';
+
+/** 6.0 A: the lines of values in Full LaTeX need no let names: they are written in the forms that say what they are. */
+const NO_LETS: ReadonlySet<string> = new Set();
 
 type Data = Record<string, unknown>;
 
@@ -508,7 +513,7 @@ function optionWords(o: Opt, kind: Kind, variable: string): Mapped {
 }
 
 /** Keys the commands take with a value (name=R1, at=..., in=R1, levels=..., labels=..., text=...); the others they take as flags (max, ->, plane). */
-const TAKES_VALUE = new Set(['name', 'at', 'in', 'levels', 'labels', 'text', 'from', 'to' /* 6.0 B */]);
+const TAKES_VALUE = new Set(['name', 'at', 'in', 'levels', 'labels', 'text', 'from', 'to' /* 6.0 A, B */]);
 
 /** The options of an object after a bar (`head | red, dashed`), but those its line itself takes. */
 function barInto(m: Mapped, opts: Opt[], kind: Kind, variable: string, taken: ReadonlySet<string>, extra: Mapped[] = []) {
@@ -609,6 +614,13 @@ function drawWords(cmd: Command): Mapped {
     const opts = cmd.options;
     namedInto(m, opts);
     const arg = argOf(cmd);
+    // 6.0 A: \draw[vector, from={(1, 1)}, tip to tail]{v, w} (src/values/text.ts).
+    if (flagOf(opts, 'vector')) {
+        const from = valueOf(opts, 'from');
+        m.put(vectorWords(arg.text, from ? textOf(from.value ?? '').trim() : '', !!flagOf(opts, 'tip to tail')), cmd.at);
+        barInto(m, opts, 'other', 'x', new Set(['name', 'vector', 'from', 'tip to tail']));
+        return m;
+    }
     const plane = flagOf(opts, 'plane');
     const levels = valueOf(opts, 'levels');
     if (plane) {
@@ -692,6 +704,14 @@ function markWords(cmd: Command): Mapped {
         mathInto(m, arg.text, arg.at);
         m.put(` on the ${axisFlag.key}`, axisFlag.at);
         barInto(m, opts, 'other', 'x', new Set(['name', ...AXIS_FLAGS]));
+        return m;
+    }
+    // 6.0 A: \mark[list, joined]{S}: the points of a list (src/values/text.ts).
+    if (flagOf(opts, 'list')) {
+        const direct = arg.text.startsWith('\\{') || arg.text.startsWith('[');
+        m.put(`mark the points ${direct ? '' : 'of '}`, cmd.at);
+        mathInto(m, arg.text, arg.at);
+        barInto(m, opts, 'points', 'x', new Set(['name', 'list']));
         return m;
     }
     if (flagOf(opts, 'crossings', 'intersections')) {
@@ -1153,6 +1173,9 @@ const DRAW_NOUN = /^(?:(?:a|an|the)\s+)?(double\s+arrow|arrow|line|segment|polyg
 function drawFull(own: string, rest: string, options: string[]): string | null {
     const t = rest.trim();
     if (!t) return null;
+    // 6.0 A: vector arrows.
+    const vector = vectorFull(t, NO_LETS);
+    if (vector) return command('draw', own, [...vector.flags, ...options.map((o) => optionFull(o, 'other'))], vector.arg);
     if (DEFINITION.test(t)) return command('plot', own, options.map((o) => optionFull(o, 'function')), t);
     // 6.0 B: the chord of a function.
     const chord = readChord(t);
@@ -1214,6 +1237,9 @@ function drawFull(own: string, rest: string, options: string[]): string | null {
 
 function markFull(own: string, rest: string, options: string[]): string | null {
     const p = rest.trim().replace(/^the\s+/i, '');
+    // 6.0 A: the points of a list.
+    const values = readListPoints(p, NO_LETS);
+    if (values !== null) return command('mark', own, ['list', ...options.map((o) => optionFull(o, 'points'))], values);
     const region = (r: string): string[] => (/^the\s+region$/i.test(r) ? [] : [`in=${encValue(r)}`]);
     const opts = (lead: string[]) => [...lead, ...options.map((o) => optionFull(o, 'points'))];
     // 6.0 B: a set on an axis.

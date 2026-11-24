@@ -48,6 +48,10 @@ import {
     SegmentTool,
     Tool,
     ToolType,
+    // 6.0 A
+    ListPointsTool,
+    ValueTool,
+    VectorTool,
 } from './types';
 
 export const SCHEMA_VERSION = 4;
@@ -124,6 +128,10 @@ const TOOL_PREFIX: Record<ToolType, string> = {
     // 6.0 B
     axisSet: 'AX',
     chord: 'CH',
+    // 6.0 A: values
+    value: 'L',
+    vector: 'V',
+    listPoints: 'LP',
 };
 
 const PARAMETER_LETTERS = ['a', 'b', 'c', 'd', 'k', 'm', 'n', 'p', 'q', 'r', 's', 'u', 'v', 'w'];
@@ -608,6 +616,10 @@ type ProbabilityBody = Omit<ProbabilityTool, 'id' | 'name' | 'hidden'>;
 type RiemannBody = Omit<RiemannTool, 'id' | 'name' | 'hidden'>;
 type SlopeFieldBody = Omit<SlopeFieldTool, 'id' | 'name' | 'hidden'>;
 type SolutionBody = Omit<SolutionTool, 'id' | 'name' | 'hidden'>;
+// 6.0 A
+type ValueBody = Omit<ValueTool, 'id' | 'name' | 'hidden'>;
+type VectorBody = Omit<VectorTool, 'id' | 'name' | 'hidden'>;
+type ListPointsBody = Omit<ListPointsTool, 'id' | 'name' | 'hidden'>;
 
 function regionDefaults(): RegionBody {
     return {
@@ -698,6 +710,53 @@ function slopeFieldDefaults(): SlopeFieldBody {
 
 function solutionDefaults(): SolutionBody {
     return { type: 'solution', color: 'red', field: '', through: '', thickness: 'thick', dashed: false };
+}
+
+// 6.0 A: values (src/values/).
+function valueDefaults(): ValueBody {
+    return { type: 'value', color: 'black', params: '', expression: '' };
+}
+
+function vectorDefaults(): VectorBody {
+    return { type: 'vector', color: 'blue', vectors: '', from: '', tipToTail: false, thickness: 'thick', dashed: false, label: '', valueLabel: false };
+}
+
+function listPointsDefaults(): ListPointsBody {
+    return { type: 'listPoints', color: 'red', points: '', joined: false, size: 'normal', thickness: 'thin', label: '', valueLabel: false };
+}
+
+function completeValue(src: Record<string, unknown>): ValueBody {
+    const d = valueDefaults();
+    return { type: 'value', color: colorOf(src.color, d.color), params: str(src.params, d.params), expression: str(src.expression, d.expression) };
+}
+
+function completeVector(src: Record<string, unknown>): VectorBody {
+    const d = vectorDefaults();
+    return {
+        type: 'vector',
+        color: colorOf(src.color, d.color),
+        vectors: str(src.vectors, d.vectors),
+        from: str(src.from, d.from),
+        tipToTail: bool(src.tipToTail, d.tipToTail),
+        thickness: thicknessOf(src.thickness, d.thickness),
+        dashed: bool(src.dashed, d.dashed),
+        label: str(src.label, d.label),
+        valueLabel: bool(src.valueLabel, d.valueLabel),
+    };
+}
+
+function completeListPoints(src: Record<string, unknown>): ListPointsBody {
+    const d = listPointsDefaults();
+    return {
+        type: 'listPoints',
+        color: colorOf(src.color, d.color),
+        points: str(src.points, d.points),
+        joined: bool(src.joined, d.joined),
+        size: oneOf(src.size, MARKER_SIZES, d.size),
+        thickness: thicknessOf(src.thickness, d.thickness),
+        label: str(src.label, d.label),
+        valueLabel: bool(src.valueLabel, d.valueLabel),
+    };
 }
 
 function probabilityDefaults(): ProbabilityBody {
@@ -1088,6 +1147,13 @@ function convertTool(src: Record<string, unknown>, ctx: ConvertContext): { body:
             return { body: completeAxisSet(src), hidden: false };
         case 'chord':
             return { body: completeChord(src), hidden: false };
+        // 6.0 A
+        case 'value':
+            return { body: completeValue(src), hidden: false };
+        case 'vector':
+            return { body: completeVector(src), hidden: false };
+        case 'listPoints':
+            return { body: completeListPoints(src), hidden: false };
         case 'segment':
             return isLegacySegment(src) ? legacySegment(src) : { body: completeSegment(src, ctx), hidden: false };
         case 'areaBetween':
@@ -1652,6 +1718,19 @@ function newSolution(opts: ToolOpts): SolutionTool {
     return { ...solutionDefaults(), ...identity('solution', opts) };
 }
 
+// 6.0 A
+function newValue(opts: ToolOpts): ValueTool {
+    return { ...valueDefaults(), ...identity('value', opts) };
+}
+
+function newVector(opts: ToolOpts): VectorTool {
+    return { ...vectorDefaults(), ...identity('vector', opts) };
+}
+
+function newListPoints(opts: ToolOpts): ListPointsTool {
+    return { ...listPointsDefaults(), ...identity('listPoints', opts) };
+}
+
 /**
  * Default tool of a kind. New regions cycle through the palette (next
  * colour not used by another region) at opacity 0.25.
@@ -1694,6 +1773,13 @@ export function defaultTool(type: ToolType, opts: { is3D: boolean; tools: Tool[]
             return { ...axisSetDefaults(), ...identity('axisSet', opts) };
         case 'chord':
             return { ...chordDefaults(), ...identity('chord', opts) };
+        // 6.0 A
+        case 'value':
+            return newValue(opts);
+        case 'vector':
+            return newVector(opts);
+        case 'listPoints':
+            return newListPoints(opts);
     }
 }
 
@@ -2025,6 +2111,8 @@ function recipes2D(): Recipe[] {
             callable: callableFunctions,
             names: chartNames,
         }),
+        // 6.0 A
+        ...valueRecipes(in2D, false),
         labelRecipe(in2D),
         sliderRecipe(in2D),
     ];
@@ -2236,6 +2324,61 @@ function beyondRecipes(in2D: (ctx: RecipeContext) => boolean): Recipe[] {
     ];
 }
 
+// ------------------------------------------------------------ values (6.0 A)
+
+/** A free name for a new definition: the first of `wanted` no name of the chart has, else the next L1, L2, ... */
+function freeName(ctx: RecipeContext, wanted: string[]): string | null {
+    const taken = new Set(chartNames(ctx));
+    return wanted.find((n) => !taken.has(n)) ?? null;
+}
+
+/** The recipes of let definitions, vector arrows and (2D) points of a list. */
+function valueRecipes(available: (ctx: RecipeContext) => boolean, is3D: boolean): Recipe[] {
+    const all: Recipe[] = [
+        {
+            id: 'let-definition',
+            section: 'Values',
+            label: t('values.recipe.let'),
+            hint: t('values.recipeHint.let'),
+            available,
+            build: (ctx) => {
+                const tool = { ...newValue(toolOpts(ctx)), expression: ctx.is3D ? '(1, 2, 2)' : '(2, 1)' };
+                tool.name = freeName(ctx, ['v', 'w', 'u']) ?? tool.name;
+                return { kind: 'tool', tool };
+            },
+        },
+        {
+            id: 'vector-arrow',
+            section: 'Values',
+            label: t('values.recipe.vector'),
+            hint: t('values.recipeHint.vector'),
+            available,
+            build: (ctx) => {
+                // The vector of the chart's first definition, else a new one called v.
+                const existing = ctx.tools.find((x) => x.type === 'value' && !x.params.trim());
+                const def: ValueTool | null = existing ? null : { ...newValue(toolOpts(ctx)), expression: ctx.is3D ? '(1, 2, 2)' : '(2, 1)' };
+                if (def) def.name = freeName(ctx, ['v', 'w', 'u']) ?? def.name;
+                const c = withTools(ctx, def ? [def] : []);
+                const arrow: VectorTool = { ...newVector(toolOpts(c)), vectors: (existing ?? def)?.name ?? '', valueLabel: true };
+                return def ? { kind: 'items', tools: [def, arrow], reveal: 1 } : { kind: 'tool', tool: arrow };
+            },
+        },
+        {
+            id: 'list-points',
+            section: 'Values',
+            label: t('values.recipe.listPoints'),
+            hint: t('values.recipeHint.listPoints'),
+            available,
+            build: (ctx) => {
+                const n = chartNames(ctx).includes('n') ? null : { name: 'n', value: 6, min: 3, max: 16, step: 1 };
+                const tool: ListPointsTool = { ...newListPoints(toolOpts(ctx)), points: `\\{e^{2\\pi i k / ${n ? 'n' : '6'}} : k = 0, \\dots, ${n ? 'n' : '6'} - 1\\}`, joined: true };
+                return { kind: 'items', parameters: n ? [n] : [], tools: [tool] };
+            },
+        },
+    ];
+    return is3D ? all.filter((r) => r.id !== 'list-points') : all;
+}
+
 function recipes3D(): Recipe[] {
     const in3D = (ctx: RecipeContext) => ctx.is3D;
     return [
@@ -2311,6 +2454,8 @@ function recipes3D(): Recipe[] {
                 },
             }),
         },
+        // 6.0 A
+        ...valueRecipes(in3D, true),
         labelRecipe(in3D),
         sliderRecipe(in3D),
     ];

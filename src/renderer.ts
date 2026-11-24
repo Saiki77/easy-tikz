@@ -16,6 +16,8 @@ import { niceInterval, formatTick, marchingGrid, sampleCurve, stripLatex, tickVa
 import { AxisTicks, Tick, axisTicks } from './ticks';
 import { extractMathSource, renderMathLabel, flushMathRenders } from './mathlabel';
 import { FunctionInfo, FunctionKind, MathContext, labelDisplayText } from './mathcontext';
+// 6.0 A
+import { valueDefinitions } from './values/defs';
 import {
     BracePrim,
     FillPrim,
@@ -364,6 +366,8 @@ export class SVGRenderer {
                       polar: this.polar,
                       variables: config.variables,
                       toolNames: (config.tools || []).map((t) => t && t.name).filter((n): n is string => typeof n === 'string'),
+                      // 6.0 A: let definitions.
+                      values: valueDefinitions(config.tools),
                   });
         this.cache = opts ? opts.cache : undefined;
         this.quality = opts && opts.quality === 'draft' ? 'draft' : 'full';

@@ -611,6 +611,48 @@ const NOTES6: Record<string, string> = {
     ].join('\n'),
 };
 
+// ------------------------------------------------------------- values (6.0 A)
+
+/** Charts of values: sums written out, let functions, complex numbers, vector arrows and the points of a list, 2D and 3D. */
+const VALUES: Record<string, string> = {
+    // Taylor and Fourier sums on sliders, a let function in a plot, the modulus of a complex function.
+    sums: [
+        'show x from -6 to 6 and y from -2.5 to 2.5',
+        'slider n from 0 to 12, starting at 5, in steps of 1',
+        'plot $T(x) = \\sum_{k=0}^{n} \\frac{(-1)^k x^{2k+1}}{(2k+1)!}$, thick',
+        'plot $S(x) = \\sum_{k=1}^{n} \\frac{\\sin((2k - 1)x)}{2k - 1}$ in red',
+        'let $f(x, y) = x^2 / 8 + y^2$',
+        'plot g(x) = f(x, 1) - 2 in green',
+        'let $c = -0.8 + 0.156i$',
+        'plot $h(x) = |e^{ix} + c|$ in purple, dashed',
+        'write "${5 \\choose 2} = {binom(5, 2)}$, $|c| = {|c|:3}$" at (-4, 2)',
+    ].join('\n'),
+    // Arrows of vectors (labelled with arrows on the names), tip to tail, from a point; the roots of unity.
+    arrows: [
+        'show x from -3 to 3 and y from -3 to 3',
+        'equal scale',
+        'slider n from 3 to 12, starting at 7, in steps of 1',
+        'let v = (2, 1)',
+        'let $w = \\begin{pmatrix} -1 \\\\ 1.5 \\end{pmatrix}$',
+        'let A = [[0, -1], [1, 0]]',
+        'draw v and w as arrows, labelled',
+        'draw v + w tip to tail in red, labelled',
+        'draw A v as an arrow from (-1, -2) in green, labelled',
+        'draw (1, -2) as an arrow in orange, labelled',
+        'mark the points $\\{e^{2\\pi i k / n} : k = 0, \\dots, n - 1\\}$, joined, labelled',
+    ].join('\n'),
+    // In space: arrows end to end with labels at their tips, and a joined list of points.
+    arrows3d: [
+        '3d',
+        'show x from -1 to 3 and y from -1 to 3',
+        'let u = (1, 2, 1)',
+        'let v = (1, 0, 1.5)',
+        'draw u + v tip to tail, labelled',
+        'draw u \\times v as an arrow in red, labelled',
+        'mark the points of [(1, 0, 0), (0, 1, 0), (0, 0, 1)], joined',
+    ].join('\n'),
+};
+
 // --------------------------------------------------------------- compile
 
 /** The block's export as a complete document. Snippets are wrapped using their own `% Needs:` lines. */
@@ -709,6 +751,8 @@ if (!hasLatex) {
     for (const [k, c] of Object.entries(BEYOND)) cases.push({ name: `beyond-${k}`, data: parseChartText(c.text).data, table: c.table });
     for (const [k, text] of Object.entries(MOTION6)) cases.push({ name: `motion6-${k}`, data: parseChartText(text).data }); // 6.0 C
     for (const [k, text] of Object.entries(NOTES6)) cases.push({ name: `notes6-${k}`, data: parseChartText(text).data }); // 6.0 B
+    // 6.0 A
+    for (const [k, text] of Object.entries(VALUES)) cases.push({ name: `values-${k}`, data: parseChartText(text).data });
 
     const jobs = pool(
         cases.map((c) => ({

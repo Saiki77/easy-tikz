@@ -7,6 +7,8 @@ import { t } from './i18n';
 import { GRID_OPACITY, opacityValue } from './opacity';
 import { AxisNumbers, TickAxis, numbersKeys, numbersMode } from './ticks';
 import { NoteTable, tableData } from './beyond/table';
+// 6.0 A
+import { valueDefinitions } from './values/defs';
 import { boxAspectOf, boxRatioOf } from './box3d';
 import { exportsFrames, framesTikz } from './motion6/frames'; // 6.0 C
 // 6.0 B
@@ -213,6 +215,8 @@ export class SettingsManager {
                 .map((t) => t && t.name)
                 .filter((n): n is string => typeof n === 'string' && n.length > 0),
             table: this.noteTable,
+            // 6.0 A: let definitions (src/values/).
+            values: valueDefinitions(this.tools()),
         };
     }
 

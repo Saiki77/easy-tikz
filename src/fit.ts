@@ -26,6 +26,8 @@ import { beyondFitShapes, fitBeyondTool } from './beyond/fit';
 import { fitMotionTool, motionFitShapes } from './motion6/fit'; // 6.0 C
 // 6.0 B
 import { fitNotes6Tool, notes6FitShapes } from './notes6/tools';
+// 6.0 A
+import { valuesFitShapes } from './values/scene';
 
 // ------------------------------------------------------------------ rules
 
@@ -546,7 +548,8 @@ function fit2D(input: FitInput): FitResult {
             const tool = item.kind === 'tool' ? original.get(item.key) : undefined;
             if (item.kind === 'tool' && !tool) continue;
             // Data, probability, Riemann sums and slope fields (5.0): what they hold, or nothing when they cover the view.
-            const beyond = tool ? (beyondFitShapes(tool, item, math) ?? motionFitShapes(tool, item) ?? notes6FitShapes(tool, item)) : null; // 6.0 B, C
+            // 6.0 A: values (src/values/scene.ts) hold their arrows and points; 6.0 B, C: their tools.
+            const beyond = tool ? (valuesFitShapes(tool, item) ?? beyondFitShapes(tool, item, math) ?? motionFitShapes(tool, item) ?? notes6FitShapes(tool, item)) : null;
             if (beyond) {
                 for (const p of beyond.points) c.point(p);
                 for (const l of beyond.lines) c.line(l.pts, l.closed);

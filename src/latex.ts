@@ -5,6 +5,8 @@
  * formula without a backslash or a brace is the plain syntax already and
  * stays as it is, so 4.x charts read as before. Pure: no DOM, no Obsidian.
  */
+// 6.0 A: values (src/values/latex.ts).
+import { MATRIX_ENVS, SUMMAND_ENDS, matrixText, setText } from './values/latex';
 
 /** A backslash, a brace or a single bar (|x|, not the `||` of or): the formula is LaTeX (the plain syntax has none of them). */
 export function looksLikeLatex(src: string): boolean {
@@ -14,23 +16,31 @@ export function looksLikeLatex(src: string): boolean {
 /** Functions LaTeX writes as commands: `\sin x` is sin(x). */
 const FUNCTIONS = new Set([
     'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'arcsin', 'arccos', 'arctan', 'sinh', 'cosh', 'tanh', 'ln', 'log', 'exp', 'min', 'max',
+    // 6.0 A: values (src/values/): \arg z, \det A, \Re z, \Im z.
+    'arg', 'det', 'Re', 'Im',
 ]);
 
-/** The arc functions as the formulas name them: `\arcsin x` is asin(x). */
-const ARC: Record<string, string> = { arcsin: 'asin', arccos: 'acos', arctan: 'atan' };
+/** The arc functions as the formulas name them: `\arcsin x` is asin(x). 6.0 A: \Re z is re(z), \Im z is im(z). */
+const ARC: Record<string, string> = { arcsin: 'asin', arccos: 'acos', arctan: 'atan', Re: 're', Im: 'im' };
+
+/** 6.0 A: names in \operatorname{...} that are functions of a value: `\operatorname{tr} A` is tr(A). */
+const VALUE_OPERATORS: Record<string, string> = { tr: 'tr', Tr: 'tr', trace: 'tr', det: 'det', Re: 're', Im: 'im', arg: 'arg', Arg: 'arg', conj: 'conj', diag: 'diag', rank: 'rank' };
 
 /** Commands that are an operator or a relation. */
 const SYMBOLS: Record<string, string> = {
-    cdot: '*', times: '*', div: '/', ast: '*',
+    // 6.0 A: \times is × (a cross product between two vectors, a product otherwise).
+    cdot: '*', times: '×', div: '/', ast: '*',
     le: '<=', leq: '<=', leqslant: '<=', ge: '>=', geq: '>=', geqslant: '>=', lt: '<', gt: '>',
-    lvert: '|', rvert: '|', vert: '|', mid: '|',
+    lvert: '|', rvert: '|', vert: '|', mid: '|', lVert: '|', rVert: '|', Vert: '|',
     quad: ' ', qquad: ' ', ',': ' ', ';': ' ', ':': ' ', '!': '', ' ': ' ',
     '{': '(', '}': ')', '|': '|',
     varphi: 'phi', vartheta: 'theta', varepsilon: 'epsilon',
 };
 
 /** Commands whose argument is plain text or a name: `\operatorname{sgn}`, `\mathrm{e}`. */
-const TEXT_COMMANDS = new Set(['operatorname', 'mathrm', 'text', 'mathit', 'mathbf', 'textrm', 'mathsf']);
+const TEXT_COMMANDS = new Set(['operatorname', 'mathrm', 'text', 'mathit', 'mathbf', 'textrm', 'mathsf',
+    // 6.0 A: \vec{v} is the vector v.
+    'vec', 'boldsymbol', 'overrightarrow']);
 
 /**
  * The plugin's formula syntax for a LaTeX formula: `\frac{a}{b}` is `((a)/(b))`,
@@ -77,6 +87,8 @@ function convert(s: string): string {
     const fnArg = (): string => {
         spaces();
         if (s[i] === '(') return '';
+        // 6.0 A: \Im \overline{z}, \Re \frac{z}{2}: a command with its argument.
+        if (/^\\(?:overline|bar|frac|dfrac|sqrt|binom)(?![A-Za-z])/.test(s.slice(i))) return `(${command()})`;
         if (s[i] === '{') return `(${group()})`;
         // `\ln|x|`: the bars are the argument.
         if (s[i] === '|') {
@@ -104,11 +116,146 @@ function convert(s: string): string {
         i = Math.min(s.length, j + 1);
         return `(${convert(inner)})`;
     };
+    /** The raw text of the next argument (a braced group without its braces, a command, or one character), with i after it. */
+    const rawArg = (): string => {
+        spaces();
+        if (s[i] === '{') {
+            const start = i + 1;
+            let depth = 0;
+            for (; i < s.length; i++) {
+                if (s[i] === '\\') {
+                    i++;
+                    continue;
+                }
+                if (s[i] === '{') depth++;
+                else if (s[i] === '}' && --depth === 0) break;
+            }
+            const inner = s.slice(start, Math.min(i, s.length));
+            if (s[i] === '}') i++;
+            return inner;
+        }
+        if (s[i] === '\\') {
+            const m = /^\\(?:[A-Za-z]+|.)/.exec(s.slice(i));
+            const cmd = m ? m[0] : '\\';
+            i += cmd.length;
+            return cmd;
+        }
+        return s[i++] ?? '';
+    };
+    /**
+     * 6.0 A: the summand of `\sum_{k=1}^{n}`, read the way it is meant: up to
+     * a `+` or `-` (a sign at its start belongs to it), a relation, a comma
+     * or the bracket that closes around the sum, whichever comes first.
+     */
+    const summand = (): string => {
+        spaces();
+        const start = i;
+        let depth = 0;
+        let bars = 0;
+        let first = true;
+        let j = i;
+        while (j < s.length) {
+            const c = s[j];
+            if (c === '\\') {
+                const m = /^\\([A-Za-z]+|.)/.exec(s.slice(j));
+                const cmd = m ? m[1] : '';
+                if (depth === 0 && bars === 0 && (SUMMAND_ENDS.has(cmd) || cmd === '}' || cmd === '\\')) break;
+                j += m ? m[0].length : 1;
+                first = false;
+                continue;
+            }
+            if (c === '{' || c === '(' || c === '[') depth++;
+            else if (c === '}' || c === ')' || c === ']') {
+                if (depth === 0) break;
+                depth--;
+            } else if (c === '|' && depth === 0) bars = bars ? 0 : 1;
+            else if (depth === 0 && bars === 0 && !first && (c === '+' || c === '-')) break;
+            else if (depth === 0 && bars === 0 && /[=<>,;:&]/.test(c)) break;
+            if (!/\s/.test(c)) first = false;
+            j++;
+        }
+        i = j;
+        return s.slice(start, j);
+    };
+    /** 6.0 A: the LaTeX of values as the plain syntax (src/values/): null for any other command. */
+    const valueCommand = (name: string): string | null => {
+        if (name === 'begin') {
+            const m = /^\s*\{\s*([A-Za-z]+\*?)\s*\}/.exec(s.slice(i));
+            if (!m || !MATRIX_ENVS.has(m[1])) return null;
+            i += m[0].length;
+            const end = new RegExp(String.raw`\\end\s*\{\s*${m[1].replace('*', '\\*')}\s*\}`, 'g');
+            end.lastIndex = i;
+            const close = end.exec(s);
+            const body = s.slice(i, close ? close.index : s.length);
+            i = close ? close.index + close[0].length : s.length;
+            const text = matrixText(body, convert);
+            return m[1] === 'vmatrix' || m[1] === 'Vmatrix' ? ` det(${text})` : ` ${text}`;
+        }
+        if (name === 'sum' || name === 'prod') {
+            let index = '';
+            let lo = '';
+            let hi = '';
+            for (let k = 0; k < 2; k++) {
+                spaces();
+                if (s[i] === '_') {
+                    i++;
+                    const sub = rawArg();
+                    const eq = sub.indexOf('=');
+                    if (eq > 0) {
+                        index = convert(sub.slice(0, eq)).replace(/\s+/g, '');
+                        lo = convert(sub.slice(eq + 1));
+                    }
+                } else if (s[i] === '^') {
+                    i++;
+                    hi = convert(rawArg());
+                }
+            }
+            if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(index) || !lo.trim() || !hi.trim()) return ` ${name} `;
+            return ` ${name}((${convert(summand())}), ${index}, (${lo}), (${hi})) `;
+        }
+        if (name === 'binom' || name === 'dbinom' || name === 'tbinom') {
+            const n = arg();
+            const k = arg();
+            return ` binom((${n}), (${k}))`;
+        }
+        if (name === 'bar' || name === 'overline') return ` conj(${arg()})`;
+        if (name === 'nabla') {
+            spaces();
+            const m = /^(?:\\([A-Za-z]+)|([A-Za-z](?:_\{?[A-Za-z0-9]+\}?)?))/.exec(s.slice(i));
+            if (!m) return ' nabla ';
+            i += m[0].length;
+            const fn = m[1] ?? m[2].replace(/[{}]/g, '');
+            const at = parenArg();
+            return at ? ` grad(${fn}, ${at.slice(1, -1)})` : ` grad(${fn})`;
+        }
+        if (name === '{') {
+            let depth = 0;
+            let j = i;
+            for (; j < s.length; j++) {
+                if (s[j] !== '\\') continue;
+                if (s[j + 1] === '{') depth++;
+                else if (s[j + 1] === '}') {
+                    if (depth === 0) break;
+                    depth--;
+                }
+                j++;
+            }
+            if (j >= s.length) return null;
+            const text = setText(s.slice(i, j), convert);
+            if (text === null) return null;
+            i = j + 2;
+            return ` ${text}`;
+        }
+        return null;
+    };
     const command = (): string => {
         i++;
         const m = /^[A-Za-z]+/.exec(s.slice(i));
         const name = m ? m[0] : s[i] ?? '';
         i += name.length || 1;
+        // 6.0 A: matrices, sums and products, binomials, conjugates, gradients and lists (src/values/).
+        const value = valueCommand(name);
+        if (value !== null) return value;
         if (name === 'frac' || name === 'dfrac' || name === 'tfrac') {
             const a = arg();
             const b = arg();
@@ -135,7 +282,12 @@ function convert(s: string): string {
             if (s[i] === '\\') return command();
             return s[i++] ?? '';
         }
-        if (TEXT_COMMANDS.has(name)) return ` ${arg().replace(/\s+/g, '')}`;
+        if (TEXT_COMMANDS.has(name)) {
+            // 6.0 A: \operatorname{tr} A is tr(A).
+            const text = arg().replace(/\s+/g, '');
+            const op = (name === 'operatorname' || name === 'mathrm') && Object.prototype.hasOwnProperty.call(VALUE_OPERATORS, text) ? VALUE_OPERATORS[text] : undefined;
+            return op ? ` ${op}${fnArg() || parenArg()}` : ` ${text}`;
+        }
         if (FUNCTIONS.has(name)) {
             spaces();
             const fn = ARC[name] ?? name;
@@ -226,7 +378,8 @@ export function splitLetterRuns(tex: string, keep: ReadonlySet<string> = new Set
             out += cmd;
             i += cmd.length;
             // The argument of a text command is a name: keep it whole.
-            if (m && TEXT_COMMANDS.has(m[1]) && tex[i] === '{') {
+            // 6.0 A: so is the name of an environment (\begin{pmatrix}).
+            if (m && (TEXT_COMMANDS.has(m[1]) || m[1] === 'begin' || m[1] === 'end') && tex[i] === '{') {
                 const end = tex.indexOf('}', i);
                 const stop = end < 0 ? tex.length : end + 1;
                 out += tex.slice(i, stop);

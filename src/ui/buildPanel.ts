@@ -27,6 +27,8 @@ import '../beyond/cards';
 import '../motion6/cards'; // 6.0 C
 // 6.0 B: sets on an axis and chords.
 import '../notes6/cards';
+// 6.0 A
+import '../values/cards';
 import { CardUiState, FunctionCardHandle, createFunctionCard, createSurfaceCard } from './functionCards';
 import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, textButton, trapEscape } from './kit';
 import { PickerContent, PickerGroup, PickerItem, addPicker } from './addPicker';
@@ -116,6 +118,8 @@ const SECTION_ICONS: Record<string, string> = {
     Probability: 'bar-chart-2',
     Calculus: 'sigma',
     Motion: 'wind', // 6.0 C
+    // 6.0 A
+    Values: 'braces',
 };
 
 /** More words that find a recipe in the + Add picker (English, as people search): vector finds Arrow. */
@@ -160,6 +164,10 @@ const RECIPE_WORDS: Record<string, string> = {
     // 6.0 B
     'axis-set': 'interval sublevel set number line where below zero',
     chord: 'jensen convex secant lambda',
+    // 6.0 A
+    'let-definition': 'let define matrix complex function variable name',
+    'vector-arrow': 'vector arrow let tip tail',
+    'list-points': 'list roots unity complex polygon',
 };
 
 /** Menu heading per recipe section (Functions reads Surfaces in 3D charts). */
@@ -176,6 +184,8 @@ const SECTION_TITLES: Record<string, MessageKey> = {
     Probability: 'beyond.section.probability',
     Calculus: 'beyond.section.calculus',
     Motion: 'motion6.section', // 6.0 C
+    // 6.0 A
+    Values: 'values.section.values',
 };
 
 /** One-click links under the starter examples: [text key, recipe id]. */

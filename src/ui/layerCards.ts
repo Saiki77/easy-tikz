@@ -185,6 +185,10 @@ const TOOL_KIND: Record<Tool['type'], MessageKey> = {
     // 6.0 B
     axisSet: 'notes6.kind.axisSet',
     chord: 'notes6.kind.chord',
+    // 6.0 A
+    value: 'values.kind.value',
+    vector: 'values.kind.vector',
+    listPoints: 'values.kind.listPoints',
 };
 
 // --------------------------------------------------------------- helpers

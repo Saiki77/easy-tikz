@@ -31,6 +31,7 @@
 import type { Affine, IssueFix } from './mathcontext';
 import { Language, language, t as msg } from './i18n';
 import { latexToPlain } from './latex';
+import { binom, factorial, termRange } from './values/special';
 
 /**
  * Compile-time problem in user math (syntax, unknown name, wrong variable,
@@ -101,6 +102,9 @@ const BUILTINS: Record<string, Builtin> = {
     sec: unary((v) => 1 / Math.cos(v)),
     csc: unary((v) => 1 / Math.sin(v)),
     cot: unary((v) => 1 / Math.tan(v)),
+    // 6.0 A: n! and \binom{n}{k} (src/values/special.ts).
+    factorial: unary(factorial),
+    binom: binary(binom),
 };
 
 const MATH_CONSTANTS: Record<string, number> = {
@@ -167,12 +171,16 @@ export interface Token {
     /** Source span [pos, end). */
     pos: number;
     end: number;
+    /** 6.0 A: a `*` written as × (\times): the cross product of two vectors, a product otherwise. */
+    cross?: boolean;
 }
 
 /** Longest first so `===` beats `==` beats `=`, `**` beats `*`, `<=` beats `<`. */
 const OPERATORS = [
     '===', '!==', '**', '==', '!=', '<=', '>=', '&&', '||',
-    '<', '>', '+', '-', '*', '/', '%', '^', '(', ')', ',', '?', ':', '.', '!', '=', ';',
+    // 6.0 A: `..` of a range and the brackets of lists and matrices (src/values/parse.ts reads them).
+    '..',
+    '<', '>', '+', '-', '*', '/', '%', '^', '(', ')', ',', '?', ':', '.', '!', '=', ';', '[', ']',
 ];
 
 /** Single-character unicode operators people paste from documents. */
@@ -181,7 +189,7 @@ const UNICODE_OPERATORS: Record<string, string> = {
 };
 
 /** The exponent is consumed only when digits follow: `2e` is 2*e and `2e-x` is 2*e - x. */
-const NUM_RE = /(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/y;
+const NUM_RE = /(?:\d+(?:\.(?!\.)\d*)?|\.\d+)(?:[eE][+-]?\d+)?/y;
 const IDENT_RE = /[A-Za-z_$][A-Za-z0-9_$]*/y;
 const IDENT_FULL_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
@@ -219,7 +227,9 @@ export function tokenize(source: string): Token[] {
         }
         const uni = own(UNICODE_OPERATORS, ch);
         if (uni !== undefined) {
-            tokens.push({ kind: 'op', text: uni, value: 0, pos: i, end: i + 1 });
+            const token: Token = { kind: 'op', text: uni, value: 0, pos: i, end: i + 1 };
+            if (ch === '×') token.cross = true;
+            tokens.push(token);
             i++;
             continue;
         }
@@ -292,6 +302,8 @@ export interface BinaryNode extends Span {
     right: Node;
     /** Multiplication written by juxtaposition (2x). */
     implicit?: boolean;
+    /** 6.0 A: written as × (\times): the cross product of two vectors. */
+    cross?: boolean;
     /** Top-level `lhs = rhs` of an equation, stored as lhs - rhs. */
     equation?: boolean;
 }
@@ -384,6 +396,8 @@ class Parser {
             }
             throw new ExprError(msg('problems.expr.compareWithDoubleEquals'), { pos: t.pos });
         }
+        // 6.0 A: `..` is a token of value ranges; elsewhere `1..5` is the typo it always was.
+        if (t.kind === 'op' && t.text === '..') throw new ExprError(msg('problems.expr.unexpectedDot'), { pos: t.pos + 1 });
         throw new ExprError(msg('problems.expr.unexpected', { token: t.text }), { pos: t.pos });
     }
 
@@ -555,6 +569,7 @@ class Parser {
                 this.i++;
                 const right = this.unary();
                 left = { t: 'binary', op: t.text, left, right, s: left.s, e: right.e };
+                if (t.cross) left.cross = true;
             } else if (startsPrimary(t)) {
                 // `1..5`, `1.2.3`, `x.5`, `f(x).5`: a '.'-led number glued to the
                 // previous operand is a typo, not a product (`3 .5` still is one).
@@ -581,7 +596,12 @@ class Parser {
     }
 
     private pow(): Node {
-        const base = this.primary();
+        let base = this.primary();
+        // 6.0 A: n! (a factorial binds tighter than a power: n!^2 is (n!)^2).
+        while (this.isOp('!')) {
+            const bang = this.next();
+            base = { t: 'call', name: 'factorial', math: false, args: [base], ns: bang.pos, ne: bang.end, s: base.s, e: bang.end };
+        }
         if (this.eatOp('^') || this.eatOp('**')) {
             // Right-associative; unary on the right allows `2^-x`.
             const exponent = this.unary();
@@ -1069,6 +1089,66 @@ export interface Env {
     knownNames(): string[];
     /** Callable user-function names (suggestions). */
     fnNames(): string[];
+    /** 6.0 A: optional, the typed path for formulas that use values (src/values/): vectors, complex numbers, let names. */
+    values?: ValueHooks;
+}
+
+/**
+ * 6.0 A: how a formula that uses values (a let name, a vector, a complex
+ * number, i) compiles and exports. MathContext supplies it (src/values/);
+ * every other formula keeps the compiler below, unchanged.
+ */
+export interface ValueHooks {
+    /** The formula needs the typed path. Never throws. */
+    needs(ast: Node, env: Env, src: string): boolean;
+    /** The formula as a closure of the Env's variables: its value when that is a real number, else NaN. Throws ExprError. */
+    compileNumber(ast: Node, env: Env, src: string): Compiled;
+    /** pgfmath text of the formula (variables printed as `outVars`). Throws ExprError when it has none. */
+    pgf(ast: Node, env: Env, outVars: string[], fmt: (n: number) => string): string;
+}
+
+/** 6.0 A: `sum(body, k, lo, hi)` and `prod(...)`: the index name, else null (an ordinary call). */
+export function seriesIndex(n: CallNode): string | null {
+    if (n.math || (n.name !== 'sum' && n.name !== 'prod') || n.args.length !== 4) return null;
+    const k = n.args[1];
+    return k.t === 'name' ? k.name : null;
+}
+
+/** 6.0 A: `env` with one more name, read from `read` (a sum's index): it hides an axis variable of the same name. */
+export function withLocal(env: Env, name: string, read: () => number): Env {
+    const local: Scalar = { kind: 'local', read };
+    return {
+        vars: env.vars.map((list) => list.filter((v) => v !== name)),
+        scalar: (n) => (n === name ? local : env.scalar(n)),
+        fn: (n) => (n === name ? null : env.fn(n)),
+        bareFnError: (n) => env.bareFnError(n),
+        notHere: (n) => (n === name ? null : env.notHere(n)),
+        noSlider: (n) => n === name || env.noSlider(n),
+        defaultVars: env.defaultVars,
+        knownNames: () => [...env.knownNames(), name],
+        fnNames: () => env.fnNames(),
+        values: env.values,
+    };
+}
+
+/** 6.0 A: the value of a constant name (pi, e, true, ...), or undefined. */
+export function constantValue(name: string): number | undefined {
+    return own(CONSTANTS, name);
+}
+
+/** 6.0 A: a builtin function (`Math.` ones when `math`): its function and accepted argument counts, or undefined. */
+export function builtinFunction(name: string, math = false): { fn: (...args: number[]) => number; min: number; max: number; pure: boolean } | undefined {
+    return math ? own(MATH_FUNCTIONS, name) : own(BUILTINS, name);
+}
+
+/** 6.0 A: the 'Unknown name' error of the compiler, with its quick fixes. */
+export function unknownNameError(name: string, s: number, e: number, env: Env, src: string): ExprError {
+    return unknownName(name, s, e, env, src);
+}
+
+/** 6.0 A: the error of a call to a function that does not exist, with its quick fixes. */
+export function unknownFunctionError(node: CallLike, env: Env, src: string): ExprError {
+    return unknownFunction(node, env, src);
 }
 
 type Resolution =
@@ -1334,7 +1414,7 @@ function splitCall(name: string, known: readonly string[], isFn: (part: string) 
  * is one edit away ('ax' vs 'max').
  */
 function valueSplit(
-    node: CallNode,
+    node: CallLike,
     env: Env,
     src: string,
     message: string,
@@ -1365,7 +1445,10 @@ function valueSplit(
     };
 }
 
-function unknownFunction(node: CallNode, env: Env, src: string): ExprError {
+/** 6.0 A: what the messages of a call read (a call of src/values/parse.ts is one too). */
+type CallLike = Pick<CallNode, 'name' | 'math' | 'ns' | 'ne'> & { args: readonly unknown[] };
+
+function unknownFunction(node: CallLike, env: Env, src: string): ExprError {
     const label = node.math ? `Math.${node.name}` : node.name;
     const pos = node.ns;
     const message = msg('problems.expr.unknownFunction', { name: label });
@@ -1803,6 +1886,9 @@ class Compiler {
     }
 
     private call(n: CallNode): CNode {
+        // 6.0 A: sum(body, k, lo, hi) and prod(...).
+        const index = seriesIndex(n);
+        if (index !== null) return this.series(n, index);
         const target = resolveCall(n, this.env, this.src);
         if (target.k === 'builtin') {
             checkArity(n.math ? `Math.${n.name}` : n.name, target.b, n.args.length, n.ns);
@@ -1827,6 +1913,28 @@ class Compiler {
         // `a(x + 1)` with a slider / variable / constant a: implicit multiplication.
         return arith('*', this.resolved(target.res, n.name, n.ns), this.node(n.args[0]));
     }
+
+    /** 6.0 A: a sum or product over k = lo..hi (bounds rounded, at most MAX_TERMS terms, else NaN). */
+    private series(n: CallNode, index: string): CNode {
+        const lo = this.node(n.args[2]).f;
+        const hi = this.node(n.args[3]).f;
+        let k = NaN;
+        const body = new Compiler(withLocal(this.env, index, () => k), this.src, this.hook).node(n.args[0]).f;
+        const product = n.name === 'prod';
+        return dyn((a, b) => {
+            const range = termRange(lo(a, b), hi(a, b));
+            if (!range) return NaN;
+            const saved = k;
+            let acc = product ? 1 : 0;
+            for (let j = range[0]; j <= range[1]; j++) {
+                k = j;
+                const t = body(a, b);
+                acc = product ? acc * t : acc + t;
+            }
+            k = saved;
+            return acc;
+        });
+    }
 }
 
 /**
@@ -1837,6 +1945,8 @@ class Compiler {
  * see CompileHook; without it the result is unchanged.
  */
 export function compile(ast: Node, env: Env, src: string, hook?: CompileHook): Compiled {
+    // 6.0 A: a formula that uses values compiles on the typed path (src/values/).
+    if (env.values && env.values.needs(ast, env, src)) return env.values.compileNumber(ast, env, src);
     return new Compiler(env, src, hook || null).node(ast).f;
 }
 
@@ -1929,6 +2039,11 @@ function variableFree(n: Node, env: Env): boolean {
             return !!res && res.k !== 'var' && res.k !== 'fn';
         }
         case 'call': {
+            // 6.0 A: a sum's index is no variable.
+            const index = seriesIndex(n);
+            if (index !== null) {
+                return variableFree(n.args[2], env) && variableFree(n.args[3], env) && variableFree(n.args[0], withLocal(env, index, () => NaN));
+            }
             const res = n.math || own(BUILTINS, n.name) ? null : resolveName(n.name, env);
             if (res && res.k === 'var') return false;
             return n.args.every((a) => variableFree(a, env));
@@ -2365,12 +2480,17 @@ const PGF_SAME: Record<string, string> = {
     csc: 'cosec', min: 'min', max: 'max', pow: 'pow', trunc: 'int',
 };
 
+/** 6.0 A: most terms a sum is written out with in the export. */
+const MAX_PGF_TERMS = 400;
+
 class PgfPrinter {
     constructor(
         private env: Env,
         /** Text for each variable index (already safe as an operand). */
         private varText: string[],
-        private fmt: (n: number) => string
+        private fmt: (n: number) => string,
+        /** 6.0 A: print every part without a variable as its number (the terms of a sum). */
+        private fold = false
     ) {}
 
     private num(v: number): Printed {
@@ -2379,6 +2499,8 @@ class PgfPrinter {
     }
 
     print(n: Node): Printed {
+        // 6.0 A: in a sum's term, (2*3+1)! and (-1)^3 are numbers.
+        if (this.fold && n.t !== 'num' && variableFree(n, this.env)) return this.num(compile(n, this.env, '')(NaN, NaN));
         switch (n.t) {
             case 'num':
                 return atom(literalText(n));
@@ -2428,6 +2550,28 @@ class PgfPrinter {
             case 'ternary':
                 return compound(`${this.truthy(n.test)} ? ${wrap(this.print(n.then))} : ${wrap(this.print(n.else))}`);
         }
+    }
+
+    /**
+     * 6.0 A: sum(body, k, lo, hi) term by term, the index (and every part of
+     * a term without a variable) as numbers: `\sum_{k=0}^{2} x^k/k!` is
+     * (1)+(x^(1))+((x^(2))/(2)). The bounds must not read a variable.
+     */
+    private series(n: CallNode, index: string): Printed {
+        if (!variableFree(n.args[2], this.env) || !variableFree(n.args[3], this.env)) {
+            throw new ExprError(msg('values.problem.noPgf', { what: n.name }));
+        }
+        const range = termRange(compile(n.args[2], this.env, '')(NaN, NaN), compile(n.args[3], this.env, '')(NaN, NaN));
+        if (!range || range[1] - range[0] + 1 > MAX_PGF_TERMS) throw new ExprError(msg('values.problem.noPgf', { what: n.name }));
+        const product = n.name === 'prod';
+        const terms: string[] = [];
+        for (let k = range[0]; k <= range[1]; k++) {
+            const env = withLocal(this.env, index, () => k);
+            const body = n.args[0];
+            terms.push(wrap(variableFree(body, env) ? this.num(compile(body, env, '')(NaN, NaN)) : new PgfPrinter(env, this.varText, this.fmt, true).print(body)));
+        }
+        if (!terms.length) return atom(product ? '1' : '0');
+        return terms.length === 1 ? atom(terms[0]) : compound(terms.join(product ? '*' : '+'));
     }
 
     /** Ternary test text: NaN is falsy as in JavaScript (pgfmath treats nan as true). */
@@ -2488,8 +2632,16 @@ class PgfPrinter {
     }
 
     private call(n: CallNode): Printed {
+        // 6.0 A: a sum is written out term by term at the sliders' values (pgfmath has no sum).
+        const index = seriesIndex(n);
+        if (index !== null) return this.series(n, index);
         const target = resolveCall(n, this.env, '');
         if (target.k === 'fn') return this.inline(target.ref, this.print(n.args[0]));
+        // 6.0 A: n! and \binom{n}{k} are numbers in the export (pgfmath's factorial stops at 7!); of a variable they have no pgfmath form.
+        if (target.k === 'builtin' && (target.name === 'factorial' || target.name === 'binom')) {
+            if (!n.args.every((a) => variableFree(a, this.env))) throw new ExprError(msg('values.problem.noPgf', { what: `${target.name}(...)` }));
+            return this.num(compile(n, this.env, '')(NaN, NaN));
+        }
         if (target.k === 'mul') {
             const left = n.name;
             const l = this.name(left);
@@ -2553,6 +2705,8 @@ class PgfPrinter {
  * reported as ExprError with quick fixes.
  */
 export function toPgf(ast: Node, env: Env, outVars: string[], fmt: (n: number) => string): string {
+    // 6.0 A: a formula that uses values exports through src/values/.
+    if (env.values && env.values.needs(ast, env, '')) return env.values.pgf(ast, env, outVars, fmt);
     return new PgfPrinter(env, outVars, fmt).print(ast).s;
 }
 
@@ -2747,6 +2901,17 @@ class TexPrinter {
     }
 
     private call(n: CallNode): Tex {
+        // 6.0 A: \sum_{k=1}^{n} ..., n!, {n \choose k} (kernel LaTeX has no \binom).
+        const index = seriesIndex(n);
+        if (index !== null) {
+            const body = this.print(n.args[0]);
+            const op = n.name === 'prod' ? '\\prod' : '\\sum';
+            return { s: `${op}_{${texName(index)}=${this.print(n.args[2]).s}}^{${this.print(n.args[3]).s}} ${paren(body, P_MUL)}`, p: P_ADD };
+        }
+        if (!n.math && n.name === 'factorial' && n.args.length === 1) return { s: `${paren(this.print(n.args[0]), P_ATOM)}!`, p: P_POW };
+        if (!n.math && n.name === 'binom' && n.args.length === 2) {
+            return { s: `{${this.print(n.args[0]).s} \\choose ${this.print(n.args[1]).s}}`, p: P_ATOM };
+        }
         const args = n.args.map((a) => this.print(a).s);
         if (!texBuiltin(n)) {
             return { s: `${texName(n.name)}(${args.join(', ')})`, p: P_ATOM };

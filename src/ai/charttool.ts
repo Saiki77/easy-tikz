@@ -24,7 +24,7 @@ import { inEnglish } from '../i18n';
 export type { Data };
 export { canonical, clone, minimize };
 
-const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory']; // vectorField, restPoints, trajectory: 6.0 C
+const TOOL_TYPES: ToolType[] = ['region', 'curve', 'points', 'segment', 'plane3D', 'data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution', 'vectorField', 'restPoints', 'trajectory', 'value', 'vector', 'listPoints']; // 6.0 C: vectorField, restPoints, trajectory; 6.0 A: value, vector, listPoints
 /** Keys a block may carry that the editor's defaults do not list: how the chart sits in the note. */
 const DISPLAY_KEYS = ['displayWidth', 'displayAlign'];
 

@@ -23,6 +23,8 @@ import { needsClock } from './motion6/clock'; // 6.0 C
 import { notes6ToolReads, renameInNotes6Tool } from './notes6/tools';
 import { AskController } from './notes6/askHost';
 import type { AskTarget } from './notes6/ask';
+// 6.0 A
+import { renameInValueTool, valueToolReads } from './values/tools';
 import type { NoteTable } from './beyond/table';
 import type { ChartDraft } from './templates';
 import type { BlockFormat } from './blockjson';
@@ -723,8 +725,8 @@ export class TikzModal extends Modal implements PanelHost {
                     t.value = expr(t.value);
                     break;
                 default:
-                    // 6.0 B: sets on an axis and chords first.
-                    if (!renameInNotes6Tool(t, { expr, tpl, ref, kind })) renameInBeyondTool(t, { expr, tpl, ref, kind });
+                    // 6.0 A: values (src/values/tools.ts); 6.0 B: sets on an axis and chords; then the tools beyond functions; 6.0 C: motion.
+                    if (!renameInValueTool(t, { expr, tpl, ref, kind }, from) && !renameInNotes6Tool(t, { expr, tpl, ref, kind })) renameInBeyondTool(t, { expr, tpl, ref, kind });
                     renameInMotionTool(t, { expr, tpl, ref, kind }); // 6.0 C
             }
         }
@@ -3180,8 +3182,13 @@ export class TikzModal extends Modal implements PanelHost {
                 case 'plane3D':
                     if (reads(t.value)) return true;
                     break;
-                default:
-                    if (beyondToolReads(t, reads) || motionToolReads(t, reads) || notes6ToolReads(t, reads)) return true; // 6.0 B, C
+                default: {
+                    // 6.0 A
+                    const value = valueToolReads(t, name, reads);
+                    if (value !== null) {
+                        if (value) return true;
+                    } else if (beyondToolReads(t, reads) || motionToolReads(t, reads) || notes6ToolReads(t, reads)) return true; // 6.0 B, C
+                }
             }
         }
         for (const a of this.list<Annotation>('annotations')) {

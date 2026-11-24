@@ -32,6 +32,8 @@ import { STEP_LISTS, hasSteps, stepsInOrder, withoutStep } from '../motion6/step
 import type { StepList } from '../motion6/steps';
 // 6.0 B
 import { axisSetHead, chordHead } from '../notes6/text';
+// 6.0 A
+import { letHead, listPointsHead, vectorHead } from '../values/text';
 
 // ---------------------------------------------------------------- values
 
@@ -467,6 +469,11 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
     } else {
         o.common();
         o.label();
+    }
+    // 6.0 A: a definition's line names it (`let v = ...`); its options follow a comma.
+    if (type === 'value') {
+        const options = o.finish();
+        return options.length ? `${head}, ${options.join(', ')}` : head;
     }
     const line = withOptions(head, o.finish());
     // 6.0 C: a vector field's line holds its name (F(x, y) = ...).
@@ -1210,6 +1217,22 @@ const BEYOND_HEADS: Record<string, (full: Data, o: Options, ctx: Ctx) => string 
         const what = method === 'trapezoid' ? 'the trapezoid rule' : `the ${method === 'right' || method === 'middle' ? method : 'left'} Riemann sum`;
         return `draw ${what} of ${fn} from ${from} to ${to} with ${parts} ${parts === '1' ? 'part' : 'parts'}`;
     },
+    // 6.0 A: values (src/values/text.ts).
+    value: (full, o) => {
+        const head = letHead(full);
+        if (head) o.mark('params', 'expression');
+        return head;
+    },
+    vector: (full, o) => {
+        const head = vectorHead(full);
+        if (head) o.mark('vectors', 'from', 'tipToTail');
+        return head;
+    },
+    listPoints: (full, o) => {
+        const head = listPointsHead(full);
+        if (head) o.mark('points');
+        return head;
+    },
     probability: (full, o, ctx) => {
         const event = str(full.event).trim();
         // The event stands in brackets: no bar, no line break, and its brackets in pairs.
@@ -1241,6 +1264,20 @@ function beyondOptions(type: string, o: Options) {
     }
     if (type === 'probability') {
         o.fillLook();
+        o.take('label', (v) => (typeof v === 'string' ? `labelled ${quote(v)}` : null));
+        o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
+    }
+    // 6.0 A
+    if (type === 'vector') {
+        o.take('thickness', (v) => (typeof v === 'string' && THICKNESSES.includes(v) ? v : null));
+        o.take('dashed', (v) => (v === true ? 'dashed' : null));
+        o.take('label', (v) => (typeof v === 'string' ? `labelled ${quote(v)}` : null));
+        o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
+    }
+    if (type === 'listPoints') {
+        o.take('joined', (v) => (v === true ? 'joined' : null));
+        o.take('size', (v) => (v === 'small' || v === 'large' || v === 'normal' ? v : null));
+        o.take('thickness', (v) => (typeof v === 'string' && THICKNESSES.includes(v) ? v : null));
         o.take('label', (v) => (typeof v === 'string' ? `labelled ${quote(v)}` : null));
         o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
     }

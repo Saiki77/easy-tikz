@@ -11,6 +11,10 @@ import { FunctionParameters, Parameter } from './types';
 import { AffinePlan, BinaryNode, CmpOp, Compiled, Env, ExprError, FnRef, Lru, Node, Scalar, TupleItem, compile, dollarMath, formatFixed, formatNumber, identifierTokens, identifiers, isReservedName, linearPlan, matchingBrace, parse, parseList, parseTuples, renameIdentifier as renameIdentifierImpl, renameTokens, scanTemplate, toPgf, toTex, tokenize, topLevelColon, isLatexFormula } from './expr';
 import { MessageKey, language, t as msg } from './i18n';
 import { NoteTable, tableKey } from './beyond/table';
+import { ValueDefinition, ValueTable } from './values/table';
+import { valueHooks } from './values/hooks';
+import { formatValue } from './values/format';
+import type { ValueHooks } from './expr';
 
 export type FunctionKind = 'cartesian' | 'parametric' | 'polar';
 
@@ -145,6 +149,13 @@ export interface MathContextInput {
      * context is shared only by charts with the same table.
      */
     table?: NoteTable | null;
+    /**
+     * Optional (6.0 A): the chart's let definitions (`let v = (2, 1)`,
+     * `let f(x, y) = x^2 + 4y^2`), usable by name in every formula field
+     * (src/values/). Their names are values, not tools, even when
+     * `toolNames` has them. Part of the structure key.
+     */
+    values?: ValueDefinition[];
 }
 
 /** A slider problem, shaped like a SceneIssue (scene.ts) so hosts can list it with the others. */
@@ -370,6 +381,9 @@ export class MathContext {
     private _version = 0;
     private _paramsKey: string | null = null;
     private _callable: string[] | null = null;
+    /** 6.0 A: the let definitions and the typed path every Env hands src/expr.ts. */
+    private readonly letTable: ValueTable;
+    private readonly letHooks: ValueHooks;
 
     /**
      * Create (or reuse) a context. Memoized on a structure key built from
@@ -429,6 +443,14 @@ export class MathContext {
         }
         this.toolSet = new Set((Array.isArray(input.toolNames) ? input.toolNames : []).filter((t) => typeof t === 'string'));
         this.table = input.table;
+        // 6.0 A: let definitions (src/values/table.ts), before the functions, which may call them.
+        this.letTable = new ValueTable(Array.isArray(input.values) ? input.values : [], {
+            env: () => this.env('value', 'cartesian', null),
+            version: () => this._version,
+            conflict: (name) => this.letConflict(name),
+        });
+        for (const name of this.letTable.names()) this.toolSet.delete(name);
+        this.letHooks = valueHooks(this.letTable);
         this.buildFunctions(Array.isArray(input.functions) ? input.functions : []);
     }
 
@@ -439,6 +461,19 @@ export class MathContext {
      */
     noteTable(): NoteTable | null | undefined {
         return this.table;
+    }
+
+    /** Optional (6.0 A): the let definitions (src/values/table.ts), for src/values/index.ts and the scene. */
+    valueTable(): ValueTable {
+        return this.letTable;
+    }
+
+    /** 6.0 A: why a let name cannot be one (a slider, a function or an axis variable has it), or null. */
+    private letConflict(name: string): string | null {
+        if (this.allVariableNames.has(name) || isReservedName(name)) return msg('problems.math.reservedName', { name });
+        if (this.paramIndex.has(name)) return msg('values.problem.sliderName', { name });
+        if (this.byName.has(name)) return msg('values.problem.functionName', { name });
+        return null;
     }
 
     /** Monotonic counter bumped by setParams / setDerived. */
@@ -741,11 +776,23 @@ export class MathContext {
                 } catch {
                     v = NaN;
                 }
-                out += Number.isFinite(v) ? formatFixed(v, part.decimals === null ? 3 : part.decimals) : '?';
+                // 6.0 A: a vector, a complex number or a matrix prints as itself: {v} is (2, 1), {c} is -0.8 + 0.156i.
+                const value = Number.isFinite(v) ? null : this.valueText(part.expr, part.decimals === null ? 3 : part.decimals);
+                out += Number.isFinite(v) ? formatFixed(v, part.decimals === null ? 3 : part.decimals) : (value ?? '?');
             }
             return out;
         } finally {
             this.locals = prev;
+        }
+    }
+
+    /** 6.0 A: a placeholder that is a value (not a real number) as text, or null. */
+    private valueText(src: string, decimals: number): string | null {
+        try {
+            const v = this.letTable.evaluate(src, this.env('value', 'cartesian', null));
+            return v === null || typeof v === 'number' ? null : formatValue(v, decimals);
+        } catch {
+            return null;
         }
     }
 
@@ -815,6 +862,9 @@ export class MathContext {
             const rec = this.byName.get(f);
             if (rec) parts.push(`${f}:${rec.kind}:${rec.expression}|${rec.expressionY}|${rec.domainSrc}|${rec.hidden ? 1 : 0}`);
         }
+        // 6.0 A: the let definitions (a context with others is another context, but keys may be compared across them).
+        const lets = this.letTable.definitions();
+        if (lets.length) parts.push(`let:${JSON.stringify(lets)}`);
         return parts.join(';');
     }
 
@@ -1096,6 +1146,7 @@ export class MathContext {
         const hit = this.depsMemo.get(src);
         if (hit) return hit;
         const out: DepSets = { params: new Set(), functions: new Set(), derived: new Set(), tools: new Set() };
+        const seenLets = new Set<string>();
         const collect = (text: string) => {
             const tokens = identifierTokens(text);
             if (!tokens) return;
@@ -1114,6 +1165,11 @@ export class MathContext {
                     }
                 } else if (this.toolSet.has(name)) {
                     out.tools.add(name);
+                } else if (this.letTable.has(name)) {
+                    // 6.0 A: a let name stands for its formula: its sliders and functions count too.
+                    if (seenLets.has(name)) continue;
+                    seenLets.add(name);
+                    collect(this.letTable.source(name) ?? '');
                 } else {
                     const m = this.derivedMatch(name);
                     if (m) {
@@ -1238,6 +1294,7 @@ export class MathContext {
             defaultVars: v1 === 'x' && v2 === 'y',
             knownNames: (): string[] => [...usable, ...this.paramNames, ...localSet, 'pi', 'e'],
             fnNames: (): string[] => this.callableNames(),
+            values: this.letHooks,
         };
     }
 
@@ -1547,6 +1604,8 @@ function structureKey(input: MathContextInput): string {
         str(input.variables),
         Array.isArray(input.toolNames) ? input.toolNames : [],
         tableKey(input.table),
+        // 6.0 A: let definitions.
+        Array.isArray(input.values) ? input.values.map((d) => (d ? [d.name, d.params, d.expression] : null)) : [],
     ]);
 }
 

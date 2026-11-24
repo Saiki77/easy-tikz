@@ -51,6 +51,8 @@ import { BEYOND_TYPES, BeyondOutput, beyondSources, computeBeyond } from './beyo
 import { MOTION_3D_TYPES, MOTION_TYPES, MotionOutput, computeMotion, computeMotion3D, motionSources, motionStrokes } from './motion6/scene';
 // 6.0 B
 import { NOTES6_TYPES, computeNotes6, notes6Sources } from './notes6/scene';
+// 6.0 A
+import { VALUE_TYPES, computeValues, computeValues3D, valuesSources } from './values/scene';
 
 export type ArrowHeads = 'forward' | 'backward' | 'both';
 
@@ -383,6 +385,9 @@ interface Point3Spec {
     size: MarkerSize;
     part: number;
     locals: Record<string, number>;
+    /** 6.0 A: a label that is no template (an arrow's vector in LaTeX), and no marker (a label alone, at an arrow's tip). */
+    literal?: string;
+    bare?: boolean;
 }
 
 /** One node's result. Cached outputs are shared across frames and never mutated. */
@@ -847,7 +852,8 @@ function toolNode(t: Tool, math: MathContext): SceneNode {
             notes6Sources(t, scan);
             break;
         default:
-            beyondSources(t, scan, refs);
+            // 6.0 A: values (src/values/scene.ts), then the tools beyond functions; 6.0 C: motion.
+            if (!valuesSources(t, scan)) beyondSources(t, scan, refs);
             motionSources(t, scan, refs); // 6.0 C
     }
     return { id: `tool:${t.id}`, name: str(t.name) || str(t.id), tool: t, refs, sources, base: toolBase(t) };
@@ -2297,7 +2303,8 @@ function compute2D(node: SceneNode, ctx: Ctx): Output {
         case 'chord':
             return computeNotes6(t, ctx) ?? newOutput();
         default:
-            return computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? newOutput(); // 6.0 C
+            // 6.0 A: values (src/values/scene.ts); 6.0 C: motion.
+            return computeValues(t, ctx) ?? computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? newOutput();
     }
 }
 
@@ -3524,6 +3531,8 @@ function labelFormatter(node: SceneNode, math: MathContext, issues: SceneIssue[]
 /** Scene internals the tools beyond functions are computed with (5.0). */
 export type { Output as SceneOutput, Ctx as SceneCtx, TextSpec as SceneTextSpec };
 export { newOutput, addIssue, fail, publish, labelSpot, towardCenter, midSpot, UP_RIGHT };
+/** 6.0 A: for src/values/scene.ts. */
+export { normDir };
 
 // --------------------------------------------------------------- 3D scene
 
@@ -3591,7 +3600,8 @@ export function edgeLabelSide3D(
 }
 
 export interface Scene3D {
-    points: Array<{ x: number; y: number; z: number; color: string; size: MarkerSize; label?: string }>;
+    /** 6.0 A: `bare` is a label without its marker (vector arrows). */
+    points: Array<{ x: number; y: number; z: number; color: string; size: MarkerSize; label?: string; bare?: boolean }>;
     segments: Array<{
         a: [number, number, number];
         b: [number, number, number];
@@ -3715,6 +3725,8 @@ function scene3D(input: SceneInput3D): Scene3D {
     for (const t of tools) {
         if (t.type === 'plane3D' || ((t.type === 'points' || t.type === 'segment') && t.dim === 3)) nodes.push(toolNode(t, math));
         else if (MOTION_3D_TYPES.has(t.type)) nodes.push(toolNode(t, math)); // 6.0 C
+        // 6.0 A: definitions, vector arrows and points of a list (src/values/scene.ts).
+        else if (VALUE_TYPES.has(t.type)) nodes.push(toolNode(t, math));
     }
     // Data, probability, Riemann sums and slope fields are drawn in 2D charts only (5.0).
     const only2D: SceneIssue[] = tools
@@ -3736,7 +3748,7 @@ function scene3D(input: SceneInput3D): Scene3D {
             if (t.type === 'points') return computePoints3D(t, ctx);
             if (t.type === 'segment') return computeSegment3D(t, ctx);
             if (t.type === 'plane3D') return computePlane(t, ctx);
-            return computeMotion3D(t, ctx) ?? newOutput(); // 6.0 C
+            return computeValues3D(t, ctx) ?? computeMotion3D(t, ctx) ?? newOutput(); // 6.0 A, C
         },
         new Set()
     );
@@ -3752,8 +3764,13 @@ function scene3D(input: SceneInput3D): Scene3D {
         const formatter = labelFormatter(node, math, scene.issues);
         for (const p of out.points3 || []) {
             const point: Scene3D['points'][number] = { x: p.x, y: p.y, z: p.z, color: p.color, size: p.size };
-            const label = formatter({ template: 'label', part: p.part, locals: p.locals });
+            // 6.0 A: a literal label, and a label without its marker.
+            const label = formatter({ template: 'label', part: p.part, locals: p.locals, literal: p.literal });
             if (label.trim()) point.label = label;
+            if (p.bare) {
+                if (!point.label) continue;
+                point.bare = true;
+            }
             scene.points.push(point);
         }
         for (const s of out.segments3 || []) scene.segments.push(s);
