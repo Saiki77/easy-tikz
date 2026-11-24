@@ -4,8 +4,9 @@
  * without the GPU (no WebGL, a formula with no GLSL form, a zoom past
  * 32-bit floats) the CPU paints it 64-bit: a coarse picture at once, then
  * the full one in tiles over animation frames, a few milliseconds each, so
- * typing never waits. A finished CPU picture is kept (by its key, view and
- * size), so a redraw that changes nothing else shows it at once. A tile job
+ * typing never waits. A finished picture (the CPU's, or a settled one of the
+ * GPU) is kept by its key, view and size, so a redraw that changes nothing
+ * of it (a point dragged over a fractal) shows it at once. A tile job
  * stops when its canvas leaves the page (a newer drawing replaced it).
  *
  * exportableSvg (src/svgExport.ts) swaps each layer for an <image> with a
@@ -23,8 +24,8 @@ const FRAME_BUDGET_MS = 10;
 /** The coarse picture is this many times smaller per side (draft frames: COARSE_DRAFT). */
 const COARSE = 6;
 const COARSE_DRAFT = 4;
-/** Finished CPU pictures kept. */
-const KEEP = 8;
+/** Finished pictures kept (CPU, and settled GPU ones). */
+const KEEP = 6;
 /** Canvas pixels per pixel of the drawing at most (sharper on high-density screens). */
 const MAX_DENSITY = 2;
 
@@ -56,15 +57,16 @@ interface Job {
 
 const jobs: Job[] = [];
 let frame = 0;
-const done = new Map<string, ImageData>();
+/** Finished pictures by key, view and size: a canvas each (a drawing replaced by a newer one keeps its canvas). */
+const done = new Map<string, HTMLCanvasElement>();
 
 function keyOf(prim: PixelPrim, view: View, w: number, h: number): string {
     return `${prim.key}|${view.xmin},${view.xmax},${view.ymin},${view.ymax}|${w}x${h}`;
 }
 
-function keep(key: string, image: ImageData): void {
+function keep(key: string, picture: HTMLCanvasElement): void {
     done.delete(key);
-    done.set(key, image);
+    done.set(key, picture);
     while (done.size > KEEP) {
         const first = done.keys().next().value;
         if (first === undefined) break;
@@ -107,7 +109,7 @@ function run(): void {
         }
         if (job.next >= total) {
             jobs.splice(i, 1);
-            if (job.canvas.isConnected || !job.seen) keep(job.key, job.image);
+            if (job.canvas.isConnected || !job.seen) keep(job.key, job.canvas);
         }
         if (performance.now() - start >= FRAME_BUDGET_MS) break;
     }
@@ -140,10 +142,21 @@ function paint(canvas: HTMLCanvasElement, prim: PixelPrim, view: View, draft: bo
     const key = keyOf(prim, view, w, h);
     const kept = done.get(key);
     if (kept) {
-        ctx.putImageData(kept, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(kept, 0, 0);
         return;
     }
-    if (drawGpu(prim, view, w, h, ctx)) return;
+    if (drawGpu(prim, view, w, h, ctx)) {
+        // A settled picture is kept: a drag of something else (a point on it) draws it from here.
+        if (!draft) {
+            const copy = createEl('canvas');
+            copy.width = w;
+            copy.height = h;
+            copy.getContext('2d')?.drawImage(canvas, 0, 0);
+            keep(key, copy);
+        }
+        return;
+    }
     coarse(ctx, prim, view, w, h, draft ? COARSE_DRAFT : COARSE);
     // A draft frame (a slider or a drag on the move) keeps the coarse picture: the settled frame paints in full.
     if (draft) return;
