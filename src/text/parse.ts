@@ -35,6 +35,10 @@ import { MOTION_PREFIX } from '../motion6/tools';
 import { looksLikeAxisSet, looksLikeChord, readAxisSet, readChord } from '../notes6/text';
 // 6.0 A
 import { readLet, readListPoints, readVectors } from '../values/text';
+// 6.0 D
+import { LINEAR_KIND_WORDS, LINEAR_OPTION_HELP, LINEAR_TYPES, linearOption, readLinearDraw, readLinearShade, readTransform } from '../linear/text';
+import type { LinearRead } from '../linear/text';
+import { LINEAR_PREFIX } from '../linear/tools';
 
 type Data = Record<string, unknown>;
 
@@ -77,6 +81,8 @@ export const KEYWORDS = new Set([
     'use', 'data',
     // motion (6.0 C)
     'then', 'frames',
+    // 6.0 D
+    'transform',
 ]);
 
 export const COLORS = new Set(['black', 'gray', 'red', 'orange', 'brown', 'green', 'teal', 'blue', 'purple', 'magenta']);
@@ -86,7 +92,7 @@ export const PATTERNS = new Set(['solid', 'horizontal', 'vertical', 'crosshatch'
 export const ANCHORS = new Set(['center', 'above', 'below', 'left', 'right']);
 const AXIS_STYLES: Record<string, string> = { middle: 'middle', centre: 'middle', center: 'middle', box: 'box', edges: 'axes', edge: 'axes', axes: 'axes' };
 // 6.0 A: value (L), vector (V), listPoints (LP); 6.0 B: axisSet, chord; 6.0 C: MOTION_PREFIX.
-export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', ...MOTION_PREFIX, axisSet: 'AX', chord: 'CH', value: 'L', vector: 'V', listPoints: 'LP' };
+export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', ...MOTION_PREFIX, axisSet: 'AX', chord: 'CH', value: 'L', vector: 'V', listPoints: 'LP', ...LINEAR_PREFIX /* 6.0 D */ };
 const NAME = '[A-Za-z][A-Za-z0-9_]*';
 /** A name the block can spell: letters, digits and _. */
 export const NAME_RE = new RegExp(`^${NAME}$`);
@@ -502,6 +508,7 @@ const OPTION_HELP: Record<string, string> = {
     value: 'hidden',
     vector: 'in a colour, thin, thick, dashed, labelled, labelled "text", tip to tail, hidden',
     listPoints: 'in a colour, small, large, thin, thick, joined, labelled, labelled "text", hidden',
+    ...LINEAR_OPTION_HELP, // 6.0 D
 };
 
 /** Each kind of object in words, for messages. */
@@ -529,6 +536,7 @@ const KIND_WORDS: Record<keyof typeof OPTION_HELP, MessageKey> = {
     value: 'values.kind.value',
     vector: 'values.text.kindVector',
     listPoints: 'values.text.kindListPoints',
+    ...LINEAR_KIND_WORDS, // 6.0 D
 };
 
 /** A kind of object in the reader's words, for messages. */
@@ -554,7 +562,7 @@ function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, 
             continue;
         }
         const thick = THICKNESSES.find((t) => lower === t);
-        if (thick && kind !== 'text' && kind !== 'points' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'probability' && kind !== 'restPoints') {
+        if (thick && kind !== 'text' && kind !== 'points' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'probability' && kind !== 'restPoints' && kind !== 'transform' && kind !== 'unitSquare' /* 6.0 D */) {
             target.thickness = thick;
             continue;
         }
@@ -567,7 +575,7 @@ function applyOptions(b: Builder, kind: keyof typeof OPTION_HELP, target: Data, 
             target[raw[1]] = rawValue(raw[2]);
             continue;
         }
-        if (/^label\s/i.test(o) && kind !== 'text' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'distribution' && kind !== 'slopeField' && kind !== 'solution' && !MOTION_KINDS.has(kind)) {
+        if (/^label\s/i.test(o) && kind !== 'text' && kind !== 'surface' && kind !== 'plane' && kind !== 'data' && kind !== 'distribution' && kind !== 'slopeField' && kind !== 'solution' && !MOTION_KINDS.has(kind) && !(LINEAR_TYPES.has(kind) && kind !== 'unitSquare') /* 6.0 D */) {
             target.label = textValue(o.slice(5));
             continue;
         }
@@ -678,6 +686,8 @@ function applyKindOption(b: Builder, kind: string, target: Data, opt: Piece): bo
         if (kind === 'chord' && lower === 'dashed') return set(target, 'dashed', true);
         return false;
     }
+    // 6.0 D: grids, basis vectors, transforms, eigenvectors, unit squares, spans
+    if (LINEAR_TYPES.has(kind)) return linearOption(kind, target, o, () => b.problem(opt.at, msg('problems.text.needsFraction', { option: opt.text })));
     return beyondOption(b, kind, target, opt);
 }
 
@@ -973,7 +983,7 @@ function statement(b: Builder, line: string) {
     const restAt = kw ? body.at + t.length - kw[2].length : body.at;
     const rest: Piece = { text: kw ? kw[2] : '', at: restAt };
     // A formula that starts with a name like a word of the syntax (`mark + x = 3`, a slider called mark) is a formula.
-    if (/^(show|no|with|plot|draw|mark|write|double|use|data)$/.test(word) && /^(?:[*/^=<>!]|[-+]\s)/.test(rest.text)) return formulaLine(b, name, body, options);
+    if (/^(show|no|with|plot|draw|mark|write|double|use|data|transform)$/.test(word) && /^(?:[*/^=<>!]|[-+]\s)/.test(rest.text)) return formulaLine(b, name, body, options); // transform: 6.0 D
 
     switch (word) {
         case 'view':
@@ -1039,6 +1049,10 @@ function statement(b: Builder, line: string) {
         }
         case 'raw':
             return rawLine(b, rest);
+        // 6.0 D: transform the plane by A, transform space by B.
+        case 'transform':
+            if (!linearLine(b, name, readTransform(rest.text), options, rest.at)) return formulaLine(b, name, body, options);
+            return;
         // 6.0 C: the export shows every step side by side. Only the word alone: `frames + x = 3` stays a formula.
         case 'frames':
             if (rest.text.trim()) return formulaLine(b, name, body, options);
@@ -1067,6 +1081,7 @@ function statement(b: Builder, line: string) {
             return textLine(b, word, rest, options);
         case 'shade':
             if (shadeProbability(b, name, rest, options)) return;
+            if (linearLine(b, name, readLinearShade(rest.text), options, rest.at)) return; // 6.0 D
             addTool(b, 'region', name, conditionFields(b, rest), options, 'region');
             return;
         case 'line':
@@ -1319,6 +1334,8 @@ function draw(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
         return;
     }
     if (looksLikeChord(t)) return b.problem(rest.at, msg('notes6.text.chordTakes'));
+    // 6.0 D: draw the grid, the basis vectors, the eigenvectors of A, the span of v and w.
+    if (linearLine(b, name, readLinearDraw(t), options, rest.at)) return;
     // 6.0 A: vector arrows, `draw v and w as arrows`, `draw v + w tip to tail`.
     const vectors = readVectors(t, b.lets);
     if (vectors) {
@@ -1884,5 +1901,18 @@ function motionLine(b: Builder, name: string | null, read: MotionRead | null, op
     if (read.type === 'trajectory') fields.dim = b.is3D ? 3 : 2;
     const tool = addTool(b, read.type, own, fields, [...read.extra, ...options], read.type);
     if (read.nearest) pointAtNearest(b, tool, 'vectorField', 'field', undefined, read.extra[0]?.at ?? 0, 'motion6.text.theFieldMissing');
+    return true;
+}
+
+// ------------------------------------------------------------ 6.0 D: linear algebra
+
+/** A line of src/linear/text.ts added as its tool; true when the line was one. */
+function linearLine(b: Builder, name: string | null, read: LinearRead | null, options: Piece[], at: number): boolean {
+    if (!read) return false;
+    if (read.problem) {
+        b.problem(at, msg(read.problem));
+        return true;
+    }
+    addTool(b, read.type, name, read.fields, options, read.type);
     return true;
 }

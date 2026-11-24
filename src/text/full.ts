@@ -37,6 +37,8 @@ import { boxRatioOf } from '../box3d';
 import { AXIS_FLAGS, readAxisSet, readChord } from '../notes6/text';
 // 6.0 A
 import { readListPoints, vectorFull, vectorWords } from '../values/text';
+// 6.0 D
+import { LINEAR_FULL_HELP, readLinearDraw, readLinearShade, readTransform } from '../linear/text';
 
 /** 6.0 A: the lines of values in Full LaTeX need no let names: they are written in the forms that say what they are. */
 const NO_LETS: ReadonlySet<string> = new Set();
@@ -101,6 +103,7 @@ export const FULL_OPTION_HELP: Record<string, string> = {
     // 6.0 B
     axisSet: 'a colour, thin, thick, labelled, label={text}, hidden; x-axis or y-axis says the axis',
     chord: 'a colour, thin, thick, dashed, labelled, label={text}, hidden; chord, from=a, to=b and at=λ say the chord',
+    ...LINEAR_FULL_HELP, // 6.0 D
 };
 
 // ------------------------------------------------------------ text pieces
@@ -564,6 +567,8 @@ function listOf(o: Opt): string[] {
 }
 
 function shadeWords(cmd: Command): Mapped {
+    const linear = unitSquareWords(cmd); // 6.0 D
+    if (linear) return linear;
     const m = new Mapped();
     namedInto(m, cmd.options);
     m.put('shade ', cmd.at);
@@ -610,6 +615,8 @@ function andListInto(m: Mapped, items: Piece[]) {
 }
 
 function drawWords(cmd: Command): Mapped {
+    const linear = linearDrawWords(cmd); // 6.0 D
+    if (linear) return linear;
     const m = new Mapped();
     const opts = cmd.options;
     namedInto(m, opts);
@@ -985,6 +992,9 @@ function lineWords(line: string, no: number, problems: TextProblem[]): Mapped[] 
         case 'restpoints':
         case 'solution':
             return [motionWords(cmd)];
+        // 6.0 D: \transform{A}
+        case 'transform':
+            return [transformWords(cmd)];
         default:
             return [genericWords(cmd)];
     }
@@ -1371,6 +1381,8 @@ function objectFull(raw: string): string | null {
     const options = split.options;
     const motion = motionFull(own, rest, options); // 6.0 C
     if (motion !== undefined) return motion;
+    const linear = linearFull(own, rest, options); // 6.0 D
+    if (linear !== undefined) return linear;
     if (DEFINITION.test(rest)) return command('plot', own, options.map((o) => optionFull(o, SURFACE_HEAD.test(rest) ? 'surface' : 'function')), rest);
     const kw = /^([A-Za-z0-9]+)\b\s*([\s\S]*)$/.exec(rest);
     const word = kw ? kw[1].toLowerCase() : '';
@@ -1782,3 +1794,132 @@ function motionFull(own: string, rest: string, options: string[]): string | null
     }
     return command('solution', own, out, sol[1].trim());
 }
+
+// ------------------------------------------------------------ 6.0 D: linear algebra
+
+/**
+ * \transform{A} in words: `transform by A` (the parser reads it in 2D and
+ * 3D; the printer writes `transform the plane by` or `transform space by`).
+ */
+function transformWords(cmd: Command): Mapped {
+    const m = new Mapped();
+    namedInto(m, cmd.options);
+    const arg = argOf(cmd);
+    m.put('transform by ', cmd.at);
+    mathInto(m, arg.text, arg.at);
+    barInto(m, cmd.options, 'other', 'x', new Set(['name']));
+    return m;
+}
+
+/** \draw[grid, from=a, to=b, spacing=s], \draw[basis vectors], \draw[eigenvectors]{A}, \draw[span]{v, w} in words; null for any other \draw. */
+function linearDrawWords(cmd: Command): Mapped | null {
+    const opts = cmd.options;
+    const grid = flagOf(opts, 'grid');
+    const basis = flagOf(opts, 'basis vectors', 'basis');
+    const eig = flagOf(opts, 'eigenvectors');
+    const span = flagOf(opts, 'span');
+    if (!grid && !basis && !eig && !span) return null;
+    const m = new Mapped();
+    namedInto(m, opts);
+    const arg = argOf(cmd);
+    const used = new Set<Opt>();
+    if (grid) {
+        used.add(grid);
+        m.put('draw the grid', cmd.at);
+        const from = valueOf(opts, 'from');
+        const to = valueOf(opts, 'to');
+        const spacing = valueOf(opts, 'spacing');
+        const value = (o: Opt, word: string) => {
+            used.add(o);
+            const v = inner(o.value ?? '', o.valueAt);
+            m.put(word, o.at).copy(v.text.trim(), v.at + (v.text.length - v.text.trimStart().length));
+        };
+        if (from && to) {
+            value(from, ' from ');
+            value(to, ' to ');
+        }
+        if (spacing) value(spacing, ' in steps of ');
+    } else if (basis) {
+        used.add(basis);
+        m.put('draw the basis vectors', cmd.at);
+    } else if (eig) {
+        used.add(eig);
+        m.put('draw the eigenvectors of ', cmd.at);
+        mathInto(m, arg.text, arg.at);
+    } else if (span) {
+        used.add(span);
+        m.put('draw the span of ', cmd.at);
+        const items = splitCommas(arg.text, arg.at).filter((p) => p.text);
+        items.forEach((p, i) => {
+            if (i) m.put(i === items.length - 1 ? ' and ' : ', ', p.at);
+            mathInto(m, p.text, p.at);
+        });
+    }
+    barInto(
+        m,
+        opts.filter((o) => !used.has(o)),
+        'other',
+        'x',
+        new Set(['name'])
+    );
+    return m;
+}
+
+/** \shade[unit square] (image, unit cube) in words; null for any other \shade. */
+function unitSquareWords(cmd: Command): Mapped | null {
+    const opts = cmd.options;
+    const square = flagOf(opts, 'unit square', 'unit cube');
+    if (!square) return null;
+    const image = flagOf(opts, 'image');
+    const m = new Mapped();
+    namedInto(m, opts);
+    m.put(`shade the ${image ? 'image of the ' : ''}${square.key}`, cmd.at);
+    barInto(
+        m,
+        opts.filter((o) => o !== square && o !== image),
+        'other',
+        'x',
+        new Set(['name'])
+    );
+    return m;
+}
+
+/** A line of 6.0 D in words as its Full LaTeX command; undefined for any other line, null when no command fits it. */
+function linearFull(own: string, rest: string, options: string[]): string | null | undefined {
+    const opts = options.map((o) => optionFull(o, 'other'));
+    const transform = /^transform\s+([\s\S]*)$/i.exec(rest);
+    if (transform) {
+        const read = readTransform(transform[1]);
+        if (!read || read.problem) return undefined;
+        return command('transform', own, opts, String(read.fields.map));
+    }
+    const shade = /^shade\s+([\s\S]*)$/i.exec(rest);
+    if (shade) {
+        const read = readLinearShade(shade[1]);
+        if (!read) return undefined;
+        const cube = /\bcube\s*$/i.test(shade[1]);
+        return command('shade', own, [cube ? 'unit cube' : 'unit square', ...(read.fields.image ? ['image'] : []), ...opts], null);
+    }
+    const draw = /^draw\s+([\s\S]*)$/i.exec(rest);
+    if (!draw) return undefined;
+    const read = readLinearDraw(draw[1]);
+    if (!read || read.problem) return undefined;
+    const f = read.fields;
+    switch (read.type) {
+        case 'planeGrid': {
+            const lead = ['grid'];
+            if (typeof f.from === 'string' && typeof f.to === 'string') lead.push(`from=${encValue(f.from)}`, `to=${encValue(f.to)}`);
+            if (typeof f.spacing === 'string') lead.push(`spacing=${encValue(f.spacing)}`);
+            return command('draw', own, [...lead, ...opts], null);
+        }
+        case 'basisVectors':
+            return command('draw', own, ['basis vectors', ...opts], null);
+        case 'eigenvectors':
+            return command('draw', own, ['eigenvectors', ...opts], String(f.matrix));
+        case 'span':
+            return command('draw', own, ['span', ...opts], String(f.vectors).split(';').map((v) => v.trim()).join(', '));
+        default:
+            return undefined;
+    }
+}
+

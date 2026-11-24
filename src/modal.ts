@@ -15,6 +15,7 @@ import { EXAMPLES, defaultParameter } from './migrate';
 import { showcaseExamples } from './guides';
 import { beyondToolReads, renameInBeyondTool } from './beyond/tools';
 import { motionToolReads, renameInMotionTool } from './motion6/tools'; // 6.0 C
+import { linearToolReads, renameInLinearTool } from './linear/tools'; // 6.0 D
 import { MotionPlayer } from './motion6/player'; // 6.0 C
 import { playerFor } from './motion6/host'; // 6.0 C
 import { atStep, lastStep, movesWithSteps } from './motion6/steps'; // 6.0 C
@@ -728,6 +729,7 @@ export class TikzModal extends Modal implements PanelHost {
                     // 6.0 A: values (src/values/tools.ts); 6.0 B: sets on an axis and chords; then the tools beyond functions; 6.0 C: motion.
                     if (!renameInValueTool(t, { expr, tpl, ref, kind }, from) && !renameInNotes6Tool(t, { expr, tpl, ref, kind })) renameInBeyondTool(t, { expr, tpl, ref, kind });
                     renameInMotionTool(t, { expr, tpl, ref, kind }); // 6.0 C
+                    renameInLinearTool(t, { expr, tpl, ref, kind }); // 6.0 D
             }
         }
         for (const a of this.list<Annotation>('annotations')) {
@@ -3187,7 +3189,7 @@ export class TikzModal extends Modal implements PanelHost {
                     const value = valueToolReads(t, name, reads);
                     if (value !== null) {
                         if (value) return true;
-                    } else if (beyondToolReads(t, reads) || motionToolReads(t, reads) || notes6ToolReads(t, reads)) return true; // 6.0 B, C
+                    } else if (beyondToolReads(t, reads) || motionToolReads(t, reads) || notes6ToolReads(t, reads) || linearToolReads(t, reads)) return true; // 6.0 B, C, D
                 }
             }
         }

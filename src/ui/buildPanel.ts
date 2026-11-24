@@ -25,6 +25,7 @@ import { LayerCardActions, LayerCardHandle, createLayerCard } from './layerCards
 // The cards of data, probability, Riemann sums and slope fields register themselves with the layer cards (5.0).
 import '../beyond/cards';
 import '../motion6/cards'; // 6.0 C
+import '../linear/cards'; // 6.0 D
 // 6.0 B: sets on an axis and chords.
 import '../notes6/cards';
 // 6.0 A
@@ -120,6 +121,7 @@ const SECTION_ICONS: Record<string, string> = {
     Motion: 'wind', // 6.0 C
     // 6.0 A
     Values: 'braces',
+    'Linear algebra': 'grid-3x3', // 6.0 D
 };
 
 /** More words that find a recipe in the + Add picker (English, as people search): vector finds Arrow. */
@@ -168,6 +170,11 @@ const RECIPE_WORDS: Record<string, string> = {
     'let-definition': 'let define matrix complex function variable name',
     'vector-arrow': 'vector arrow let tip tail',
     'list-points': 'list roots unity complex polygon',
+    // 6.0 D
+    'transform-matrix': 'matrix linear map transformation shear rotation grid basis determinant det 3blue1brown',
+    eigenvectors: 'eigenvalue eigenvector lambda matrix invariant line',
+    'grid-basis': 'basis vectors i hat j hat grid lattice',
+    'complex-map': 'complex function conformal z squared mapsto warp',
 };
 
 /** Menu heading per recipe section (Functions reads Surfaces in 3D charts). */
@@ -186,6 +193,7 @@ const SECTION_TITLES: Record<string, MessageKey> = {
     Motion: 'motion6.section', // 6.0 C
     // 6.0 A
     Values: 'values.section.values',
+    'Linear algebra': 'linear.section', // 6.0 D
 };
 
 /** One-click links under the starter examples: [text key, recipe id]. */

@@ -231,6 +231,9 @@ export function formatTick(value: number): string {
 }
 
 const SYMBOL_MAP: Record<string, string> = {
+    // 6.0 D: the dotless i and j of the basis vectors (\hat{\imath}).
+    '\\imath': 'ı',
+    '\\jmath': 'ȷ',
     '\\backslash': '\\',
     '\\textbackslash': '\\',
     '\\sum': '∑',
@@ -486,6 +489,15 @@ function stripLatexInner(text: string): string {
                     out += stripLatexInner(content);
                     i = after;
                 }
+                continue;
+            }
+
+            // 6.0 D: an accent over one group (\hat{\imath}, \vec{v}): the group with a combining mark.
+            const accent = /^\\(hat|vec)(?![a-zA-Z])\s*/.exec(rest);
+            if (accent && text[i + accent[0].length] === '{') {
+                const [content, after] = readBraceGroup(text, i + accent[0].length);
+                out += stripLatexInner(content) + (accent[1] === 'hat' ? '\u0302' : '\u20d7');
+                i = after;
                 continue;
             }
 

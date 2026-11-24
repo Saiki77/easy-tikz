@@ -586,6 +586,85 @@ export interface ListPointsTool extends ToolBase {
     valueLabel: boolean;
 }
 
+// 6.0 D: linear algebra and complex maps (src/linear/). 2D and 3D, as the chart is.
+
+/**
+ * The grid that transforms move: the lines x = k·step and y = k·step (in 3D
+ * the lines of a grid cube) from `from` to `to`. Text: `draw the grid`,
+ * `draw the grid from -2 to 2 in steps of 0.5`.
+ */
+export interface PlaneGridTool extends ToolBase {
+    type: 'planeGrid';
+    /** Where the lines start and end on every axis (formulas); both '' = beyond the view. */
+    from: string;
+    to: string;
+    /** Between two lines (a formula); '' = 1. */
+    spacing: string;
+    thickness: string;
+}
+
+/**
+ * The basis vectors î and ĵ (k̂ in 3D) as arrows from the origin. In the
+ * colour green they are green, red and blue; any other colour draws all of
+ * them in it. Text: `draw the basis vectors`.
+ */
+export interface BasisVectorsTool extends ToolBase {
+    type: 'basisVectors';
+    thickness: string;
+    /** î, ĵ, k̂ beside the tips. */
+    valueLabel: boolean;
+}
+
+/**
+ * Moves every object drawn before it (not the axes) by a matrix or a map;
+ * in a step (`then`) it moves while the step comes in: (1 - t)I + tA, or
+ * (1 - t)z + t f(z). Text: `transform the plane by A`, `transform space by B`,
+ * `transform the plane by $z \mapsto z^2$`.
+ */
+export interface TransformTool extends ToolBase {
+    type: 'transform';
+    /** A matrix (a let name, `[[1, 1], [0, 1]]`, `\begin{pmatrix} 1 & 1 \\ 0 & 1 \end{pmatrix}`) or a map: `z \mapsto z^2`, `(x, y) \mapsto (x + y, y)`. */
+    map: string;
+}
+
+/** The lines through 0 along the real eigenvectors of a matrix, with λ as labels. Text: `draw the eigenvectors of A, labelled`. */
+export interface EigenvectorsTool extends ToolBase {
+    type: 'eigenvectors';
+    /** The matrix: a let name or a formula. */
+    matrix: string;
+    thickness: string;
+    dashed: boolean;
+    /** λ = ... beside each line. */
+    valueLabel: boolean;
+}
+
+/**
+ * The unit square (in 3D the unit cube), shaded: transforms after it move
+ * it, and its label follows. `image`: the image of the unit square under
+ * the transforms before it. Text: `shade the unit square, labelled "det A = {det(A)}"`,
+ * `shade the image of the unit square, labelled`.
+ */
+export interface UnitSquareTool extends ToolBase {
+    type: 'unitSquare';
+    image: boolean;
+    fillOpacity: number;
+    /** Template at its middle; locals area (signed) and det. '' = none. */
+    label: string;
+    /** Its area (volume) now as the label (when `label` is empty). */
+    valueLabel: boolean;
+}
+
+/** The span of vectors: a line through 0, the whole plane (shaded) or 0. Text: `draw the span of v and w`. */
+export interface SpanTool extends ToolBase {
+    type: 'span';
+    /** The vectors, `;` between them: names or formulas. */
+    vectors: string;
+    fillOpacity: number;
+    thickness: string;
+    /** span(v, w) as the label. */
+    valueLabel: boolean;
+}
+
 export type Tool =
     | RegionTool
     | CurveTool
@@ -609,7 +688,14 @@ export type Tool =
     // 6.0 A
     | ValueTool
     | VectorTool
-    | ListPointsTool;
+    | ListPointsTool
+    // 6.0 D
+    | PlaneGridTool
+    | BasisVectorsTool
+    | TransformTool
+    | EigenvectorsTool
+    | UnitSquareTool
+    | SpanTool;
 
 export type ToolType = Tool['type'];
 

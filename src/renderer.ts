@@ -344,6 +344,8 @@ export class SVGRenderer {
     layout: RenderLayout | null = null;
     /** CONTRACT (v4, drag to edit): scene items and function curves of the last render(), null before the first. */
     drawn: DrawnScene | null = null;
+    /** 6.0 D: the functions a transform moves (the scene draws them; their curves are left out). */
+    private movedFns: ReadonlySet<number> = new Set();
     /**
      * Set by render() when the drawing has `$...$` labels typeset by MathJax
      * (null otherwise). MathJax styles the glyphs of a new label only after
@@ -651,6 +653,7 @@ export class SVGRenderer {
      */
     private sceneItems(fns: ChartFunction[]): SceneItem2D[] {
         const cfg = this.config;
+        this.movedFns = new Set(); // 6.0 D
         const tools = (cfg.tools || []).filter((t): t is Tool => !!t && typeof t === 'object');
         const decorated = fns.some(({ f }) => f.fill || f.tangent || f.extrema);
         if (!tools.length && !decorated) {
@@ -681,6 +684,7 @@ export class SVGRenderer {
                 motion: cfg.motion,
             });
             if (this.cache) lastGoodScene.set(this.cache, scene);
+            this.movedFns = new Set(scene.movedFunctions ?? []); // 6.0 D
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             this.addIssue({ source: 'chart', message: msg('problems.scene.shapesFailed', { error: message }), severity: 'error' });
@@ -1151,6 +1155,7 @@ export class SVGRenderer {
         const legend: LegendEntry[] = [];
         for (const { info, f } of fns) {
             if (info.hidden || info.error || info.domainError || isBlank(f)) continue;
+            if (this.movedFns.has(info.index)) continue; // 6.0 D: a transform draws it
             const color = this.css(f.color);
             const width = this.strokeWidth(f.thickness);
             const lines = this.sampleFunction(info);

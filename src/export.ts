@@ -580,7 +580,7 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
     const layers = new Layers();
 
     for (const item of items) addFills(layers, item, colors, libs);
-    const legends = addFunctions(layers, config, ctx, view, colors);
+    const legends = addFunctions(layers, config, ctx, view, colors, new Set(scene.movedFunctions ?? [])); // 6.0 D: a transform draws the functions it moves
     for (const item of items) addStrokes(layers, item, colors, view);
     for (const item of items) addGuides(layers, item, colors, view);
     for (const item of items) addMarkers(layers, item, colors, view);
@@ -655,12 +655,13 @@ function addFills(layers: Layers, item: SceneItem2D, colors: ColorSet, libs: Lib
  * pgfplots hands legend entries to plots by position. Returns whether any
  * legend entry was written.
  */
-function addFunctions(layers: Layers, config: RendererConfig, ctx: MathContext, view: View, colors: ColorSet): boolean {
+function addFunctions(layers: Layers, config: RendererConfig, ctx: MathContext, view: View, colors: ColorSet, moved: ReadonlySet<number>): boolean {
     const funcs = config.functions || [];
     let legends = false;
     for (const info of ctx.functions()) {
         const f = funcs[info.index];
         if (!f || info.hidden || info.error || info.domainError || !String(f.expression ?? '').trim()) continue;
+        if (moved.has(info.index)) continue; // 6.0 D
         if (info.kind === 'parametric' && !String(f.expressionY ?? '').trim()) continue;
         let body: string;
         let pieces: Array<[string, string, number]>;

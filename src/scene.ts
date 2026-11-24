@@ -53,6 +53,9 @@ import { MOTION_3D_TYPES, MOTION_TYPES, MotionOutput, computeMotion, computeMoti
 import { NOTES6_TYPES, computeNotes6, notes6Sources } from './notes6/scene';
 // 6.0 A
 import { VALUE_TYPES, computeValues, computeValues3D, valuesSources } from './values/scene';
+// 6.0 D
+import { LINEAR_TYPES, computeLinear, computeLinear3D, linearSources, transformItems, transformScene3D } from './linear/scene';
+import type { LinearOutput, Span3D } from './linear/scene';
 
 export type ArrowHeads = 'forward' | 'backward' | 'both';
 
@@ -152,7 +155,14 @@ export type PartRef =
     | { part: 'vertex'; index: number; item: number }
     | { part: 'tangent' }
     /** Extremum marker `index` of a function's Extrema option (left to right). */
-    | { part: 'extremum'; index: number };
+    | { part: 'extremum'; index: number }
+    /**
+     * 6.0 D: the tip of an arrow whose numbers are those of a let value
+     * (src/linear/drag.ts): `owner` is the let name (a matrix or a vector),
+     * `entries` the places of the tip's x and y among its numbers (row by
+     * row), `base` where the arrow starts (the tip is base + those numbers).
+     */
+    | { part: 'tip'; index: number; owner: string; entries: number[]; base?: [number, number] };
 
 /** Why a marker cannot be dragged itself: the scene computes it from other items. */
 export type LockKind = 'optimum' | 'intersection' | 'corner' | 'lattice';
@@ -216,6 +226,9 @@ export interface Scene2D {
     issues: SceneIssue[];
     /** Derived names published while computing (P1_x, P1_y, P1_val, P1_n, P1_x2, ...). */
     derived: Record<string, number>;
+    // 6.0 D
+    /** Indices of the functions a transform moves: it draws them, so the renderer and the export leave their curves out. */
+    movedFunctions?: number[];
 }
 
 export interface SceneInput2D {
@@ -418,6 +431,9 @@ interface Output {
     // 6.0 C
     /** What a vector field hands its rest points and its particles (src/motion6/scene.ts). */
     motion?: MotionOutput;
+    // 6.0 D
+    /** What a transform hands the pass after the memo: its map (src/linear/scene.ts). */
+    linear?: LinearOutput;
 }
 
 /** A function's decorations or a tool, as a node of the dependency graph. */
@@ -451,6 +467,9 @@ interface Ctx {
     /** Plot size the label placer measures with (pt), and whether both axes have the same unit (5.0, slope fields). */
     metrics?: LabelMetrics;
     equalScale?: boolean;
+    // 6.0 D
+    /** 3D: the z range of the box (the view holds x and y). */
+    zRange?: [number, number];
 }
 
 interface CacheState {
@@ -853,7 +872,7 @@ function toolNode(t: Tool, math: MathContext): SceneNode {
             break;
         default:
             // 6.0 A: values (src/values/scene.ts), then the tools beyond functions; 6.0 C: motion.
-            if (!valuesSources(t, scan)) beyondSources(t, scan, refs);
+            if (!valuesSources(t, scan) && !linearSources(t, scan) /* 6.0 D */) beyondSources(t, scan, refs);
             motionSources(t, scan, refs); // 6.0 C
     }
     return { id: `tool:${t.id}`, name: str(t.name) || str(t.id), tool: t, refs, sources, base: toolBase(t) };
@@ -2196,16 +2215,19 @@ function scene2D(input: SceneInput2D): Scene2D {
         itemSpecs.push({ item, node, out });
     });
 
+    // 6.0 D: transforms move what is drawn before them (src/linear/scene.ts), after the memo.
+    const moved = transformItems(itemSpecs, ctx, input.motion);
+
     // Texts last: final derived values, then sides (and region label spots)
     // chosen by the label placer, then halos over any drawn fill.
     const jobs: TextJob[] = [];
     // Only asked for when there is a text to place.
     let moving: Set<SceneNode> | null = null;
-    for (const { item, node, out } of itemSpecs) {
+    for (const [k, { item, node, out }] of itemSpecs.entries()) {
         const formatter = labelFormatter(node, math, issues);
-        for (const b of out.braces) item.braces.push({ from: b.from, to: b.to, color: b.color, label: formatter({ template: 'label' }) });
+        for (const b of moved?.braces.get(k) ?? out.braces) item.braces.push({ from: b.from, to: b.to, color: b.color, label: formatter({ template: 'label' }) }); // 6.0 D
         const rank = labelRank(node);
-        for (const [index, spec] of out.texts.entries()) {
+        for (const [index, spec] of (moved?.texts.get(k) ?? out.texts).entries()) {
             const text = formatter(spec);
             if (!text.trim()) continue;
             if (!moving) moving = movingNodes(nodes, math);
@@ -2262,6 +2284,8 @@ function scene2D(input: SceneInput2D): Scene2D {
         if (job.offset) prim.offset = job.offset;
         job.item.texts.push(prim);
     }
+    // 6.0 D
+    if (moved && moved.functions.length) return { items, issues, derived, movedFunctions: moved.functions };
     return { items, issues, derived };
 }
 
@@ -2304,7 +2328,7 @@ function compute2D(node: SceneNode, ctx: Ctx): Output {
             return computeNotes6(t, ctx) ?? newOutput();
         default:
             // 6.0 A: values (src/values/scene.ts); 6.0 C: motion.
-            return computeValues(t, ctx) ?? computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? newOutput();
+            return computeValues(t, ctx) ?? computeLinear(t, ctx) /* 6.0 D */ ?? computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? newOutput();
     }
 }
 
@@ -3622,6 +3646,9 @@ export interface SceneInput3D {
     tools: Tool[];
     math: MathContext;
     view: View & { zmin: number; zmax: number };
+    // 6.0 D
+    /** The step shown and its progress (a transform moves space while its step comes in); absent: the still frame. */
+    motion?: MotionFrame;
 }
 
 function computePoints3D(t: PointsTool, ctx: Ctx): Output {
@@ -3720,13 +3747,14 @@ function scene3D(input: SceneInput3D): Scene3D {
         outputs: new Map(),
         toolsByName: toolMap(tools),
         functions: [],
+        zRange: [v && Number.isFinite(v.zmin) ? v.zmin : -5, v && Number.isFinite(v.zmax) ? v.zmax : 5], // 6.0 D
     };
     const nodes: SceneNode[] = [];
     for (const t of tools) {
         if (t.type === 'plane3D' || ((t.type === 'points' || t.type === 'segment') && t.dim === 3)) nodes.push(toolNode(t, math));
         else if (MOTION_3D_TYPES.has(t.type)) nodes.push(toolNode(t, math)); // 6.0 C
-        // 6.0 A: definitions, vector arrows and points of a list (src/values/scene.ts).
-        else if (VALUE_TYPES.has(t.type)) nodes.push(toolNode(t, math));
+        // 6.0 A: definitions, vector arrows and points of a list (src/values/scene.ts); 6.0 D: linear algebra.
+        else if (VALUE_TYPES.has(t.type) || LINEAR_TYPES.has(t.type)) nodes.push(toolNode(t, math));
     }
     // Data, probability, Riemann sums and slope fields are drawn in 2D charts only (5.0).
     const only2D: SceneIssue[] = tools
@@ -3748,7 +3776,7 @@ function scene3D(input: SceneInput3D): Scene3D {
             if (t.type === 'points') return computePoints3D(t, ctx);
             if (t.type === 'segment') return computeSegment3D(t, ctx);
             if (t.type === 'plane3D') return computePlane(t, ctx);
-            return computeValues3D(t, ctx) ?? computeMotion3D(t, ctx) ?? newOutput(); // 6.0 A, C
+            return computeValues3D(t, ctx) ?? computeLinear3D(t, ctx) ?? computeMotion3D(t, ctx) ?? newOutput(); // 6.0 A, C, D
         },
         new Set()
     );
@@ -3756,11 +3784,13 @@ function scene3D(input: SceneInput3D): Scene3D {
     for (const out of outs) Object.assign(scene.derived, out.derived);
     math.setDerived(scene.derived);
     const read = readNames(nodes, math);
+    const spans: Span3D[] = []; // 6.0 D
     nodes.forEach((node, i) => {
         const out = outs[i];
         pushIssues(scene.issues, out.issues, node, read);
         const t = node.tool as Tool;
         if (t.hidden) return;
+        const span: Span3D = { tool: t, out, points: [scene.points.length, 0], segments: [scene.segments.length, 0] }; // 6.0 D
         const formatter = labelFormatter(node, math, scene.issues);
         for (const p of out.points3 || []) {
             const point: Scene3D['points'][number] = { x: p.x, y: p.y, z: p.z, color: p.color, size: p.size };
@@ -3775,6 +3805,11 @@ function scene3D(input: SceneInput3D): Scene3D {
         }
         for (const s of out.segments3 || []) scene.segments.push(s);
         for (const p of out.planes3 || []) scene.planes.push(p);
+        // 6.0 D
+        span.points[1] = scene.points.length;
+        span.segments[1] = scene.segments.length;
+        spans.push(span);
     });
+    transformScene3D(scene, spans, input.motion); // 6.0 D: transforms move what is drawn before them
     return scene;
 }

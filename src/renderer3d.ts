@@ -621,6 +621,7 @@ export class SVG3DRenderer {
                     zmin: config.zmin,
                     zmax: config.zmax,
                 },
+                motion: config.motion, // 6.0 D: a transform moves space while its step comes in
             });
         } catch (e) {
             this.issues.push({ source: 'chart', message: msg('problems.render.shapesNotDrawn', { error: errorMessage(e) }), severity: 'error' });

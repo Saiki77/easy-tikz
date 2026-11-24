@@ -1206,7 +1206,7 @@ function assertStructurallyValid(ctx: RecipeContext, id: string): void {
 }
 
 test('recipes: the documented lists, unique ids, sections and plain-language text', () => {
-    const sections = ['Functions', 'Regions', 'Curves and lines', 'Points', 'Segments and arrows', 'Labels', 'Sliders', '3D', 'Data', 'Probability', 'Calculus', 'Motion', 'Values'];
+    const sections = ['Functions', 'Regions', 'Curves and lines', 'Points', 'Segments and arrows', 'Labels', 'Sliders', '3D', 'Data', 'Probability', 'Calculus', 'Motion', 'Values', 'Linear algebra'];
     for (const is3D of [false, true]) {
         const list = recipes(is3D);
         assert.equal(new Set(list.map((r) => r.id)).size, list.length);
@@ -1233,10 +1233,12 @@ test('recipes: the documented lists, unique ids, sections and plain-language tex
             // 6.0 B
             'axis-set', 'chord',
             'let-definition', 'vector-arrow', 'list-points',
+            // 6.0 D
+            'transform-matrix', 'eigenvectors', 'grid-basis', 'complex-map',
             'label', 'slider',
         ]
     );
-    assert.deepEqual(recipes(true).map((r) => r.id), ['surface', 'plane', 'point', 'segment', 'arrow', 'trajectory-3d', 'let-definition', 'vector-arrow', 'label', 'slider']);
+    assert.deepEqual(recipes(true).map((r) => r.id), ['surface', 'plane', 'point', 'segment', 'arrow', 'trajectory-3d', 'let-definition', 'vector-arrow', 'transform-matrix', 'eigenvectors', 'grid-basis', 'label', 'slider']);
 });
 
 test('recipes build structurally valid items on an empty and on a populated chart', () => {

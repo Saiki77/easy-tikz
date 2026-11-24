@@ -653,6 +653,29 @@ const VALUES: Record<string, string> = {
     ].join('\n'),
 };
 
+/** 6.0 D: linear algebra and complex maps. */
+const LINEAR: Record<string, string> = {
+    // A grid, î and ĵ, the unit square with det, a function, eigenvectors and a span, moved by A in a step.
+    matrix: [
+        'show x from -4.5 to 4.5 and y from -3 to 3',
+        'equal scale',
+        'let $A = \\begin{pmatrix} 1.5 & 1 \\\\ 0.5 & 2 \\end{pmatrix}$',
+        'plot f(x) = x^2/4 in purple',
+        'draw the grid',
+        'draw the basis vectors',
+        'shade the unit square, labelled "det A = {det(A)}"',
+        'then transform the plane by A',
+        'then draw the eigenvectors of A, labelled',
+        'draw the span of (1, 0), labelled',
+    ].join('\n'),
+    // Every step side by side, a rotation without real eigenvectors.
+    frames: ['frames', 'show x from -3 to 3 and y from -3 to 3', 'let R = [[0, -1], [1, 0]]', 'draw the grid from -2 to 2', 'draw the basis vectors', 'then transform the plane by R', 'draw the eigenvectors of R, labelled'].join('\n'),
+    // z ↦ z² bends a small grid; the plane spanned by two vectors.
+    complex: ['show x from -3 to 3 and y from -2 to 2', 'draw the grid from -1.5 to 1.5 in steps of 0.25', 'transform the plane by $z \\mapsto z^2$', 'draw the span of (1, 2) and (2, 1), labelled'].join('\n'),
+    // In space: the grid cube, î ĵ k̂ and the unit cube with its volume.
+    space: ['3d', 'show x from -3 to 3 and y from -3 to 3', 'let B = [[1, 0.5, 0], [0, 1, 0], [0, 0.5, 1.5]]', 'draw the grid from -1 to 1', 'draw the basis vectors', 'shade the unit cube, labelled', 'transform space by B', 'draw the eigenvectors of B, labelled'].join('\n'),
+};
+
 // --------------------------------------------------------------- compile
 
 /** The block's export as a complete document. Snippets are wrapped using their own `% Needs:` lines. */
@@ -753,6 +776,8 @@ if (!hasLatex) {
     for (const [k, text] of Object.entries(NOTES6)) cases.push({ name: `notes6-${k}`, data: parseChartText(text).data }); // 6.0 B
     // 6.0 A
     for (const [k, text] of Object.entries(VALUES)) cases.push({ name: `values-${k}`, data: parseChartText(text).data });
+    // 6.0 D
+    for (const [k, text] of Object.entries(LINEAR)) cases.push({ name: `linear-${k}`, data: parseChartText(text).data });
 
     const jobs = pool(
         cases.map((c) => ({

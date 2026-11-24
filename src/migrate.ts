@@ -19,6 +19,9 @@ import { MOTION_PREFIX, completeMotionTool, keptStep, restPointsDefaults, trajec
 // 6.0 B
 import { axisSetDefaults, chordDefaults, completeAxisSet, completeChord } from './notes6/tools';
 import { notes6Recipes } from './notes6/recipes';
+// 6.0 D
+import { LINEAR_PREFIX, basisVectorsDefaults, completeLinearTool, eigenvectorsDefaults, planeGridDefaults, spanDefaults, transformDefaults, unitSquareDefaults } from './linear/tools';
+import { linearRecipes } from './linear/recipes';
 import {
     Annotation,
     AnnotationAnchor,
@@ -132,6 +135,8 @@ const TOOL_PREFIX: Record<ToolType, string> = {
     value: 'L',
     vector: 'V',
     listPoints: 'LP',
+    // 6.0 D
+    ...LINEAR_PREFIX,
 };
 
 const PARAMETER_LETTERS = ['a', 'b', 'c', 'd', 'k', 'm', 'n', 'p', 'q', 'r', 's', 'u', 'v', 'w'];
@@ -1176,7 +1181,10 @@ function convertTool(src: Record<string, unknown>, ctx: ConvertContext): { body:
         default: {
             // 6.0 C: vector fields, rest points, solutions of systems
             const motion = completeMotionTool(src, ctx.dim);
-            return motion ? { body: motion, hidden: false } : null;
+            if (motion) return { body: motion, hidden: false };
+            // 6.0 D: grids, basis vectors, transforms, eigenvectors, unit squares, spans
+            const linear = completeLinearTool(src);
+            return linear ? { body: linear, hidden: false } : null;
         }
     }
 }
@@ -1780,6 +1788,19 @@ export function defaultTool(type: ToolType, opts: { is3D: boolean; tools: Tool[]
             return newVector(opts);
         case 'listPoints':
             return newListPoints(opts);
+        // 6.0 D
+        case 'planeGrid':
+            return { ...planeGridDefaults(), ...identity('planeGrid', opts) };
+        case 'basisVectors':
+            return { ...basisVectorsDefaults(), ...identity('basisVectors', opts) };
+        case 'transform':
+            return { ...transformDefaults(), ...identity('transform', opts) };
+        case 'eigenvectors':
+            return { ...eigenvectorsDefaults(), ...identity('eigenvectors', opts) };
+        case 'unitSquare':
+            return { ...unitSquareDefaults(), ...identity('unitSquare', opts) };
+        case 'span':
+            return { ...spanDefaults(), ...identity('span', opts) };
     }
 }
 
@@ -2113,6 +2134,8 @@ function recipes2D(): Recipe[] {
         }),
         // 6.0 A
         ...valueRecipes(in2D, false),
+        // 6.0 D
+        ...linearRecipes(in2D, { identity: (type, ctx) => identity(type, toolOpts(ctx)), names: chartNames }, false),
         labelRecipe(in2D),
         sliderRecipe(in2D),
     ];
@@ -2456,6 +2479,8 @@ function recipes3D(): Recipe[] {
         },
         // 6.0 A
         ...valueRecipes(in3D, true),
+        // 6.0 D
+        ...linearRecipes(in3D, { identity: (type, ctx) => identity(type, toolOpts(ctx)), names: chartNames }, true),
         labelRecipe(in3D),
         sliderRecipe(in3D),
     ];

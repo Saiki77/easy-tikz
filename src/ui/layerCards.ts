@@ -189,6 +189,13 @@ const TOOL_KIND: Record<Tool['type'], MessageKey> = {
     value: 'values.kind.value',
     vector: 'values.kind.vector',
     listPoints: 'values.kind.listPoints',
+    // 6.0 D
+    planeGrid: 'linear.kind.planeGrid',
+    basisVectors: 'linear.kind.basisVectors',
+    transform: 'linear.kind.transform',
+    eigenvectors: 'linear.kind.eigenvectors',
+    unitSquare: 'linear.kind.unitSquare',
+    span: 'linear.kind.span',
 };
 
 // --------------------------------------------------------------- helpers

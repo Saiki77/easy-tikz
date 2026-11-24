@@ -1,0 +1,106 @@
+/* Linear algebra and complex maps (6.0 D): grids, basis vectors, transforms, eigenvectors, the unit square and spans: their problems, labels, cards, recipes, questions, hover cards and drags. Owner: src/linear/. */
+export const linear = {
+    // ---- the kinds of cards
+    'linear.kind.planeGrid': 'Grid',
+    'linear.kind.basisVectors': 'Basis vectors',
+    'linear.kind.transform': 'Transform',
+    'linear.kind.eigenvectors': 'Eigenvectors',
+    'linear.kind.unitSquare': 'Unit square',
+    'linear.kind.unitCube': 'Unit cube',
+    'linear.kind.span': 'Span',
+
+    // ---- kinds in messages of the chart text
+    'linear.text.kindGrid': 'a grid',
+    'linear.text.kindBasis': 'basis vectors',
+    'linear.text.kindTransform': 'a transform',
+    'linear.text.kindEigenvectors': 'eigenvectors',
+    'linear.text.kindUnitSquare': 'a unit square',
+    'linear.text.kindSpan': 'a span',
+    'linear.text.gridTakes': 'Write the grid as: draw the grid from -2 to 2 in steps of 0.5 (or draw the grid).',
+    'linear.text.eigenTakes': 'Write it as: draw the eigenvectors of A (a matrix).',
+    'linear.text.spanTakes': 'Write it as: draw the span of v and w.',
+    'linear.text.transformTakes': 'Write it as: transform the plane by A (a matrix), or by $z \\mapsto z^2$.',
+
+    // ---- problems
+    'linear.problem.noMap': 'Write the matrix or the map, such as A or z \\mapsto z^2.',
+    'linear.problem.mapLeft': 'Before \\mapsto goes z, or the point (x, y): {left} is neither.',
+    'linear.problem.notMatrix': 'The transform needs a {n} x {n} matrix or a map such as z \\mapsto z^2. This is {what}.',
+    'linear.problem.notVector': '{text} is not a vector of this chart.',
+    'linear.problem.gridStep': 'The steps of the grid must be larger than 0.',
+    'linear.problem.gridLines': 'The grid would have {n} lines. Use larger steps or a smaller range.',
+    'linear.problem.everyVector': 'Every vector is an eigenvector (λ = {value}).',
+    'linear.problem.complexEigen': 'No real eigenvectors: λ = {re} ± {im}i. The matrix turns every line.',
+
+    // ---- labels in the chart
+    'linear.label.everyVector': 'every vector:',
+    'linear.label.noRealEigen': 'no real eigenvectors:',
+    'linear.label.area': 'area',
+    'linear.label.volume': 'volume',
+
+    // ---- + Add menu
+    'linear.section': 'Linear algebra',
+    'linear.recipe.transform': 'Transform the plane by a matrix',
+    'linear.recipe.transform3d': 'Transform space by a matrix',
+    'linear.recipeHint.transform': 'A grid with î and ĵ and the unit square; the next step moves them by A.',
+    'linear.recipe.eigenvectors': 'Eigenvectors',
+    'linear.recipeHint.eigenvectors': 'The lines through 0 that a matrix keeps, with their λ.',
+    'linear.recipe.gridBasis': 'Grid and basis vectors',
+    'linear.recipeHint.gridBasis': 'The grid lines and î, ĵ that a transform moves.',
+    'linear.recipe.complexMap': 'Complex map z ↦ f(z)',
+    'linear.recipeHint.complexMap': 'A small grid that z ↦ z² bends in the next step.',
+
+    // ---- cards
+    'linear.card.from': 'From',
+    'linear.card.to': 'To',
+    'linear.card.spacing': 'Steps',
+    'linear.card.auto': 'beyond the view',
+    'linear.card.gridSummary': 'Grid from {from} to {to}, steps {spacing}',
+    'linear.card.gridAuto': 'Grid beyond the view, steps {spacing}',
+    'linear.card.labels': 'Labels',
+    'linear.card.basisSummary': 'î and ĵ',
+    'linear.card.basisSummary3d': 'î, ĵ and k̂',
+    'linear.card.map': 'By',
+    'linear.card.mapPlaceholder': 'A, or z \\mapsto z^2',
+    'linear.card.mapSummary': 'Moves what is above it by {map}',
+    'linear.card.mapEmpty': 'No matrix yet',
+    'linear.card.mapHint': 'Moves every object above it (not the axes). In a step, it moves while the step comes in.',
+    'linear.card.matrix': 'Matrix',
+    'linear.card.matrixPlaceholder': 'A',
+    'linear.card.eigenSummary': 'Eigenvectors of {matrix}',
+    'linear.card.image': 'Image under the transforms above',
+    'linear.card.squareSummary': 'The unit square',
+    'linear.card.imageSummary': 'The image of the unit square',
+    'linear.card.vectors': 'Vectors',
+    'linear.card.vectorsPlaceholder': 'v; w',
+    'linear.card.spanSummary': 'span({vectors})',
+    'linear.card.empty': 'Not set yet',
+
+    // ---- Ask the curve
+    'linear.ask.group': 'Linear algebra',
+    'linear.ask.eigenvectors': 'Its eigenvectors',
+    'linear.ask.unitSquare': 'The image of the unit square, with det',
+    'linear.ask.span': 'The span of its columns',
+    'linear.ask.inverse': 'The inverse transform, in the next step',
+    'linear.ask.function': 'A function it moves (y = x²/4)',
+    'linear.ask.vectorSpan': 'The span of {v}',
+    'linear.ask.vectorSpanWith': 'The span of {v} and {w}',
+    'linear.ask.vectorImage': 'The image {m} {v} as an arrow',
+    'linear.ask.vectorSum': '{v} + {w} tip to tail',
+    'linear.ask.gridTransform': 'Transform the plane by a shear, in the next step',
+    'linear.ask.basis': 'The basis vectors î and ĵ',
+
+    // ---- hover cards
+    'linear.hover.kind.matrix': 'Matrix as a transform',
+    'linear.hover.kind.product': 'Matrix times vector',
+    'linear.hover.kind.det': 'Determinant',
+    'linear.hover.kind.eigen': 'Eigenvectors',
+    'linear.hover.note.t': 'Move t from 0 to 1: the grid goes from I to {name}.',
+    'linear.hover.note.example': 'The note does not define {name}: the card uses an example.',
+    'linear.hover.note.fromNote': '{name} as the note defines it.',
+
+    // ---- drag
+    'linear.drag.tip': 'Tip of {name}',
+    'linear.drag.column': 'column {k} of {name}',
+    'linear.drag.notNumbers': '{name} is not written as numbers, so a drag cannot change it.',
+    'linear.drag.moved': 'Changed {name} to {value}',
+};

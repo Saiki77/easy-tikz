@@ -18,5 +18,7 @@ import { motion6 } from './motion6'; // 6.0 C
 import { notes6 } from './notes6';
 // 6.0 A
 import { values } from './values';
+// 6.0 D
+import { linear } from './linear';
 
-export const JA: Messages<typeof EN> = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...motion6, ...notes6, ...values };
+export const JA: Messages<typeof EN> = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...motion6, ...notes6, ...values, ...linear };
