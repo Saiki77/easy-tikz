@@ -10,11 +10,11 @@
 import type { AxisSetTool, ChordTool, Tool } from '../types';
 import type { Pt } from '../geometry';
 import type { SceneCtx, SceneOutput } from '../scene';
-import { addIssue, fail, newOutput, publish } from '../scene';
+import { addIssue, fail, newOutput, publish, textBoxPt } from '../scene';
 import { t as msg } from '../i18n';
 import { errorText } from '../util';
 import { decimal } from '../beyond/maths';
-import { compileCondition, intervalCondition, setLabel, solveSet } from './sets';
+import { compileCondition, intervalCondition, setLabel, setTex, solveSet } from './sets';
 
 /** The tool types of this part: drawn in 2D charts only. */
 export const NOTES6_TYPES: ReadonlySet<string> = new Set(['axisSet', 'chord']);
@@ -120,9 +120,26 @@ function computeAxisSet(t: AxisSetTool, ctx: SceneCtx): SceneOutput {
         const bar = Number.isFinite(first) && Number.isFinite(last) && last > first ? [at(Math.max(first, lo)), at(Math.min(last, hi))] : undefined;
         const spec = { ...at(mid), template: 'label' as const, color, size: 'small' as const, dir: axis === 'x' ? { x: 0, y: 1 } : { x: 1, y: 0 }, ...(bar ? { slide: bar } : {}) };
         if (label) out.texts.push(spec);
-        else out.texts.push({ ...spec, literal: setLabel(axis, ctx.math.tex(intervalCondition(src, axis)), pieces) });
+        else {
+            // 6.0 F1: a label wider than most of the plot (a small chart, a long union) is the set alone, so it fits on one line.
+            const whole = setLabel(axis, ctx.math.tex(intervalCondition(src, axis)), pieces);
+            out.texts.push({ ...spec, literal: fitsPlot(whole, ctx) ? whole : `$${setTex(pieces)}$` });
+        }
     }
     return out;
+}
+
+/** 6.0 F1: math is set wider than the placer's estimate of its characters (the spaces around = and the union). */
+const MATH_SPREAD = 1.15;
+/** 6.0 F1: a set label may take this share of the plot's width. */
+const LABEL_SHARE = 0.75;
+
+/** 6.0 F1: does a small label of this text fit well inside the plot's width? */
+export function fitsPlot(text: string, ctx: SceneCtx): boolean {
+    const m = ctx.metrics;
+    if (!m) return true;
+    const box = textBoxPt({ x: 0, y: 0, text, anchor: 'center', size: 'small' }, ctx.view, m);
+    return (box.x1 - box.x0) * MATH_SPREAD <= LABEL_SHARE * m.w;
 }
 
 /** Does any clause have a value anywhere in [lo, hi]? */

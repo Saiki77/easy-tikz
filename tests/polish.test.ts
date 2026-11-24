@@ -490,3 +490,17 @@ test('polish: moving or deleting objects of a chart with steps keeps every comme
         ['% a', 'let A = [[1, 1], [0, 1]]', 'draw the grid', '% b', 'then', '% c', 'then draw the basis vectors', 'shade the unit square', '% d']
     );
 });
+
+test('polish: a set label too wide for a small chart (the hover card) is the set alone', () => {
+    const labelOf = (text: string, widthCm: number) => {
+        const settings = SettingsManager.fromJSON(read(text));
+        const math = settings.createMathContext();
+        const config = settings.toRendererConfig(math);
+        const scene = computeScene2D({ functions: config.functions, tools: config.tools, math, view: { xmin: -4, xmax: 4, ymin: -1, ymax: 1 }, grid: { nx: 60, ny: 60 }, axisStyle: 'box', polar: false, labelMetrics: labelMetricsFor(widthCm, 5.5) });
+        return scene.items.flatMap((i) => i.texts.map((x) => x.text));
+    };
+    const long = 'show x from -4 to 4\nmark where $x^3 - 3x \\ge 0$ on the x-axis, labelled';
+    assert.deepEqual(labelOf(long, 8), ['$[-1.732, 0] \\cup [1.732, \\infty)$']);
+    assert.deepEqual(labelOf(long, 16), ['$\\{x \\mid x^{3} - 3 x \\ge 0\\} = [-1.732, 0] \\cup [1.732, \\infty)$']);
+    assert.deepEqual(labelOf('show x from -4 to 4\nmark where $x^2 - 4 \\le 0$ on the x-axis, labelled', 8), ['$\\{x \\mid x^{2} - 4 \\le 0\\} = [-2, 2]$']);
+});
