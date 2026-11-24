@@ -27,6 +27,8 @@ import { stripMathDollars } from '../latex';
 import { FULL_OPTION_HELP, isFullText, mapFull, readFull } from './full';
 import { eventNames } from '../beyond/event';
 import { boxRatioOf } from '../box3d';
+// 6.0 B
+import { looksLikeAxisSet, looksLikeChord, readAxisSet, readChord } from '../notes6/text';
 
 type Data = Record<string, unknown>;
 
@@ -75,7 +77,7 @@ export const THICKNESSES = ['very thin', 'very thick', 'thin', 'thick'];
 export const PATTERNS = new Set(['solid', 'horizontal', 'vertical', 'crosshatch', 'dots', 'north-east', 'north-west']);
 export const ANCHORS = new Set(['center', 'above', 'below', 'left', 'right']);
 const AXIS_STYLES: Record<string, string> = { middle: 'middle', centre: 'middle', center: 'middle', box: 'box', edges: 'axes', edge: 'axes', axes: 'axes' };
-export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y' };
+export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', axisSet: 'AX', chord: 'CH' /* 6.0 B */ };
 const NAME = '[A-Za-z][A-Za-z0-9_]*';
 /** A name the block can spell: letters, digits and _. */
 export const NAME_RE = new RegExp(`^${NAME}$`);
@@ -476,6 +478,9 @@ const OPTION_HELP: Record<string, string> = {
     riemann: 'in a colour, thin, thick, opacity 0.35, labelled, labelled "text", hidden',
     slopeField: 'in a colour, thin, thick, hidden',
     solution: 'in a colour, thin, thick, dashed, hidden',
+    // 6.0 B
+    axisSet: 'in a colour, thin, thick, labelled, labelled "text", hidden',
+    chord: 'in a colour, thin, thick, dashed, labelled, labelled "text", hidden',
 };
 
 /** Each kind of object in words, for messages. */
@@ -495,6 +500,9 @@ const KIND_WORDS: Record<keyof typeof OPTION_HELP, MessageKey> = {
     riemann: 'beyond.text.kindRiemann',
     slopeField: 'beyond.text.kindSlopeField',
     solution: 'beyond.text.kindSolution',
+    // 6.0 B
+    axisSet: 'notes6.text.kindAxisSet',
+    chord: 'notes6.text.kindChord',
 };
 
 /** A kind of object in the reader's words, for messages. */
@@ -636,6 +644,12 @@ function applyKindOption(b: Builder, kind: string, target: Data, opt: Piece): bo
     if (kind === 'plane') {
         const m = word(/^opacity\s+(.+)$/i);
         if (m) return numberOption(b, opt, target, 'fillOpacity', m[1]);
+        return false;
+    }
+    // 6.0 B: sets on an axis and chords.
+    if (kind === 'axisSet' || kind === 'chord') {
+        if (lower === 'labelled' || lower === 'labeled') return set(target, 'valueLabel', true);
+        if (kind === 'chord' && lower === 'dashed') return set(target, 'dashed', true);
         return false;
     }
     return beyondOption(b, kind, target, opt);
@@ -1192,6 +1206,13 @@ function mark(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
         addTool(b, 'points', own, { dim: dims(b, [point]), source: 'list', points: point.text }, options, 'points');
         return;
     }
+    // 6.0 B: mark where g(x) <= 0 on the x-axis, a set on an axis.
+    const set = readAxisSet(p.text);
+    if (set && /^where\s/i.test(rest.text.trim())) {
+        addTool(b, 'axisSet', name, set, options, 'axisSet');
+        return;
+    }
+    if (/^where\s/i.test(rest.text.trim()) && looksLikeAxisSet(rest.text)) return b.problem(p.at, msg('notes6.text.axisSetTakes'));
     // 5.0: mark the data (of D2); options the words did not catch are named.
     if (/^the\s+data\b/i.test(rest.text.trim())) {
         const f = formulaOptions(p, options);
@@ -1227,6 +1248,13 @@ function draw(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
     const t = rest.text.trim();
     if (!t) return b.problem(rest.at, msg('problems.text.drawTakes'));
     if (DEFINITION.test(t)) return formulaLine(b, name, rest, options);
+    // 6.0 B: draw the chord of g from a to b (at λ).
+    const chord = readChord(t);
+    if (chord) {
+        addTool(b, 'chord', name, chord, options, 'chord');
+        return;
+    }
+    if (looksLikeChord(t)) return b.problem(rest.at, msg('notes6.text.chordTakes'));
     if (drawBeyond(b, name, rest, options)) return;
     const m = DRAW_NOUN.exec(t);
     if (m) {

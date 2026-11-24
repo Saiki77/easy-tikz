@@ -1228,6 +1228,8 @@ test('recipes: the documented lists, unique ids, sections and plain-language tex
             'data-table', 'data-points', 'regression',
             'normal-distribution', 'binomial-distribution', 'probability',
             'riemann-sum', 'slope-field', 'solution',
+            // 6.0 B
+            'axis-set', 'chord',
             'label', 'slider',
         ]
     );

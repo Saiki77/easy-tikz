@@ -26,6 +26,8 @@ import { isColormap } from '../colormaps';
 import { looksLikeLatex } from '../latex';
 import { eventNames } from '../beyond/event';
 import { boxRatioOf } from '../box3d';
+// 6.0 B
+import { axisSetHead, chordHead } from '../notes6/text';
 
 // ---------------------------------------------------------------- values
 
@@ -427,7 +429,8 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
             head = `draw the plane ${axis} = ${value}`;
             o.mark('axis', 'value');
         }
-    } else if (BEYOND_HEADS[type]) head = BEYOND_HEADS[type](full, o, ctx);
+    } else if (type === 'axisSet' || type === 'chord') head = notes6Head(full, o); // 6.0 B
+    else if (BEYOND_HEADS[type]) head = BEYOND_HEADS[type](full, o, ctx);
     // `title: ...` would read as a title line, so such a name only fits a raw line.
     if (!head || !NAME_RE.test(name) || /^(title|xlabel|ylabel|zlabel)$/i.test(name)) return raw('tool', min);
     if (type === 'region') {
@@ -445,6 +448,13 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
     } else if (type === 'plane3D') {
         o.colour();
         o.take('fillOpacity', (v) => (typeof v === 'number' && Number.isFinite(v) ? `opacity ${v}` : null));
+    } else if (type === 'axisSet' || type === 'chord') {
+        // 6.0 B
+        o.colour();
+        o.take('thickness', (v) => (typeof v === 'string' && THICKNESSES.includes(v) ? v : null));
+        if (type === 'chord') o.take('dashed', (v) => (v === true ? 'dashed' : null));
+        o.take('label', (v) => (typeof v === 'string' ? `labelled ${quote(v)}` : null));
+        o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
     } else if (BEYOND_HEADS[type]) {
         beyondOptions(type, o);
     } else {
@@ -1196,6 +1206,29 @@ function beyondOptions(type: string, o: Options) {
         o.take('label', (v) => (v === '({x:2}, {y:2})' ? 'with coordinates' : typeof v === 'string' ? `labelled ${quote(v)}` : null));
         o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
     }
+}
+
+// ------------------------------------------------------------- 6.0 B
+
+/** The statement of a set on an axis or a chord (null: no line form fits, the tool is written raw). */
+function notes6Head(full: Data, o: Options): string | null {
+    if (str(full.type) === 'axisSet') {
+        const cond = str(full.condition).trim();
+        const latex = looksLikeLatex(cond);
+        // The condition stands between `where` and `on the x-axis`: no comma or bar of the line, no `on the` of its own.
+        if (!cond || hasControl(cond) || (!latex && hasBar(cond)) || parts(cond, ',').length !== 1 || /\son\s+the\s/i.test(cond)) return null;
+        const axis = str(full.axis) === 'y' ? 'y' : 'x';
+        o.mark('condition', 'axis');
+        return axisSetHead(mathText(cond), axis);
+    }
+    const fn = str(full.function);
+    const from = part(full.from);
+    const to = part(full.to);
+    const atRaw = str(full.at).trim();
+    const at = atRaw ? part(atRaw) : '';
+    if (!NAME_RE.test(fn) || from === null || to === null || at === null || /\s(?:to|at)\s/i.test(to) || /\sat\s/i.test(from) || /\sat\s/i.test(at)) return null;
+    o.mark('function', 'from', 'to', 'at');
+    return chordHead(fn, from, to, at);
 }
 
 /**

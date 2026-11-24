@@ -33,6 +33,8 @@ import type { LineTrace, ObjectList, TextChart, TextProblem } from './parse';
 import { COLORS, LINE_BREAK, NAME_RE, THICKNESSES, definedNames, parseChartText, splitStatement, splitTop } from './parse';
 import { NO_WORDS, chartWords, hasWords, readWords } from './words';
 import { boxRatioOf } from '../box3d';
+// 6.0 B
+import { AXIS_FLAGS, readAxisSet, readChord } from '../notes6/text';
 
 type Data = Record<string, unknown>;
 
@@ -91,6 +93,9 @@ export const FULL_OPTION_HELP: Record<string, string> = {
     text: 'a colour, small, large, above, below, left, right, center, hidden',
     surface: 'a colour, a colour map (colormap/viridis, heat, cool, diverging, rainbow, greyscale), domain=a:b, y domain=c:d, opacity=0.7, mesh=0.4, samples=40, wireframe, hidden',
     plane: 'a colour, opacity=0.25, hidden',
+    // 6.0 B
+    axisSet: 'a colour, thin, thick, labelled, label={text}, hidden; x-axis or y-axis says the axis',
+    chord: 'a colour, thin, thick, dashed, labelled, label={text}, hidden; chord, from=a, to=b and at=λ say the chord',
 };
 
 // ------------------------------------------------------------ text pieces
@@ -503,7 +508,7 @@ function optionWords(o: Opt, kind: Kind, variable: string): Mapped {
 }
 
 /** Keys the commands take with a value (name=R1, at=..., in=R1, levels=..., labels=..., text=...); the others they take as flags (max, ->, plane). */
-const TAKES_VALUE = new Set(['name', 'at', 'in', 'levels', 'labels', 'text']);
+const TAKES_VALUE = new Set(['name', 'at', 'in', 'levels', 'labels', 'text', 'from', 'to' /* 6.0 B */]);
 
 /** The options of an object after a bar (`head | red, dashed`), but those its line itself takes. */
 function barInto(m: Mapped, opts: Opt[], kind: Kind, variable: string, taken: ReadonlySet<string>, extra: Mapped[] = []) {
@@ -619,6 +624,24 @@ function drawWords(cmd: Command): Mapped {
         barInto(m, opts, 'curve', 'x', new Set(['name', 'levels']));
         return m;
     }
+    // 6.0 B: \draw[chord, from=a, to=b, at=λ]{g} is the chord of g.
+    const chord = flagOf(opts, 'chord');
+    const from = valueOf(opts, 'from');
+    const to = valueOf(opts, 'to');
+    if (chord && from && to && arg.text) {
+        m.put('draw the chord of ', cmd.at).copy(arg.text, arg.at);
+        const value = (o: Opt, word: string) => {
+            const v = inner(o.value ?? '', o.valueAt);
+            m.put(word, o.at);
+            mathInto(m, v.text.trim(), v.at + (v.text.length - v.text.trimStart().length));
+        };
+        value(from, ' from ');
+        value(to, ' to ');
+        const at = valueOf(opts, 'at');
+        if (at) value(at, ' at ');
+        barInto(m, opts, 'other', 'x', new Set(['name', 'chord', 'from', 'to', 'at']));
+        return m;
+    }
     const path = pathOf(arg);
     if (path) {
         const arrow = flagOf(opts, '->', '<-', '<->');
@@ -662,6 +685,15 @@ function markWords(cmd: Command): Mapped {
     };
     const sense = flagOf(opts, 'max', 'maximum') ? 'maximum' : flagOf(opts, 'min', 'minimum') ? 'minimum' : null;
     const taken = new Set(['name', 'in', 'max', 'maximum', 'min', 'minimum', 'corners', 'integer', 'crossings', 'intersections']);
+    // 6.0 B: \mark[x-axis]{g(x) \le 0} is the set on the axis where the condition holds.
+    const axisFlag = flagOf(opts, ...AXIS_FLAGS);
+    if (axisFlag && arg.text) {
+        m.put('mark where ', cmd.at);
+        mathInto(m, arg.text, arg.at);
+        m.put(` on the ${axisFlag.key}`, axisFlag.at);
+        barInto(m, opts, 'other', 'x', new Set(['name', ...AXIS_FLAGS]));
+        return m;
+    }
     if (flagOf(opts, 'crossings', 'intersections')) {
         let refs = splitCommas(arg.text, arg.at).filter((p) => p.text);
         if (refs.length === 1) refs = splitTop(arg.text, ' and ', arg.at);
@@ -1110,6 +1142,12 @@ function drawFull(own: string, rest: string, options: string[]): string | null {
     const t = rest.trim();
     if (!t) return null;
     if (DEFINITION.test(t)) return command('plot', own, options.map((o) => optionFull(o, 'function')), t);
+    // 6.0 B: the chord of a function.
+    const chord = readChord(t);
+    if (chord) {
+        const lead = ['chord', `from=${encValue(chord.from)}`, `to=${encValue(chord.to)}`, ...(chord.at ? [`at=${encValue(chord.at)}`] : [])];
+        return command('draw', own, [...lead, ...options.map((o) => optionFull(o, 'other'))], chord.function);
+    }
     const noun = DRAW_NOUN.exec(t);
     const curve = (eq: string) => command('draw', own, options.map((o) => optionFull(o, 'curve')), eq);
     if (!noun) return curve(t);
@@ -1166,6 +1204,9 @@ function markFull(own: string, rest: string, options: string[]): string | null {
     const p = rest.trim().replace(/^the\s+/i, '');
     const region = (r: string): string[] => (/^the\s+region$/i.test(r) ? [] : [`in=${encValue(r)}`]);
     const opts = (lead: string[]) => [...lead, ...options.map((o) => optionFull(o, 'points'))];
+    // 6.0 B: a set on an axis.
+    const set = /^where\s/i.test(p) ? readAxisSet(p) : null;
+    if (set) return command('mark', own, [`${set.axis}-axis`, ...options.map((o) => optionFull(o, 'other'))], set.condition);
     let m = /^where\s+(\S+)\s+and\s+(\S+)\s+(?:cross|meet|intersect)$/i.exec(p) ?? /^(?:crossings|intersections|crossing\s+points|intersection\s+points)\s+of\s+(\S+)\s+and\s+(\S+)$/i.exec(p);
     if (m) return command('mark', own, opts(['crossings']), `${m[1]}, ${m[2]}`);
     m = /^corners\s+of\s+(the\s+region|\S+)$/i.exec(p);

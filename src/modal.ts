@@ -14,6 +14,8 @@ import { View } from './geometry';
 import { EXAMPLES, defaultParameter } from './migrate';
 import { showcaseExamples } from './guides';
 import { beyondToolReads, renameInBeyondTool } from './beyond/tools';
+// 6.0 B
+import { notes6ToolReads, renameInNotes6Tool } from './notes6/tools';
 import type { NoteTable } from './beyond/table';
 import type { ChartDraft } from './templates';
 import type { BlockFormat } from './blockjson';
@@ -705,7 +707,8 @@ export class TikzModal extends Modal implements PanelHost {
                     t.value = expr(t.value);
                     break;
                 default:
-                    renameInBeyondTool(t, { expr, tpl, ref, kind });
+                    // 6.0 B: sets on an axis and chords first.
+                    if (!renameInNotes6Tool(t, { expr, tpl, ref, kind })) renameInBeyondTool(t, { expr, tpl, ref, kind });
             }
         }
         for (const a of this.list<Annotation>('annotations')) {
@@ -3037,7 +3040,7 @@ export class TikzModal extends Modal implements PanelHost {
                     if (reads(t.value)) return true;
                     break;
                 default:
-                    if (beyondToolReads(t, reads)) return true;
+                    if (beyondToolReads(t, reads) || notes6ToolReads(t, reads)) return true; // 6.0 B
             }
         }
         for (const a of this.list<Annotation>('annotations')) {

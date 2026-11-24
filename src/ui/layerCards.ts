@@ -176,6 +176,9 @@ const TOOL_KIND: Record<Tool['type'], MessageKey> = {
     riemann: 'beyond.kind.riemann',
     slopeField: 'beyond.kind.slopeField',
     solution: 'beyond.kind.solution',
+    // 6.0 B
+    axisSet: 'notes6.kind.axisSet',
+    chord: 'notes6.kind.chord',
 };
 
 // --------------------------------------------------------------- helpers

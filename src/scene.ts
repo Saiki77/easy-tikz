@@ -46,6 +46,8 @@ import { findExtrema1D } from './math';
 import { errorText } from './util';
 import { language, t as msg } from './i18n';
 import { BEYOND_TYPES, BeyondOutput, beyondSources, computeBeyond } from './beyond/scene';
+// 6.0 B
+import { NOTES6_TYPES, computeNotes6, notes6Sources } from './notes6/scene';
 
 export type ArrowHeads = 'forward' | 'backward' | 'both';
 
@@ -78,6 +80,9 @@ export interface MarkerPrim {
     size: MarkerSize;
     /** Drawn with reduced opacity (e.g. optimum of an unbounded problem within the view). */
     dim?: boolean;
+    // 6.0 B
+    /** An open dot: a ring in the colour, filled with the background (the end of a set that is not in it). */
+    open?: boolean;
 }
 
 /** Side of its anchor point a scene text sits on: the annotation anchors plus the four diagonals. */
@@ -823,6 +828,11 @@ function toolNode(t: Tool, math: MathContext): SceneNode {
             break;
         case 'plane3D':
             scan(t.value, 'value');
+            break;
+        // 6.0 B
+        case 'axisSet':
+        case 'chord':
+            notes6Sources(t, scan);
             break;
         default:
             beyondSources(t, scan, refs);
@@ -2266,6 +2276,10 @@ function compute2D(node: SceneNode, ctx: Ctx): Output {
             return computePointsTool(t, ctx);
         case 'segment':
             return computeSegmentTool(t, ctx);
+        // 6.0 B
+        case 'axisSet':
+        case 'chord':
+            return computeNotes6(t, ctx) ?? newOutput();
         default:
             return computeBeyond(t, ctx) ?? newOutput();
     }
@@ -3684,7 +3698,7 @@ function scene3D(input: SceneInput3D): Scene3D {
     }
     // Data, probability, Riemann sums and slope fields are drawn in 2D charts only (5.0).
     const only2D: SceneIssue[] = tools
-        .filter((t) => BEYOND_TYPES.has(t.type) && !t.hidden)
+        .filter((t) => (BEYOND_TYPES.has(t.type) || NOTES6_TYPES.has(t.type)) && !t.hidden) // 6.0 B: sets on an axis and chords too
         .map((t) => ({ source: str(t.name), message: msg('beyond.problem.only2D', { name: str(t.name) }), severity: 'error' as const }));
     if (!nodes.length) {
         math.setDerived({});

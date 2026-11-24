@@ -459,12 +459,16 @@ function wrap(standalone: boolean, libs: Libraries, picture: string[]): string {
     const libraries: string[] = [];
     if (libs.patterns) libraries.push('patterns');
     if (libs.braces) libraries.push('decorations.pathreplacing');
+    // 6.0 B: \mathbb (the label of a set on an axis that is all of R) needs amssymb.
+    const amssymb = picture.some((l) => l.includes('\\mathbb'));
     if (standalone) {
         lines.push('\\documentclass[border=5pt]{standalone}', '\\usepackage{pgfplots}', '\\pgfplotsset{compat=1.16}');
+        if (amssymb) lines.push('\\usepackage{amssymb}');
         for (const lib of libraries) lines.push(`\\usetikzlibrary{${lib}}`);
         lines.push('\\begin{document}');
     } else {
         lines.push('% Needs: \\usepackage{pgfplots}', '% Needs: \\pgfplotsset{compat=1.16}');
+        if (amssymb) lines.push('% Needs: \\usepackage{amssymb}');
         for (const lib of libraries) lines.push(`% Needs: \\usetikzlibrary{${lib}}`);
     }
     lines.push(...picture);
@@ -841,10 +845,12 @@ function addMarkers(layers: Layers, item: SceneItem2D, colors: ColorSet, view: V
         if (!finitePt(m) || !inView(m, view, 0)) continue;
         const c = colors.use(m.color);
         const size = MARK_SIZE[m.size] || MARK_SIZE.normal;
-        const key = `${c}|${size}|${m.dim ? 1 : 0}`;
+        const key = `${c}|${size}|${m.dim ? 1 : 0}|${m.open ? 1 : 0}`;
         let g = groups.length ? groups[groups.length - 1] : null;
         if (!g || g.key !== key) {
-            const opts = ['only marks', 'mark=*', `mark size=${size}`, c, 'mark options={draw=white, line width=0.4pt}'];
+            // 6.0 B: an open dot is a ring in the colour filled with white.
+            const look = m.open ? `mark options={fill=white, draw=${c}, line width=0.8pt}` : 'mark options={draw=white, line width=0.4pt}';
+            const opts = ['only marks', 'mark=*', `mark size=${size}`, c, look];
             if (m.dim) opts.push(`opacity=${fmtNum(DIM_OPACITY)}`);
             opts.push('forget plot');
             g = { key, opts: opts.join(', '), pts: [] };

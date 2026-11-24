@@ -14,6 +14,9 @@ import { isColormap } from './colormaps';
 import { GRID_OPACITY } from './opacity';
 import { dollarMath, splitDomain } from './expr';
 import { t } from './i18n';
+// 6.0 B
+import { axisSetDefaults, chordDefaults, completeAxisSet, completeChord } from './notes6/tools';
+import { notes6Recipes } from './notes6/recipes';
 import {
     Annotation,
     AnnotationAnchor,
@@ -111,6 +114,9 @@ const TOOL_PREFIX: Record<ToolType, string> = {
     riemann: 'RS',
     slopeField: 'SF',
     solution: 'Y',
+    // 6.0 B
+    axisSet: 'AX',
+    chord: 'CH',
 };
 
 const PARAMETER_LETTERS = ['a', 'b', 'c', 'd', 'k', 'm', 'n', 'p', 'q', 'r', 's', 'u', 'v', 'w'];
@@ -1061,6 +1067,11 @@ function convertTool(src: Record<string, unknown>, ctx: ConvertContext): { body:
             return { body: completeSlopeField(src), hidden: false };
         case 'solution':
             return { body: completeSolution(src), hidden: false };
+        // 6.0 B
+        case 'axisSet':
+            return { body: completeAxisSet(src), hidden: false };
+        case 'chord':
+            return { body: completeChord(src), hidden: false };
         case 'segment':
             return isLegacySegment(src) ? legacySegment(src) : { body: completeSegment(src, ctx), hidden: false };
         case 'areaBetween':
@@ -1652,6 +1663,11 @@ export function defaultTool(type: ToolType, opts: { is3D: boolean; tools: Tool[]
             return newSlopeField(opts);
         case 'solution':
             return newSolution(opts);
+        // 6.0 B
+        case 'axisSet':
+            return { ...axisSetDefaults(), ...identity('axisSet', opts) };
+        case 'chord':
+            return { ...chordDefaults(), ...identity('chord', opts) };
     }
 }
 
@@ -1975,6 +1991,13 @@ function recipes2D(): Recipe[] {
             build: (ctx) => segmentRecipe(ctx, { path: '(1, 1); (4, 1)', style: 'brace', label: 'width' }),
         },
         ...beyondRecipes(in2D),
+        // 6.0 B
+        ...notes6Recipes(in2D, {
+            newTool: (type, ctx) => defaultTool(type, toolOpts(ctx)),
+            newFunction: (ctx, expression) => ({ ...defaultFunction(chartNames(ctx), nextFunctionColor(ctx.functions)), expression }),
+            callable: callableFunctions,
+            names: chartNames,
+        }),
         labelRecipe(in2D),
         sliderRecipe(in2D),
     ];

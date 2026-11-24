@@ -1290,6 +1290,12 @@ export class SVGRenderer {
             'stroke-width': this.compact ? '1' : '1.5',
         };
         if (m.dim) attrs.opacity = '0.45';
+        // 6.0 B: an open dot is a ring in the colour around the background.
+        if (m.open) {
+            attrs.fill = BACKGROUND;
+            attrs.stroke = this.css(m.color);
+            attrs['stroke-width'] = this.compact ? '1.2' : '2';
+        }
         g.appendChild(this.el('circle', attrs));
     }
 

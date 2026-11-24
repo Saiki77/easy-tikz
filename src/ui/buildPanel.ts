@@ -24,6 +24,8 @@ import { cloneData } from '../util';
 import { LayerCardActions, LayerCardHandle, createLayerCard } from './layerCards';
 // The cards of data, probability, Riemann sums and slope fields register themselves with the layer cards (5.0).
 import '../beyond/cards';
+// 6.0 B: sets on an axis and chords.
+import '../notes6/cards';
 import { CardUiState, FunctionCardHandle, createFunctionCard, createSurfaceCard } from './functionCards';
 import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, textButton, trapEscape } from './kit';
 import { PickerContent, PickerGroup, PickerItem, addPicker } from './addPicker';
@@ -147,6 +149,9 @@ const RECIPE_WORDS: Record<string, string> = {
     probability: 'p value area shade',
     'riemann-sum': 'integral rectangles left right midpoint',
     'slope-field': 'ode differential equation direction',
+    // 6.0 B
+    'axis-set': 'interval sublevel set number line where below zero',
+    chord: 'jensen convex secant lambda',
 };
 
 /** Menu heading per recipe section (Functions reads Surfaces in 3D charts). */
