@@ -251,6 +251,9 @@ const SYMBOL_MAP: Record<string, string> = {
     '\\ast': '∗',
     '\\circ': '∘',
     '\\bullet': '•',
+    // 6.0: the bar of set notation ({x | g(x) ≤ 0}, the labels of sets on an axis).
+    '\\mid': '|',
+    '\\vert': '|',
     '\\leq': '≤',
     '\\le': '≤',
     '\\geq': '≥',
@@ -575,8 +578,11 @@ function stripLatexInner(text: string): string {
  * and `\sqrt{}`, and drops `\left`/`\right` sizing and grouping braces.
  */
 export function stripLatex(text: string): string {
-    return stripLatexInner(text);
+    // 6.0: number sets (\mathbb{R}) as their double-struck letters, as set labels use them.
+    return stripLatexInner(text.replace(/\\mathbb\s*\{\s*([RNZQC])\s*\}|\\mathbb\s*([RNZQC])(?![A-Za-z])/g, (_m, a: string | undefined, b: string | undefined) => DOUBLE_STRUCK[(a ?? b) as string]));
 }
+
+const DOUBLE_STRUCK: Record<string, string> = { R: 'ℝ', N: 'ℕ', Z: 'ℤ', Q: 'ℚ', C: 'ℂ' };
 
 /**
  * Parse a hex color of the form `#rrggbb` into its components, or return null

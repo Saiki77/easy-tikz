@@ -319,9 +319,13 @@ function computeRestPoints(t: RestPointsTool, ctx: SceneCtx): SceneOutput {
     }
     const color = str(t.color) || 'red';
     const size = t.size === 'small' || t.size === 'large' ? t.size : 'normal';
+    // A rest point on the border of the view keeps its marker; its name would not fit beside it.
+    const mx = (ctx.view.xmax - ctx.view.xmin) * 0.03;
+    const my = (ctx.view.ymax - ctx.view.ymin) * 0.03;
+    const roomy = (p: { x: number; y: number }) => p.x > ctx.view.xmin + mx && p.x < ctx.view.xmax - mx && p.y > ctx.view.ymin + my && p.y < ctx.view.ymax - my;
     found.forEach((p, i) => {
         out.markers.push(p.stable ? { x: p.x, y: p.y, color, size } : { x: p.x, y: p.y, color, size, open: true });
-        if (t.valueLabel) out.texts.push({ x: p.x, y: p.y, template: 'label', part: i, literal: restKindText(p.kind), color, size: 'small', dir: UP_RIGHT, marker: size });
+        if (t.valueLabel && roomy(p)) out.texts.push({ x: p.x, y: p.y, template: 'label', part: i, literal: restKindText(p.kind), color, size: 'small', dir: UP_RIGHT, marker: size });
     });
     return out;
 }
