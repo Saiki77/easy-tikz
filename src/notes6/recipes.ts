@@ -5,13 +5,15 @@
  * and hands over the helpers they need, so this file never imports it.
  * Pure: no DOM, no Obsidian.
  */
-import type { AxisSetTool, ChordTool, FunctionParameters, Parameter, Tool } from '../types';
+import type { AxisSetTool, ChordTool, FunctionParameters, Parameter } from '../types';
+import { axisSetDefaults, chordDefaults } from './tools';
 import type { Recipe, RecipeContext } from '../migrate';
 import { t } from '../i18n';
 
 /** What migrate.ts lends the recipes. */
 export interface RecipeKit {
-    newTool(type: 'axisSet' | 'chord', ctx: RecipeContext): Tool;
+    /** A new tool's id and name (the name free in the chart). */
+    identity(type: 'axisSet' | 'chord', ctx: RecipeContext): { id: string; name: string };
     /** A new function (its name free, its colour the next one), for a chart that has none to point at. */
     newFunction(ctx: RecipeContext, expression: string): FunctionParameters;
     /** Names usable as f(x): named, not parametric, with an expression. */
@@ -39,7 +41,7 @@ export function notes6Recipes(in2D: (ctx: RecipeContext) => boolean, kit: Recipe
             build: (ctx) => {
                 const { name, fn } = someFunction(ctx, kit, 'x^2 - 4');
                 const c: RecipeContext = fn ? { ...ctx, functions: [...ctx.functions, fn] } : ctx;
-                const tool = { ...(kit.newTool('axisSet', c) as AxisSetTool), condition: `${name}(x) <= 0`, valueLabel: true };
+                const tool: AxisSetTool = { ...axisSetDefaults(), ...kit.identity('axisSet', c), condition: `${name}(x) <= 0`, valueLabel: true };
                 if (!fn) return { kind: 'tool', tool };
                 return { kind: 'items', functions: [fn], tools: [tool] };
             },
@@ -55,7 +57,7 @@ export function notes6Recipes(in2D: (ctx: RecipeContext) => boolean, kit: Recipe
                 const c: RecipeContext = fn ? { ...ctx, functions: [...ctx.functions, fn] } : ctx;
                 // λ on a slider, called lambda when that name is free.
                 const lambda: Parameter | null = kit.names(c).includes('lambda') ? null : { name: 'lambda', value: 0.3, min: 0, max: 1, step: 0.01 };
-                const tool = { ...(kit.newTool('chord', c) as ChordTool), function: name, from: '-1', to: '2', at: lambda ? 'lambda' : '0.5', valueLabel: true };
+                const tool: ChordTool = { ...chordDefaults(), ...kit.identity('chord', c), function: name, from: '-1', to: '2', at: lambda ? 'lambda' : '0.5', valueLabel: true };
                 return { kind: 'items', parameters: lambda ? [lambda] : [], functions: fn ? [fn] : [], tools: [tool] };
             },
         },

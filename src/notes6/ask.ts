@@ -207,9 +207,12 @@ function inside(rings: Pt[][], p: Pt): boolean {
  */
 export function pickTarget(drawn: DrawnChart, tools: Tool[], p: Pt, sx: number, sy: number, tol: number): AskTarget | null {
     const type = (name: string) => tools.find((x) => x.name === name)?.type;
-    let best: { d: number; target: AskTarget } | null = null;
+    const best: { d: number; target: AskTarget | null } = { d: Infinity, target: null };
     const offer = (d: number, target: AskTarget, bias = 0) => {
-        if (d <= tol && (!best || d + bias < best.d)) best = { d: d + bias, target };
+        if (d <= tol && d + bias < best.d) {
+            best.d = d + bias;
+            best.target = target;
+        }
     };
     for (const item of drawn.items) {
         if (item.kind !== 'tool' || type(item.source) !== 'points') continue;
@@ -225,7 +228,7 @@ export function pickTarget(drawn: DrawnChart, tools: Tool[], p: Pt, sx: number, 
         const n = nearest(item.strokes.flatMap((s) => s.lines), p, sx, sy);
         if (n) offer(n.d, { kind: 'curve', name: item.source, x: n.at.x, y: n.at.y });
     }
-    if (best) return (best as { target: AskTarget }).target;
+    if (best.target) return best.target;
     // A region: the click inside its fill (the last one drawn is on top).
     for (let i = drawn.items.length - 1; i >= 0; i--) {
         const item = drawn.items[i];
@@ -242,7 +245,7 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 /** A list item as the chart stores it, without its id and name, for comparing. */
 function sameKey(listName: string, item: Data): string {
     const full = SettingsManager.fromJSON({ v: 4, [listName]: [clone(item)] }).serialize();
-    const one = { ...((list<Data>(full[listName])[0] ?? {}) as Data) };
+    const one: Data = { ...(list<Data>(full[listName])[0] ?? {}) };
     delete one.id;
     delete one.name;
     return stableJson(one);
@@ -264,7 +267,7 @@ function newItems(data: Data, all: string[]): Record<(typeof LISTS)[number], Dat
     // A problem on a line of the answer: it does not read.
     const first = base.split('\n').length + 1;
     if (after.problems.some((p) => p.line >= first)) return null;
-    const out = { parameters: [], functions: [], tools: [], annotations: [] } as Record<(typeof LISTS)[number], Data[]>;
+    const out: Record<(typeof LISTS)[number], Data[]> = { parameters: [], functions: [], tools: [], annotations: [] };
     for (const key of LISTS) {
         const a = list<Data>(before.data[key]);
         const b = list<Data>(after.data[key]);
@@ -381,13 +384,13 @@ function functionQuestions(ctx: AskContext): Question[] {
     const x0 = ctx.target.x;
     const q: Question[] = [];
     const axis = t('notes6.ask.group.axis');
-    const sign: Array<[string, string, string]> = [
+    const sign: Array<[string, string, 'notes6.ask.le' | 'notes6.ask.ge' | 'notes6.ask.lt' | 'notes6.ask.gt']> = [
         ['le', '\\le', 'notes6.ask.le'],
         ['ge', '\\ge', 'notes6.ask.ge'],
         ['lt', '<', 'notes6.ask.lt'],
         ['gt', '>', 'notes6.ask.gt'],
     ];
-    for (const [id, op, key] of sign) q.push({ id, group: axis, label: t(key as 'notes6.ask.le', { f }), answer: { lines: [`mark where $${f}(x) ${op} 0$ on the x-axis, labelled`] } });
+    for (const [id, op, key] of sign) q.push({ id, group: axis, label: t(key, { f }), answer: { lines: [`mark where $${f}(x) ${op} 0$ on the x-axis, labelled`] } });
     q.push({ id: 'zeros', group: axis, label: t('notes6.ask.zeros', { f }), answer: { lines: [`mark where $${f}(x) = 0$ on the x-axis, labelled`] } });
 
     const shape = t('notes6.ask.group.shape');

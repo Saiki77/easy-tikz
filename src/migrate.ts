@@ -1993,7 +1993,7 @@ function recipes2D(): Recipe[] {
         ...beyondRecipes(in2D),
         // 6.0 B
         ...notes6Recipes(in2D, {
-            newTool: (type, ctx) => defaultTool(type, toolOpts(ctx)),
+            identity: (type, ctx) => identity(type, toolOpts(ctx)),
             newFunction: (ctx, expression) => ({ ...defaultFunction(chartNames(ctx), nextFunctionColor(ctx.functions)), expression }),
             callable: callableFunctions,
             names: chartNames,

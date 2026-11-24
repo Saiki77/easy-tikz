@@ -140,6 +140,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
 
     const partnerOf = (key: RangeKey): RangeKey => (key.endsWith('min') ? (key.replace('min', 'max') as RangeKey) : (key.replace('max', 'min') as RangeKey));
 
+    let fitHint: HTMLElement | null = null; // 6.0 B
     const rangeInput = (row: HTMLElement, key: RangeKey, label: string) => {
         const handle = exprInput(row, {
             value: str(settings.getValue(key)),
@@ -149,6 +150,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
             validate: (src) => validateBound(key, src),
             onInput: (value) => {
                 settings.setValue(key, value);
+                fitHint?.toggleClass('tikz-hidden', settings.getValue('fitY') !== true); // 6.0 B
                 host.requestUpdate();
                 // min >= max is reported on either bound, so the partner may change state too.
                 ranges.get(partnerOf(key))?.validate();
@@ -191,6 +193,9 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
         }
         const hint = g.body.createDiv({ cls: 'etz-chart-hint' });
         hint.setText(t('panels.chart.rangesHint'));
+        // 6.0 B: a chart whose text gives no y range: y follows what it draws until a y range is typed.
+        fitHint = g.body.createDiv({ cls: 'etz-chart-hint', text: t('notes6.chart.fitY') });
+        fitHint.toggleClass('tikz-hidden', settings.getValue('fitY') !== true);
         const buttons = g.body.createDiv({ cls: 'etz-chart-buttons' });
         textButton(buttons, { text: t('panels.chart.autoFit'), icon: 'maximize-2', size: 'sm', onClick: () => opts.fit() });
         textButton(buttons, { text: t('common.reset'), icon: 'rotate-ccw', size: 'sm', onClick: () => opts.reset() });
@@ -501,6 +506,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
                 const value = str(settings.getValue(key));
                 if (handle.input !== active && handle.getValue() !== value) handle.setValue(value);
             });
+            fitHint?.toggleClass('tikz-hidden', settings.getValue('fitY') !== true); // 6.0 B
             gridMajor?.setValue(settings.getValue('showLargeGrid') === true);
             gridMinor?.setValue(settings.getValue('showSmallGrid') === true);
             gridOpacity?.setValue(opacityValue(settings.getValue('gridOpacity'), GRID_OPACITY));

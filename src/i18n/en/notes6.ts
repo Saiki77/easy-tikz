@@ -101,4 +101,7 @@ export const notes6 = {
     'notes6.hover.dimension': 'Dimension n',
     'notes6.hover.n1': 'n = 1',
     'notes6.hover.n2': 'n = 2',
+
+    // ---- Chart tab
+    'notes6.chart.fitY': 'The text of this chart gives no y range: y follows what the chart draws. Type a y range, pan or zoom to fix it.',
 };

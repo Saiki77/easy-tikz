@@ -94,7 +94,7 @@ export function showAskMenu(o: AskMenuOptions): AskMenuHandle {
         items[i].focus();
     };
     el.addEventListener('keydown', (e) => {
-        const at = items.indexOf(doc.activeElement as HTMLButtonElement);
+        const at = items.findIndex((b) => b === doc.activeElement);
         if (e.key === 'ArrowDown') move(at + 1);
         else if (e.key === 'ArrowUp') move(at < 0 ? items.length - 1 : at - 1);
         else if (e.key === 'Home') move(0);

@@ -104,4 +104,7 @@ export const notes6: Messages<typeof en> = {
     'notes6.hover.dimension': '次元 n',
     'notes6.hover.n1': 'n = 1',
     'notes6.hover.n2': 'n = 2',
+
+    // ---- Chart tab
+    'notes6.chart.fitY': 'このグラフのテキストには y の範囲がありません。y は描くものに合わせて決まります。y の範囲を入力するか、移動や拡大をすると固定されます。',
 };
