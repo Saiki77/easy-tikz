@@ -37,6 +37,7 @@ test('LaTeX of values reads as the plain syntax', () => {
     assert.match(latexToPlain('\\Re z + \\Im z'), /^re\(z\) \+ im\(z\)$/);
     assert.match(latexToPlain('\\det A'), /^det\(A\)$/);
     assert.match(latexToPlain('v \\times w'), /^v × w$/);
+    assert.equal(latexToPlain('\\vec{v} + \\vec w'), 'v + w');
 });
 
 test('sums, products, factorials and binomials in a plain formula', () => {

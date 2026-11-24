@@ -189,3 +189,10 @@ test('a function with no pgfmath form (a gradient) exports as its points; let fu
     assert.ok(s.items.find((i) => i.source === 'R1')?.fills.length);
     assert.ok(s.items.find((i) => i.source === 'C1')?.strokes.length);
 });
+
+test('arrows from a let point; a 3D vector in a 2D chart is a problem of its dimension', () => {
+    const s = sceneOf('let P = (1, 1)\nlet v = (2, 1)\ndraw v as an arrow from P');
+    assert.deepEqual(issues(s), []);
+    assert.deepEqual(s.items.find((i) => i.strokes.length)?.strokes[0].lines[0].map((p) => [p.x, p.y]), [[1, 1], [3, 2]]);
+    assert.deepEqual(issues(sceneOf('let u = (1, 2, 3)\ndraw u as an arrow')), ['V1.vectors error: u has 3 numbers, a vector of this chart 2']);
+});

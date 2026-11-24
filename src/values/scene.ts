@@ -146,8 +146,9 @@ function computeVectors(t: VectorTool, ctx: SceneCtx, dim: 2 | 3): SceneOutput {
     let start = dim === 2 ? [0, 0] : [0, 0, 0];
     const fromSrc = str(t.from).trim();
     if (fromSrc) {
+        // A points tool (a dragged point moves the arrows); a let name is a value like any formula.
         const tool = ctx.toolsByName.get(fromSrc);
-        if (tool) {
+        if (tool && tool.type !== 'value') {
             const prod = ctx.outputs.get(fromSrc);
             const p = prod && prod.points && prod.points[0];
             if (!p) return fail(out, t.name, 'from', msg('problems.scene.hasError', { name: fromSrc }));
@@ -163,15 +164,12 @@ function computeVectors(t: VectorTool, ctx: SceneCtx, dim: 2 | 3): SceneOutput {
     const isVector = vectorName(ctx);
     const arrows: Arrow[] = [];
     const vectorOf = (v: Value, text: string): number[] | null => {
-        const p = asVector(v, dim);
-        if (!p) {
-            fail(out, t.name, 'vectors', msg('values.problem.notAVector', { text, what: shapeText(shapeOf(v)) }));
-            return null;
-        }
-        if (typeof v !== 'number' && v.kind === 'vec' && v.v.length > dim) {
+        if (typeof v !== 'number' && v.kind === 'vec' && v.v.length !== dim && !(dim === 3 && v.v.length === 2)) {
             fail(out, t.name, 'vectors', msg('values.problem.dimension', { text, n: v.v.length, dim }));
             return null;
         }
+        const p = asVector(v, dim);
+        if (!p) fail(out, t.name, 'vectors', msg('values.problem.notAVector', { text, what: shapeText(shapeOf(v)) }));
         return p;
     };
     if (t.tipToTail) {
