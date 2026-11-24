@@ -587,11 +587,12 @@ if (started) {
             const px = await obs.call(() => {
                 const r = window.__etzMedia.requireEditor().renderer3d;
                 const ctx = r.canvas.getContext('2d');
-                const dpr = window.devicePixelRatio || 1;
+                // 6.0 F4: the canvas has one pixel per screen pixel as shown (canvasScale), not always the screen density.
+                const [kx, ky] = r.canvasScale || [window.devicePixelRatio || 1, window.devicePixelRatio || 1];
                 const z = (x, y) => -3 + 6 * Math.exp(-((x / 2) ** 4 + (y / 2) ** 4));
                 const at = (x, y, zz) => {
                     const p = r.project(x, y, zz);
-                    const d = ctx.getImageData(Math.round(p.sx * dpr) - 2, Math.round(p.sy * dpr) - 2, 5, 5).data;
+                    const d = ctx.getImageData(Math.round(p.sx * kx) - 2, Math.round(p.sy * ky) - 2, 5, 5).data;
                     let sum = 0;
                     for (let k = 0; k < d.length; k += 4) sum += d[k] + d[k + 1] + d[k + 2];
                     return Math.round(sum / 25);

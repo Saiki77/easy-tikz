@@ -15,6 +15,7 @@ import type { MessageKey } from '../i18n';
 import { isColormap } from '../colormaps';
 import { looksLikeLatex, splitLetterRuns } from '../latex';
 import { rightSide, tupleParts } from './maths';
+import { optionValue } from './liveprims'; // 6.0 F4
 
 type Data = Record<string, unknown>;
 
@@ -29,9 +30,9 @@ export const MOTION_KINDS = new Set(['vectorField', 'restPoints', 'trajectory'])
 
 /** What each motion kind takes as options, for "unknown option" messages (chart words: they stay English). */
 export const MOTION_OPTION_HELP: Record<string, string> = {
-    vectorField: 'in a colour, thin, thick, coloured by length (in a colour map), with moving particles, with streamlines, density=30, hidden',
+    vectorField: 'in a colour, thin, thick, coloured by length (in a colour map), with moving particles, with streamlines, density=30, speed 1, 450 particles, trails 0.9, width 1.4, arrows 0.025, no arrows, hidden',
     restPoints: 'in a colour, small, large, labelled, hidden',
-    trajectory: 'in a colour, thin, thick, dashed, for t from a to b, coloured by time (in a colour map), traced, hidden',
+    trajectory: 'in a colour, thin, thick, dashed, for t from a to b, coloured by time (in a colour map), traced, speed 1, hidden',
 };
 
 export const MOTION_KIND_WORDS: Record<string, MessageKey> = {
@@ -76,13 +77,32 @@ function colouredBy(o: string): { by: 'length' | 'time'; map: string } | null {
 /** An option in the words of the motion lines (already in its short form: no leading with/the). */
 export function isMotionOption(o: string): boolean {
     const t = o.trim().toLowerCase();
-    return t === 'moving particles' || t === 'particles' || t === 'streamlines' || t === 'traced' || colouredBy(t) !== null; // traced: 6.0 F4
+    return t === 'moving particles' || t === 'particles' || t === 'streamlines' || t === 'traced' || colouredBy(t) !== null || flowOption(t) !== null; // traced, flowOption: 6.0 F4
+}
+
+/**
+ * 6.0 F4: an option of moving things with a number: `speed 2`, `450 particles`,
+ * `trails 0.9`, `width 1.4`, `arrows 0.05`, `no arrows`; the field and its value,
+ * or null (also for a number out of its range).
+ */
+export function flowOption(o: string): { key: 'speed' | 'count' | 'trails' | 'particleWidth' | 'arrows'; value: number } | null {
+    const t = o.trim().toLowerCase();
+    if (t === 'no arrows') return { key: 'arrows', value: 0 };
+    const count = /^(\d+)\s+particles$/.exec(t);
+    const m = count ? ['', 'particles', count[1]] : /^(speed|trails|width|arrows)\s+(\S+)$/.exec(t);
+    if (!m) return null;
+    const key = m[1] === 'particles' ? 'count' : m[1] === 'width' ? 'particleWidth' : m[1] === 'speed' ? 'speed' : m[1] === 'trails' ? 'trails' : 'arrows';
+    const value = optionValue(key, m[2]);
+    return value === undefined ? null : { key, value };
 }
 
 /** Apply a motion option to `target` of `kind`; true when it was one. */
 export function motionOption(kind: string, target: Data, o: string, problem: (key: 'range') => void): boolean {
     const t = o.trim();
     const lower = t.toLowerCase();
+    // 6.0 F4: speed on every moving thing, the flow's own options on a vector field.
+    const flow = flowOption(t);
+    if (flow && (kind === 'vectorField' || flow.key === 'speed') && kind !== 'restPoints') return set(target, flow.key, flow.value);
     if (kind === 'vectorField') {
         if (lower === 'moving particles' || lower === 'particles') return set(target, 'particles', true);
         if (lower === 'streamlines') return set(target, 'streamlines', true);
@@ -334,6 +354,12 @@ export function motionOptions(type: string, o: LineOptions, full: Data): void {
         o.take('colormap', mapWord('length'));
         o.take('particles', (v) => (v === true ? 'with moving particles' : null));
         o.take('streamlines', (v) => (v === true ? 'with streamlines' : null));
+        // 6.0 F4: the flow's options.
+        o.take('speed', (v) => (typeof v === 'number' ? `speed ${v}` : null));
+        o.take('count', (v) => (typeof v === 'number' ? `${v} particles` : null));
+        o.take('trails', (v) => (typeof v === 'number' ? `trails ${v}` : null));
+        o.take('particleWidth', (v) => (typeof v === 'number' ? `width ${v}` : null));
+        o.take('arrows', (v) => (v === 0 ? 'no arrows' : typeof v === 'number' ? `arrows ${v}` : null));
     } else if (type === 'restPoints') {
         o.take('size', (v) => (v === 'small' || v === 'large' || v === 'normal' ? v : null));
         o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
@@ -345,5 +371,6 @@ export function motionOptions(type: string, o: LineOptions, full: Data): void {
         o.take('colormap', (v) => (isColormap(v) ? `coloured by time in ${v}` : null));
         o.take('byTime', (v) => (v === true ? 'coloured by time' : null));
         o.take('traced', (v) => (v === true ? 'traced' : null));
+        o.take('speed', (v) => (typeof v === 'number' ? `speed ${v}` : null));
     }
 }

@@ -29,6 +29,7 @@ import { eventNames } from '../beyond/event';
 import { boxRatioOf } from '../box3d';
 // 6.0 C
 import { MOTION_KINDS, MOTION_KIND_WORDS, MOTION_OPTION_HELP, isMotionOption, motionOption, ownName, readMotionDraw, readMotionMark, thenPrefix } from '../motion6/text';
+import { optionValue } from '../motion6/liveprims'; // 6.0 F4
 import type { MotionRead } from '../motion6/text';
 import { MOTION_PREFIX } from '../motion6/tools';
 // 6.0 B
@@ -488,7 +489,8 @@ class Builder {
 }
 
 /** Lines about the chart itself, and sliders: their words are their own, and they take no options. */
-const CHART_WORDS = new Set(['view', 'show', 'axes', 'no', 'grid', 'with', 'size', 'equal', 'polar', '3d', 'snippet', 'variables', 'set', 'slider', 'frames', 'turning']); // frames: 6.0 C, turning: 6.0 F4
+// 6.0 F4: not `turning`: its line takes an option after a comma (`turning, speed 2`).
+const CHART_WORDS = new Set(['view', 'show', 'axes', 'no', 'grid', 'with', 'size', 'equal', 'polar', '3d', 'snippet', 'variables', 'set', 'slider', 'frames']); // frames: 6.0 C
 
 /** What each kind of object accepts as options, for messages (words of the chart language: they stay English). */
 const OPTION_HELP: Record<string, string> = {
@@ -1073,7 +1075,13 @@ function statement(b: Builder, line: string) {
         // 6.0 F4: a 3D chart turns by itself in notes and the editor. Only the word alone: `turning + x = 3` stays a formula.
         case 'turning':
             if (rest.text.trim()) return formulaLine(b, name, body, options);
-            if (options.length) b.problem(options[0].at, msg('problems.text.standsAlone', { word: 'turning' }));
+            // Its one option: how fast it turns, `turning, speed 2`.
+            for (const o of options) {
+                const speed = /^speed\s+(\S+)$/i.exec(o.text.trim());
+                const v = speed ? optionValue('speed', speed[1]) : undefined;
+                if (v !== undefined) b.chart.turnSpeed = v;
+                else b.problem(o.at, msg('problems.text.standsAlone', { word: 'turning' }));
+            }
             b.chart.turning = true;
             return;
         case 'snippet':

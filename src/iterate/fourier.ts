@@ -13,8 +13,8 @@ import { Cell, Locals, ValueCompiler } from '../values/compile';
 import { compileComplexFormula } from '../values/fast';
 import { NUM } from '../values/types';
 
-/** Radians of t per second of the clock: one turn of the first circle in about 10 s. */
-export const FOURIER_SPEED = 0.6;
+/** Radians of t per second of the clock (6.0 F4: the plan's 1.1, one turn of the first circle in under 6 s; `speed 2` doubles it). */
+export const FOURIER_SPEED = 1.1;
 
 export interface FourierTerms {
     /** The terms at time t, as (re, im) pairs, first term first. */

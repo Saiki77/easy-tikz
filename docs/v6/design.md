@@ -16,11 +16,41 @@ The SVG keeps the still frame of the moving parts, hidden while the canvas draws
 | `traced` solution or orbit | draws itself with a dot at its head, holds the whole picture 1.6 s, starts again | the whole curve |
 | turning circles | circles, arms, tip and wave turn | the picture at time 0 (or `stillTime`) |
 
-The flow follows the plan's recipe: every frame the canvas fades by a tenth, the arrow grid (19 points across) is drawn at 2.5 % (it settles near a fifth), and every particle takes one midpoint step and draws one segment from its old place to its new one, 1.4 px at 85 %. A particle older than 6 s or out of the view starts again somewhere at random. A new canvas (first drawing, resize, pan, theme change) runs 40 steps first. Particles move at the mean |F| across 0.28 of the view a second (the pendulum example: 1.4 s of t a second, as the plan).
+The flow follows the plan's recipe exactly when it has no options: 450 particles at random places (random ages 0 to 5); every frame the canvas fades by a tenth (it takes away from the canvas, so the grid and the fills under it still show), the arrow grid (19 points across, 13 on a plot of 3 : 2) is drawn at 2.5 % (it settles near a fifth), and every particle takes one midpoint step of max(dt, 0.016) x 1.4 of the field's time and draws one segment from its old place to its new one, 1.4 px at 85 %. A particle older than 6 (of the field's time) or out of the view starts again somewhere at random. A new canvas (first drawing, resize, pan, theme change) runs 40 steps of 0.016 first.
+
+**Sharp.** Each canvas has one canvas pixel per screen pixel of the canvas as shown: its place and size are measured on screen (the SVG is scaled to its box) and moved onto whole device pixels; a resize of the chart's box or a new screen density measures again. The 3D canvas is sized to the size it is shown at too. (Round 1 looked soft in notes: the layer's class `etz-live` was also the class of the Live Preview block, whose padding of 4 and 8 px squashed the canvas and moved it down; it is `etz-motion-layer` now, with no padding.)
+
+### Options of moving things (round 2)
+
+Every option is in words, Full LaTeX, the cards and the chart words. Without options each moving thing is the plan's picture.
+
+| Words | Full LaTeX | On | Meaning (the plan's value) |
+|---|---|---|---|
+| `speed 2` | `speed=2` | particles, traced solutions and orbits, turning circles | times the usual speed (1) |
+| `450 particles` | `count=450` | vector field with moving particles | how many particles (450; 300 at most on a phone) |
+| `trails 0.9` | `trails=0.9` | the same | how much of the last frame each frame keeps (0.9, a fade of 0.1); 0 to 0.99 |
+| `width 1.4` | `width=1.4` | the same | the particles' line width in screen pixels (1.4; `thick` gives 2.2, `very thin` 1) |
+| `arrows 0.025` | `arrows=0.025` | the same | the arrow grid's opacity each frame (0.025); the still frame's arrows are this over the fade (0.25) |
+| `no arrows` | `no arrows` | the same | no arrow grid (and none in the still frame) |
+| `turning, speed 2` | `\axis[turning=2]` | a 3D chart | turns at twice the plan's 0.25 rad (14.3°) a second |
+
+Turning circles turn at the plan's 1.1 rad of t a second (was 0.6). The Chart tab's View 3D has a Speed slider under "Turns by itself"; the vector field card has Speed, Particles, Trails, Width and Arrows while it has moving particles; the Solution and Orbit cards have Speed while traced, the Turning circles card always.
+
+The plan's flow 1 : 1, its own colours too:
+
+```easy-tikz
+size 15 x 10.5
+equal scale
+show x from -6.3 to 6.3 and y from -4.2 to 4.2
+draw the vector field $F(x, y) = (y, -\sin x - 0.25y)$, with moving particles, color="#2546c4"
+mark the rest points of F, color="#a86400"
+```
+
+Films of round 2 (60 fps, frame-exact, 1200 x 1200, `scripts/media/film/check.mjs`: 0 uneven frames each): `scratchpad/f4-round2/plugin-flow.mp4` (the chart above without its colours), `plan-flow.mp4` (the plan's own code over the same plot, same seed), `plugin-lorenz.mp4` (turning, traced); stills at 1 : 1 `flow-still-1to1.png` and `plan-still-1to1.png`.
 
 ### 3D runs the clock
 
-- **`turning`** (chart line, 3D): the view turns slowly by itself in notes and the editor (12° a second, from the chart's azimuth). A drag turns it (in notes a sideways drag; the chart text keeps its view); the turn stops while dragged and goes on from there. The size stays the same all the way round. The export shows the view as set. Full LaTeX: `\axis[turning]`. The Chart tab has a "Turns by itself" chip in View 3D.
+- **`turning`** (chart line, 3D): the view turns slowly by itself in notes and the editor (the plan's 0.25 rad, 14.3° a second, from the chart's azimuth; `turning, speed 2`). A drag turns it (in notes a sideways drag; the chart text keeps its view); the turn stops while dragged and goes on from there. The size stays the same all the way round. The export shows the view as set. Full LaTeX: `\axis[turning]`. The Chart tab has a "Turns by itself" chip in View 3D.
 - Long curves (solutions in 3D) are drawn as smooth paths, in six depth bands (far ones fainter), each band and colour one path: a Lorenz curve costs about 0.5 ms a frame. The export draws the same runs with `smooth`.
 - A solution in 3D is `thin` by default.
 

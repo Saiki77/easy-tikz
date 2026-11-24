@@ -24,7 +24,7 @@ import { MotionPlayer } from './motion6/player'; // 6.0 C
 import { playerFor } from './motion6/host'; // 6.0 C
 import { atStep, lastStep, movesWithSteps } from './motion6/steps'; // 6.0 C
 import { needsClock } from './motion6/clock'; // 6.0 C
-import { Turn } from './motion6/clock'; // 6.0 F4
+import { Turn, turnSpeed } from './motion6/clock'; // 6.0 F4
 import { LiveLayer } from './motion6/live'; // 6.0 F4
 // 6.0 B
 import { notes6ToolReads, renameInNotes6Tool } from './notes6/tools';
@@ -1398,7 +1398,7 @@ export class TikzModal extends Modal implements PanelHost {
             const config = view.settings.toRendererConfig(math);
             if (this.player) config.motion = this.player.frame();
             // 6.0 F4: a turning 3D chart turns from its azimuth on the clock.
-            if (this.player && config.is3D && view.settings.getValue('turning') === true) config.turn = this.turn.angle(this.player.frame().time);
+            if (this.player && config.is3D && view.settings.getValue('turning') === true) config.turn = this.turn.angle(this.player.frame().time, turnSpeed(view.settings.getValue('turnSpeed')));
             issues = config.is3D ? this.render3D(config, math, quality) : this.render2D(config, math, quality);
         } catch (e) {
             // Keep the last good drawing; the problem goes to the status chip, never a Notice.
@@ -1782,7 +1782,7 @@ export class TikzModal extends Modal implements PanelHost {
             // 6.0 F4: a turning chart stops turning while dragged; the drag starts from the view as it is now.
             if (this.player && this.settings.getValue('turning') === true) {
                 const time = this.player.frame().time;
-                this.drag.azimuth = (((this.drag.azimuth + this.turn.angle(time)) % 360) + 360) % 360;
+                this.drag.azimuth = (((this.drag.azimuth + this.turn.angle(time, turnSpeed(this.settings.getValue('turnSpeed')))) % 360) + 360) % 360;
                 this.turn.hold(true, time);
                 this.applyRotation(this.drag.azimuth, this.drag.elevation);
             }

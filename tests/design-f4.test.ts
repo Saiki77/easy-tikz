@@ -14,7 +14,8 @@ import { SettingsManager } from '../src/settings';
 import { computeScene2D, computeScene3D, labelMetricsFor, Scene2D } from '../src/scene';
 import { MAX_POINTS, simplify, solveSystem } from '../src/motion6/maths';
 import { Turn, TURN_DEG_PER_S, needsClock, turns } from '../src/motion6/clock';
-import { TIME_LEVELS, TRACE_HOLD, lightColor, rampColor, themedColor, traceFraction, traceSeconds } from '../src/motion6/liveprims';
+import { FLOW, TIME_LEVELS, TRACE_HOLD, flowOf, lightColor, rampColor, speedOf, themedColor, traceFraction, traceSeconds } from '../src/motion6/liveprims';
+import { PIECES } from '../src/text/words';
 import { MotionFrame } from '../src/types';
 
 type Data = Record<string, unknown>;
@@ -259,4 +260,77 @@ test('points of a solution: chosen by shape, the ends kept, at most the cap', ()
     const zigzag = Array.from({ length: 11 }, (_, i) => [i, i % 2]);
     assert.equal(simplify(zigzag, 50).length, 11);
     assert.ok(simplify(zigzag, 4).length <= 4);
+});
+
+// ------------------------------------------------- round 2: the plan 1 : 1
+
+const FIELD = 'draw the vector field $F(x, y) = (y, -\\sin x - 0.25y)$, with moving particles';
+
+test("options of moving things: speed everywhere, the flow's count, trails, width and arrows, turning speed; words and Full LaTeX", () => {
+    const words = roundTrip(`show x from -6.3 to 6.3 and y from -4.2 to 4.2\n${FIELD}, speed 1.5, 300 particles, trails 0.85, width 2, arrows 0.05`);
+    assert.match(words, /with moving particles, speed 1\.5, 300 particles, trails 0\.85, width 2, arrows 0\.05$/m);
+    const f = toolOf(words);
+    assert.deepEqual([f.speed, f.count, f.trails, f.particleWidth, f.arrows], [1.5, 300, 0.85, 2, 0.05]);
+    assert.match(printFullText(parseChartText(words).data), /\\vectorfield\[particles, speed=1\.5, count=300, trails=0\.85, width=2, arrows=0\.05\]/);
+    assert.equal(toolOf(roundTrip(`${FIELD}, no arrows`)).arrows, 0);
+    assert.equal(toolOf(`${VIEW}\ndraw the solution of (y, -x) through (1, 0), traced, speed 2`).speed, 2);
+    roundTrip(`${VIEW}\ndraw the solution of (y, -x) through (1, 0), traced, speed 2`);
+    roundTrip(`${DESCENT_CHART}\n${DESCENT}, traced, speed 0.5`);
+    roundTrip('show x from -2 to 8 and y from -2 to 2\ndraw the circles of $\\sum_{k=1}^{5} \\frac{1}{k} e^{ikt}$, with its wave, speed 2');
+    const turning = roundTrip('3d\nturning, speed 2\nplot f(x, y) = x y');
+    assert.match(turning, /^turning, speed 2$/m);
+    assert.equal(parseChartText(turning).data.turnSpeed, 2);
+    assert.match(printFullText(parseChartText(turning).data), /\\axis\[3d, turning=2\]/);
+    // A number out of its range is no option.
+    assert.ok(parseChartText(`${FIELD}, trails 1.5`).problems.length > 0);
+    assert.ok(parseChartText('3d\nturning, speed 0').problems.length > 0);
+    // The chart words know every new word.
+    for (const w of ['turning', 'traced', 'speed', 'particles', 'trails', 'width', 'arrows', 'no arrows']) assert.ok(PIECES.some((p) => p.builtin === w), w);
+});
+
+test("the flow without options is the plan's exactly; options and thickness change it", () => {
+    assert.deepEqual(flowOf({}), { speed: 1.4, count: 450, fade: 0.1, width: 1.4, arrows: 0.025 });
+    assert.equal(FLOW.count, 450);
+    near(flowOf({ speed: 2 }).speed, 2.8, 1e-12);
+    near(flowOf({ trails: 0.8 }).fade, 0.2, 1e-12);
+    assert.equal(speedOf({ speed: 99 }), 1);
+    const plain = sceneOf(`${VIEW}\n${FIELD}`).items[0];
+    const p = plain.live?.[0].particles;
+    assert.ok(p);
+    if (!p) return;
+    assert.deepEqual([p.speed, p.count, p.fade, p.width, p.arrows], [1.4, 450, 0.1, 1.4, 0.025]);
+    // The still arrows are as faint as the canvas's settle: 0.025 a frame over a fade of 0.1.
+    assert.equal(plain.strokes[0].opacity, 0.25);
+    const none = sceneOf(`${VIEW}\n${FIELD}, no arrows`).items[0];
+    assert.ok(none.strokes.every((s) => s.opacity === 0.6));
+    assert.equal(sceneOf(`${VIEW}\n${FIELD}, thick`).items[0].live?.[0].particles?.width, 2.2);
+    assert.equal(sceneOf(`${VIEW}\n${FIELD}, thick, width 3`).items[0].live?.[0].particles?.width, 3);
+    // The plan's picture 1 : 1, its own colours too (docs/v6/design.md).
+    const plan = `size 15 x 10.5\nequal scale\nshow x from -6.3 to 6.3 and y from -4.2 to 4.2\n${FIELD}, color="#2546c4"\nmark the rest points of F, color="#a86400"`;
+    roundTrip(plan);
+    const live = sceneOf(plan).items[0].live?.[0].particles;
+    assert.equal(live?.color, '#2546c4');
+    assert.match(settingsOf(plan).generateTikzCode(), /definecolor\{etHex/);
+});
+
+test('speed: a traced line draws itself faster, circles turn faster, a turning view turns faster', () => {
+    const at = (speed: string) => sceneOf(`${VIEW}\ndraw the solution of $\\dot{p} = (y, -x)$ through (1, 0) for t from 0 to 10, traced${speed}`).items[0].live?.[0].at;
+    const one = at('');
+    const two = at(', speed 2');
+    assert.ok(one && two);
+    if (!one || !two) return;
+    assert.deepEqual(two(1), one(2));
+    const circles = (speed: string) => sceneOf(`show x from -2 to 8 and y from -2 to 2\nequal scale\ndraw the circles of $\\sum_{k=1}^{3} \\frac{1}{k} e^{ikt}$${speed}`).items[0].live?.[0].at;
+    const c1 = circles('');
+    const c2 = circles(', speed 2');
+    assert.ok(c1 && c2);
+    if (!c1 || !c2) return;
+    assert.deepEqual(c2(0.5).dots, c1(1).dots);
+    const turn = new Turn();
+    near(turn.angle(1, 2), 2 * TURN_DEG_PER_S, 1e-9);
+    // A new speed goes on from the angle reached (no jump).
+    near(turn.angle(2, 1), 4 * TURN_DEG_PER_S, 1e-9);
+    near(turn.angle(3, 1), 5 * TURN_DEG_PER_S, 1e-9);
+    // The plan's Lorenz turns 0.25 rad a second.
+    near(TURN_DEG_PER_S, (0.25 * 180) / Math.PI, 1e-12);
 });

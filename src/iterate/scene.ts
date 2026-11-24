@@ -23,7 +23,7 @@ import { PixelPrim, bifurcationPrim, bifurcationStep, domainPrim, escapePrim, he
 import { FourierTerms, compileFourier, FOURIER_SPEED } from './fourier';
 // 6.0 F4: what moves on the preview's live canvas.
 import type { LiveShapes, TraceRun } from '../motion6/liveprims';
-import { emptyShapes, orbitSeconds, tracedAt } from '../motion6/liveprims';
+import { emptyShapes, orbitSeconds, speedOf, tracedAt } from '../motion6/liveprims';
 
 /** The tool types of this part (all 2D). */
 export const ITERATE_SCENE_TYPES: ReadonlySet<string> = new Set(['orbit', 'cobweb', 'bifurcation', 'newton', 'colourPlane', 'fourierCircles']);
@@ -48,7 +48,7 @@ const FAR = 1e6;
 /** What a tool of this part hands the clock and the fit (kept on its scene output). */
 export interface IterateOutput {
     /** The turning circles: the terms at a time, the curve of the tip over one turn, the size of the chain. */
-    circles?: { terms: FourierTerms; trace: Pt[]; reach: number; color: string; width: string; wave: boolean };
+    circles?: { terms: FourierTerms; trace: Pt[]; reach: number; color: string; width: string; wave: boolean; speed: number };
     /** What the fit holds of a line tool (the points it reaches; the lines across the view do not count). */
     fit?: Pt[];
 }
@@ -353,7 +353,7 @@ function computeOrbit(t: OrbitTool, ctx: SceneCtx): SceneOutput {
         const n = pts.length - 1;
         const run: TraceRun = { pts, u: pts.map((_, i) => i / n), color, line: 0 };
         const reached = pts.slice(1, dots).map((p, i) => ({ x: p.x, y: p.y, u: (i + 1) / n, color, size }));
-        out.live = [{ key: `${str(t.id)}:trace`, at: tracedAt([run], { width, head: { size: 'normal' }, dots: reached, seconds: orbitSeconds(n) }) }];
+        out.live = [{ key: `${str(t.id)}:trace`, at: tracedAt([run], { width, head: { size: 'normal' }, dots: reached, seconds: orbitSeconds(n) / speedOf(t) }) }];
     }
     if (t.valueLabel) {
         const v = ctx.view;
@@ -623,11 +623,11 @@ function computeCircles(t: FourierCirclesTool, ctx: SceneCtx): SceneOutput {
     const width = str(t.thickness) || 'thick';
     // The curve of the tip, faint: the wave and the circles are what moves (6.0 F4: fainter still).
     if (trace.length > 1) out.strokes.push({ lines: [trace], color, width: 'thin', dashed: false, opacity: 0.25 });
-    const circles = { terms, trace, reach, color, width, wave: !!t.wave };
+    const circles = { terms, trace, reach, color, width, wave: !!t.wave, speed: FOURIER_SPEED * speedOf(t) };
     hold(out, { circles, fit: trace });
     // 6.0 F4: the circles turn on the preview's live canvas.
     const view = { ...ctx.view };
-    out.live = [{ key: `${str(t.id)}:circles`, at: (time) => circleShapes(circlesAt(circles, time * FOURIER_SPEED, view), circles) }];
+    out.live = [{ key: `${str(t.id)}:circles`, at: (time) => circleShapes(circlesAt(circles, time * circles.speed, view), circles) }];
     return out;
 }
 
@@ -703,7 +703,7 @@ export function iterateMotion(tool: Tool | undefined, out: SceneOutput, ctx: Sce
     if (!tool || tool.type !== 'fourierCircles') return null;
     const c = out.iterate?.circles;
     if (!c) return null;
-    const p = circlesAt(c, clockTime(frame) * FOURIER_SPEED, ctx.view);
+    const p = circlesAt(c, clockTime(frame) * c.speed, ctx.view);
     const strokes: StrokePrim[] = [];
     const circles = p.rings.map((r) => {
         const ring: Pt[] = [];

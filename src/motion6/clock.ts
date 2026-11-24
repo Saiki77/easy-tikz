@@ -12,6 +12,7 @@
  * once at load; scene code reads clockTime(input.motion). Pure: no DOM.
  */
 import type { MotionFrame, Tool } from '../types';
+import { optionValue } from './liveprims'; // 6.0 F4
 
 type Data = Record<string, unknown>;
 
@@ -48,10 +49,15 @@ export function needsClock(data: Data): boolean {
 
 // 6.0 F4: a 3D chart that turns by itself (chart line `turning`).
 
-/** Degrees a turning 3D view turns a second: once round in half a minute. */
-export const TURN_DEG_PER_S = 12;
+/** Degrees a turning 3D view turns a second: the plan's 0.25 rad, once round in 25 s (`turning, speed 2` doubles it). */
+export const TURN_DEG_PER_S = (0.25 * 180) / Math.PI;
 /** Degrees a sideways drag turns it per pixel (as the editor's drag). */
 export const TURN_DRAG_DEG_PER_PX = 0.5;
+
+/** How fast a turning chart turns, times the usual (`turning, speed 2`). */
+export function turnSpeed(value: unknown): number {
+    return optionValue('speed', value) ?? 1;
+}
 
 /** Whether the chart is a 3D chart that turns by itself. */
 export function turns(data: Data): boolean {
@@ -66,17 +72,27 @@ export function turns(data: Data): boolean {
 export class Turn {
     private from = 0;
     private held = false;
+    private base = 0;
+    private speed: number | null = null;
 
-    /** Degrees turned at clock time `time` (0 while held). */
-    angle(time: number): number {
+    /** Degrees turned at clock time `time` (0 while held), at `speed` times the usual rate. */
+    angle(time: number, speed = 1): number {
         if (this.held) this.from = time;
-        return (time - this.from) * TURN_DEG_PER_S;
+        // A new speed goes on from the angle reached, not from the start.
+        if (this.speed === null) this.speed = speed;
+        else if (speed !== this.speed) {
+            this.base += (time - this.from) * TURN_DEG_PER_S * this.speed;
+            this.from = time;
+            this.speed = speed;
+        }
+        return this.base + (time - this.from) * TURN_DEG_PER_S * speed;
     }
 
     /** A drag starts (true) or ends (false) at clock time `time`: the turn starts again from 0 there. */
     hold(on: boolean, time: number): void {
         this.held = on;
         this.from = time;
+        this.base = 0;
     }
 }
 

@@ -42,7 +42,7 @@ import { playerFor } from './src/motion6/host';
 import { atStep } from './src/motion6/steps';
 // 6.0 F4: the live canvas of a moving 2D chart, the turn of a turning 3D chart.
 import { LiveLayer } from './src/motion6/live';
-import { TURN_DRAG_DEG_PER_PX, Turn } from './src/motion6/clock';
+import { TURN_DRAG_DEG_PER_PX, Turn, turnSpeed } from './src/motion6/clock';
 // 6.0 B: Ask the curve under a block in Live Preview.
 import { AskController, svgBoxOf } from './src/notes6/askHost';
 import { LongPress } from './src/notes6/press'; // 6.0 F1
@@ -1853,7 +1853,7 @@ class InlineChart {
     private motionConfig(config: RendererConfig) {
         if (!this.player) return;
         config.motion = this.player.frame();
-        if (config.is3D && this.manager.getValue('turning') === true) config.turn = this.dragTurn + this.turn.angle(config.motion.time);
+        if (config.is3D && this.manager.getValue('turning') === true) config.turn = this.dragTurn + this.turn.angle(config.motion.time, turnSpeed(this.manager.getValue('turnSpeed')));
     }
 
     /** A turning 3D chart turns with a sideways drag in the note too (the chart text keeps its view). */
@@ -1863,7 +1863,7 @@ class InlineChart {
         const time = () => (this.player ? this.player.frame().time : 0);
         box.addEventListener('pointerdown', (e: PointerEvent) => {
             if (e.button !== 0 || !this.player || this.manager.getValue('turning') !== true || !this.manager.getValue('dimension')) return;
-            drag = { id: e.pointerId, x: e.clientX, y: e.clientY, from: this.dragTurn + this.turn.angle(time()), moved: false };
+            drag = { id: e.pointerId, x: e.clientX, y: e.clientY, from: this.dragTurn + this.turn.angle(time(), turnSpeed(this.manager.getValue('turnSpeed'))), moved: false };
         });
         box.addEventListener('pointermove', (e: PointerEvent) => {
             if (!drag || drag.id !== e.pointerId) return;

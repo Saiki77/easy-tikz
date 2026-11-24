@@ -267,7 +267,7 @@ draw the vector field $F(x, y) = (y, -\sin x - 0.25y)$, coloured by length, with
 mark the rest points of F, labelled
 ```
 
-Field options: a colour, `thin`, `thick`, `coloured by length` (viridis, or `coloured by length in heat`), `with moving particles` (each lives 3 s and leaves a fading trail), `with streamlines` (still curves, also in the export), `density=30` (arrows across, 4 to 60), `hidden`. Rest points: a colour, `small`, `large`, `labelled`, `hidden`; they publish `RP1_n`, `RP1_x`, `RP1_y`, ... (at most 40). 2D charts only. Full LaTeX: `\vectorfield[colormap/viridis, particles, streamlines]{F(x, y) = ...}`, `\restpoints[labelled]{F}`.
+Field options: a colour, `thin`, `thick`, `coloured by length` (viridis, or `coloured by length in heat`), `with moving particles` (450 particles leave fading trails over faint arrows; the export draws faint arrows and a few streamlines), with them `speed 2`, `300 particles`, `trails 0.9`, `width 1.4`, `arrows 0.025` or `no arrows`, `with streamlines` (still curves, also in the export), `density=30` (arrows across, 4 to 60), `hidden`. Rest points: a colour, `small`, `large`, `labelled`, `hidden`; they publish `RP1_n`, `RP1_x`, `RP1_y`, ... (at most 40). 2D charts only. Full LaTeX: `\vectorfield[colormap/viridis, particles, streamlines]{F(x, y) = ...}`, `\restpoints[labelled]{F}`.
 
 **Solutions of systems.** `draw the solution of $\dot{p} = (y, -x)$ through P for t from 0 to 10` draws the solution through a points tool (drag P and it follows) or a point, by RK4. The right side has 2 formulas in a 2D chart and 3 in a 3D chart, in x, y (z) and t. In 3D it draws the Lorenz attractor:
 

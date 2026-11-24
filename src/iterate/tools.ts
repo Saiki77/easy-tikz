@@ -3,6 +3,7 @@
  * keeps of a stored one, and their fields for the editor's rename (the
  * pattern of src/motion6/tools.ts). Pure: no DOM, no Obsidian.
  */
+import { OPTION_RANGE, optionValue } from '../motion6/liveprims'; // 6.0 F4
 import type { BifurcationTool, CobwebTool, FourierCirclesTool, NewtonTool, OrbitTool, PlaneColormap, PlaneColourTool, Tool } from '../types';
 import { THICKNESS_MAP } from '../colors';
 import { isColormap } from '../colormaps';
@@ -74,6 +75,16 @@ export function iterateDefaults(type: string): IterateBody | null {
 }
 
 /** A stored tool of this part with every field it needs (unknown values give way to the defaults); null for other types. */
+/** 6.0 F4: the options of moving things a stored tool keeps (numbers in their range). */
+function kept(src: Data, keys: Array<keyof typeof OPTION_RANGE>): Data {
+    const out: Data = {};
+    for (const k of keys) {
+        const v = optionValue(k, src[k]);
+        if (v !== undefined) out[k] = v;
+    }
+    return out;
+}
+
 export function completeIterateTool(src: Data): IterateBody | null {
     switch (src.type) {
         case 'orbit': {
@@ -90,6 +101,7 @@ export function completeIterateTool(src: Data): IterateBody | null {
                 thickness: thicknessOf(src.thickness, d.thickness),
                 valueLabel: bool(src.valueLabel, d.valueLabel),
                 ...(src.traced === true ? { traced: true } : {}), // 6.0 F4
+                ...kept(src, ['speed']), // 6.0 F4
             };
         }
         case 'cobweb': {
@@ -149,6 +161,7 @@ export function completeIterateTool(src: Data): IterateBody | null {
                 sum: str(src.sum, d.sum),
                 wave: bool(src.wave, d.wave),
                 thickness: thicknessOf(src.thickness, d.thickness),
+                ...kept(src, ['speed']), // 6.0 F4
             };
         }
         default:

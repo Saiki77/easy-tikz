@@ -14,7 +14,14 @@
  *   old place to its new one. A particle that is old or leaves the view
  *   starts again somewhere at random. The canvas is warmed up when it
  *   starts (and after a resize, a pan or a theme change), so the trails
- *   show at once, also while paused.
+ *   show at once, also while paused. The tool's options set the speed, the
+ *   count, the trails, the width and the arrows (LiveParticles); without
+ *   them it is the plan's picture exactly.
+ *
+ * Sharp: each canvas has one canvas pixel per screen pixel. Its place and
+ * size are measured on screen (the SVG is scaled to its box) and moved onto
+ * whole screen pixels, so the browser shows the canvas without resampling;
+ * a new size, a new screen density or a pane resize measures again.
  *   Shapes at a time (a curve that draws itself, turning circles): drawn
  *   afresh each frame on a second canvas.
  *
@@ -33,24 +40,14 @@ import { themedColor } from './liveprims';
 /** Canvas pixels per screen pixel at most. */
 const MAX_DPR = 2;
 
-// The flow (the plan's picture: 450 particles over a 640 x 430 canvas).
-const PARTICLES = 450;
+// The flow (the plan's picture; the counts, fade, width and arrows come with the tool, LiveParticles).
+/** Particles on a phone at most. */
 const PARTICLES_PHONE = 300;
-/** Each frame fades the last one by this much (the trails fade). */
-const FADE = 0.1;
-/**
- * Every so many frames a stronger fade: a faint pixel that a fade of a tenth
- * no longer changes (8-bit rounding) would stay for good as a ghost trail.
- */
-const CLEAN_EVERY = 30;
-const CLEAN_FADE = 0.2;
-/** Arrows: points across and the share of a cell an arrow is long; drawn this faint each frame. */
+/** Arrows: points across and the share of a cell an arrow is long. */
 const GRID_ACROSS = 19;
 const GRID_SHARE = 0.43;
-const GRID_ALPHA = 0.025;
-/** Particles: this opaque, this wide (screen px); a frame moves them at least 16 ms; they live 6 s at most. */
+/** Particles: this opaque; a frame moves them at least 16 ms; they live 6 (of their time) at most. */
 const PARTICLE_ALPHA = 0.85;
-const PARTICLE_WIDTH = 1.4;
 const MIN_STEP = 0.016;
 const MAX_STEP = 0.05;
 const PARTICLE_AGE = 6;
@@ -84,6 +81,14 @@ interface Flow {
 export class LiveLayer {
     private fo: SVGForeignObjectElement | null = null;
     private box: HTMLDivElement | null = null;
+    /** Where the canvases are, in SVG units: the plot rectangle moved onto whole screen pixels. */
+    private pos = { x: 0, y: 0, w: 1, h: 1 };
+    /** The rectangle the place was measured for. */
+    private posFor = '';
+    private resize: ResizeObserver | null = null;
+    private watchedSvg: Element | null = null;
+    private dprQuery: MediaQueryList | null = null;
+    private readonly onDpr = () => this.remeasure();
     /** The flows' canvas (faded each frame) and the shapes' canvas (drawn afresh), made when needed. */
     private flowCanvas: HTMLCanvasElement | null = null;
     private shapeCanvas: HTMLCanvasElement | null = null;
@@ -100,7 +105,6 @@ export class LiveLayer {
     /** What the flow canvas shows: a new one (other view, size or theme) is cleared and warmed up. */
     private flowKey = '';
     private lastTime = NaN;
-    private flowFrames = 0;
     /** Milliseconds the last paint took; every 30th paint also on the layer (data-paint-ms), for the smoke test. */
     lastPaintMs = 0;
     private paints = 0;
@@ -132,46 +136,59 @@ export class LiveLayer {
         this.background = this.color('var(--background-primary)');
         const { rect } = geo;
         if (!this.fo) {
-            this.fo = createSvg('foreignObject', { cls: 'etz-live', attr: { 'pointer-events': 'none', 'aria-hidden': 'true' } });
-            this.box = this.fo.createDiv({ cls: 'etz-live-box' });
+            this.fo = createSvg('foreignObject', { cls: 'etz-motion-layer', attr: { 'pointer-events': 'none', 'aria-hidden': 'true' } });
+            this.box = this.fo.createDiv({ cls: 'etz-motion-box' });
         }
         const fo = this.fo;
-        const box = this.box ?? fo.createDiv({ cls: 'etz-live-box' });
+        const box = this.box ?? fo.createDiv({ cls: 'etz-motion-box' });
         this.box = box;
-        for (const [k, v] of Object.entries({ x: rect.x, y: rect.y, width: rect.w, height: rect.h })) fo.setAttribute(k, String(v));
+        // The place measured for this rectangle stays (a redraw of the same chart); a new rectangle starts from it.
+        const rectKey = `${rect.x},${rect.y},${rect.w},${rect.h}`;
+        if (rectKey !== this.posFor) {
+            this.posFor = rectKey;
+            this.pos = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+            this.measured = false;
+        }
+        this.place();
         const hasFlow = prims.some((p) => p.particles);
         const hasShapes = prims.some((p) => p.at);
         if (hasFlow && !this.flowCanvas) {
-            this.flowCanvas = createEl('canvas', { cls: 'etz-live-canvas' });
+            this.flowCanvas = createEl('canvas', { cls: 'etz-motion-canvas' });
             box.prepend(this.flowCanvas);
         }
         if (!hasFlow && this.flowCanvas) {
             this.flowCanvas.remove();
             this.flowCanvas = null;
         }
-        if (hasShapes && !this.shapeCanvas) this.shapeCanvas = box.createEl('canvas', { cls: 'etz-live-canvas' });
+        if (hasShapes && !this.shapeCanvas) this.shapeCanvas = box.createEl('canvas', { cls: 'etz-motion-canvas' });
         if (!hasShapes && this.shapeCanvas) {
             this.shapeCanvas.remove();
             this.shapeCanvas = null;
         }
-        this.measured = false;
-        this.density = this.screen * Math.min(MAX_DPR, window.devicePixelRatio || 1);
+        if (!this.measured) this.density = this.screen * Math.min(MAX_DPR, window.devicePixelRatio || 1);
         this.size();
         this.syncFlows();
         this.paint(time);
-        // Once the drawing is on screen: as many canvas pixels as the screen shows.
+        // Once the drawing is on screen: one canvas pixel per screen pixel, on whole screen pixels.
         window.requestAnimationFrame(() => {
+            this.watch();
             if (this.measure()) this.paint(this.lastTime);
         });
         return fo;
     }
 
-    /** Size the canvases to the rectangle at the current density (a new size clears them). */
+    /** The layer element at `pos`. */
+    private place(): void {
+        const fo = this.fo;
+        if (!fo) return;
+        const p = this.pos;
+        for (const [k, v] of Object.entries({ x: p.x, y: p.y, width: p.w, height: p.h })) fo.setAttribute(k, String(v));
+    }
+
+    /** Size the canvases to the place at the current density (a new size clears them). */
     private size(): void {
-        const geo = this.geo;
-        if (!geo) return;
-        const w = Math.max(1, Math.round(geo.rect.w * this.density));
-        const h = Math.max(1, Math.round(geo.rect.h * this.density));
+        const w = Math.max(1, Math.round(this.pos.w * this.density));
+        const h = Math.max(1, Math.round(this.pos.h * this.density));
         for (const c of [this.flowCanvas, this.shapeCanvas]) {
             if (!c) continue;
             if (c.width !== w) c.width = w;
@@ -179,19 +196,56 @@ export class LiveLayer {
         }
     }
 
-    /** Measure the scale on screen (the SVG is fitted to its box); true when the canvases changed size. */
+    /** Measure again when the chart's box or the screen density changes (a pane resize, another screen). */
+    private watch(): void {
+        const svg = this.fo?.ownerSVGElement ?? null;
+        if (svg && svg !== this.watchedSvg && typeof ResizeObserver !== 'undefined') {
+            this.resize?.disconnect();
+            this.resize = new ResizeObserver(() => this.remeasure());
+            this.resize.observe(svg);
+            this.watchedSvg = svg;
+        }
+        const dpr = window.devicePixelRatio || 1;
+        if (!this.dprQuery || !this.dprQuery.matches) {
+            this.dprQuery?.removeEventListener('change', this.onDpr);
+            this.dprQuery = window.matchMedia(`(resolution: ${dpr}dppx)`);
+            this.dprQuery.addEventListener('change', this.onDpr);
+        }
+    }
+
+    private remeasure(): void {
+        this.measured = false;
+        if (this.measure()) this.paint(this.lastTime);
+        this.watch();
+    }
+
+    /**
+     * Measure the layer on screen and move it onto whole screen pixels: its
+     * edges on whole device pixels and one canvas pixel per device pixel, so
+     * the browser shows the canvases without resampling (soft lines). True
+     * when the canvases changed size (they were cleared and warmed up again).
+     */
     private measure(): boolean {
         const fo = this.fo;
-        const geo = this.geo;
-        if (this.measured || !fo || !geo || !fo.isConnected) return false;
+        if (this.measured || !fo || !fo.isConnected) return false;
         this.measured = true;
         const box = fo.getBoundingClientRect();
-        if (!(box.width > 0) || !(geo.rect.w > 0)) return false;
-        const screen = box.width / geo.rect.w;
-        const density = screen * Math.min(MAX_DPR, window.devicePixelRatio || 1);
-        if (Math.abs(screen - this.screen) < 0.02 && Math.abs(density - this.density) < 0.05) return false;
-        this.screen = screen;
+        const p = this.pos;
+        if (!(box.width > 0) || !(box.height > 0) || !(p.w > 0)) return false;
+        const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
+        // CSS px per SVG unit, and the edges on whole device pixels.
+        const scale = box.width / p.w;
+        const left = Math.round(box.left * dpr) / dpr;
+        const top = Math.round(box.top * dpr) / dpr;
+        const w = Math.max(1, Math.round(box.width * dpr));
+        const h = Math.max(1, Math.round(box.height * dpr));
+        this.pos = { x: p.x + (left - box.left) / scale, y: p.y + (top - box.top) / scale, w: w / dpr / scale, h: h / dpr / scale };
+        this.place();
+        this.screen = scale;
+        const density = scale * dpr;
+        const resized = Math.abs(density - this.density) > 1e-6 || [this.flowCanvas, this.shapeCanvas].some((c) => !!c && (c.width !== w || c.height !== h));
         this.density = density;
+        if (!resized) return false;
         this.size();
         this.flowKey = '';
         this.syncFlows();
@@ -252,21 +306,23 @@ export class LiveLayer {
     }
 
     private newFlow(p: LiveParticles): Flow {
-        const n = Platform.isMobile ? PARTICLES_PHONE : PARTICLES;
+        const n = Math.max(1, Math.round(Platform.isMobile ? Math.min(PARTICLES_PHONE, p.count) : p.count));
         const flow: Flow = { p, x: new Float64Array(n), y: new Float64Array(n), age: new Float64Array(n), grid: this.grid(p) };
-        for (let i = 0; i < n; i++) {
-            this.spawn(flow, i);
-            flow.age[i] = Math.random() * 5;
-        }
+        for (let i = 0; i < n; i++) flow.age[i] = this.spawn(flow, i) * 5;
         return flow;
     }
 
-    private spawn(flow: Flow, i: number): void {
+    /**
+     * A particle somewhere at random, age 0. As the plan's spawn it takes three
+     * random numbers (x, y, and the age a first particle starts with, returned).
+     */
+    private spawn(flow: Flow, i: number): number {
         const v = this.geo?.view;
-        if (!v) return;
+        if (!v) return 0;
         flow.x[i] = v.xmin + Math.random() * (v.xmax - v.xmin);
         flow.y[i] = v.ymin + Math.random() * (v.ymax - v.ymin);
         flow.age[i] = 0;
+        return Math.random();
     }
 
     /** The arrow grid in SVG units: short lines along F, the same length on screen, by colour. */
@@ -275,6 +331,7 @@ export class LiveLayer {
         if (!geo) return [];
         const { view: v, rect, ax, bx, ay, by } = geo;
         const nx = GRID_ACROSS;
+        // 19 x 13 on a plot of 3 : 2, as the plan.
         const ny = Math.max(2, Math.round(((GRID_ACROSS - 1) * rect.h) / rect.w) + 1);
         const len = (GRID_SHARE * rect.w) / (GRID_ACROSS - 1);
         const pts: Array<{ x: number; y: number; dx: number; dy: number; size: number }> = [];
@@ -316,19 +373,20 @@ export class LiveLayer {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalCompositeOperation = 'destination-out';
         ctx.globalAlpha = 1;
-        ctx.fillStyle = `rgba(0, 0, 0, ${++this.flowFrames % CLEAN_EVERY === 0 ? CLEAN_FADE : FADE})`;
+        const first = this.flows.values().next().value;
+        ctx.fillStyle = `rgba(0, 0, 0, ${first ? first.p.fade : 0.1})`;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.globalCompositeOperation = 'source-over';
-        ctx.setTransform(d, 0, 0, d, -geo.rect.x * d, -geo.rect.y * d);
+        ctx.setTransform(d, 0, 0, d, -this.pos.x * d, -this.pos.y * d);
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         const px = 1 / this.screen;
         const { ax, bx, ay, by, view: v } = geo;
         const h = Math.max(dt, MIN_STEP);
         for (const flow of this.flows.values()) {
-            ctx.globalAlpha = GRID_ALPHA;
+            ctx.globalAlpha = flow.p.arrows;
             ctx.lineWidth = px;
-            for (const g of flow.grid) {
+            for (const g of flow.p.arrows > 0 ? flow.grid : []) {
                 ctx.strokeStyle = g.color;
                 ctx.beginPath();
                 const s = g.segs;
@@ -339,9 +397,10 @@ export class LiveLayer {
                 ctx.stroke();
             }
             const F = flow.p.field;
+            // The plan's step: hdt = max(dt, 0.016) * 1.4 (its speed), in the field's own time.
             const k = h * flow.p.speed;
             ctx.globalAlpha = PARTICLE_ALPHA;
-            ctx.lineWidth = PARTICLE_WIDTH * px;
+            ctx.lineWidth = flow.p.width * px;
             ctx.strokeStyle = this.chartColor(flow.p.color);
             ctx.beginPath();
             const n = flow.x.length;
@@ -358,7 +417,7 @@ export class LiveLayer {
                 }
                 flow.x[i] = nx;
                 flow.y[i] = ny;
-                flow.age[i] += h;
+                flow.age[i] += k;
                 if (!(flow.age[i] <= PARTICLE_AGE) || !(nx >= v.xmin && nx <= v.xmax && ny >= v.ymin && ny <= v.ymax)) this.spawn(flow, i);
             }
             ctx.stroke();
@@ -384,7 +443,7 @@ export class LiveLayer {
             const d = this.density;
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.setTransform(d, 0, 0, d, -geo.rect.x * d, -geo.rect.y * d);
+            ctx.setTransform(d, 0, 0, d, -this.pos.x * d, -this.pos.y * d);
             ctx.lineJoin = 'round';
             ctx.lineCap = 'round';
             for (const p of this.prims) {
@@ -459,6 +518,10 @@ export class LiveLayer {
 
     /** The chart left the page. */
     destroy(): void {
+        this.resize?.disconnect();
+        this.resize = null;
+        this.dprQuery?.removeEventListener('change', this.onDpr);
+        this.dprQuery = null;
         this.fo?.remove();
         this.fo = null;
         this.box = null;

@@ -20,7 +20,7 @@ import type { RestKind, VectorFn } from './maths';
 import { clockTime } from './clock';
 // 6.0 F4: what moves on the preview's live canvas.
 import type { LivePrim, TraceRun } from './liveprims';
-import { TIME_LEVELS, rampColor, traceSeconds, tracedAt } from './liveprims';
+import { TIME_LEVELS, flowOf, optionValue, rampColor, speedOf, traceSeconds, tracedAt } from './liveprims';
 
 /** The tool types of this module. */
 export const MOTION_TYPES: ReadonlySet<string> = new Set(['vectorField', 'restPoints', 'trajectory']);
@@ -48,11 +48,10 @@ const LEVELS = 8;
  * streamlines. The preview's live canvas draws the flow itself
  * (src/motion6/live.ts), and hides these.
  */
-const UNDER_PARTICLES = 0.25;
 const STILL_STREAM_GAP = 3.2;
+/** The particles' width in screen pixels by the field's thickness. */
+const PARTICLE_WIDTH: Record<string, number> = { 'very thin': 1, thin: 1.4, thick: 2.2, 'very thick': 3 };
 const STILL_STREAM_OPACITY = 0.6;
-/** Particles move at the mean |F| across this share of the view a second (the plan's flow: 1.4 s of t a second). */
-const FLOW_SPEED = 0.28;
 /** Streamlines are this many arrow cells apart. */
 const STREAM_GAP = 1.6;
 /** A solution stops where it runs this many chart sizes away. */
@@ -206,12 +205,17 @@ function computeField(t: VectorFieldTool, ctx: SceneCtx): SceneOutput {
         }
     }
     const flow = t.particles === true;
+    const look = flowOf(t);
+    // The particles' width follows the tool's thickness (thin: the plan's 1.4 px) unless `width` sets it.
+    if (optionValue('particleWidth', t.particleWidth) === undefined) look.width = PARTICLE_WIDTH[width] ?? look.width;
+    // 6.0 F4: under moving particles the arrows are as faint as the live canvas's settle (0.025 a frame, a tenth fading: 0.25).
+    const faint = Math.min(1, look.arrows / Math.max(0.01, look.fade));
     const push = (list: typeof arrows, c: string) => {
-        if (!list.length) return;
+        if (!list.length || (flow && !(faint > 0))) return;
         const s: StrokePrim = { lines: list.flatMap((a) => [a.shaft, a.head]), color: c, width, dashed: false, exact: true };
-        // 6.0 F4: faint under moving particles, and the live canvas draws its own (still: hidden there).
+        // The live canvas draws its own (still: hidden there).
         if (flow) {
-            s.opacity = UNDER_PARTICLES;
+            s.opacity = Number(faint.toFixed(3));
             s.still = true;
         }
         out.strokes.push(s);
@@ -242,11 +246,9 @@ function computeField(t: VectorFieldTool, ctx: SceneCtx): SceneOutput {
             const lines = streamlines(F, view, ux, uy, STILL_STREAM_GAP * cell);
             if (lines.length) out.strokes.push({ lines, color, width: 'thin', dashed: false, opacity: STILL_STREAM_OPACITY, still: true });
         }
-        // Particles at the mean |F| cross FLOW_SPEED of the view a second.
-        const mean = sum / counted;
-        const speed = mean > 0 ? (FLOW_SPEED * (view.xmax - view.xmin)) / mean : 0;
-        motion.particles = { speed, color };
-        out.live = [{ key: `${str(t.id)}:particles`, particles: { field: F, speed, color, colormap: map } }];
+        // The plan's flow: 1.4 s of the field's time a second (times `speed`), 450 particles, trails of 0.9.
+        motion.particles = { speed: look.speed, color };
+        out.live = [{ key: `${str(t.id)}:particles`, particles: { field: F, color, colormap: map, ...look } }];
     }
     return out;
 }
@@ -450,7 +452,7 @@ function computeTrajectory(t: TrajectoryTool, ctx: SceneCtx): SceneOutput {
         });
     }
     if (traced && runs.length) {
-        const look = { width, dashed, head: { size: 'normal' as const }, seconds: traceSeconds(solved.t0, solved.t1) };
+        const look = { width, dashed, head: { size: 'normal' as const }, seconds: traceSeconds(solved.t0, solved.t1) / speedOf(t) };
         out.live = [{ key: `${str(t.id)}:trace`, at: tracedAt(runs, look) }];
     }
     return out;
@@ -469,7 +471,7 @@ export function computeMotion3D(t: Tool, ctx: SceneCtx): SceneOutput | null {
     const dashed = !!t.dashed;
     const colours = timeColours(t);
     const traced = t.traced === true;
-    const seconds = traceSeconds(solved.t0, solved.t1);
+    const seconds = traceSeconds(solved.t0, solved.t1) / speedOf(t);
     const span = solved.t1 - solved.t0;
     const legs: Scene3D['segments'] = [];
     let runCounter = 0;

@@ -17,6 +17,7 @@ import { givenParts, isPlaneColormap } from './tools';
 import { planeKind } from './forms';
 import { recurrenceStep } from './pixels';
 import { compileFourier } from './fourier';
+import { speedRow } from '../motion6/cards'; // 6.0 F4
 
 const OK: ValidateResult = { ok: true };
 const NAME_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -183,11 +184,17 @@ class OrbitCard extends IterateCard<OrbitTool> {
                 },
             ],
         });
+        // 6.0 F4: how fast it draws itself.
+        const speed = speedRow(this.body, tool, () => this.frame());
+        const showSpeed = () => speed.els.forEach((el) => el.toggleClass('tikz-hidden', tool.traced !== true));
+        showSpeed();
         this.onSync(() => {
             line.thickness.setValue(tool.thickness);
             line.chips[0]?.setValue(tool.path);
             line.chips[1]?.setValue(tool.valueLabel);
             line.chips[2]?.setValue(tool.traced === true); // 6.0 F4
+            speed.sync();
+            showSpeed();
         });
     }
 
@@ -533,9 +540,11 @@ class CirclesCard extends IterateCard<FourierCirclesTool> {
             },
             chips: [],
         });
+        const speed = speedRow(this.body, tool, () => this.frame()); // 6.0 F4: how fast the circles turn
         this.onSync(() => {
             wave.setValue(tool.wave);
             line.thickness.setValue(tool.thickness);
+            speed.sync();
         });
     }
 

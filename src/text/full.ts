@@ -109,12 +109,12 @@ export const FULL_OPTION_HELP: Record<string, string> = {
     chord: 'a colour, thin, thick, dashed, labelled, label={text}, hidden; chord, from=a, to=b and at=λ say the chord',
     ...LINEAR_FULL_HELP, // 6.0 D
     // 6.0 E
-    orbit: 'z_0=a start, c=a value, steps=40, a colour, thin, thick, small, large, as a path, labelled, traced, hidden',
+    orbit: 'z_0=a start, c=a value, steps=40, a colour, thin, thick, small, large, as a path, labelled, traced, speed=1, hidden',
     cobweb: 'from=x_0, steps=40, a colour, thin, thick, hidden',
     bifurcation: 'r=a:b, x_0=a start, a colour, hidden',
     newton: 'from=x_0, steps=5, a colour, thin, thick, labelled, hidden',
     colourPlane: 'z_0=a start, c=a value, steps=200, colormap/viridis (heat, cool, diverging, rainbow, greyscale, cyclic), opacity=0.5, hidden',
-    fourierCircles: 'wave, a colour, thin, thick, hidden',
+    fourierCircles: 'wave, a colour, thin, thick, speed=1, hidden',
 };
 
 // ------------------------------------------------------------ text pieces
@@ -506,7 +506,14 @@ function optionWords(o: Opt, kind: Kind, variable: string): Mapped {
         case 'mesh':
         case 'samples':
         case 'pattern':
+        // 6.0 F4: the options of moving things
+        case 'speed':
+        case 'trails':
+        case 'width':
+        case 'arrows':
             return m.put(`${o.key} `, o.at).copy(v.text, v.at);
+        case 'count':
+            return m.copy(v.text, v.at).put(' particles', o.at);
         case 'domain':
         case 'x domain':
         case 'y domain': {
@@ -893,6 +900,7 @@ function axisWords(cmd: Command, line: number, problems: TextProblem[]): Mapped[
             else unknown(o);
         } else if (!v) continue;
         else if (/^[xyz](min|max)$/.test(o.key)) bounds.set(o.key, { o, v });
+        else if (o.key === 'turning') out.push(new Mapped().put('turning, speed ', o.at).copy(v.text, v.at)); // 6.0 F4
         else if (o.key === 'plot box ratio') {
             const ratio = boxRatioOf(v.text.replace(/[{}]/g, ' '));
             if (ratio) say(`box ${ratio.join(' x ')}`, o.at);
@@ -1180,6 +1188,11 @@ function optionFull(o: string, kind: Kind): string {
     if (m) return `tangent=${encValue(m[1].trim())}`;
     m = /^(opacity|mesh|samples|pattern)\s+(.+)$/i.exec(t);
     if (m) return `${m[1].toLowerCase()}=${encValue(m[2].trim())}`;
+    // 6.0 F4: the options of moving things.
+    m = /^(speed|trails|width|arrows)\s+([-+\d.e]+)$/i.exec(t);
+    if (m) return `${m[1].toLowerCase()}=${m[2]}`;
+    m = /^(\d+)\s+particles$/i.exec(t);
+    if (m) return `count=${m[1]}`;
     const r = rangeOption(t);
     if (r) return `${r.y ? 'y domain' : 'domain'}=${encBound(r.range[0])}:${encBound(r.range[1])}`;
     m = /^([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.+)$/.exec(t);
@@ -1513,7 +1526,11 @@ function axisFull(fields: string[], chart: Data): string[] {
     take('coordinateSystem', (v) => (v === 'polar' ? opts.push('polar') : generic('coordinateSystem')));
     take('documentSetup', (v) => (v === false ? opts.push('snippet') : generic('documentSetup')));
     take('frames', (v) => (v === true ? opts.push('frames') : generic('frames'))); // 6.0 C
-    take('turning', (v) => (v === true ? opts.push('turning') : generic('turning'))); // 6.0 F4
+    // 6.0 F4: `turning, speed 2` is turning=2.
+    const turnSpeed = typeof chart.turnSpeed === 'number' && Number.isFinite(chart.turnSpeed) && chart.turnSpeed > 0 ? chart.turnSpeed : null;
+    take('turning', (v) => (v === true ? opts.push(turnSpeed !== null ? `turning=${turnSpeed}` : 'turning') : generic('turning')));
+    if (chart.turning === true && turnSpeed !== null) done.add('turnSpeed');
+    take('turnSpeed', () => generic('turnSpeed'));
     for (const k of ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax']) {
         take(k, (v) => (typeof v === 'string' || typeof v === 'number' ? opts.push(`${k}=${encValue(String(v).trim())}`) : sets.push(setFull(k, v))));
     }

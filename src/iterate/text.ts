@@ -16,6 +16,7 @@
  * the names the recurrence reads (`c = P`), the steps (`40 steps`) and
  * options. Full LaTeX: src/text/full.ts (6.0 E block).
  */
+import { optionValue } from '../motion6/liveprims'; // 6.0 F4
 import type { MessageKey } from '../i18n';
 import { looksLikeLatex, splitLetterRuns } from '../latex';
 import { readRecurrence } from '../values';
@@ -35,12 +36,12 @@ export const ITERATE_KINDS = new Set(['orbit', 'cobweb', 'bifurcation', 'newton'
 
 /** What each kind takes as options, for "unknown option" messages (chart words: they stay English). */
 export const ITERATE_OPTION_HELP: Record<string, string> = {
-    orbit: 'z_0 = a start, c = a value, 40 steps, in a colour, thin, thick, small, large, as a path, labelled, traced, hidden',
+    orbit: 'z_0 = a start, c = a value, 40 steps, in a colour, thin, thick, small, large, as a path, labelled, traced, speed 1, hidden',
     cobweb: 'from x_0, 40 steps, in a colour, thin, thick, hidden',
     bifurcation: 'for r from a to b, x_0 = a start, in a colour, hidden',
     newton: 'from x_0, 5 steps, in a colour, thin, thick, labelled, hidden',
     colourPlane: 'z_0 = a start, c = a value, 200 steps, in a colour map (viridis, heat, cool, diverging, rainbow, greyscale, cyclic), opacity 0.5, hidden',
-    fourierCircles: 'with its wave, in a colour, thin, thick, hidden',
+    fourierCircles: 'with its wave, in a colour, thin, thick, speed 1, hidden',
 };
 
 export const ITERATE_KIND_WORDS: Record<string, MessageKey> = {
@@ -53,7 +54,7 @@ export const ITERATE_KIND_WORDS: Record<string, MessageKey> = {
 };
 
 /** The fields of each kind: `steps = 40` with such a name is a field, not a name the recurrence reads. */
-const FIELDS = new Set(['type', 'name', 'id', 'color', 'hidden', 'step', 'recurrence', 'start', 'given', 'steps', 'path', 'size', 'thickness', 'valueLabel', 'parameter', 'from', 'to', 'function', 'formula', 'colormap', 'opacity', 'sum', 'wave', 'traced']); // traced: 6.0 F4
+const FIELDS = new Set(['type', 'name', 'id', 'color', 'hidden', 'step', 'recurrence', 'start', 'given', 'steps', 'path', 'size', 'thickness', 'valueLabel', 'parameter', 'from', 'to', 'function', 'formula', 'colormap', 'opacity', 'sum', 'wave', 'traced', 'speed']); // traced, speed: 6.0 F4
 
 // --------------------------------------------------------------- pieces
 
@@ -98,11 +99,17 @@ function binding(o: string): { name: string; value: string } | null {
     return { name: m[1].replace(/_\{([A-Za-z0-9]+)\}/, '_$1'), value: m[2] };
 }
 
+/** 6.0 F4: `speed 2`, the value in its range, else undefined. */
+function speedOption(o: string): number | undefined {
+    const m = /^speed\s+(\S+)$/i.exec(o.trim());
+    return m ? optionValue('speed', m[1]) : undefined;
+}
+
 /** An option of this part in the words (already in its short form: no leading with/the/its). */
 export function isIterateOption(o: string): boolean {
     const t = o.trim().toLowerCase();
     // `40 steps` is part of the statement: a line ends with it before its options.
-    return t === 'as a path' || t === 'path' || t === 'wave' || t === 'in cyclic' || t === 'cyclic' || t === 'traced'; // traced: 6.0 F4
+    return t === 'as a path' || t === 'path' || t === 'wave' || t === 'in cyclic' || t === 'cyclic' || t === 'traced' || speedOption(t) !== undefined; // traced, speed: 6.0 F4
 }
 
 /** Apply an option of this part to `target` of `kind`; true when it was one. */
@@ -111,6 +118,9 @@ export function iterateOption(kind: string, target: Data, o: string, problem: (k
     const lower = t.toLowerCase();
     const steps = stepsPiece(t);
     if (steps !== null && (kind === 'orbit' || kind === 'cobweb' || kind === 'newton' || kind === 'colourPlane')) return set(target, 'steps', steps);
+    // 6.0 F4: how fast an orbit draws itself, how fast circles turn.
+    const speed = speedOption(t);
+    if (speed !== undefined && (kind === 'orbit' || kind === 'fourierCircles')) return set(target, 'speed', speed);
     if (kind === 'orbit') {
         if (lower === 'as a path' || lower === 'path') return set(target, 'path', true);
         if (lower === 'traced') return set(target, 'traced', true); // 6.0 F4
@@ -411,10 +421,12 @@ export function iterateOptions(type: string, o: LineOptions): void {
         o.take('path', (v) => (v === true ? 'as a path' : null));
         o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
         o.take('traced', (v) => (v === true ? 'traced' : null)); // 6.0 F4
+        o.take('speed', (v) => (typeof v === 'number' ? `speed ${v}` : null)); // 6.0 F4
     } else if (type === 'cobweb' || type === 'newton' || type === 'fourierCircles') {
         o.take('thickness', thickness);
         if (type === 'newton') o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
         if (type === 'fourierCircles') o.take('wave', (v) => (v === true ? 'with its wave' : null));
+        if (type === 'fourierCircles') o.take('speed', (v) => (typeof v === 'number' ? `speed ${v}` : null)); // 6.0 F4
     } else if (type === 'colourPlane') {
         o.take('colormap', (v) => (isPlaneColormap(v) ? `in ${v}` : null));
         o.take('opacity', (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? `opacity ${v}` : null));

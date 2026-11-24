@@ -479,15 +479,34 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
         syncLengths();
         // 6.0 F4: the view turns by itself in notes and the editor (chart line `turning`).
         const turning = g.body.createDiv({ cls: 'etz-chip-row' });
+        const turnField = field(g.body, { label: t('motion6.card.speed'), layout: 'inline' });
         chip(turning, {
             label: t('motion6.chart.turning'),
             value: settings.getValue('turning') === true,
             onChange: (on) => {
                 settings.setValue('turning', on ? true : undefined);
+                if (!on) settings.setValue('turnSpeed', undefined);
+                turnField.el.toggleClass('tikz-hidden', !on);
                 host.requestUpdate();
             },
         });
         turning.setAttr('title', t('motion6.chart.turningHint'));
+        // How fast it turns, times the usual (`turning, speed 2`).
+        liveSlider(turnField.controlEl, {
+            min: 0.1,
+            max: 5,
+            step: 0.1,
+            value: typeof settings.getValue('turnSpeed') === 'number' ? Number(settings.getValue('turnSpeed')) : 1,
+            label: t('motion6.card.speed'),
+            fixedRange: true,
+            format: (v) => v.toFixed(1),
+            onInput: (v) => {
+                const speed = Number(v.toFixed(1));
+                settings.setValue('turnSpeed', Math.abs(speed - 1) < 1e-9 ? undefined : speed);
+                host.requestUpdate();
+            },
+        });
+        turnField.el.toggleClass('tikz-hidden', settings.getValue('turning') !== true);
     };
 
     const build = () => {

@@ -13,6 +13,7 @@ import { COLORMAPS, colormapName, isColormap } from '../colormaps';
 import { defaultTool } from '../migrate';
 import { t } from '../i18n';
 import { compileTuple } from './maths';
+import { FLOW, OPTION_RANGE } from './liveprims'; // 6.0 F4
 
 const OK: ValidateResult = { ok: true };
 
@@ -77,6 +78,58 @@ function mapRow(body: HTMLElement, label: string, get: () => Colormap | undefine
     };
     sync();
     return sync;
+}
+
+// ---------------------------------------------- 6.0 F4: options of moving things
+
+type NumberKey = keyof typeof OPTION_RANGE;
+
+interface NumberRow {
+    key: NumberKey;
+    label: string;
+    min: number;
+    max: number;
+    step: number;
+    /** The value without the option (the plan's). */
+    plain: number;
+    digits: number;
+}
+
+/**
+ * Sliders for the options of a moving thing (speed; the flow's count, trails,
+ * width and arrows). A value at its plain one leaves the option out. Returns
+ * the rows (to show or hide) and a sync.
+ */
+export function numberRows(body: HTMLElement, tool: Partial<Record<NumberKey, number>>, rows: NumberRow[], frame: () => void): { els: HTMLElement[]; sync: () => void } {
+    const els: HTMLElement[] = [];
+    const syncs: Array<() => void> = [];
+    for (const r of rows) {
+        const f = field(body, { label: r.label, layout: 'inline' });
+        els.push(f.el);
+        const get = () => tool[r.key] ?? r.plain;
+        const slider = liveSlider(f.controlEl, {
+            min: r.min,
+            max: r.max,
+            step: r.step,
+            value: get(),
+            label: r.label,
+            fixedRange: true,
+            format: (v) => v.toFixed(r.digits),
+            onInput: (v) => {
+                const value = Number(v.toFixed(r.digits));
+                if (Math.abs(value - r.plain) < 1e-9) delete tool[r.key];
+                else tool[r.key] = value;
+                frame();
+            },
+        });
+        syncs.push(() => slider.setValue(get()));
+    }
+    return { els, sync: () => syncs.forEach((s) => s()) };
+}
+
+/** The speed slider of a moving thing (1: as usual). */
+export function speedRow(body: HTMLElement, tool: { speed?: number }, frame: () => void): { els: HTMLElement[]; sync: () => void } {
+    return numberRows(body, tool, [{ key: 'speed', label: t('motion6.card.speed'), min: 0.1, max: 5, step: 0.1, plain: 1, digits: 1 }], frame);
 }
 
 // ---------------------------------------------------------- vector field
@@ -150,10 +203,27 @@ class VectorFieldCard extends ToolCard<VectorFieldTool> {
                 },
             ],
         });
+        // 6.0 F4: the flow's options, while it has moving particles.
+        const flow = numberRows(
+            this.body,
+            tool,
+            [
+                { key: 'speed', label: t('motion6.card.speed'), min: 0.1, max: 5, step: 0.1, plain: 1, digits: 1 },
+                { key: 'count', label: t('motion6.card.count'), min: 50, max: 1500, step: 10, plain: FLOW.count, digits: 0 },
+                { key: 'trails', label: t('motion6.card.trails'), min: 0, max: 0.98, step: 0.01, plain: FLOW.trails, digits: 2 },
+                { key: 'particleWidth', label: t('motion6.card.width'), min: 0.5, max: 5, step: 0.1, plain: FLOW.width, digits: 1 },
+                { key: 'arrows', label: t('motion6.card.arrows'), min: 0, max: 0.2, step: 0.005, plain: FLOW.arrows, digits: 3 },
+            ],
+            () => this.frame()
+        );
+        const showFlow = () => flow.els.forEach((el) => el.toggleClass('tikz-hidden', !tool.particles));
+        showFlow();
         this.onSync(() => {
             density.setValue(tool.density);
             line.thickness.setValue(tool.thickness);
             syncMap();
+            flow.sync();
+            showFlow();
         });
     }
 
@@ -342,10 +412,16 @@ class TrajectoryCard extends ToolCard<TrajectoryTool> {
                 },
             ],
         });
+        // 6.0 F4: how fast it draws itself.
+        const speed = speedRow(this.body, tool, () => this.frame());
+        const showSpeed = () => speed.els.forEach((el) => el.toggleClass('tikz-hidden', tool.traced !== true));
+        showSpeed();
         this.onSync(() => {
             line.thickness.setValue(tool.thickness);
             line.chips[1]?.setValue(tool.traced === true); // 6.0 F4
             syncMap();
+            speed.sync();
+            showSpeed();
         });
     }
 

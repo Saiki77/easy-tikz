@@ -48,11 +48,55 @@ export interface LiveShapes {
 /** A flow: particles that follow F and leave fading trails over faint arrows (src/motion6/live.ts). */
 export interface LiveParticles {
     field: (x: number, y: number) => number[];
-    /** Chart units per second per unit of |F|. */
+    /** Seconds of the field's time a second (the plan: 1.4; `speed 2` doubles it). */
     speed: number;
     color: string;
     /** The arrows' colour map (`coloured by length`); null: the text colour. */
     colormap: Colormap | null;
+    /** How many particles (the plan: 450). */
+    count: number;
+    /** How much of the last frame each frame fades (the plan: 0.1, `trails 0.9`). */
+    fade: number;
+    /** The particles' line width in screen pixels (the plan: 1.4). */
+    width: number;
+    /** The arrows' opacity each frame (the plan: 0.025); 0: no arrows. */
+    arrows: number;
+}
+
+/** 6.0 F4: the plan's flow, what a field with moving particles draws without options. */
+export const FLOW = { speed: 1.4, count: 450, trails: 0.9, width: 1.4, arrows: 0.025 } as const;
+
+/** What each option of a moving thing takes (a number outside is no option: the tool keeps its default). */
+export const OPTION_RANGE = {
+    speed: [0.05, 20],
+    count: [1, 3000],
+    trails: [0, 0.99],
+    particleWidth: [0.1, 10],
+    arrows: [0, 1],
+} as const;
+
+/** A number in the option's range, else undefined. */
+export function optionValue(key: keyof typeof OPTION_RANGE, v: unknown): number | undefined {
+    const [lo, hi] = OPTION_RANGE[key];
+    const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN;
+    if (!Number.isFinite(n) || n < lo || n > hi) return undefined;
+    return key === 'count' ? Math.round(n) : n;
+}
+
+/** A tool's speed: its `speed` times the usual (1 when it has none). */
+export function speedOf(tool: { speed?: unknown }): number {
+    return optionValue('speed', tool.speed) ?? 1;
+}
+
+/** The flow of a field with moving particles: the plan's, with the tool's options. */
+export function flowOf(tool: { speed?: unknown; count?: unknown; trails?: unknown; particleWidth?: unknown; arrows?: unknown }): { speed: number; count: number; fade: number; width: number; arrows: number } {
+    return {
+        speed: FLOW.speed * speedOf(tool),
+        count: optionValue('count', tool.count) ?? FLOW.count,
+        fade: Number((1 - (optionValue('trails', tool.trails) ?? FLOW.trails)).toFixed(6)),
+        width: optionValue('particleWidth', tool.particleWidth) ?? FLOW.width,
+        arrows: optionValue('arrows', tool.arrows) ?? FLOW.arrows,
+    };
 }
 
 export interface LivePrim {

@@ -7,6 +7,7 @@ import type { Colormap, RestPointsTool, Tool, TrajectoryTool, VectorFieldTool } 
 import { THICKNESS_MAP } from '../colors';
 import { isColormap } from '../colormaps';
 import { stepOf } from './steps';
+import { OPTION_RANGE, optionValue } from './liveprims'; // 6.0 F4
 
 type Data = Record<string, unknown>;
 type Body<T> = Omit<T, 'id' | 'name' | 'hidden'>;
@@ -35,6 +36,16 @@ export function trajectoryDefaults(dim: 2 | 3): Body<TrajectoryTool> {
 }
 
 /** A stored motion tool with every field it needs (unknown values give way to the defaults); null for other types. */
+/** 6.0 F4: the options of moving things a stored tool keeps (numbers in their range). */
+function kept(src: Data, keys: Array<keyof typeof OPTION_RANGE>): Data {
+    const out: Data = {};
+    for (const k of keys) {
+        const v = optionValue(k, src[k]);
+        if (v !== undefined) out[k] = v;
+    }
+    return out;
+}
+
 export function completeMotionTool(src: Data, dim: 2 | 3): MotionBody | null {
     const map = (v: unknown): Colormap | undefined => (isColormap(v) ? v : undefined);
     switch (src.type) {
@@ -49,6 +60,7 @@ export function completeMotionTool(src: Data, dim: 2 | 3): MotionBody | null {
                 thickness: thicknessOf(src.thickness, d.thickness),
                 particles: bool(src.particles, d.particles),
                 streamlines: bool(src.streamlines, d.streamlines),
+                ...kept(src, ['speed', 'count', 'trails', 'particleWidth', 'arrows']), // 6.0 F4
             };
             const m = map(src.colormap);
             if (m) out.colormap = m;
@@ -83,6 +95,7 @@ export function completeMotionTool(src: Data, dim: 2 | 3): MotionBody | null {
             // 6.0 F4
             if (src.byTime === true && !m) out.byTime = true;
             if (src.traced === true) out.traced = true;
+            Object.assign(out, kept(src, ['speed']));
             return out;
         }
         default:

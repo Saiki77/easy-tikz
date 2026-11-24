@@ -30,7 +30,7 @@ export function exportableSvg(svg: SVGElement, doc: Document, opts: { white?: bo
     });
 
     // 6.0 F4: the live canvas (what moves on the clock) goes; the still frame it hid shows instead.
-    clone.querySelectorAll('foreignObject.etz-live').forEach((fo) => fo.remove());
+    clone.querySelectorAll('foreignObject.etz-motion-layer').forEach((fo) => fo.remove());
     clone.querySelectorAll('.etz-still').forEach((el) => {
         el.removeAttribute('display');
         el.removeAttribute('class');

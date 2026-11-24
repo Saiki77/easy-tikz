@@ -529,7 +529,14 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
     // 6.0 C: the export shows every step side by side.
     { keys: ['frames'], print: (m) => (m.frames === true ? ['frames'] : 'frames' in m ? [`set frames = ${JSON.stringify(m.frames)}`] : []) },
     // 6.0 F4: a 3D chart that turns by itself.
-    { keys: ['turning'], print: (m) => (m.turning === true ? ['turning'] : 'turning' in m ? [`set turning = ${JSON.stringify(m.turning)}`] : []) },
+    {
+        keys: ['turning', 'turnSpeed'],
+        print: (m) => {
+            const speed = typeof m.turnSpeed === 'number' && Number.isFinite(m.turnSpeed) && m.turnSpeed > 0 ? m.turnSpeed : null;
+            if (m.turning === true) return [speed !== null ? `turning, speed ${speed}` : 'turning', ...(speed === null && 'turnSpeed' in m ? [`set turnSpeed = ${JSON.stringify(m.turnSpeed)}`] : [])];
+            return (['turning', 'turnSpeed'] as const).filter((k) => k in m).map((k) => `set ${k} = ${JSON.stringify(m[k])}`);
+        },
+    },
     {
         keys: ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'fitY'],
         print: (m, f) => {

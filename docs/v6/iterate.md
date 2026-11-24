@@ -90,7 +90,7 @@ slider n from 1 to 20, starting at 5, in steps of 1
 draw the circles of $\sum_{k=1}^{n} \frac{4}{\pi (2k - 1)} e^{i(2k - 1)t}$, with its wave
 ```
 
-- A sum in t, `\sum_{k=a}^{b} c_k(t)` (bounds are formulas: sliders): each term a circle on the tip of the one before, turning on the animation clock (part C: 0.6 rad of t a second, so the first circle of this one turns in about 10 s), the arms, the tip, and the curve the tip draws over t from 0 to 2π (faint).
+- A sum in t, `\sum_{k=a}^{b} c_k(t)` (bounds are formulas: sliders): each term a circle on the tip of the one before, turning on the animation clock (part C: 1.1 rad of t a second, the plan's, so the first circle turns in under 6 s; `speed 2` doubles it, 6.0 F4), the arms, the tip, and the curve the tip draws over t from 0 to 2π (faint).
 - `with its wave`: the imaginary part over the last turn, to the right of the circles (from 1.25 times their reach, or the middle of the view), the newest value next to them, joined to the tip by a dashed line.
 - The export, print and the SVG files draw the still frame (time 0, or the chart's `stillTime`).
 - Options: a colour (default blue), `thin`, `thick` (default), `with its wave`, `hidden`.

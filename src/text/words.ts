@@ -65,6 +65,7 @@ export const PIECES: readonly Piece[] = [
     piece('let', 'let', 'lines', 'values.words.what.let'),
     piece('then', 'then', 'lines', 'motion6.words.what.then'),
     piece('frames', 'frames', 'lines', 'motion6.words.what.frames'),
+    piece('turning', 'turning', 'lines', 'motion6.words.what.turning'), // 6.0 F4
     piece('transform-the-plane-by', 'transform the plane by', 'lines', 'linear.words.what.transformThePlaneBy'),
     piece('transform-space-by', 'transform space by', 'lines', 'linear.words.what.transformSpaceBy'),
     piece('colour-the-plane-by', 'colour the plane by', 'lines', 'iterate.words.what.colourThePlaneBy'),
@@ -174,6 +175,14 @@ export const PIECES: readonly Piece[] = [
     piece('coloured-by-time', 'coloured by time', 'options', 'motion6.words.what.colouredByTime'),
     piece('as-a-path', 'as a path', 'options', 'iterate.words.what.asAPath'),
     piece('with-its-wave', 'with its wave', 'options', 'iterate.words.what.withItsWave'),
+    // 6.0 F4: moving things.
+    piece('traced', 'traced', 'options', 'motion6.words.what.traced'),
+    piece('speed', 'speed', 'options', 'motion6.words.what.speed'),
+    piece('particles', 'particles', 'options', 'motion6.words.what.particles'),
+    piece('trails', 'trails', 'options', 'motion6.words.what.trails'),
+    piece('width', 'width', 'options', 'motion6.words.what.width'),
+    piece('no-arrows', 'no arrows', 'options', 'motion6.words.what.noArrows'),
+    piece('arrows', 'arrows', 'options', 'motion6.words.what.arrows'),
 
     piece('red', 'red', 'colours', 'panels.words.what.red'),
     piece('blue', 'blue', 'colours', 'panels.words.what.blue'),

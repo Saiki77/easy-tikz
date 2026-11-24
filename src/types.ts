@@ -450,6 +450,17 @@ export interface VectorFieldTool extends ToolBase {
     particles: boolean;
     /** Still curves along F through a grid of seeds (the export draws them too). */
     streamlines: boolean;
+    // 6.0 F4: the moving particles (absent: the plan's flow, src/motion6/liveprims.ts FLOW).
+    /** How fast, times the plan's (`speed 2`). */
+    speed?: number;
+    /** How many particles (`450 particles`). */
+    count?: number;
+    /** How long the trails stay: the share of the last frame each frame keeps (`trails 0.9`). */
+    trails?: number;
+    /** The particles' line width in screen pixels (`width 1.4`). */
+    particleWidth?: number;
+    /** The opacity the arrow grid is drawn with each frame (`arrows 0.025`); 0: `no arrows`. */
+    arrows?: number;
 }
 
 /**
@@ -489,6 +500,8 @@ export interface TrajectoryTool extends ToolBase {
     byTime?: boolean;
     /** It draws itself over time with a dot at its head, then starts again (the export draws it whole). */
     traced?: boolean;
+    /** How fast it draws itself, times the usual (`speed 2`). */
+    speed?: number;
 }
 
 // 6.0 B: notes and interaction (src/notes6/): sets on an axis and chords, 2D only.
@@ -698,6 +711,8 @@ export interface OrbitTool extends ToolBase {
     // 6.0 F4
     /** It draws itself step by step with a dot at its head, then starts again (the export draws it whole). */
     traced?: boolean;
+    /** How fast it draws itself, times the usual (`speed 2`). */
+    speed?: number;
 }
 
 /**
@@ -781,6 +796,9 @@ export interface FourierCirclesTool extends ToolBase {
     sum: string;
     wave: boolean;
     thickness: string;
+    // 6.0 F4
+    /** How fast the circles turn, times the usual (`speed 2`). */
+    speed?: number;
 }
 
 export type Tool =

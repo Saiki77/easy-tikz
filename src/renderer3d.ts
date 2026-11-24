@@ -366,6 +366,8 @@ export class SVG3DRenderer {
     private sceneMemo: { key: string; scene: Scene3D } | null = null;
     private frames = 0;
     private frameSum = 0;
+    /** Canvas pixels per config unit, across and down (6.0 F4: measured as shown). */
+    private canvasScale: [number, number] = [1, 1];
     private dark = false;
     private markerMarks: MarkerMark[] = [];
     private annotationMarks: TextMark[] = [];
@@ -505,8 +507,13 @@ export class SVG3DRenderer {
      */
     private sizeCanvas(config: RendererConfig) {
         const dpr = window.devicePixelRatio || 1;
-        const pxW = Math.round(config.width * dpr);
-        const pxH = Math.round(config.height * dpr);
+        // 6.0 F4: one canvas pixel per screen pixel of the canvas as shown (a note fits it to its box), so it is sharp.
+        const shown = this.canvas.isConnected ? this.canvas.getBoundingClientRect() : null;
+        const cssW = shown && shown.width > 0 ? shown.width : config.width;
+        const cssH = shown && shown.height > 0 ? shown.height : config.height;
+        const pxW = Math.max(1, Math.round(cssW * dpr));
+        const pxH = Math.max(1, Math.round(cssH * dpr));
+        this.canvasScale = [pxW / config.width, pxH / config.height];
         if (this.canvas.width !== pxW || this.canvas.height !== pxH) {
             this.canvas.width = pxW;
             this.canvas.height = pxH;
@@ -1668,12 +1675,10 @@ export class SVG3DRenderer {
     private paintCanvas() {
         const cfg = this.requireConfig();
         const ctx = this.ctx;
-        const dpr = window.devicePixelRatio || 1;
-
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        ctx.scale(dpr, dpr);
+        ctx.scale(this.canvasScale[0], this.canvasScale[1]); // 6.0 F4: config units to the canvas pixels as shown
 
         // Background (matches the SVG's background rect).
         ctx.fillStyle = this.themeColors.bgPrimary;
