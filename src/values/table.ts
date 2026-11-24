@@ -192,7 +192,7 @@ export class ValueTable implements Definitions {
         const rec = this.recs.get(name);
         if (!rec || rec.def.params.length) return NaN;
         if (rec.state === 0) this.compile(rec);
-        return rec.part ? this.read(rec) : NaN;
+        return rec.part ? this.read(rec, rec.part) : NaN;
     }
 
     ref(name: string): DefRef | null {
@@ -207,19 +207,20 @@ export class ValueTable implements Definitions {
         if (rec.state === 0) this.compile(rec);
         if (rec.error) throw new ExprError(msg('problems.expr.dependsOnError', { name }));
         if (!rec.def.params.length) {
-            const part = rec.part as Part;
-            return { name, value: { shape: part.shape, read: () => this.read(rec) } };
+            const part = rec.part;
+            if (!part) throw new ExprError(msg('problems.expr.dependsOnError', { name }));
+            return { name, value: { shape: part.shape, read: () => this.read(rec, part) } };
         }
         return { name, fn: { params: rec.def.params, instance: (shapes) => this.instance(rec, shapes) } };
     }
 
-    private read(rec: Rec): Value {
+    private read(rec: Rec, part: Part): Value {
         const v = this.host.version();
         if (rec.version !== v) {
             // Set first: a value that reads itself through a chart function gets NaN, not a loop.
             rec.version = v;
             rec.cached = NaN;
-            rec.cached = (rec.part as Part).f();
+            rec.cached = part.f();
         }
         return rec.cached;
     }

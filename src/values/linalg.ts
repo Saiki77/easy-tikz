@@ -135,9 +135,9 @@ export function matPow(m: Mat, k: number): Mat | null {
     let e = Math.abs(k);
     let out: Mat = identity(m.rows);
     while (e > 0) {
-        if (e & 1) out = matMul(out, base) as Mat;
+        if (e & 1) out = matMul(out, base) ?? out;
         e >>= 1;
-        if (e) base = matMul(base, base) as Mat;
+        if (e) base = matMul(base, base) ?? base;
     }
     return out;
 }

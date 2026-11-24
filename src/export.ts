@@ -678,6 +678,8 @@ function addFunctions(layers: Layers, config: RendererConfig, ctx: MathContext, 
                 pieces = curveDrawable(info, lo, hi, view) ? [[fmtNum(lo), fmtNum(hi), FUNCTION_SAMPLES]] : [];
             }
         } catch {
+            // 6.0 A: a formula of values with no pgfmath form (a list, a gradient): the curve as the preview samples it.
+            if (info.kind === 'cartesian' && valuesCurve(layers, info, f, view, colors, ctx) === 'legend') legends = true;
             // The context reported no error, so this cannot happen; never let one function break the export.
             continue;
         }
@@ -700,6 +702,32 @@ function addFunctions(layers: Layers, config: RendererConfig, ctx: MathContext, 
         });
     }
     return legends;
+}
+
+/**
+ * 6.0 A: a cartesian function whose formula has no pgfmath form, as
+ * coordinates: the runs the preview draws, with its legend entry on the
+ * first ('legend'). False when nothing is drawable.
+ */
+function valuesCurve(layers: Layers, info: FunctionInfo, f: RendererConfig['functions'][number], view: View, colors: ColorSet, ctx: MathContext): 'legend' | 'plain' | false {
+    const d = info.domain;
+    const lo = d ? Math.max(d[0], view.xmin) : view.xmin;
+    const hi = d ? Math.min(d[1], view.xmax) : view.xmax;
+    if (!(hi > lo)) return false;
+    const fn = info.fn;
+    const runs = sampleCurve((x) => ({ x, y: fn(x) }), lo, hi, PREVIEW_SAMPLES, view).filter((r) => r.length > 1);
+    if (!runs.length) return false;
+    const style = [colors.use(f.color), lineWidth(f.thickness)];
+    if (f.dashed) style.push('dashed');
+    const legend = f.showLegend ? legendText(info, f.expression, f.expressionY, f.legendLabel, ctx) : '';
+    layers.functions.push(comment(info.name));
+    runs.forEach((run, i) => {
+        const opts = [...style];
+        if (!(legend && i === 0)) opts.push('forget plot');
+        layers.functions.push(`\\addplot[${opts.join(', ')}] coordinates ${coordinateList(run.map((p) => `(${xy(p, view)})`))};`);
+        if (legend && i === 0) layers.functions.push(`\\addlegendentry{${legendEntry(legend, layers)}}`);
+    });
+    return legend ? 'legend' : 'plain';
 }
 
 /**

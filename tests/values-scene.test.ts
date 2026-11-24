@@ -178,3 +178,14 @@ test('3D: labels of arrows sit at the tips (the middles, tip to tail), without m
     assert.ok(!tex.includes('only marks'), tex);
     assert.match(tex, /\{\$\\vec\{u\} \+ \\vec\{v\}\$\}/);
 });
+
+test('a function with no pgfmath form (a gradient) exports as its points; let functions in regions and curves', () => {
+    const settings = settingsOf('show x from -3 to 3 and y from -1 to 10\nlet $f(x, y) = x^2 + 4y^2$\nplot g(x) = norm(grad(f, x, 1)) in red\nshade where $f(x, y) \\le 4$\ndraw f(x, y) = 1');
+    const math = settings.createMathContext();
+    const tex = settings.generateTikzCode(math);
+    assert.match(tex, /% g\n\\addplot\[etRed, thin, forget plot\] coordinates \{/);
+    const s = sceneOf('show x from -3 to 3 and y from -2 to 2\nlet $f(x, y) = x^2 + 4y^2$\nshade where $f(x, y) \\le 4$\ndraw f(x, y) = 1');
+    assert.deepEqual(issues(s), []);
+    assert.ok(s.items.find((i) => i.source === 'R1')?.fills.length);
+    assert.ok(s.items.find((i) => i.source === 'C1')?.strokes.length);
+});

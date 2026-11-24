@@ -539,7 +539,7 @@ export class ValueCompiler {
         }
         if (n.math) throw unknownFunctionError(n, env, this.scope.src);
         const def = this.def(n.name, n.ns);
-        if (def && def.fn) return this.letCall(n, def);
+        if (def && def.fn) return this.letCall(n, def.fn);
         if (inEnv(n.name, env)) {
             const ref = env.fn(n.name);
             if (ref) {
@@ -650,8 +650,7 @@ export class ValueCompiler {
     }
 
     /** A let function called: its body for these argument shapes, its parameters written first. */
-    private letCall(n: VCall, def: DefRef): Part {
-        const fn = def.fn as NonNullable<DefRef['fn']>;
+    private letCall(n: VCall, fn: NonNullable<DefRef['fn']>): Part {
         if (n.args.length !== fn.params.length) fail('problems.expr.takesArguments', { name: n.name, count: fn.params.length }, n.ns);
         const parts = n.args.map((a) => this.node(a));
         let inst: { cells: Cell[]; body: Part };

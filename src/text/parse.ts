@@ -821,6 +821,11 @@ export function definedNames(data: Data): Set<string> {
 function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
     const b = new Builder();
     const lines = text.split(LINE_BREAK);
+    // 6.0 A: the let names first, so `draw f(x, y) = 1` of a let function f is its curve, not a surface.
+    for (const raw of lines) {
+        const m = new RegExp(`^let\\s+\\$?\\s*(${NAME})\\s*(?:\\(([^()]*)\\))?\\s*=`).exec(raw.trim());
+        if (m) b.lets.add(m[1]);
+    }
     // Names first, so a line may use a name defined further down; and 3D charts read their tuples as (x, y, z).
     lines.forEach((raw) => {
         const t = raw.trim();
@@ -828,7 +833,7 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
         // plot and draw only say what the line does: `plot z = ...` is a surface as `z = ...` is.
         const body = (named ? t.slice(named[0].length) : t).replace(/^(?:plot|draw)\s+(?:the\s+)?/i, '');
         const surface = new RegExp(`^(${NAME})\\s*\\(\\s*[A-Za-z]+\\s*,\\s*[A-Za-z]+\\s*\\)\\s*=(?!=)`).exec(body);
-        if (/^3d$/i.test(t) || /^plane\s+(?:at\s+)?[xyz]\s*=/i.test(body) || /^z\s*=(?!=)/.test(body) || (surface && !RESERVED_NAMES.has(surface[1]))) {
+        if (/^3d$/i.test(t) || /^plane\s+(?:at\s+)?[xyz]\s*=/i.test(body) || /^z\s*=(?!=)/.test(body) || (surface && !RESERVED_NAMES.has(surface[1]) && !(/^draw\s/i.test(t) && b.lets.has(surface[1])))) {
             b.is3D = true;
         }
         const def = new RegExp(`^(${NAME})\\s*\\(\\s*[A-Za-zθ]+\\s*(?:,\\s*[A-Za-z]+\\s*)?\\)\\s*=(?!=)`).exec(body);
@@ -840,7 +845,6 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
         const letName = new RegExp(`^let\\s+\\$?\\s*(${NAME})\\s*(?:\\(([^()]*)\\))?\\s*=`).exec(t);
         if (letName) {
             b.explicit.add(letName[1]);
-            b.lets.add(letName[1]);
             for (const p of (letName[2] ?? '').split(',')) if (/^[A-Za-z]{2,}$/.test(p.trim())) b.explicit.add(p.trim());
         }
     });
@@ -1256,6 +1260,9 @@ const DRAW_NOUN = /^(?:(?:a|an|the)\s+)?(double\s+arrow|arrow|line|segment|polyg
 function draw(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
     const t = rest.text.trim();
     if (!t) return b.problem(rest.at, msg('problems.text.drawTakes'));
+    // 6.0 A: `draw f(x, y) = 1` with a let function f is its curve, not a new function f.
+    const letCall = /^([A-Za-z][A-Za-z0-9_]*)\s*\(/.exec(t);
+    if (letCall && b.lets.has(letCall[1])) return curve(b, name, rest, options);
     if (DEFINITION.test(t)) return formulaLine(b, name, rest, options);
     // 6.0 A: vector arrows, `draw v and w as arrows`, `draw v + w tip to tail`.
     const vectors = readVectors(t, b.lets);
