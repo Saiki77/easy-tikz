@@ -30,30 +30,50 @@ function tupleCheck(host: PanelHost, dim: () => 2 | 3): (src: string) => Validat
     };
 }
 
-/** A chip that turns a colour map on (viridis) and off, and the map's dropdown while it is on. */
-function mapRow(body: HTMLElement, label: string, get: () => Colormap | undefined, set: (m: Colormap | undefined) => void, changed: () => void): () => void {
+/** 6.0 F4: a default ramp the chip turns on before any map (a solution's `coloured by time`). */
+interface Ramp {
+    get(): boolean;
+    set(on: boolean): void;
+}
+
+/** A chip that turns a colour map on (viridis, or the default ramp) and off, and the map's dropdown while it is on. */
+function mapRow(body: HTMLElement, label: string, get: () => Colormap | undefined, set: (m: Colormap | undefined) => void, changed: () => void, ramp?: Ramp): () => void {
     const row = body.createDiv({ cls: 'etz-chip-row' });
+    const RAMP = 'ramp';
+    const isOn = () => !!get() || !!ramp?.get();
     const on = chip(row, {
         label,
-        value: !!get(),
+        value: isOn(),
         onChange: (v) => {
-            set(v ? 'viridis' : undefined);
+            if (ramp) {
+                ramp.set(v);
+                set(undefined);
+            } else set(v ? 'viridis' : undefined);
             changed();
         },
     });
+    const options: Array<{ value: string; text: string }> = COLORMAPS.map((m) => ({ value: m, text: colormapName(m) }));
+    if (ramp) options.unshift({ value: RAMP, text: t('motion6.card.timeRamp') });
+    const current = () => get() ?? (ramp ? RAMP : 'viridis');
     const maps = dropdown<string>(row, {
         label: t('motion6.card.colormap'),
-        options: COLORMAPS.map((m) => ({ value: m, text: colormapName(m) })),
-        value: get() ?? 'viridis',
+        options,
+        value: current(),
         onChange: (v) => {
-            if (isColormap(v)) set(v);
+            if (ramp && v === RAMP) {
+                ramp.set(true);
+                set(undefined);
+            } else if (isColormap(v)) {
+                ramp?.set(false);
+                set(v);
+            }
             changed();
         },
     });
     const sync = () => {
-        on.setValue(!!get());
-        maps.el.toggleClass('tikz-hidden', !get());
-        maps.setValue(get() ?? 'viridis');
+        on.setValue(isOn());
+        maps.el.toggleClass('tikz-hidden', !isOn());
+        maps.setValue(current());
     };
     sync();
     return sync;
@@ -288,7 +308,15 @@ class TrajectoryCard extends ToolCard<TrajectoryTool> {
                 if (m) tool.colormap = m;
                 else delete tool.colormap;
             },
-            () => this.changed()
+            () => this.changed(),
+            // 6.0 F4: `coloured by time` alone is the cobalt to amber ramp.
+            {
+                get: () => tool.byTime === true,
+                set: (on) => {
+                    if (on) tool.byTime = true;
+                    else delete tool.byTime;
+                },
+            }
         );
         const line = this.lineRow({
             thickness: () => tool.thickness,
@@ -303,10 +331,20 @@ class TrajectoryCard extends ToolCard<TrajectoryTool> {
                         tool.dashed = v;
                     },
                 },
+                // 6.0 F4
+                {
+                    label: t('motion6.trajectory.traced'),
+                    get: () => tool.traced === true,
+                    set: (v) => {
+                        if (v) tool.traced = true;
+                        else delete tool.traced;
+                    },
+                },
             ],
         });
         this.onSync(() => {
             line.thickness.setValue(tool.thickness);
+            line.chips[1]?.setValue(tool.traced === true); // 6.0 F4
             syncMap();
         });
     }

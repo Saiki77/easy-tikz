@@ -89,6 +89,7 @@ export function completeIterateTool(src: Data): IterateBody | null {
                 size: sizeOf(src.size, d.size),
                 thickness: thicknessOf(src.thickness, d.thickness),
                 valueLabel: bool(src.valueLabel, d.valueLabel),
+                ...(src.traced === true ? { traced: true } : {}), // 6.0 F4
             };
         }
         case 'cobweb': {

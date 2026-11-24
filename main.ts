@@ -40,6 +40,9 @@ import type { Extension } from '@codemirror/state';
 import { MotionPlayer } from './src/motion6/player';
 import { playerFor } from './src/motion6/host';
 import { atStep } from './src/motion6/steps';
+// 6.0 F4: the live canvas of a moving 2D chart, the turn of a turning 3D chart.
+import { LiveLayer } from './src/motion6/live';
+import { TURN_DRAG_DEG_PER_PX, Turn } from './src/motion6/clock';
 // 6.0 B: Ask the curve under a block in Live Preview.
 import { AskController, svgBoxOf } from './src/notes6/askHost';
 import { writeAnswerIntoBlock } from './src/notes6/liveAsk';
@@ -1155,6 +1158,14 @@ class InlineChart {
     private player: MotionPlayer | null = null;
     /** The chart at a step before its last: its own settings and context, made from the chart's. */
     private stepView: { step: number; from: MathContext; manager: SettingsManager; math: MathContext } | null = null;
+    // 6.0 F4
+    /** What moves on the clock in a 2D chart, on a canvas inside it (src/motion6/live.ts). */
+    private liveLayer: LiveLayer | null = null;
+    /** A turning 3D chart: the turn on the clock, and degrees a drag in the note added (not saved). */
+    private readonly turn = new Turn();
+    private dragTurn = 0;
+    /** A drag turned the chart: the click that ends it opens no editor. */
+    private turnDragged = false;
     // 6.0 B: Ask the curve under a block in Live Preview, and what the last full 2D drawing drew.
     private ask: AskController | null = null;
     private askDrawn: { layout: RenderLayout; drawn: DrawnScene; pixelScale: number } | null = null;
@@ -1247,6 +1258,7 @@ class InlineChart {
 
         // 6.0 C: a chart with steps or objects that move by themselves gets a player.
         this.player = playerFor(this.manager.serialize(), { draw: (_frame, clock) => this.drawMotion(clock), watched: () => this.box });
+        if (this.player) this.liveLayer = new LiveLayer(); // 6.0 F4
         try {
             this.render('full');
         } catch (e) {
@@ -1273,7 +1285,15 @@ class InlineChart {
             this.askable(); // 6.0 B
             return;
         }
-        this.box.addEventListener('click', () => this.openEditor());
+        this.box.addEventListener('click', () => {
+            // 6.0 F4: the end of a drag that turned the chart is no click.
+            if (this.turnDragged) {
+                this.turnDragged = false;
+                return;
+            }
+            this.openEditor();
+        });
+        this.turnable(); // 6.0 F4
         this.box.addEventListener('keydown', (e: KeyboardEvent) => {
             // Only the focused box itself opens the editor, never keys meant for a control.
             if (e.target !== this.box) return;
@@ -1362,7 +1382,7 @@ class InlineChart {
             // Ranges may use parameters, so the config is rebuilt every frame.
             const config = view.manager.toRendererConfig(math);
             config.parameters = this.params;
-            if (this.player) config.motion = this.player.frame();
+            this.motionConfig(config); // 6.0 C, F4
             this.applySize(config);
             issues = config.is3D ? this.render3D(config, math, quality) : this.render2D(config, math, quality);
             // Hidden tools that nothing reads affect nothing: no problem line for them.
@@ -1440,6 +1460,8 @@ class InlineChart {
         this.popIn?.stop();
         this.player?.destroy(); // 6.0 C
         this.player = null;
+        this.liveLayer?.destroy(); // 6.0 F4
+        this.liveLayer = null;
         liveCharts.delete(this);
         this.syncNoteLinks();
         this.renderer3d = null;
@@ -1561,7 +1583,7 @@ class InlineChart {
             this.boxSize = { w: this.box.clientWidth, h: this.box.clientHeight };
         }
         const pixelScale = fitPixelScale(this.boxSize.w, this.boxSize.h, config.width, config.height);
-        const renderer = new SVGRenderer(config, { math, cache, quality, pixelScale });
+        const renderer = new SVGRenderer(config, { math, cache, quality, pixelScale, live: this.liveLayer ?? undefined }); // 6.0 F4: live
         const svg = renderer.render();
         svg.addClass('etz-inline-svg');
         this.placeChart(svg);
@@ -1792,12 +1814,18 @@ class InlineChart {
             this.render('full');
             return;
         }
+        // 6.0 F4: a frame of the clock alone moves the live canvas of a 2D chart; the SVG stays.
+        const frame = this.player?.frame();
+        if (frame && frame.progress >= 1 && this.liveLayer?.active() && !this.manager.getValue('dimension')) {
+            this.liveLayer.paint(frame.time);
+            return;
+        }
         try {
             const view = this.motionView();
             view.math.setParams(this.params);
             const config = view.manager.toRendererConfig(view.math);
             config.parameters = this.params;
-            if (this.player) config.motion = this.player.frame();
+            this.motionConfig(config); // 6.0 C, F4
             this.applySize(config);
             if (config.is3D) this.render3D(config, view.math, 'draft');
             else this.render2D(config, view.math, 'draft');
@@ -1805,6 +1833,50 @@ class InlineChart {
             // A frame that cannot be drawn is skipped; the last one stays.
         }
         this.popIn?.apply(this.chartEl, this.animated());
+    }
+
+    // ---------------------------------------------- 6.0 F4: live canvas, turning
+
+    /** The clock's frame into the config, and the turn of a turning 3D chart. */
+    private motionConfig(config: RendererConfig) {
+        if (!this.player) return;
+        config.motion = this.player.frame();
+        if (config.is3D && this.manager.getValue('turning') === true) config.turn = this.dragTurn + this.turn.angle(config.motion.time);
+    }
+
+    /** A turning 3D chart turns with a sideways drag in the note too (the chart text keeps its view). */
+    private turnable() {
+        const box = this.box;
+        let drag: { id: number; x: number; y: number; from: number; moved: boolean } | null = null;
+        const time = () => (this.player ? this.player.frame().time : 0);
+        box.addEventListener('pointerdown', (e: PointerEvent) => {
+            if (e.button !== 0 || !this.player || this.manager.getValue('turning') !== true || !this.manager.getValue('dimension')) return;
+            drag = { id: e.pointerId, x: e.clientX, y: e.clientY, from: this.dragTurn + this.turn.angle(time()), moved: false };
+        });
+        box.addEventListener('pointermove', (e: PointerEvent) => {
+            if (!drag || drag.id !== e.pointerId) return;
+            const dx = e.clientX - drag.x;
+            if (!drag.moved) {
+                // A drag that goes more down than sideways is the page scrolling.
+                if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(e.clientY - drag.y)) return;
+                drag.moved = true;
+                this.turn.hold(true, time());
+                box.setPointerCapture(e.pointerId);
+            }
+            this.dragTurn = drag.from + dx * TURN_DRAG_DEG_PER_PX;
+            this.drawMotion(true);
+        });
+        const end = (e: PointerEvent) => {
+            if (!drag || drag.id !== e.pointerId) return;
+            if (drag.moved) {
+                this.turnDragged = true;
+                this.turn.hold(false, time());
+                window.setTimeout(() => (this.turnDragged = false), 0);
+            }
+            drag = null;
+        };
+        box.addEventListener('pointerup', end);
+        box.addEventListener('pointercancel', end);
     }
 
     /** The slider rows again, for the sliders the chart has now. */

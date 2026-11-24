@@ -15,9 +15,12 @@ import { addIssue, fail, newOutput, publish, UP_RIGHT } from '../scene';
 import { t as msg } from '../i18n';
 import { errorText } from '../util';
 import { colormapRgb, isColormap } from '../colormaps';
-import { MAX_STEPS, PARTICLE_LIFE, compileTuple, particlesAt, restPoints, setTupleMessages, solveSystem, streamlines } from './maths';
+import { MAX_STEPS, compileTuple, restPoints, setTupleMessages, solveSystem, streamlines } from './maths';
 import type { RestKind, VectorFn } from './maths';
 import { clockTime } from './clock';
+// 6.0 F4: what moves on the preview's live canvas.
+import type { LivePrim, TraceRun } from './liveprims';
+import { TIME_LEVELS, rampColor, traceSeconds, tracedAt } from './liveprims';
 
 /** The tool types of this module. */
 export const MOTION_TYPES: ReadonlySet<string> = new Set(['vectorField', 'restPoints', 'trajectory']);
@@ -28,8 +31,8 @@ export const MOTION_3D_TYPES: ReadonlySet<string> = new Set(['trajectory']);
 export interface MotionOutput {
     /** F(x, y), which rest points read. */
     field?: (x: number, y: number) => number[];
-    /** The moving particles: how many, how fast, how drawn. */
-    particles?: { count: number; speed: number; color: string; width: string };
+    /** The moving particles: how fast (chart units a second per unit of |F|), in what colour. */
+    particles?: { speed: number; color: string };
 }
 
 /** An arrow is this share of its grid cell long (on screen). */
@@ -39,14 +42,17 @@ const HEAD_SHARE = 0.32;
 const HEAD_ANGLE = (25 * Math.PI) / 180;
 /** Colour levels of a field or a solution coloured through a map. */
 const LEVELS = 8;
-/** Arrows under moving particles are drawn this faint. */
-const UNDER_PARTICLES = 0.4;
-/** Particles per grid cell of the arrows, and their bounds. */
-const PARTICLES_PER_CELL = 0.9;
-const MIN_PARTICLES = 40;
-const MAX_PARTICLES = 400;
-/** Opacity levels of the particles' trails (oldest part faintest). */
-const TRAIL_LEVELS = [0.15, 0.35, 0.6, 1];
+/**
+ * 6.0 F4: the still frame of a field with moving particles (the export, SVG
+ * files, Copy SVG) is the same picture at rest: faint arrows and a few
+ * streamlines. The preview's live canvas draws the flow itself
+ * (src/motion6/live.ts), and hides these.
+ */
+const UNDER_PARTICLES = 0.25;
+const STILL_STREAM_GAP = 3.2;
+const STILL_STREAM_OPACITY = 0.6;
+/** Particles move at the mean |F| across this share of the view a second (the plan's flow: 1.4 s of t a second). */
+const FLOW_SPEED = 0.28;
 /** Streamlines are this many arrow cells apart. */
 const STREAM_GAP = 1.6;
 /** A solution stops where it runs this many chart sizes away. */
@@ -199,11 +205,15 @@ function computeField(t: VectorFieldTool, ctx: SceneCtx): SceneOutput {
             arrows.push({ shaft: [tail, tip], head: [side(HEAD_ANGLE), tip, side(-HEAD_ANGLE)], size });
         }
     }
-    const faint = t.particles === true ? UNDER_PARTICLES : undefined;
+    const flow = t.particles === true;
     const push = (list: typeof arrows, c: string) => {
         if (!list.length) return;
         const s: StrokePrim = { lines: list.flatMap((a) => [a.shaft, a.head]), color: c, width, dashed: false, exact: true };
-        if (faint !== undefined) s.opacity = faint;
+        // 6.0 F4: faint under moving particles, and the live canvas draws its own (still: hidden there).
+        if (flow) {
+            s.opacity = UNDER_PARTICLES;
+            s.still = true;
+        }
         out.strokes.push(s);
     };
     if (map && arrows.length) {
@@ -226,54 +236,20 @@ function computeField(t: VectorFieldTool, ctx: SceneCtx): SceneOutput {
         // In the tool's own colour: a map's light end would hardly show on paper.
         if (lines.length) out.strokes.push({ lines, color, width: 'thin', dashed: false });
     }
-    if (t.particles === true && counted) {
-        const count = Math.max(MIN_PARTICLES, Math.min(MAX_PARTICLES, Math.round(nx * ny * PARTICLES_PER_CELL)));
-        // A typical arrow's own cell is crossed in about a second: |F| times speed is cell / 1 s.
+    if (flow && counted) {
+        // 6.0 F4: the still frame of the flow: a few streamlines over the faint arrows (unless it draws its own).
+        if (t.streamlines !== true) {
+            const lines = streamlines(F, view, ux, uy, STILL_STREAM_GAP * cell);
+            if (lines.length) out.strokes.push({ lines, color, width: 'thin', dashed: false, opacity: STILL_STREAM_OPACITY, still: true });
+        }
+        // Particles at the mean |F| cross FLOW_SPEED of the view a second.
         const mean = sum / counted;
-        const cellUnits = Math.hypot(cell / ux, cell / uy) / Math.SQRT2;
-        const speed = mean > 0 ? cellUnits / mean : 0;
-        motion.particles = { count, speed, color, width: 'thick' };
+        const speed = mean > 0 ? (FLOW_SPEED * (view.xmax - view.xmin)) / mean : 0;
+        motion.particles = { speed, color };
+        out.live = [{ key: `${str(t.id)}:particles`, particles: { field: F, speed, color, colormap: map } }];
     }
     return out;
 }
-
-/**
- * The particles of a vector field at the frame's time, as strokes that fade
- * along their trails (the still frame: time 0 or the chart's stillTime).
- * Null when the tool has none. Called after the scene memo, every frame.
- */
-export function motionStrokes(tool: Tool | undefined, out: SceneOutput, ctx: SceneCtx, frame: MotionFrame | undefined): StrokePrim[] | null {
-    if (!tool || tool.type !== 'vectorField' || tool.particles !== true) return null;
-    const motion = out.motion;
-    if (!motion || !motion.field || !motion.particles) return null;
-    const p = motion.particles;
-    const time = clockTime(frame);
-    const parts = particlesAt(motion.field, ctx.view, p.count, p.speed, time);
-    const levels: Pt[][][] = TRAIL_LEVELS.map(() => []);
-    for (const part of parts) {
-        const n = part.trail.length;
-        // The trail in as many pieces as levels, the newest one the most opaque.
-        for (let k = 0; k < TRAIL_LEVELS.length; k++) {
-            const a = Math.floor((k * (n - 1)) / TRAIL_LEVELS.length);
-            const b = Math.floor(((k + 1) * (n - 1)) / TRAIL_LEVELS.length);
-            if (b <= a) continue;
-            const alpha = TRAIL_LEVELS[k] * part.life;
-            // Nearest level at or below: a piece fades with its particle's life.
-            let level = 0;
-            for (let j = 0; j < TRAIL_LEVELS.length; j++) if (TRAIL_LEVELS[j] <= alpha + 1e-9) level = j;
-            if (alpha < TRAIL_LEVELS[0] * 0.5) continue;
-            levels[level].push(part.trail.slice(a, b + 1));
-        }
-    }
-    const strokes: StrokePrim[] = [];
-    levels.forEach((lines, k) => {
-        if (lines.length) strokes.push({ lines, color: p.color, width: p.width, dashed: false, opacity: TRAIL_LEVELS[k] });
-    });
-    return strokes;
-}
-
-/** How long one round of a particle takes (the clock's natural period, for a film or a guide). */
-export const PARTICLE_PERIOD = PARTICLE_LIFE;
 
 // ---------------------------------------------------------- rest points
 
@@ -317,7 +293,7 @@ function computeRestPoints(t: RestPointsTool, ctx: SceneCtx): SceneOutput {
         addIssue(out, t.name, undefined, msg('motion6.problem.noRestPoints'), 'info');
         return out;
     }
-    const color = str(t.color) || 'red';
+    const color = str(t.color) || 'orange';
     const size = t.size === 'small' || t.size === 'large' ? t.size : 'normal';
     // A rest point on the border of the view keeps its marker; its name would not fit beside it.
     const mx = (ctx.view.xmax - ctx.view.xmin) * 0.03;
@@ -413,9 +389,21 @@ function solve(t: TrajectoryTool, dim: 2 | 3, ctx: SceneCtx, out: SceneOutput, s
     return { lines, t0, t1 };
 }
 
-/** The level (0..LEVELS-1) of time `tt` in [t0, t1]. */
-function levelOf(tt: number, t0: number, t1: number): number {
-    return Math.max(0, Math.min(LEVELS - 1, Math.floor(((tt - t0) / (t1 - t0)) * LEVELS)));
+/** The level (0..levels-1) of time `tt` in [t0, t1]. */
+function levelOf(tt: number, t0: number, t1: number, levels = LEVELS): number {
+    return Math.max(0, Math.min(levels - 1, Math.floor(((tt - t0) / (t1 - t0)) * levels)));
+}
+
+/**
+ * 6.0 F4: how a solution is coloured by time: the default ramp (cobalt to
+ * amber, `coloured by time`) or a colour map (`in viridis`); null when it is
+ * one colour. TIME_LEVELS levels either way, so the gradient reads smooth.
+ */
+function timeColours(t: TrajectoryTool): ((k: number) => string) | null {
+    const map = isColormap(t.colormap) ? t.colormap : null;
+    if (map) return (k) => levelColor(map, k, TIME_LEVELS);
+    if (t.byTime === true) return (k) => rampColor(k);
+    return null;
 }
 
 function computeTrajectory(t: TrajectoryTool, ctx: SceneCtx): SceneOutput {
@@ -427,27 +415,44 @@ function computeTrajectory(t: TrajectoryTool, ctx: SceneCtx): SceneOutput {
     const color = str(t.color) || 'red';
     const width = str(t.thickness) || 'thick';
     const dashed = !!t.dashed;
-    const map = isColormap(t.colormap) ? t.colormap : null;
-    if (!map) {
+    const colours = timeColours(t);
+    // 6.0 F4: a traced solution draws itself on the live canvas; the SVG keeps it whole (the still frame).
+    const traced = t.traced === true;
+    const runs: TraceRun[] = [];
+    const span = solved.t1 - solved.t0;
+    const uOf = (ts: number[]) => ts.map((v) => (v - solved.t0) / span);
+    if (!colours) {
         const lines = solved.lines.map((l) => l.pts.map((p) => ({ x: p[0], y: p[1] })));
-        if (lines.length) out.strokes.push({ lines, color, width, dashed });
-        return out;
+        if (lines.length) out.strokes.push(traced ? { lines, color, width, dashed, still: true } : { lines, color, width, dashed });
+        if (traced) lines.forEach((pts, i) => runs.push({ pts, u: uOf(solved.lines[i].ts), color, line: i }));
+    } else {
+        // Coloured by time: the run of each level its own stroke (neighbouring runs share their end point).
+        const groups: Pt[][][] = Array.from({ length: TIME_LEVELS }, () => []);
+        solved.lines.forEach((l, line) => {
+            let start = 0;
+            for (let i = 1; i <= l.pts.length; i++) {
+                const k = levelOf(l.ts[start], solved.t0, solved.t1, TIME_LEVELS);
+                if (i < l.pts.length && levelOf(l.ts[i], solved.t0, solved.t1, TIME_LEVELS) === k) continue;
+                const to = Math.min(l.pts.length, i + 1);
+                const run = l.pts.slice(start, to).map((p) => ({ x: p[0], y: p[1] }));
+                if (run.length >= 2) {
+                    groups[k].push(run);
+                    if (traced) runs.push({ pts: run, u: uOf(l.ts.slice(start, to)), color: colours(k), line });
+                }
+                start = i;
+            }
+        });
+        groups.forEach((lines, k) => {
+            if (!lines.length) return;
+            const s: StrokePrim = { lines, color: colours(k), width, dashed };
+            if (traced) s.still = true;
+            out.strokes.push(s);
+        });
     }
-    // Coloured by time: the run of each level its own stroke (neighbouring runs share their end point).
-    const groups: Pt[][][] = Array.from({ length: LEVELS }, () => []);
-    for (const l of solved.lines) {
-        let start = 0;
-        for (let i = 1; i <= l.pts.length; i++) {
-            const k = levelOf(l.ts[start], solved.t0, solved.t1);
-            if (i < l.pts.length && levelOf(l.ts[i], solved.t0, solved.t1) === k) continue;
-            const run = l.pts.slice(start, Math.min(l.pts.length, i + 1)).map((p) => ({ x: p[0], y: p[1] }));
-            if (run.length >= 2) groups[k].push(run);
-            start = i;
-        }
+    if (traced && runs.length) {
+        const look = { width, dashed, head: { size: 'normal' as const }, seconds: traceSeconds(solved.t0, solved.t1) };
+        out.live = [{ key: `${str(t.id)}:trace`, at: tracedAt(runs, look) }];
     }
-    groups.forEach((lines, k) => {
-        if (lines.length) out.strokes.push({ lines, color: levelColor(map, k), width, dashed });
-    });
     return out;
 }
 
@@ -459,9 +464,13 @@ export function computeMotion3D(t: Tool, ctx: SceneCtx): SceneOutput | null {
     const solved = solve(t, 3, ctx, out, Math.max(view.xmax - view.xmin, view.ymax - view.ymin));
     if (!solved) return out;
     const color = str(t.color) || 'red';
-    const width = str(t.thickness) || 'thick';
+    // 6.0 F4: thin by default in 3D (trajectoryDefaults), a smooth ramp when coloured by time.
+    const width = str(t.thickness) || 'thin';
     const dashed = !!t.dashed;
-    const map = isColormap(t.colormap) ? t.colormap : null;
+    const colours = timeColours(t);
+    const traced = t.traced === true;
+    const seconds = traceSeconds(solved.t0, solved.t1);
+    const span = solved.t1 - solved.t0;
     const legs: Scene3D['segments'] = [];
     let runCounter = 0;
     for (const l of solved.lines) {
@@ -471,10 +480,16 @@ export function computeMotion3D(t: Tool, ctx: SceneCtx): SceneOutput | null {
         for (let i = 1; i < l.pts.length; i++) {
             const a = l.pts[i - 1];
             const b = l.pts[i];
-            const k = map ? levelOf(l.ts[i - 1], solved.t0, solved.t1) : 0;
+            const k = colours ? levelOf(l.ts[i - 1], solved.t0, solved.t1, TIME_LEVELS) : 0;
             if (last >= 0 && k !== last) run = ++runCounter;
             last = k;
-            legs.push({ a: [a[0], a[1], a[2]], b: [b[0], b[1], b[2]], color: map ? levelColor(map, k) : color, width, dashed, run });
+            const leg: Scene3D['segments'][number] = { a: [a[0], a[1], a[2]], b: [b[0], b[1], b[2]], color: colours ? colours(k) : color, width, dashed, run, curve: true };
+            // 6.0 F4: where the leg comes in when the curve draws itself (0..1), and how long that takes.
+            if (traced) {
+                leg.trace = [(l.ts[i - 1] - solved.t0) / span, (l.ts[i] - solved.t0) / span];
+                leg.traceSeconds = seconds;
+            }
+            legs.push(leg);
         }
     }
     out.segments3 = legs;

@@ -35,7 +35,7 @@ export const ITERATE_KINDS = new Set(['orbit', 'cobweb', 'bifurcation', 'newton'
 
 /** What each kind takes as options, for "unknown option" messages (chart words: they stay English). */
 export const ITERATE_OPTION_HELP: Record<string, string> = {
-    orbit: 'z_0 = a start, c = a value, 40 steps, in a colour, thin, thick, small, large, as a path, labelled, hidden',
+    orbit: 'z_0 = a start, c = a value, 40 steps, in a colour, thin, thick, small, large, as a path, labelled, traced, hidden',
     cobweb: 'from x_0, 40 steps, in a colour, thin, thick, hidden',
     bifurcation: 'for r from a to b, x_0 = a start, in a colour, hidden',
     newton: 'from x_0, 5 steps, in a colour, thin, thick, labelled, hidden',
@@ -53,7 +53,7 @@ export const ITERATE_KIND_WORDS: Record<string, MessageKey> = {
 };
 
 /** The fields of each kind: `steps = 40` with such a name is a field, not a name the recurrence reads. */
-const FIELDS = new Set(['type', 'name', 'id', 'color', 'hidden', 'step', 'recurrence', 'start', 'given', 'steps', 'path', 'size', 'thickness', 'valueLabel', 'parameter', 'from', 'to', 'function', 'formula', 'colormap', 'opacity', 'sum', 'wave']);
+const FIELDS = new Set(['type', 'name', 'id', 'color', 'hidden', 'step', 'recurrence', 'start', 'given', 'steps', 'path', 'size', 'thickness', 'valueLabel', 'parameter', 'from', 'to', 'function', 'formula', 'colormap', 'opacity', 'sum', 'wave', 'traced']); // traced: 6.0 F4
 
 // --------------------------------------------------------------- pieces
 
@@ -102,7 +102,7 @@ function binding(o: string): { name: string; value: string } | null {
 export function isIterateOption(o: string): boolean {
     const t = o.trim().toLowerCase();
     // `40 steps` is part of the statement: a line ends with it before its options.
-    return t === 'as a path' || t === 'path' || t === 'wave' || t === 'in cyclic' || t === 'cyclic';
+    return t === 'as a path' || t === 'path' || t === 'wave' || t === 'in cyclic' || t === 'cyclic' || t === 'traced'; // traced: 6.0 F4
 }
 
 /** Apply an option of this part to `target` of `kind`; true when it was one. */
@@ -113,6 +113,7 @@ export function iterateOption(kind: string, target: Data, o: string, problem: (k
     if (steps !== null && (kind === 'orbit' || kind === 'cobweb' || kind === 'newton' || kind === 'colourPlane')) return set(target, 'steps', steps);
     if (kind === 'orbit') {
         if (lower === 'as a path' || lower === 'path') return set(target, 'path', true);
+        if (lower === 'traced') return set(target, 'traced', true); // 6.0 F4
         if (lower === 'labelled' || lower === 'labeled') return set(target, 'valueLabel', true);
         if (lower === 'small' || lower === 'large' || lower === 'normal') return set(target, 'size', lower);
         return false;
@@ -409,6 +410,7 @@ export function iterateOptions(type: string, o: LineOptions): void {
         o.take('size', (v) => (v === 'small' || v === 'large' || v === 'normal' ? v : null));
         o.take('path', (v) => (v === true ? 'as a path' : null));
         o.take('valueLabel', (v) => (v === true ? 'labelled' : null));
+        o.take('traced', (v) => (v === true ? 'traced' : null)); // 6.0 F4
     } else if (type === 'cobweb' || type === 'newton' || type === 'fourierCircles') {
         o.take('thickness', thickness);
         if (type === 'newton') o.take('valueLabel', (v) => (v === true ? 'labelled' : null));

@@ -408,6 +408,9 @@ export function settledValues(F: (x: number, r: number) => number, r: number, x0
 }
 
 /** The bifurcation diagram as a density picture: each column one r, each kept value a hit of its row. */
+/** 6.0 F4: the dots of a bifurcation diagram are this share of their colour's channels (a deeper shade). */
+const DEEPER = 0.78;
+
 export function bifurcationPrim(F: (x: number, r: number) => number, s: BifurcationSpec): PixelPrim {
     return {
         key: s.key,
@@ -432,10 +435,11 @@ export function bifurcationPrim(F: (x: number, r: number) => number, s: Bifurcat
                     if (!hits[j]) continue;
                     const k = 4 * (j * w + i);
                     // Sparse rows faint, often-visited rows full (as the plan's prototype).
-                    const a = Math.min(1, 0.25 + Math.sqrt(hits[j] * (300 / BIFURCATION_KEEP)) * 0.28);
-                    buf[k] = s.rgb[0];
-                    buf[k + 1] = s.rgb[1];
-                    buf[k + 2] = s.rgb[2];
+                    // 6.0 F4: a deeper shade of the colour and a stronger start, so the chaotic part reads as a density.
+                    const a = Math.min(1, 0.38 + Math.sqrt(hits[j] * (300 / BIFURCATION_KEEP)) * 0.34);
+                    buf[k] = s.rgb[0] * DEEPER;
+                    buf[k + 1] = s.rgb[1] * DEEPER;
+                    buf[k + 2] = s.rgb[2] * DEEPER;
                     buf[k + 3] = Math.round(a * 255);
                 }
             }

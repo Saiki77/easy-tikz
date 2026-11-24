@@ -141,8 +141,12 @@ function knownKeys(part: string, defaults: Record<string, Data>): Set<string> {
     if (part === 'chart') {
         keys.add('frames');
         keys.add('stillTime');
+        keys.add('turning'); // 6.0 F4
     }
     if (part === 'vectorField' || part === 'trajectory') keys.add('colormap');
+    // 6.0 F4: a solution coloured by time in the default ramp; solutions and orbits that draw themselves.
+    if (part === 'trajectory') keys.add('byTime');
+    if (part === 'trajectory' || part === 'orbit') keys.add('traced');
     if (part === 'colourPlane') keys.add('colormap'); // 6.0 E
     return keys;
 }

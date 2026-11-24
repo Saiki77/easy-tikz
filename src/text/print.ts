@@ -526,6 +526,8 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
     { keys: ['documentSetup'], print: (m) => (m.documentSetup === false ? ['snippet'] : 'documentSetup' in m ? [`set documentSetup = ${JSON.stringify(m.documentSetup)}`] : []) },
     // 6.0 C: the export shows every step side by side.
     { keys: ['frames'], print: (m) => (m.frames === true ? ['frames'] : 'frames' in m ? [`set frames = ${JSON.stringify(m.frames)}`] : []) },
+    // 6.0 F4: a 3D chart that turns by itself.
+    { keys: ['turning'], print: (m) => (m.turning === true ? ['turning'] : 'turning' in m ? [`set turning = ${JSON.stringify(m.turning)}`] : []) },
     {
         keys: ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'fitY'],
         print: (m, f) => {

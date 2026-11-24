@@ -193,8 +193,13 @@ test('solution of a system: 3D, coloured by time; the 5.0 slope field line is un
     assert.deepEqual(r.problems, []);
     const s = list(r.data, 'tools')[0];
     assert.equal(s.dim, 3);
-    assert.equal(s.colormap, 'viridis');
+    // 6.0 F4: `coloured by time` alone is the default ramp; a map is named.
+    assert.equal(s.byTime, true);
+    assert.equal(s.colormap, undefined);
     roundTrip(text);
+    const viridis = list(parseChartText(text.replace('coloured by time', 'coloured by time in viridis')).data, 'tools')[0];
+    assert.equal(viridis.colormap, 'viridis');
+    assert.equal(viridis.byTime, undefined);
     const old = parseChartText("draw the slope field of y' = x - y\ndraw the solution of SF1 through (0, 1)");
     assert.deepEqual(old.problems, []);
     assert.equal(list(old.data, 'tools')[1].type, 'solution');

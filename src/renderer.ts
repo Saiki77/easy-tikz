@@ -37,6 +37,8 @@ import { Grid, Pt, View, pointInRings } from './geometry';
 import { t as msg } from './i18n';
 import { GRID_OPACITY, opacityValue } from './opacity';
 import { pixelLayer } from './iterate/paint'; // 6.0 E
+import type { LiveLayer } from './motion6/live'; // 6.0 F4
+import { themedColor } from './motion6/liveprims'; // 6.0 F4
 
 /** CONTRACT (v4): options for one render. */
 export interface SVGRendererOptions {
@@ -54,6 +56,13 @@ export interface SVGRendererOptions {
      * drawn into.
      */
     pixelScale?: number;
+    // 6.0 F4
+    /**
+     * The live canvas of a chart on screen (src/motion6/live.ts): what moves
+     * on the clock is drawn there, its still frame hidden in the SVG. Absent
+     * (the export, SVG files): the still frame shows.
+     */
+    live?: LiveLayer;
 }
 
 /** CONTRACT (v4): where the plot area ended up, for mapping pointer positions to math coordinates. */
@@ -347,6 +356,10 @@ export class SVGRenderer {
     drawn: DrawnScene | null = null;
     /** 6.0 D: the functions a transform moves (the scene draws them; their curves are left out). */
     private movedFns: ReadonlySet<number> = new Set();
+    /** 6.0 F4: the live canvas, and whether it draws this render's moving parts (their still frame is hidden then). */
+    private readonly live: LiveLayer | null;
+    private liveOn = false;
+    private dark = false;
     /**
      * Set by render() when the drawing has `$...$` labels typeset by MathJax
      * (null otherwise). MathJax styles the glyphs of a new label only after
@@ -374,6 +387,7 @@ export class SVGRenderer {
                   });
         this.cache = opts ? opts.cache : undefined;
         this.quality = opts && opts.quality === 'draft' ? 'draft' : 'full';
+        this.live = opts?.live ?? null; // 6.0 F4
         this.width = Number.isFinite(config.width) && config.width > 0 ? config.width : 760;
         this.height = Number.isFinite(config.height) && config.height > 0 ? config.height : 480;
         this.compact = this.width < COMPACT_MAX_WIDTH || this.height < COMPACT_MAX_HEIGHT;
@@ -440,6 +454,8 @@ export class SVGRenderer {
         const items = this.sceneItems(fns);
 
         this.drawPixels(svg, items); // 6.0 E
+        this.liveOn = !!this.live && items.some((i) => !!i.live && i.live.length > 0); // 6.0 F4
+        this.dark = typeof activeDocument !== 'undefined' && !!activeDocument.body && activeDocument.body.hasClass('theme-dark'); // 6.0 F4
         this.drawGrid(svg);
         this.drawFills(svg, items);
         this.drawAxes(svg);
@@ -447,6 +463,7 @@ export class SVGRenderer {
         const legend = this.drawCurves(svg, fns, curves);
         this.drawn = { items, curves };
         this.drawStrokes(svg, items);
+        this.drawLive(svg, items); // 6.0 F4
         this.drawMarks(svg, items);
         this.drawBraces(svg, items);
         this.drawTexts(svg, items);
@@ -752,7 +769,7 @@ export class SVGRenderer {
     /** Palette key -> preview colour ('black' follows the theme's text colour). */
     private css(color: string | undefined): string {
         if (!color) return TEXT_NORMAL;
-        return COLOR_MAP[color] || color;
+        return COLOR_MAP[color] || themedColor(color, this.dark); // 6.0 F4: a time ramp colour in its dark-theme twin
     }
 
     /**
@@ -1013,6 +1030,43 @@ export class SVGRenderer {
         }
     }
 
+    /**
+     * 6.0 F4: the live canvas over the lines, under the markers and labels:
+     * what moves on the clock, painted at the frame's time now and by the
+     * host on every frame of the clock.
+     */
+    private drawLive(svg: SVGElement, items: SceneItem2D[]): void {
+        if (!this.live) return;
+        const v = this.view;
+        const bx = this.plot.w / (v.xmax - v.xmin);
+        const by = -this.plot.h / (v.ymax - v.ymin);
+        const fo = this.live.mount(
+            this.liveOn ? items : [],
+            {
+                rect: { ...this.plot },
+                ax: this.plot.x - v.xmin * bx,
+                bx,
+                ay: this.plot.y + this.plot.h - v.ymin * by,
+                by,
+                view: { ...v },
+                width: (w) => this.strokeWidth(w),
+                radius: (size) => (MARKER_RADIUS[size] || MARKER_RADIUS.normal) * (this.compact ? 0.6 : 1),
+                css: (c) => this.css(c),
+            },
+            this.config.motion?.time ?? 0
+        );
+        if (fo) svg.appendChild(fo);
+    }
+
+    /** 6.0 F4: a part of the still frame of something the live canvas draws: hidden here (exportableSvg shows it). */
+    private stillAttrs(prim: { still?: boolean }, attrs: Record<string, string>): Record<string, string> {
+        if (prim.still && this.liveOn) {
+            attrs.display = 'none';
+            attrs.class = 'etz-still';
+        }
+        return attrs;
+    }
+
     /** Layer 2: function fills and region fills in item order; patterns over the tint like the export. */
     private drawFills(svg: SVGElement, items: SceneItem2D[]): void {
         const g = this.layer('etz-fills', true);
@@ -1029,7 +1083,7 @@ export class SVGRenderer {
         if (!d) return;
         const color = this.css(fill.color);
         const opacity = Number.isFinite(fill.opacity) ? clamp(fill.opacity, 0, 1) : 0.25;
-        g.appendChild(this.el('path', { d, fill: color, 'fill-opacity': String(opacity), 'fill-rule': 'evenodd', stroke: 'none' }));
+        g.appendChild(this.el('path', this.stillAttrs(fill, { d, fill: color, 'fill-opacity': String(opacity), 'fill-rule': 'evenodd', stroke: 'none' }))); // 6.0 F4: stillAttrs
         const pattern = this.pattern(fill.pattern, color);
         if (pattern) g.appendChild(this.el('path', { d, fill: pattern, 'fill-rule': 'evenodd', stroke: 'none' }));
     }
@@ -1262,6 +1316,7 @@ export class SVGRenderer {
         if (!guide && s.dashed) attrs['stroke-dasharray'] = '6 4';
         // 6.0 C: faded lines (the trails of moving particles).
         if (!guide && typeof s.opacity === 'number' && s.opacity >= 0 && s.opacity < 1) attrs['stroke-opacity'] = String(s.opacity);
+        if (!guide) this.stillAttrs(s, attrs); // 6.0 F4
         const runs: Pt[][] = [];
         for (const line of s.lines || []) runs.push(...finiteRuns(line));
         if (!runs.length) return;
@@ -1323,6 +1378,7 @@ export class SVGRenderer {
             attrs.stroke = this.css(m.color);
             attrs['stroke-width'] = this.compact ? '1.2' : '2';
         }
+        this.stillAttrs(m, attrs); // 6.0 F4
         g.appendChild(this.el('circle', attrs));
     }
 

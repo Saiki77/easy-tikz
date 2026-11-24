@@ -202,7 +202,8 @@ export function solveSystem(f: VectorFn, p0: readonly number[], t0: number, t1: 
     const wanted = Math.ceil(Math.abs(span) / STEP);
     const steps = Math.max(MIN_STEPS, Math.min(MAX_STEPS, wanted));
     const h = span / steps;
-    const every = Math.max(1, Math.ceil(steps / MAX_POINTS));
+    // 6.0 F4: every step is kept here; the points drawn are chosen by shape below (smooth where it turns fast).
+    const every = 1;
     const pts: number[][] = [p0.slice()];
     const ts: number[] = [t0];
     let p = p0.slice();
@@ -234,7 +235,80 @@ export function solveSystem(f: VectorFn, p0: readonly number[], t0: number, t1: 
             ts.push(stopped);
         }
     }
-    return { pts, ts, capped: wanted > MAX_STEPS, stopped };
+    const kept = simplify(pts, MAX_POINTS);
+    return { pts: kept.map((i) => pts[i]), ts: kept.map((i) => ts[i]), capped: wanted > MAX_STEPS, stopped };
+}
+
+/**
+ * 6.0 F4: which points of a polyline to draw, at most `max`: those that keep
+ * it within a small distance of the whole (Douglas-Peucker), the distance
+ * as small as the count allows, so fast turns keep their points and
+ * straight runs lose theirs. The first and the last point always stay.
+ */
+export function simplify(pts: readonly number[][], max: number): number[] {
+    const n = pts.length;
+    if (n <= 2) return pts.map((_, i) => i);
+    const dim = pts[0].length;
+    let size = 0;
+    for (let k = 0; k < dim; k++) {
+        let lo = Infinity;
+        let hi = -Infinity;
+        for (const p of pts) {
+            lo = Math.min(lo, p[k]);
+            hi = Math.max(hi, p[k]);
+        }
+        size = Math.max(size, hi - lo);
+    }
+    if (!(size > 0)) return [0, n - 1];
+    // The largest distance of each point from the chord of the part it splits (computed once, DP order).
+    const err = new Float64Array(n).fill(-1);
+    err[0] = Infinity;
+    err[n - 1] = Infinity;
+    const stack: Array<[number, number, number]> = [[0, n - 1, Infinity]];
+    for (;;) {
+        const top = stack.pop();
+        if (!top) break;
+        const [a, b, cap] = top;
+        if (b - a < 2) continue;
+        let best = -1;
+        let at = a + 1;
+        const pa = pts[a];
+        const pb = pts[b];
+        let len2 = 0;
+        for (let k = 0; k < dim; k++) len2 += (pb[k] - pa[k]) ** 2;
+        for (let i = a + 1; i < b; i++) {
+            const p = pts[i];
+            let d2: number;
+            if (len2 > 0) {
+                let dot = 0;
+                for (let k = 0; k < dim; k++) dot += (p[k] - pa[k]) * (pb[k] - pa[k]);
+                const s = Math.max(0, Math.min(1, dot / len2));
+                d2 = 0;
+                for (let k = 0; k < dim; k++) d2 += (p[k] - pa[k] - s * (pb[k] - pa[k])) ** 2;
+            } else {
+                d2 = 0;
+                for (let k = 0; k < dim; k++) d2 += (p[k] - pa[k]) ** 2;
+            }
+            if (d2 > best) {
+                best = d2;
+                at = i;
+            }
+        }
+        // A point never counts for more than the part it came from: the order of splits is kept.
+        err[at] = Math.min(cap, Math.sqrt(best));
+        stack.push([a, at, err[at]], [at, b, err[at]]);
+    }
+    // The tolerance: a ten-thousandth of the size, raised until at most `max` points stay.
+    let tol = size * 1e-4;
+    for (;;) {
+        let count = 0;
+        for (let i = 0; i < n; i++) if (err[i] > tol) count++;
+        if (count <= max) break;
+        tol *= 1.5;
+    }
+    const out: number[] = [];
+    for (let i = 0; i < n; i++) if (err[i] > tol) out.push(i);
+    return out;
 }
 
 // ---------------------------------------------------------- rest points

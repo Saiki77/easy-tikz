@@ -25,11 +25,13 @@ export function vectorFieldDefaults(): Body<VectorFieldTool> {
 }
 
 export function restPointsDefaults(): Body<RestPointsTool> {
-    return { type: 'restPoints', color: 'red', field: '', size: 'normal', valueLabel: false };
+    // 6.0 F4: amber (orange), clear over the field's blue particles.
+    return { type: 'restPoints', color: 'orange', field: '', size: 'normal', valueLabel: false };
 }
 
 export function trajectoryDefaults(dim: 2 | 3): Body<TrajectoryTool> {
-    return { type: 'trajectory', color: 'red', expression: '', through: '', from: '0', to: '10', dim, thickness: 'thick', dashed: false };
+    // 6.0 F4: thin in 3D, where a solution often winds many times (a Lorenz attractor).
+    return { type: 'trajectory', color: 'red', expression: '', through: '', from: '0', to: '10', dim, thickness: dim === 3 ? 'thin' : 'thick', dashed: false };
 }
 
 /** A stored motion tool with every field it needs (unknown values give way to the defaults); null for other types. */
@@ -78,6 +80,9 @@ export function completeMotionTool(src: Data, dim: 2 | 3): MotionBody | null {
             };
             const m = map(src.colormap);
             if (m) out.colormap = m;
+            // 6.0 F4
+            if (src.byTime === true && !m) out.byTime = true;
+            if (src.traced === true) out.traced = true;
             return out;
         }
         default:

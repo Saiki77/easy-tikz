@@ -28,6 +28,8 @@ export function registerClockType(type: string, moves: (tool: Tool) => boolean):
 
 // The vector field's moving particles (src/motion6/scene.ts).
 registerClockType('vectorField', (t) => t.type === 'vectorField' && t.particles === true);
+// 6.0 F4: a solution that draws itself.
+registerClockType('trajectory', (t) => t.type === 'trajectory' && t.traced === true);
 
 /** Whether a tool moves by itself (a hidden one never does). */
 export function movesByItself(tool: unknown): boolean {
@@ -41,7 +43,41 @@ export function movesByItself(tool: unknown): boolean {
 /** Whether a chart (its tools) needs the clock. */
 export function needsClock(data: Data): boolean {
     const tools = data.tools;
-    return Array.isArray(tools) && tools.some(movesByItself);
+    return turns(data) || (Array.isArray(tools) && tools.some(movesByItself)); // 6.0 F4: turns
+}
+
+// 6.0 F4: a 3D chart that turns by itself (chart line `turning`).
+
+/** Degrees a turning 3D view turns a second: once round in half a minute. */
+export const TURN_DEG_PER_S = 12;
+/** Degrees a sideways drag turns it per pixel (as the editor's drag). */
+export const TURN_DRAG_DEG_PER_PX = 0.5;
+
+/** Whether the chart is a 3D chart that turns by itself. */
+export function turns(data: Data): boolean {
+    return data.turning === true && data.dimension === true;
+}
+
+/**
+ * The turn of a turning view, for a host: the angle follows the clock, and a
+ * drag holds it (the drag turns the view itself; the turn goes on from
+ * there when it ends).
+ */
+export class Turn {
+    private from = 0;
+    private held = false;
+
+    /** Degrees turned at clock time `time` (0 while held). */
+    angle(time: number): number {
+        if (this.held) this.from = time;
+        return (time - this.from) * TURN_DEG_PER_S;
+    }
+
+    /** A drag starts (true) or ends (false) at clock time `time`: the turn starts again from 0 there. */
+    hold(on: boolean, time: number): void {
+        this.held = on;
+        this.from = time;
+    }
 }
 
 /** The time a scene draws: the frame's, or 0 for the still frame. */

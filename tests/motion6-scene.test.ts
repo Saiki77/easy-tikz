@@ -122,19 +122,26 @@ test('vector field: arrows of one length on screen, coloured by length', () => {
     assert.ok(colours.every((c) => /^#[0-9a-f]{6}$/.test(c)));
 });
 
-test('vector field: streamlines, and particles that follow the clock (after the memo)', () => {
+test('vector field: streamlines; moving particles live on the canvas, the still frame is faint arrows and a few streamlines', () => {
     const stream = sceneOf(`${VIEW}\ndraw the vector field ${DAMPED}, with streamlines`);
     assert.equal(stream.items[0].strokes.length, 2);
     assert.ok(stream.items[0].strokes[1].lines.length > 3);
+    assert.equal(stream.items[0].live, undefined);
     const text = `${VIEW}\ndraw the vector field ${DAMPED}, with moving particles`;
     const still = sceneOf(text);
+    const item = still.items[0];
+    // 6.0 F4: every part of the still frame is hidden under the live canvas; the arrows faint, a few streamlines.
+    assert.ok(item.strokes.every((s) => s.still === true));
+    assert.equal(item.strokes[0].opacity, 0.25);
+    assert.ok(item.strokes.some((s) => s.opacity === 0.6 && s.lines.length >= 2));
+    assert.equal(item.live?.length, 1);
+    const flow = item.live?.[0].particles;
+    assert.ok(flow && flow.speed > 0.5 && flow.speed < 3, `speed ${flow?.speed}`);
+    // The plan's flow moves the pendulum at 1.4 s of t a second.
+    near(flow?.speed ?? 0, 1.4, 0.45);
+    // The clock moves nothing in the SVG: the picture is the same at any time.
     const later = sceneOf(text, { time: 1.5, step: Infinity, progress: 1 });
-    const faded = still.items[0].strokes.filter((s) => s.opacity !== undefined);
-    // The arrows under particles are faint, the trails fade in levels.
-    assert.ok(faded.length >= 3);
-    assert.notDeepEqual(JSON.stringify(later.items[0].strokes), JSON.stringify(still.items[0].strokes));
-    // The still frame is time 0.
-    assert.equal(JSON.stringify(sceneOf(text, { time: 0, step: Infinity, progress: 1 }).items[0].strokes), JSON.stringify(still.items[0].strokes));
+    assert.equal(JSON.stringify(later.items[0].strokes), JSON.stringify(item.strokes));
 });
 
 test('rest points: filled when stable, open when not, kinds as labels, published', () => {
@@ -198,15 +205,18 @@ test('solution of a system: 3D legs coloured by time, in runs the export joins',
 
 // --------------------------------------------------------------- export
 
-test('export: still particles at the still time, faded trails, open rest points', () => {
+test('export: moving particles as their still frame (faint arrows, a few streamlines), open rest points', () => {
     const settings = settingsOf(`${VIEW}\ndraw the vector field ${DAMPED}, with moving particles\nmark the rest points of F`);
     const code = settings.generateTikzCode();
-    assert.match(code, /draw opacity=0\.15/);
-    assert.match(code, /mark options=\{fill=white, draw=etRed, line width=0\.8pt\}/);
+    assert.match(code, /draw opacity=0\.25/);
+    assert.match(code, /draw opacity=0\.6/);
+    // 6.0 F4: rest points are amber (the palette's orange) by default.
+    assert.match(code, /mark options=\{fill=white, draw=etOrange, line width=0\.8pt\}/);
     const again = settingsOf(`${VIEW}\ndraw the vector field ${DAMPED}, with moving particles\nmark the rest points of F`).generateTikzCode();
     assert.equal(again, code);
-    const later = settingsOf(`${VIEW}\nset stillTime = 1.5\ndraw the vector field ${DAMPED}, with moving particles`).generateTikzCode();
-    assert.notEqual(later.split('% F')[1], code.split('% F')[1]);
+    // The still frame no longer depends on the still time (the flow is not drawn on paper).
+    const later = settingsOf(`${VIEW}\nset stillTime = 1.5\ndraw the vector field ${DAMPED}, with moving particles\nmark the rest points of F`).generateTikzCode();
+    assert.equal(later, code);
 });
 
 test('export: the last step by default, every step side by side with frames', () => {

@@ -85,6 +85,8 @@ export const KEYWORDS = new Set([
     'use', 'data',
     // motion (6.0 C)
     'then', 'frames',
+    // 6.0 F4
+    'turning',
     // 6.0 D
     'transform',
     // colour the plane (6.0 E)
@@ -486,7 +488,7 @@ class Builder {
 }
 
 /** Lines about the chart itself, and sliders: their words are their own, and they take no options. */
-const CHART_WORDS = new Set(['view', 'show', 'axes', 'no', 'grid', 'with', 'size', 'equal', 'polar', '3d', 'snippet', 'variables', 'set', 'slider', 'frames']); // frames: 6.0 C
+const CHART_WORDS = new Set(['view', 'show', 'axes', 'no', 'grid', 'with', 'size', 'equal', 'polar', '3d', 'snippet', 'variables', 'set', 'slider', 'frames', 'turning']); // frames: 6.0 C, turning: 6.0 F4
 
 /** What each kind of object accepts as options, for messages (words of the chart language: they stay English). */
 const OPTION_HELP: Record<string, string> = {
@@ -1067,6 +1069,12 @@ function statement(b: Builder, line: string) {
             if (rest.text.trim()) return formulaLine(b, name, body, options);
             if (options.length) b.problem(options[0].at, msg('motion6.text.framesAlone'));
             b.chart.frames = true;
+            return;
+        // 6.0 F4: a 3D chart turns by itself in notes and the editor. Only the word alone: `turning + x = 3` stays a formula.
+        case 'turning':
+            if (rest.text.trim()) return formulaLine(b, name, body, options);
+            if (options.length) b.problem(options[0].at, msg('problems.text.standsAlone', { word: 'turning' }));
+            b.chart.turning = true;
             return;
         case 'snippet':
             if (rest.text.trim()) b.problem(rest.at, msg('problems.text.standsAlone', { word: 'snippet' }));

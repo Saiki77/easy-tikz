@@ -1529,7 +1529,8 @@ function segmentCmds(scene: Scene3D, box: Box, colors: ColorSet): string[] {
         }
         const [t0, t1] = span;
         if (s.run !== undefined && !s.arrow && t0 <= 0 && t1 >= 1) {
-            const opts = [colors.use(s.color), lineWidth(s.width), ...(s.dashed ? ['dashed'] : []), 'forget plot'].join(', ');
+            // 6.0 F4: a long curve (a solution) as the smooth curve through its points, as the preview draws it.
+            const opts = [colors.use(s.color), lineWidth(s.width), ...(s.dashed ? ['dashed'] : []), ...(s.curve ? ['smooth'] : []), 'forget plot'].join(', ');
             const cur = open as { run: number; key: string; pts: Array<[number, number, number]> } | null;
             const last = cur ? cur.pts[cur.pts.length - 1] : null;
             if (cur && last && cur.run === s.run && cur.key === opts && last.every((v, k) => v === s.a[k])) cur.pts.push(s.b);

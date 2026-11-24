@@ -7,6 +7,7 @@
 import { stripLatex } from './util';
 import { t } from './i18n';
 import { pixelImage } from './iterate/paint'; // 6.0 E
+import { lightColor } from './motion6/liveprims'; // 6.0 F4
 
 /**
  * A copy of `svg` that renders on its own: MathJax labels (foreignObject)
@@ -26,6 +27,13 @@ export function exportableSvg(svg: SVGElement, doc: Document, opts: { white?: bo
         const img = layers[i] ? pixelImage(layers[i]) : null;
         if (img) fo.replaceWith(img);
         else fo.remove();
+    });
+
+    // 6.0 F4: the live canvas (what moves on the clock) goes; the still frame it hid shows instead.
+    clone.querySelectorAll('foreignObject.etz-live').forEach((fo) => fo.remove());
+    clone.querySelectorAll('.etz-still').forEach((el) => {
+        el.removeAttribute('display');
+        el.removeAttribute('class');
     });
 
     // MathJax labels live in <foreignObject> nodes whose rendering
@@ -80,6 +88,7 @@ export function exportableSvg(svg: SVGElement, doc: Document, opts: { white?: bo
         for (const attrName of ['fill', 'stroke', 'font-family', 'stop-color']) {
             const v = el.getAttribute(attrName);
             if (v && v.includes('var(')) el.setAttribute(attrName, resolveVars(v));
+            else if (v && opts.white && v.startsWith('#')) el.setAttribute(attrName, lightColor(v)); // 6.0 F4: time ramps in light colours
         }
         const styleAttr = el.getAttribute('style');
         if (styleAttr && styleAttr.includes('var(')) el.setAttribute('style', resolveVars(styleAttr));

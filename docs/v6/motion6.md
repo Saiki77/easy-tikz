@@ -43,7 +43,7 @@ draw the vector field $F(x, y) = (y, -\sin x - 0.25y)$, coloured by length, with
 
 - The formula is a pair `(P, Q)` in x and y (LaTeX or plain, sliders allowed). `F(x, y) =` names the field (the tool's name; without it: VF1). `draw the vector field (y, -x)` works too.
 - Short arrows on a grid over the view, all the same length on screen (like slope fields). Options: a colour, `thin`/`thick`, `coloured by length` (viridis; `coloured by length in heat` for another map), `with moving particles`, `with streamlines`, `density=30` (arrows across, 4 to 60), `hidden`.
-- Particles: about one per arrow cell (40 to 400), each lives 3 s on the clock and leaves a fading trail (0.6 s). Their speed follows |F|. They are a pure function of the time, so the preview's first frame and the export agree. Arrows under particles are drawn faint.
+- Particles (6.0 F4, docs/v6/design.md): the plan's flow on the live canvas, 450 particles with fading trails over very faint arrows. The export draws the still frame: faint arrows and a few streamlines.
 - Streamlines: still curves from a grid of seeds, kept apart; the export draws them.
 - 2D charts only (a 3D chart names it as a problem).
 - **Full LaTeX:** `\vectorfield[colormap/viridis, particles, streamlines]{F(x, y) = (y, -\sin x - 0.25y)}`.

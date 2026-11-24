@@ -84,4 +84,10 @@ export const motion6 = {
     'motion6.player.step': 'Step {step} of {count}',
     'motion6.player.clockPlay': 'Play the motion',
     'motion6.player.clockPause': 'Pause the motion',
+    // 6.0 F4
+    'motion6.trajectory.traced': 'Traced',
+    'motion6.card.timeRamp': 'Cobalt to amber',
+    'motion6.chart.turning': 'Turns by itself',
+    'motion6.chart.turningHint': 'In notes and the editor the 3D view turns slowly; a drag turns it too. The export shows the view as set.',
+    'motion6.orbit.traced': 'Traced',
 };

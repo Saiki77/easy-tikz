@@ -47,3 +47,23 @@
 .etz-motion6-steprow input.etz-motion6-stepinput {
     width: 56px;
 }
+
+/* 6.0 F4: the live canvas of a chart, over the plot (src/motion6/live.ts); pointers go to the chart under it. */
+.etz-live {
+    pointer-events: none;
+}
+
+.etz-live-box {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.etz-live-canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+}

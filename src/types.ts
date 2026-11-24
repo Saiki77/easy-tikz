@@ -484,6 +484,11 @@ export interface TrajectoryTool extends ToolBase {
     dashed: boolean;
     /** Coloured by time through a colour map; absent: the tool's colour. */
     colormap?: Colormap;
+    // 6.0 F4
+    /** Coloured by time in the default ramp, cobalt to amber (`coloured by time`); a colormap wins. */
+    byTime?: boolean;
+    /** It draws itself over time with a dot at its head, then starts again (the export draws it whole). */
+    traced?: boolean;
 }
 
 // 6.0 B: notes and interaction (src/notes6/): sets on an axis and chords, 2D only.
@@ -690,6 +695,9 @@ export interface OrbitTool extends ToolBase {
     thickness: string;
     /** The first points labelled z_0, z_1, ... */
     valueLabel: boolean;
+    // 6.0 F4
+    /** It draws itself step by step with a dot at its head, then starts again (the export draws it whole). */
+    traced?: boolean;
 }
 
 /**
@@ -866,6 +874,9 @@ export interface RendererConfig {
     // 6.0 C
     /** The animation clock and the step shown (src/motion6/clock.ts); absent: the still frame of the export. */
     motion?: MotionFrame;
+    // 6.0 F4
+    /** Degrees the 3D view has turned by itself (chart line `turning`), added to rotationZ in notes and the editor; absent: 0. */
+    turn?: number;
 }
 
 // 6.0 C

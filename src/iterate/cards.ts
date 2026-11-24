@@ -172,12 +172,22 @@ class OrbitCard extends IterateCard<OrbitTool> {
                         tool.valueLabel = v;
                     },
                 },
+                // 6.0 F4
+                {
+                    label: t('motion6.orbit.traced'),
+                    get: () => tool.traced === true,
+                    set: (v) => {
+                        if (v) tool.traced = true;
+                        else delete tool.traced;
+                    },
+                },
             ],
         });
         this.onSync(() => {
             line.thickness.setValue(tool.thickness);
             line.chips[0]?.setValue(tool.path);
             line.chips[1]?.setValue(tool.valueLabel);
+            line.chips[2]?.setValue(tool.traced === true); // 6.0 F4
         });
     }
 

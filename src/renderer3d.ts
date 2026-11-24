@@ -10,6 +10,9 @@ import { MESH_OPACITY, opacityValue } from './opacity';
 import { AxisTicks, axisTicks } from './ticks';
 import { niceInterval, stripLatex, hexToRgb, rgbStringToRgb } from './util';
 import { t as msg } from './i18n';
+// 6.0 F4: the clock in 3D (a turning view, curves that draw themselves) and the look of long curves.
+import { clockTime } from './motion6/clock';
+import { themedColor, traceFraction } from './motion6/liveprims';
 
 
 const PADDING_TOP = 40;
@@ -157,6 +160,52 @@ interface SegmentMark {
     /** Arrow head triangles as [tipX, tipY, leftX, leftY, rightX, rightY]. */
     heads: number[][];
 }
+
+/** 6.0 F4: one projected leg of a long curve (a solution); legs are drawn in batches by depth. */
+interface CurveLeg {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    color: string;
+    width: number;
+    dashed: boolean;
+    depth: number;
+}
+
+/** 6.0 F4: legs of a curve of one depth band and colour as one path; far bands fainter. */
+interface CurveBatch {
+    color: string;
+    width: number;
+    dashed: boolean;
+    alpha: number;
+    /** Points as x1, y1, x2, y2 per leg, joined where a leg starts at the last one's end. */
+    legs: number[];
+}
+
+/**
+ * 6.0 F4: legs (x1, y1, x2, y2 each) as smooth paths: where a leg starts at
+ * the end of the one before, the joint is a quadratic curve from the middle
+ * of one leg to the middle of the next (the export draws the curve `smooth`).
+ */
+function curvePath(L: number[], pen: { move(x: number, y: number): void; line(x: number, y: number): void; quad(cx: number, cy: number, x: number, y: number): void }): void {
+    for (let i = 0; i < L.length; i += 4) {
+        const mx = (L[i] + L[i + 2]) / 2;
+        const my = (L[i + 1] + L[i + 3]) / 2;
+        const joined = i > 0 && L[i] === L[i - 2] && L[i + 1] === L[i - 1];
+        if (joined) pen.quad(L[i], L[i + 1], mx, my);
+        else {
+            if (i > 0) pen.line(L[i - 2], L[i - 1]);
+            pen.move(L[i], L[i + 1]);
+            pen.line(mx, my);
+        }
+    }
+    if (L.length >= 4) pen.line(L[L.length - 2], L[L.length - 1]);
+}
+
+/** 6.0 F4: long curves are drawn in this many depth bands, the farthest at this opacity. */
+const CURVE_BANDS = 6;
+const CURVE_FAR_ALPHA = 0.5;
 
 interface MarkerMark {
     sx: number;
@@ -309,6 +358,15 @@ export class SVG3DRenderer {
     /** Projected tool marks and texts. Set by `prepareScene`, drawn by either path. */
     private planeOutlines: PlaneOutline[] = [];
     private segmentMarks: SegmentMark[] = [];
+    // 6.0 F4
+    private curveBatches: CurveBatch[] = [];
+    /** Heads of curves that draw themselves (the canvas, while the clock runs). */
+    private curveHeads: MarkerMark[] = [];
+    /** The last 3D scene and what it was made from: a frame that only turns the view or moves the clock reuses it. */
+    private sceneMemo: { key: string; scene: Scene3D } | null = null;
+    private frames = 0;
+    private frameSum = 0;
+    private dark = false;
     private markerMarks: MarkerMark[] = [];
     private annotationMarks: TextMark[] = [];
     private titleText = '';
@@ -423,9 +481,16 @@ export class SVG3DRenderer {
      * CONTRACT (v4): `opts.math` shared context (created from config when omitted).
      */
     renderCanvas(config: RendererConfig, opts?: { math?: MathContext }) {
+        const start = performance.now(); // 6.0 F4
         this.prepareScene(config, opts?.math);
         this.sizeCanvas(config);
         this.paintCanvas();
+        // 6.0 F4: what a frame costs (the mean of 30 frames) on the root (data-frame-ms), for the smoke test.
+        this.frameSum += performance.now() - start;
+        if (++this.frames % 30 === 0) {
+            this.root.dataset.frameMs = (this.frameSum / 30).toFixed(2);
+            this.frameSum = 0;
+        }
     }
 
     /**
@@ -551,7 +616,9 @@ export class SVG3DRenderer {
         const availW = config.width - PADDING_LEFT - PADDING_RIGHT;
         const availH = config.height - PADDING_TOP - PADDING_BOTTOM;
         const zoom = Math.max(0.1, Math.min(10, config.zoom3D || 1));
-        const az = (config.rotationZ * Math.PI) / 180;
+        // 6.0 F4: a turning view turns from the chart's azimuth.
+        const turn = typeof config.turn === 'number' && Number.isFinite(config.turn) ? config.turn : 0;
+        const az = ((config.rotationZ + turn) * Math.PI) / 180;
         const el = (config.rotationX * Math.PI) / 180;
         this.cosA = Math.cos(az);
         this.sinA = Math.sin(az);
@@ -571,6 +638,10 @@ export class SVG3DRenderer {
         // chart. A cube seen from the default view keeps the size of before (box3d.ts BOX_FILL_*).
         const half: Vec3 = [Math.abs(this.xNormFactor * xRange) / 2, Math.abs(this.yNormFactor * yRange) / 2, Math.abs(this.zNormFactor * zRange) / 2];
         this.scale = boxFitScale(half, config.rotationZ, config.rotationX, availW, availH) * zoom;
+        // 6.0 F4: a turning view keeps one size all the way round (the smallest fit of its turn).
+        if (config.turn !== undefined) {
+            for (let k = 0; k < 12; k++) this.scale = Math.min(this.scale, boxFitScale(half, config.rotationZ + 30 * k, config.rotationX, availW, availH) * zoom);
+        }
 
         // Tools first: points tools publish derived names (P1_x, ...) that
         // surfaces and labels may read.
@@ -607,6 +678,13 @@ export class SVG3DRenderer {
      */
     private computeTools(config: RendererConfig, math: MathContext): Scene3D {
         let scene: Scene3D;
+        // 6.0 F4: a frame of the clock (the view turns, a curve draws itself) reuses the scene of the frame before.
+        const m = config.motion;
+        const key = JSON.stringify([config.tools, config.parameters, config.functions, config.xmin, config.xmax, config.ymin, config.ymax, config.zmin, config.zmax, m ? [m.step, m.progress] : null]);
+        if (this.sceneMemo && this.sceneMemo.key === key) {
+            if (this.sceneMemo.scene.derived) math.setDerived(this.sceneMemo.scene.derived);
+            return this.sceneMemo.scene;
+        }
         try {
             // Also called without tools: the scene then clears derived
             // values left over from tools that no longer draw in 3D.
@@ -630,6 +708,7 @@ export class SVG3DRenderer {
         // The scene publishes derived values itself; repeating it is a no-op
         // then, and keeps labels working if it only returned them.
         if (scene.derived) math.setDerived(scene.derived);
+        this.sceneMemo = { key, scene }; // 6.0 F4
         return scene;
     }
 
@@ -790,6 +869,7 @@ export class SVG3DRenderer {
     }
 
     private refreshThemeColors() {
+        this.dark = activeDocument.body.hasClass('theme-dark'); // 6.0 F4
         const cs = getComputedStyle(activeDocument.body);
         this.themeColors.textNormal = cs.getPropertyValue('--text-normal').trim() || '#000';
         this.themeColors.textMuted = cs.getPropertyValue('--text-muted').trim() || '#666';
@@ -822,7 +902,7 @@ export class SVG3DRenderer {
         const k = key || 'black';
         let info = this.colorCache.get(k);
         if (!info) {
-            const css = resolveCssColor(COLOR_MAP[k] || k);
+            const css = resolveCssColor(COLOR_MAP[k] || themedColor(k, this.dark)); // 6.0 F4: a time ramp colour in its dark-theme twin
             info = { css, rgb: hexToRgb(css) || rgbStringToRgb(css), shades: null };
             this.colorCache.set(k, info);
         }
@@ -1077,16 +1157,40 @@ export class SVG3DRenderer {
         const lo: [number, number, number] = [cfg.xmin, cfg.ymin, cfg.zmin];
         const hi: [number, number, number] = [cfg.xmax, cfg.ymax, cfg.zmax];
         this.segmentMarks = [];
+        // 6.0 F4: long curves in depth bands; a traced one up to its head while the clock runs (the still frame: whole).
+        const legs: CurveLeg[] = [];
+        this.curveHeads = [];
+        const time = clockTime(cfg.motion);
         for (const seg of scene.segments) {
             const { a, b } = seg;
             if (![...a, ...b].every(Number.isFinite)) continue;
-            const span = clipToBox(a, b, lo, hi);
+            let cut = 1;
+            if (seg.trace && seg.traceSeconds) {
+                const f = traceFraction(time, seg.traceSeconds);
+                const [u0, u1] = seg.trace;
+                if (u0 > f) continue;
+                if (u1 > f) {
+                    // The head of the line: the leg up to it, and a dot there.
+                    cut = u1 > u0 ? (f - u0) / (u1 - u0) : 0;
+                    const p = [a[0] + (b[0] - a[0]) * cut, a[1] + (b[1] - a[1]) * cut, a[2] + (b[2] - a[2]) * cut];
+                    if (insideRange(p[0], cfg.xmin, cfg.xmax) && insideRange(p[1], cfg.ymin, cfg.ymax) && insideRange(p[2], cfg.zmin, cfg.zmax)) {
+                        const q = this.project(p[0], p[1], p[2]);
+                        this.curveHeads.push({ sx: q.sx, sy: q.sy, r: MARKER_RADIUS.normal, color: this.colorInfo(seg.color).css, label: '' });
+                    }
+                }
+            }
+            const bb: [number, number, number] = cut < 1 ? [a[0] + (b[0] - a[0]) * cut, a[1] + (b[1] - a[1]) * cut, a[2] + (b[2] - a[2]) * cut] : b;
+            const span = clipToBox(a, bb, lo, hi);
             if (!span) continue;
             const [t0, t1] = span;
-            const lerp = (t: number, k: number) => a[k] + (b[k] - a[k]) * t;
+            const lerp = (t: number, k: number) => a[k] + (bb[k] - a[k]) * t;
             const p1 = this.project(lerp(t0, 0), lerp(t0, 1), lerp(t0, 2));
             const p2 = this.project(lerp(t1, 0), lerp(t1, 1), lerp(t1, 2));
             const width = THICKNESS_MAP[seg.width] || 1.5;
+            if (seg.curve && !seg.arrow) {
+                legs.push({ x1: p1.sx, y1: p1.sy, x2: p2.sx, y2: p2.sy, color: this.colorInfo(seg.color).css, width, dashed: !!seg.dashed, depth: (p1.depth + p2.depth) / 2 });
+                continue;
+            }
             const mark: SegmentMark = {
                 x1: p1.sx, y1: p1.sy,
                 x2: p2.sx, y2: p2.sy,
@@ -1117,6 +1221,7 @@ export class SVG3DRenderer {
             }
             this.segmentMarks.push(mark);
         }
+        this.curveBatches = curveBatches(legs);
     }
 
     /** Project the scene's points; points outside the box are not drawn. */
@@ -1305,6 +1410,26 @@ export class SVG3DRenderer {
             poly.setAttribute('stroke-opacity', String(o.opacity));
             poly.setAttribute('stroke-width', '1');
             group.appendChild(poly);
+        }
+        // 6.0 F4: long curves, far bands first, each band and colour one path.
+        for (const c of this.curveBatches) {
+            let d = '';
+            const f = (v: number) => v.toFixed(2);
+            curvePath(c.legs, {
+                move: (x, y) => (d += `M${f(x)} ${f(y)}`),
+                line: (x, y) => (d += `L${f(x)} ${f(y)}`),
+                quad: (cx, cy, x, y) => (d += `Q${f(cx)} ${f(cy)} ${f(x)} ${f(y)}`),
+            });
+            const path = createSvg('path');
+            path.setAttribute('d', d);
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke', c.color);
+            path.setAttribute('stroke-width', String(c.width));
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            if (c.alpha < 1) path.setAttribute('stroke-opacity', c.alpha.toFixed(2));
+            if (c.dashed) path.setAttribute('stroke-dasharray', '6 4');
+            group.appendChild(path);
         }
         for (const s of this.segmentMarks) {
             const line = createSvg('line');
@@ -1627,6 +1752,34 @@ export class SVG3DRenderer {
         }
 
         ctx.lineCap = 'round';
+        // 6.0 F4: long curves, far bands first, each band and colour one path.
+        ctx.lineJoin = 'round';
+        for (const c of this.curveBatches) {
+            ctx.beginPath();
+            // Smooth through the points: each joint a quadratic curve between the middles of its legs.
+            curvePath(c.legs, {
+                move: (x, y) => ctx.moveTo(x, y),
+                line: (x, y) => ctx.lineTo(x, y),
+                quad: (cx, cy, x, y) => ctx.quadraticCurveTo(cx, cy, x, y),
+            });
+            ctx.globalAlpha = c.alpha;
+            ctx.strokeStyle = c.color;
+            ctx.lineWidth = c.width;
+            ctx.setLineDash(c.dashed ? [6, 4] : []);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]);
+        ctx.lineJoin = 'miter';
+        for (const m of this.curveHeads) {
+            ctx.beginPath();
+            ctx.arc(m.sx, m.sy, m.r, 0, Math.PI * 2);
+            ctx.fillStyle = m.color;
+            ctx.fill();
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = this.themeColors.bgPrimary;
+            ctx.stroke();
+        }
         for (const s of this.segmentMarks) {
             ctx.beginPath();
             ctx.moveTo(s.x1, s.y1);
@@ -1781,6 +1934,39 @@ export class SVG3DRenderer {
         ctx.textBaseline = 'alphabetic';
         ctx.fillText(this.titleText, cfg.width / 2, PADDING_TOP - 10);
     }
+}
+
+/**
+ * 6.0 F4: legs of long curves in CURVE_BANDS depth bands (far to near, the
+ * far ones fainter), each band's legs of one colour, width and dash as one
+ * batch, in the order they come (so a curve's legs join up).
+ */
+function curveBatches(legs: CurveLeg[]): CurveBatch[] {
+    if (!legs.length) return [];
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const l of legs) {
+        lo = Math.min(lo, l.depth);
+        hi = Math.max(hi, l.depth);
+    }
+    const span = hi - lo;
+    const bands: Array<Map<string, CurveBatch[]>> = Array.from({ length: CURVE_BANDS }, () => new Map());
+    const out: CurveBatch[][] = Array.from({ length: CURVE_BANDS }, () => []);
+    for (const l of legs) {
+        // Band 0 is the farthest (largest depth).
+        const band = span > 1e-12 ? Math.min(CURVE_BANDS - 1, Math.floor(((hi - l.depth) / span) * CURVE_BANDS)) : CURVE_BANDS - 1;
+        let list = bands[band].get(l.color);
+        if (!list) bands[band].set(l.color, (list = []));
+        let batch = list.find((b) => b.width === l.width && b.dashed === l.dashed);
+        if (!batch) {
+            const near = CURVE_BANDS > 1 ? band / (CURVE_BANDS - 1) : 1;
+            batch = { color: l.color, width: l.width, dashed: l.dashed, alpha: CURVE_FAR_ALPHA + (1 - CURVE_FAR_ALPHA) * near, legs: [] };
+            list.push(batch);
+            out[band].push(batch);
+        }
+        batch.legs.push(l.x1, l.y1, l.x2, l.y2);
+    }
+    return out.flat();
 }
 
 function quadPath(ctx: CanvasRenderingContext2D, q: Quad) {

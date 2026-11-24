@@ -109,7 +109,7 @@ export const FULL_OPTION_HELP: Record<string, string> = {
     chord: 'a colour, thin, thick, dashed, labelled, label={text}, hidden; chord, from=a, to=b and at=λ say the chord',
     ...LINEAR_FULL_HELP, // 6.0 D
     // 6.0 E
-    orbit: 'z_0=a start, c=a value, steps=40, a colour, thin, thick, small, large, as a path, labelled, hidden',
+    orbit: 'z_0=a start, c=a value, steps=40, a colour, thin, thick, small, large, as a path, labelled, traced, hidden',
     cobweb: 'from=x_0, steps=40, a colour, thin, thick, hidden',
     bifurcation: 'r=a:b, x_0=a start, a colour, hidden',
     newton: 'from=x_0, steps=5, a colour, thin, thick, labelled, hidden',
@@ -887,7 +887,7 @@ function axisWords(cmd: Command, line: number, problems: TextProblem[]): Mapped[
         const tick = /^([xyz])tick( distance)?$/.exec(o.key);
         const label = /^([xyz])label$/.exec(o.key);
         if (o.value === null) {
-            if (['3d', 'cube', 'polar', 'snippet', 'frames'].includes(o.key)) say(o.key, o.at); // frames: 6.0 C
+            if (['3d', 'cube', 'polar', 'snippet', 'frames', 'turning'].includes(o.key)) say(o.key, o.at); // frames: 6.0 C, turning: 6.0 F4
             else if (o.key === 'hide axis') say('no axes', o.at);
             else if (o.key === 'axis equal' || o.key === 'axis equal image') say('equal scale', o.at);
             else unknown(o);
@@ -1455,7 +1455,7 @@ function verbFor(list: ObjectList, item: Data | undefined): string | null {
 }
 
 /** A line that starts a chart line in words (show, axes, title, set, x numbers, ...). */
-const CHART_LINE = /^(?:(?:view|show|axes|no|with|grid|size|equal|polar|3d|cube|box|snippet|frames|variables|set|title|xlabel|ylabel|zlabel)(?![A-Za-z0-9_(])|[xyz]\s+numbers\b)/i; // frames: 6.0 C
+const CHART_LINE = /^(?:(?:view|show|axes|no|with|grid|size|equal|polar|3d|cube|box|snippet|frames|turning|variables|set|title|xlabel|ylabel|zlabel)(?![A-Za-z0-9_(])|[xyz]\s+numbers\b)/i; // frames: 6.0 C, turning: 6.0 F4
 
 const listItems = (v: unknown): Data[] => (Array.isArray(v) ? (v.filter((x) => x && typeof x === 'object' && !Array.isArray(x)) as Data[]) : []);
 
@@ -1513,6 +1513,7 @@ function axisFull(fields: string[], chart: Data): string[] {
     take('coordinateSystem', (v) => (v === 'polar' ? opts.push('polar') : generic('coordinateSystem')));
     take('documentSetup', (v) => (v === false ? opts.push('snippet') : generic('documentSetup')));
     take('frames', (v) => (v === true ? opts.push('frames') : generic('frames'))); // 6.0 C
+    take('turning', (v) => (v === true ? opts.push('turning') : generic('turning'))); // 6.0 F4
     for (const k of ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax']) {
         take(k, (v) => (typeof v === 'string' || typeof v === 'number' ? opts.push(`${k}=${encValue(String(v).trim())}`) : sets.push(setFull(k, v))));
     }
@@ -1793,6 +1794,8 @@ function motionWords(cmd: Command): Mapped {
 /** A motion line in words as its Full LaTeX command; undefined for any other line, null when no command fits it. */
 function motionFull(own: string, rest: string, options: string[]): string | null | undefined {
     const opt = (o: string): string => {
+        // 6.0 F4: a solution coloured by time without a map keeps its words (the default ramp).
+        if (/^colou?red\s+by\s+time$/i.test(o.trim())) return 'coloured by time';
         const c = /^colou?red\s+by\s+(?:length|size|time)(?:\s+in\s+([a-z]+))?$/i.exec(o.trim());
         if (c) return `colormap/${(c[1] ?? 'viridis').toLowerCase()}`;
         if (/^moving\s+particles$/i.test(o.trim())) return 'particles';

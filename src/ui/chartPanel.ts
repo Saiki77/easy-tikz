@@ -477,6 +477,17 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
             lengthInputs.forEach((input, k) => input.setValue(String(ratio[k])));
         };
         syncLengths();
+        // 6.0 F4: the view turns by itself in notes and the editor (chart line `turning`).
+        const turning = g.body.createDiv({ cls: 'etz-chip-row' });
+        chip(turning, {
+            label: t('motion6.chart.turning'),
+            value: settings.getValue('turning') === true,
+            onChange: (on) => {
+                settings.setValue('turning', on ? true : undefined);
+                host.requestUpdate();
+            },
+        });
+        turning.setAttr('title', t('motion6.chart.turningHint'));
     };
 
     const build = () => {

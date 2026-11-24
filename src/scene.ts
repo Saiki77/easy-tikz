@@ -48,7 +48,7 @@ import { errorText } from './util';
 import { language, t as msg } from './i18n';
 import { BEYOND_TYPES, BeyondOutput, beyondSources, computeBeyond } from './beyond/scene';
 // 6.0 C
-import { MOTION_3D_TYPES, MOTION_TYPES, MotionOutput, computeMotion, computeMotion3D, motionSources, motionStrokes } from './motion6/scene';
+import { MOTION_3D_TYPES, MOTION_TYPES, MotionOutput, computeMotion, computeMotion3D, motionSources } from './motion6/scene';
 // 6.0 B
 import { NOTES6_TYPES, computeNotes6, notes6Sources } from './notes6/scene';
 // 6.0 A
@@ -59,6 +59,8 @@ import type { LinearOutput, Span3D } from './linear/scene';
 // 6.0 E
 import { IterateOutput, computeIterate, iterateMotion, iterateSources } from './iterate/scene';
 import type { PixelPrim } from './iterate/pixels';
+// 6.0 F4
+import type { LivePrim } from './motion6/liveprims';
 
 export type ArrowHeads = 'forward' | 'backward' | 'both';
 
@@ -68,6 +70,9 @@ export interface FillPrim {
     color: string;
     opacity: number;
     pattern: FillPattern;
+    // 6.0 F4
+    /** Part of the still frame of something that moves (StrokePrim.still). */
+    still?: boolean;
 }
 
 export interface StrokePrim {
@@ -85,6 +90,9 @@ export interface StrokePrim {
     // 6.0 C
     /** Opacity of the lines, 0..1 (absent: 1): the faded trails of moving particles. */
     opacity?: number;
+    // 6.0 F4
+    /** Part of the still frame of something that moves: the preview's live canvas draws it instead (src/motion6/liveprims.ts). */
+    still?: boolean;
 }
 
 export interface MarkerPrim {
@@ -97,6 +105,9 @@ export interface MarkerPrim {
     // 6.0 B, C
     /** An open dot: a ring in `color` filled with the background (an end a set does not hold, a rest point that is not stable). */
     open?: boolean;
+    // 6.0 F4
+    /** Part of the still frame of something that moves (StrokePrim.still). */
+    still?: boolean;
 }
 
 /** Side of its anchor point a scene text sits on: the annotation anchors plus the four diagonals. */
@@ -208,6 +219,9 @@ export interface SceneItem2D {
     // 6.0 E
     /** Pictures over the plot (a coloured plane, a bifurcation diagram), under the grid: src/iterate/pixels.ts. */
     pixels?: PixelPrim[];
+    // 6.0 F4
+    /** What moves on the clock, for the preview's live canvas (src/motion6/live.ts); its still frame is in the lists above, marked `still`. */
+    live?: LivePrim[];
 }
 
 export interface SceneIssue {
@@ -444,6 +458,9 @@ interface Output {
     /** Pictures over the plot, and what turning circles hand the clock (src/iterate/scene.ts). */
     pixels?: PixelPrim[];
     iterate?: IterateOutput;
+    // 6.0 F4
+    /** What moves on the clock (src/motion6/liveprims.ts). */
+    live?: LivePrim[];
 }
 
 /** A function's decorations or a tool, as a node of the dependency graph. */
@@ -2218,9 +2235,7 @@ function scene2D(input: SceneInput2D): Scene2D {
         };
         // The memo's own array: a cached frame hands out the same handle objects.
         if (out.handles && out.handles.length) item.handles = out.handles;
-        // 6.0 C: moving particles follow the clock, after the memo (never into the cached arrays).
-        const moving = motionStrokes(node.tool, out, ctx, input.motion);
-        if (moving && moving.length) item.strokes = out.strokes.concat(moving);
+        // 6.0 C, F4: moving particles are drawn by the preview's live canvas (item.live); the still frame has none.
         // 6.0 E: pictures over the plot; turning circles follow the clock, after the memo too.
         if (out.pixels && out.pixels.length) item.pixels = out.pixels;
         const turning = iterateMotion(node.tool, out, ctx, input.motion);
@@ -2228,6 +2243,7 @@ function scene2D(input: SceneInput2D): Scene2D {
             item.strokes = item.strokes.concat(turning.strokes);
             item.markers = out.markers.concat(turning.markers);
         }
+        if (out.live && out.live.length) item.live = out.live; // 6.0 F4
         items.push(item);
         itemSpecs.push({ item, node, out });
     });
@@ -3653,6 +3669,12 @@ export interface Scene3D {
         // 6.0 C
         /** Legs of one polyline (a solution in 3D) share a run: the export joins them into one path. */
         run?: number;
+        // 6.0 F4
+        /** A leg of a long curve (a solution): the renderer draws such legs in batches by depth, fainter far away. */
+        curve?: boolean;
+        /** A traced curve: where the leg starts and ends (0..1 of the drawing) while it draws itself in `traceSeconds`. */
+        trace?: [number, number];
+        traceSeconds?: number;
     }>;
     planes: Array<{ axis: 'x' | 'y' | 'z'; value: number; color: string; opacity: number }>;
     issues: SceneIssue[];

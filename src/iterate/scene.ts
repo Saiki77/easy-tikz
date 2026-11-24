@@ -7,9 +7,9 @@
  * (iterateMotion), as motion6's particles are. Preview and export draw the
  * same primitives. Pure: no DOM.
  */
-import type { BifurcationTool, CobwebTool, FourierCirclesTool, MotionFrame, NewtonTool, OrbitTool, PlaneColourTool, Tool } from '../types';
+import type { BifurcationTool, CobwebTool, FourierCirclesTool, MarkerSize, MotionFrame, NewtonTool, OrbitTool, PlaneColourTool, Tool } from '../types';
 import type { Pt, View } from '../geometry';
-import type { MarkerPrim, SceneCtx, SceneItem2D, SceneOutput, StrokePrim } from '../scene';
+import type { FillPrim, MarkerPrim, SceneCtx, SceneItem2D, SceneOutput, StrokePrim } from '../scene';
 import { addIssue, fail, newOutput, UP_RIGHT } from '../scene';
 import { t as msg } from '../i18n';
 import { errorText } from '../util';
@@ -21,12 +21,17 @@ import { givenParts, isPlaneColormap, topEquals } from './tools';
 import { formulaParts, planeKind, readsLetter } from './forms';
 import { PixelPrim, bifurcationPrim, bifurcationStep, domainPrim, escapePrim, heatPrim, heatRange, recurrenceStep } from './pixels';
 import { FourierTerms, compileFourier, FOURIER_SPEED } from './fourier';
+// 6.0 F4: what moves on the preview's live canvas.
+import type { LiveShapes, TraceRun } from '../motion6/liveprims';
+import { emptyShapes, orbitSeconds, tracedAt } from '../motion6/liveprims';
 
 /** The tool types of this part (all 2D). */
 export const ITERATE_SCENE_TYPES: ReadonlySet<string> = new Set(['orbit', 'cobweb', 'bifurcation', 'newton', 'colourPlane', 'fourierCircles']);
 
 // The circles turn by themselves: the chart gets a clock (src/motion6/clock.ts).
 registerClockType('fourierCircles', (t) => t.type === 'fourierCircles');
+// 6.0 F4: an orbit that draws itself.
+registerClockType('orbit', (t) => t.type === 'orbit' && t.traced === true);
 
 /** Caps, so that a chart cannot freeze a phone (docs/v6/iterate.md). */
 export const MAX_ORBIT = 2000;
@@ -220,6 +225,58 @@ function size(view: View): number {
 
 // ----------------------------------------------------------------- orbit
 
+/** 6.0 F4: arrow heads on the steps of an orbit, so many at most. */
+const MAX_HEADS = 60;
+/** A step this long on paper (pt) or longer gets a head. */
+const HEAD_MIN_STEP = 16;
+
+/** pt per unit on each axis (the scene's label metrics; the same on both with equal scale). */
+function plotUnits(ctx: SceneCtx): { ux: number; uy: number } {
+    const { view } = ctx;
+    const m = ctx.metrics;
+    const w = m && m.w > 0 ? m.w : 250;
+    const h = m && m.h > 0 ? m.h : 250;
+    let ux = w / (view.xmax - view.xmin);
+    let uy = h / (view.ymax - view.ymin);
+    if (ctx.equalScale) ux = uy = Math.min(ux, uy);
+    return { ux, uy };
+}
+
+/**
+ * Small filled heads at 55 % of each step that is long enough on paper (the
+ * first MAX_HEADS of them), sized in pt like the line; null when none fits.
+ */
+function stepHeads(pts: Pt[], ctx: SceneCtx, width: string, color: string): FillPrim | null {
+    const { ux, uy } = plotUnits(ctx);
+    if (!(ux > 0) || !(uy > 0)) return null;
+    const v = ctx.view;
+    const scale = width === 'very thick' ? 1.5 : width === 'thick' ? 1.25 : 1;
+    const len = 4.2 * scale;
+    const half = 2.6 * scale;
+    const rings: Pt[][] = [];
+    const placed: Pt[] = [];
+    for (let i = 1; i < pts.length && rings.length < MAX_HEADS; i++) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        const dx = (b.x - a.x) * ux;
+        const dy = (b.y - a.y) * uy;
+        const L = Math.hypot(dx, dy);
+        if (!(L >= HEAD_MIN_STEP)) continue;
+        const mx = a.x + (b.x - a.x) * 0.55;
+        const my = a.y + (b.y - a.y) * 0.55;
+        if (mx < v.xmin || mx > v.xmax || my < v.ymin || my > v.ymax) continue;
+        // An orbit that comes round again puts its head where one is already (two would cancel out).
+        if (placed.some((q) => Math.hypot((q.x - mx) * ux, (q.y - my) * uy) < len)) continue;
+        placed.push({ x: mx, y: my });
+        const ex = dx / L;
+        const ey = dy / L;
+        // Tip ahead of the middle point, the base behind it (in pt, then back to chart units).
+        const at = (along: number, side: number): Pt => ({ x: mx + (ex * along - ey * side) / ux, y: my + (ey * along + ex * side) / uy });
+        rings.push([at(len * 0.55, 0), at(-len * 0.45, half), at(-len * 0.45, -half)]);
+    }
+    return rings.length ? { rings, color, opacity: 1, pattern: 'solid' } : null;
+}
+
 /** The points of an orbit (and why it stopped); null after a problem. */
 export function orbitPoints(t: OrbitTool, ctx: SceneCtx, out: SceneOutput): { pts: Pt[]; rec: Recurrence } | null {
     const rec = recurrenceOf(t.recurrence, t.name, 'recurrence', out);
@@ -283,10 +340,21 @@ function computeOrbit(t: OrbitTool, ctx: SceneCtx): SceneOutput {
     if (!pts.length) return out;
     const color = str(t.color) || 'red';
     const width = str(t.thickness) || 'thin';
-    if (pts.length > 1) out.strokes.push({ lines: [pts], color, width, dashed: false, exact: true });
+    // 6.0 F4: a traced orbit draws itself on the live canvas; the SVG keeps it whole (the still frame).
+    const traced = t.traced === true;
+    if (pts.length > 1) out.strokes.push(traced ? { lines: [pts], color, width, dashed: false, exact: true, still: true } : { lines: [pts], color, width, dashed: false, exact: true });
     const dots = t.path ? (pts.length === 1 ? 1 : 0) : Math.min(pts.length, MAX_DOTS);
-    const size = t.size === 'normal' || t.size === 'large' ? t.size : 'small';
-    for (let i = 0; i < dots; i++) out.markers.push({ x: pts[i].x, y: pts[i].y, color, size: i === 0 ? 'normal' : size });
+    const size: MarkerSize = t.size === 'normal' || t.size === 'large' ? t.size : 'small';
+    for (let i = 0; i < dots; i++) out.markers.push(traced && i > 0 ? { x: pts[i].x, y: pts[i].y, color, size, still: true } : { x: pts[i].x, y: pts[i].y, color, size: i === 0 ? 'normal' : size });
+    // 6.0 F4: small heads on the longer steps show which way the orbit goes.
+    const heads = stepHeads(pts, ctx, width, color);
+    if (heads) out.fills.push(traced ? { ...heads, still: true } : heads);
+    if (traced && pts.length > 1) {
+        const n = pts.length - 1;
+        const run: TraceRun = { pts, u: pts.map((_, i) => i / n), color, line: 0 };
+        const reached = pts.slice(1, dots).map((p, i) => ({ x: p.x, y: p.y, u: (i + 1) / n, color, size }));
+        out.live = [{ key: `${str(t.id)}:trace`, at: tracedAt([run], { width, head: { size: 'normal' }, dots: reached, seconds: orbitSeconds(n) }) }];
+    }
     if (t.valueLabel) {
         const v = ctx.view;
         for (let i = 0; i < Math.min(pts.length, MAX_LABELS); i++) {
@@ -327,8 +395,8 @@ function realStep(rec: Recurrence, name: string, ctx: SceneCtx, out: SceneOutput
     };
 }
 
-/** Opacity levels of the cobweb, earliest steps faintest. */
-const COBWEB_LEVELS = [0.3, 0.5, 0.75, 1];
+/** Opacity levels of the cobweb, earliest steps faintest (6.0 F4: more of them, so it fades in smoothly). */
+const COBWEB_LEVELS = [0.2, 0.3, 0.4, 0.5, 0.6, 0.72, 0.85, 1];
 
 function computeCobweb(t: CobwebTool, ctx: SceneCtx): SceneOutput {
     const out = newOutput();
@@ -553,68 +621,105 @@ function computeCircles(t: FourierCirclesTool, ctx: SceneCtx): SceneOutput {
     }
     const color = str(t.color) || 'blue';
     const width = str(t.thickness) || 'thick';
-    // The curve of the tip, faint: the wave and the circles are what moves.
-    if (trace.length > 1) out.strokes.push({ lines: [trace], color, width: 'thin', dashed: false, opacity: 0.55 });
-    hold(out, { circles: { terms, trace, reach, color, width, wave: !!t.wave }, fit: trace });
+    // The curve of the tip, faint: the wave and the circles are what moves (6.0 F4: fainter still).
+    if (trace.length > 1) out.strokes.push({ lines: [trace], color, width: 'thin', dashed: false, opacity: 0.25 });
+    const circles = { terms, trace, reach, color, width, wave: !!t.wave };
+    hold(out, { circles, fit: trace });
+    // 6.0 F4: the circles turn on the preview's live canvas.
+    const view = { ...ctx.view };
+    out.live = [{ key: `${str(t.id)}:circles`, at: (time) => circleShapes(circlesAt(circles, time * FOURIER_SPEED, view), circles) }];
     return out;
 }
 
 /** Circle polylines have this many legs. */
 const CIRCLE_LEGS = 72;
+/** 6.0 F4: the wave is red beside the circles' colour (rose beside cobalt, as the plan's picture). */
+const WAVE_COLOR = 'red';
 
-/**
- * The moving parts of turning circles at the frame's time (the still
- * frame: time 0 or the chart's stillTime): the circles, the arms, the tip,
- * and the wave. Null for other tools. Called after the scene memo.
- */
-export function iterateMotion(tool: Tool | undefined, out: SceneOutput, ctx: SceneCtx, frame: MotionFrame | undefined): { strokes: StrokePrim[]; markers: MarkerPrim[] } | null {
-    if (!tool || tool.type !== 'fourierCircles') return null;
-    const it = out.iterate;
-    const c = it?.circles;
-    if (!c) return null;
-    const tau = clockTime(frame) * FOURIER_SPEED;
-    const cs = c.terms.at(tau);
-    const circles: Pt[][] = [];
+type Circles = NonNullable<IterateOutput['circles']>;
+
+/** The turning circles at tau (radians of t): the circles, the arms, the tip, and the wave with where it starts. */
+interface CircleParts {
+    rings: Array<{ x: number; y: number; r: number }>;
+    arms: Pt[];
+    tip: Pt;
+    wave: { pts: Pt[]; x0: number } | null;
+}
+
+function circlesAt(c: Circles, tau: number, view: View): CircleParts {
+    const rings: CircleParts['rings'] = [];
     const arms: Pt[] = [{ x: 0, y: 0 }];
     let re = 0;
     let im = 0;
-    for (const term of cs) {
+    for (const term of c.terms.at(tau)) {
         const r = Math.hypot(term[0], term[1]);
         if (!Number.isFinite(r)) break;
-        if (r > 1e-9) {
-            const ring: Pt[] = [];
-            for (let k = 0; k <= CIRCLE_LEGS; k++) {
-                const a = (2 * Math.PI * k) / CIRCLE_LEGS;
-                ring.push({ x: re + r * Math.cos(a), y: im + r * Math.sin(a) });
-            }
-            circles.push(ring);
-        }
+        if (r > 1e-9) rings.push({ x: re, y: im, r });
         re += term[0];
         im += term[1];
         arms.push({ x: re, y: im });
     }
-    const strokes: StrokePrim[] = [];
-    if (circles.length) strokes.push({ lines: circles, color: 'gray', width: 'thin', dashed: false, opacity: 0.6 });
-    if (arms.length > 1) strokes.push({ lines: [arms], color: 'black', width: 'thin', dashed: false, exact: true });
-    const markers: MarkerPrim[] = [{ x: re, y: im, color: c.color, size: 'normal' }];
+    let wave: CircleParts['wave'] = null;
     if (c.wave) {
         // The imaginary part over the last turn, to the right of the circles, the newest point nearest them.
-        const { view } = ctx;
         const x0 = Math.max(c.reach * 1.25, view.xmin + 0.5 * (view.xmax - view.xmin));
         const span = view.xmax - x0;
         if (span > 0) {
-            const wave: Pt[] = [];
+            const pts: Pt[] = [];
             const n = 240;
             for (let i = 0; i <= n; i++) {
                 const s = tau - (2 * Math.PI * i) / n;
                 let y = 0;
                 for (const term of c.terms.at(s)) y += term[1];
-                if (Number.isFinite(y)) wave.push({ x: x0 + (span * i) / n, y });
+                if (Number.isFinite(y)) pts.push({ x: x0 + (span * i) / n, y });
             }
-            if (wave.length > 1) strokes.push({ lines: [wave], color: c.color, width: c.width, dashed: false });
-            strokes.push({ lines: [[{ x: re, y: im }, { x: x0, y: im }]], color: 'gray', width: 'thin', dashed: true, exact: true });
-            markers.push({ x: x0, y: im, color: c.color, size: 'small' });
+            wave = { pts, x0 };
         }
+    }
+    return { rings, arms, tip: { x: re, y: im }, wave };
+}
+
+/** The parts as live shapes: faint circles, the arms in the tool's colour, the wave in red with a dashed line to the tip. */
+function circleShapes(p: CircleParts, c: Circles): LiveShapes {
+    const out = emptyShapes();
+    for (const r of p.rings) out.rings.push({ ...r, color: 'gray', opacity: 0.4 });
+    if (p.arms.length > 1) out.lines.push({ pts: p.arms, color: c.color, width: 'thin' });
+    if (p.wave) {
+        if (p.wave.pts.length > 1) out.lines.push({ pts: p.wave.pts, color: WAVE_COLOR, width: c.width });
+        out.lines.push({ pts: [p.tip, { x: p.wave.x0, y: p.tip.y }], color: 'gray', width: 'thin', dashed: true, opacity: 0.7 });
+        out.dots.push({ x: p.wave.x0, y: p.tip.y, color: WAVE_COLOR, size: 'small' });
+    }
+    out.dots.push({ x: p.tip.x, y: p.tip.y, color: c.color, size: 'small' });
+    return out;
+}
+
+/**
+ * The moving parts of turning circles at the frame's time (the still
+ * frame: time 0 or the chart's stillTime): the circles, the arms, the tip,
+ * and the wave. Null for other tools. Called after the scene memo. 6.0 F4:
+ * marked still (the preview's live canvas turns them; the export draws these).
+ */
+export function iterateMotion(tool: Tool | undefined, out: SceneOutput, ctx: SceneCtx, frame: MotionFrame | undefined): { strokes: StrokePrim[]; markers: MarkerPrim[] } | null {
+    if (!tool || tool.type !== 'fourierCircles') return null;
+    const c = out.iterate?.circles;
+    if (!c) return null;
+    const p = circlesAt(c, clockTime(frame) * FOURIER_SPEED, ctx.view);
+    const strokes: StrokePrim[] = [];
+    const circles = p.rings.map((r) => {
+        const ring: Pt[] = [];
+        for (let k = 0; k <= CIRCLE_LEGS; k++) {
+            const a = (2 * Math.PI * k) / CIRCLE_LEGS;
+            ring.push({ x: r.x + r.r * Math.cos(a), y: r.y + r.r * Math.sin(a) });
+        }
+        return ring;
+    });
+    if (circles.length) strokes.push({ lines: circles, color: 'gray', width: 'thin', dashed: false, opacity: 0.4, still: true });
+    if (p.arms.length > 1) strokes.push({ lines: [p.arms], color: c.color, width: 'thin', dashed: false, exact: true, still: true });
+    const markers: MarkerPrim[] = [{ x: p.tip.x, y: p.tip.y, color: c.color, size: 'small', still: true }];
+    if (p.wave) {
+        if (p.wave.pts.length > 1) strokes.push({ lines: [p.wave.pts], color: WAVE_COLOR, width: c.width, dashed: false, still: true });
+        strokes.push({ lines: [[p.tip, { x: p.wave.x0, y: p.tip.y }]], color: 'gray', width: 'thin', dashed: true, exact: true, opacity: 0.7, still: true });
+        markers.push({ x: p.wave.x0, y: p.tip.y, color: WAVE_COLOR, size: 'small', still: true });
     }
     return { strokes, markers };
 }

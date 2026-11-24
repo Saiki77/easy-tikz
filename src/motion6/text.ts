@@ -31,7 +31,7 @@ export const MOTION_KINDS = new Set(['vectorField', 'restPoints', 'trajectory'])
 export const MOTION_OPTION_HELP: Record<string, string> = {
     vectorField: 'in a colour, thin, thick, coloured by length (in a colour map), with moving particles, with streamlines, density=30, hidden',
     restPoints: 'in a colour, small, large, labelled, hidden',
-    trajectory: 'in a colour, thin, thick, dashed, for t from a to b, coloured by time (in a colour map), hidden',
+    trajectory: 'in a colour, thin, thick, dashed, for t from a to b, coloured by time (in a colour map), traced, hidden',
 };
 
 export const MOTION_KIND_WORDS: Record<string, MessageKey> = {
@@ -76,7 +76,7 @@ function colouredBy(o: string): { by: 'length' | 'time'; map: string } | null {
 /** An option in the words of the motion lines (already in its short form: no leading with/the). */
 export function isMotionOption(o: string): boolean {
     const t = o.trim().toLowerCase();
-    return t === 'moving particles' || t === 'particles' || t === 'streamlines' || colouredBy(t) !== null;
+    return t === 'moving particles' || t === 'particles' || t === 'streamlines' || t === 'traced' || colouredBy(t) !== null; // traced: 6.0 F4
 }
 
 /** Apply a motion option to `target` of `kind`; true when it was one. */
@@ -101,9 +101,12 @@ export function motionOption(kind: string, target: Data, o: string, problem: (ke
     }
     if (kind === 'trajectory') {
         if (lower === 'dashed') return set(target, 'dashed', true);
+        if (lower === 'traced') return set(target, 'traced', true); // 6.0 F4
         const c = colouredBy(t);
         if (c && c.by === 'time') {
-            if (!/\sin\s/i.test(t) && isColormap(target.colormap)) return true;
+            // 6.0 F4: `coloured by time` alone is the default ramp (cobalt to amber); `in viridis` names a map.
+            if (!/\sin\s/i.test(t)) return isColormap(target.colormap) ? true : set(target, 'byTime', true);
+            delete target.byTime;
             return set(target, 'colormap', c.map);
         }
         const m = /^(?:for\s+t\s+from|from\s+t\s*=)\s*(.+)$/i.exec(t);
@@ -337,6 +340,10 @@ export function motionOptions(type: string, o: LineOptions, full: Data): void {
     } else if (type === 'trajectory') {
         o.take('thickness', thickness);
         o.take('dashed', (v) => (v === true ? 'dashed' : null));
-        o.take('colormap', mapWord('time'));
+        // 6.0 F4: a map is always named (`coloured by time` alone is the default ramp).
+        if (o.has('colormap')) o.mark('byTime');
+        o.take('colormap', (v) => (isColormap(v) ? `coloured by time in ${v}` : null));
+        o.take('byTime', (v) => (v === true ? 'coloured by time' : null));
+        o.take('traced', (v) => (v === true ? 'traced' : null));
     }
 }

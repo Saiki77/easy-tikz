@@ -87,4 +87,10 @@ export const motion6: Messages<typeof en> = {
     'motion6.player.step': 'ステップ {step} / {count}',
     'motion6.player.clockPlay': '動きを再生',
     'motion6.player.clockPause': '動きを一時停止',
+    // 6.0 F4
+    'motion6.trajectory.traced': '描きながら表示',
+    'motion6.card.timeRamp': 'コバルトからアンバー',
+    'motion6.chart.turning': '自動で回転',
+    'motion6.chart.turningHint': 'ノートとエディタで 3D の視点がゆっくり回ります。ドラッグでも回せます。エクスポートは設定した視点のままです。',
+    'motion6.orbit.traced': '描きながら表示',
 };

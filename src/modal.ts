@@ -24,6 +24,8 @@ import { MotionPlayer } from './motion6/player'; // 6.0 C
 import { playerFor } from './motion6/host'; // 6.0 C
 import { atStep, lastStep, movesWithSteps } from './motion6/steps'; // 6.0 C
 import { needsClock } from './motion6/clock'; // 6.0 C
+import { Turn } from './motion6/clock'; // 6.0 F4
+import { LiveLayer } from './motion6/live'; // 6.0 F4
 // 6.0 B
 import { notes6ToolReads, renameInNotes6Tool } from './notes6/tools';
 import { AskController } from './notes6/askHost';
@@ -421,6 +423,9 @@ export class TikzModal extends Modal implements PanelHost {
     private player: MotionPlayer | null = null;
     private playerKey = '';
     private playerBar: HTMLElement | null = null;
+    // 6.0 F4: the live canvas of a moving 2D chart, the turn of a turning 3D chart.
+    private liveLayer: LiveLayer | null = null;
+    private readonly turn = new Turn();
     private stepView: { step: number; from: MathContext; settings: SettingsManager; math: MathContext } | null = null;
     private renderer3d: SVG3DRenderer | null = null;
     private chartMode: '2d' | '3d' | null = null;
@@ -968,6 +973,8 @@ export class TikzModal extends Modal implements PanelHost {
         this.dropKeySession();
         this.player?.destroy(); // 6.0 C
         this.player = null;
+        this.liveLayer?.destroy(); // 6.0 F4
+        this.liveLayer = null;
         this.clearSelection();
         this.clearHover();
         // Playing sliders snap back onto their step first, so the flushed draft never stores a sub-step value.
@@ -1386,6 +1393,8 @@ export class TikzModal extends Modal implements PanelHost {
             math.setParams(this.list<Parameter>('parameters'));
             const config = view.settings.toRendererConfig(math);
             if (this.player) config.motion = this.player.frame();
+            // 6.0 F4: a turning 3D chart turns from its azimuth on the clock.
+            if (this.player && config.is3D && view.settings.getValue('turning') === true) config.turn = this.turn.angle(this.player.frame().time);
             issues = config.is3D ? this.render3D(config, math, quality) : this.render2D(config, math, quality);
         } catch (e) {
             // Keep the last good drawing; the problem goes to the status chip, never a Notice.
@@ -1411,16 +1420,21 @@ export class TikzModal extends Modal implements PanelHost {
         this.player = null;
         this.playerBar = null;
         this.stepView = null;
+        this.liveLayer?.destroy(); // 6.0 F4
+        this.liveLayer = null;
         const player = playerFor(data, {
-            draw: (_frame, clock) => {
+            draw: (frame, clock) => {
                 if (!this.isOpen) return;
-                if (clock) this.renderNow('draft');
+                // 6.0 F4: a frame of the clock alone moves the live canvas of a 2D chart; the SVG stays.
+                if (clock && frame.progress >= 1 && !this.is3D() && this.liveLayer?.active()) this.liveLayer.paint(frame.time);
+                else if (clock) this.renderNow('draft');
                 else this.renderNow('full');
             },
             watched: () => this.chartEl,
         });
         if (!player || !this.stageEl) return;
         this.player = player;
+        this.liveLayer = new LiveLayer(); // 6.0 F4
         this.playerBar = this.stageEl.createDiv({ cls: 'etz-motion6-bar' });
         player.controls(this.playerBar);
         player.watch();
@@ -1475,7 +1489,7 @@ export class TikzModal extends Modal implements PanelHost {
         }
         const pixelScale = fitPixelScale(this.chartBox.w, this.chartBox.h, config.width, config.height);
         this.gridScale = pixelScale;
-        const renderer = new SVGRenderer(config, { math, cache: this.sceneCache, quality, pixelScale });
+        const renderer = new SVGRenderer(config, { math, cache: this.sceneCache, quality, pixelScale, live: this.liveLayer ?? undefined }); // 6.0 F4: live
         const svg = renderer.render();
         svg.addClass('etz-chart-svg');
         if (this.chartSvg && this.chartSvg.parentElement === chart) this.chartSvg.replaceWith(svg);
@@ -1756,6 +1770,13 @@ export class TikzModal extends Modal implements PanelHost {
                 azimuth: num(this.settings.getValue('rotationZ'), 45),
                 elevation: num(this.settings.getValue('rotationX'), 30),
             };
+            // 6.0 F4: a turning chart stops turning while dragged; the drag starts from the view as it is now.
+            if (this.player && this.settings.getValue('turning') === true) {
+                const time = this.player.frame().time;
+                this.drag.azimuth = (((this.drag.azimuth + this.turn.angle(time)) % 360) + 360) % 360;
+                this.turn.hold(true, time);
+                this.applyRotation(this.drag.azimuth, this.drag.elevation);
+            }
         } else {
             if (middle) e.preventDefault();
             const touch = e.pointerType === 'touch';
@@ -1880,6 +1901,7 @@ export class TikzModal extends Modal implements PanelHost {
         this.chartEl?.removeClass('is-dragging');
         // A turn ends on whole degrees: the chart keeps round numbers (5.2.2).
         if (drag.kind === 'rotate') this.applyRotation(Math.round(num(this.settings.getValue('rotationZ'), 45)) % 360, Math.round(num(this.settings.getValue('rotationX'), 30)));
+        if (drag.kind === 'rotate' && this.player) this.turn.hold(false, this.player.frame().time); // 6.0 F4: the turn goes on from here
         // Released under the threshold: a click selects the object.
         if (drag.kind === 'press' && !cancelled) this.select(drag.target, drag.grab);
         // 6.0 B: and asks it a question (a click that did not move: no pan, no drag).
