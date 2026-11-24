@@ -17,6 +17,10 @@ import { seriesOf } from './compile';
 import type { VNode } from './parse';
 import { Value } from './types';
 import { termRange } from './special';
+// 6.0 G
+import { ValueCompiler } from './compile';
+import { children } from './parse';
+import { geogebraNeeds } from '../geogebra/commands';
 
 /** A real number in the text: a constant, or pgfmath text that is safe as an operand. */
 type R = number | string;
@@ -380,7 +384,15 @@ class ValuePgf {
         }
         if (inScalar(env, n.name) && n.args.length === 1) return this.binary('*', this.name(n.name, locals), this.node(n.args[0], locals), false);
         if (ref && ref.value && n.args.length === 1) return this.binary('*', this.fromValue(ref.value.read()), this.node(n.args[0], locals), false);
+        // 6.0 G: a GeoGebra command that reads no variable is its value at the sliders' values (Sum(L), Length(Sequence(k, k, 1, n))).
+        if (geogebraNeeds(n.name) && !this.readsVariable(n, locals)) return this.fromValue(new ValueCompiler({ env, defs, locals: null, src: '' }).node(n).f());
         return this.valueFunction(n.name, args());
+    }
+
+    /** 6.0 G: does the formula read an axis variable or a local (a parameter, a sum's index)? */
+    private readsVariable(n: VNode, locals: Map<string, PV>): boolean {
+        if (n.t === 'name') return locals.has(n.name) || this.env.vars.some((v) => v.includes(n.name));
+        return children(n).some((c) => this.readsVariable(c, locals));
     }
 
     private bodyOf(name: string): VNode {

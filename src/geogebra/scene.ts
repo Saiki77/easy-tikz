@@ -284,9 +284,9 @@ class Evaluator {
             case 'Curve': {
                 if (a.length !== 5 && a.length !== 6) usage();
                 const v = a[a.length - 3];
-                if (v.t !== 'name') usage();
+                const variable = v.t === 'name' ? v.name : usage();
                 const cell: Cell = { v: NaN };
-                const comps = a.slice(0, a.length - 3).map((c) => this.compile(c, src, [{ name: (v as { name: string }).name, cell }]).f);
+                const comps = a.slice(0, a.length - 3).map((c) => this.compile(c, src, [{ name: variable, cell }]).f);
                 const lo = this.number(a[a.length - 2], src);
                 const hi = this.number(a[a.length - 1], src);
                 const pts: number[][] = [];
@@ -316,7 +316,7 @@ class Evaluator {
         const usage = () => this.problem(msg('geogebra.problem.takes', { name: n.name, usage: USAGE_OBJECTS[n.name] }));
         if (a.length < 2) usage();
         const what = this.arg(a[0], src);
-        let map: PointMap | null = null;
+        let map: PointMap | null;
         switch (n.name) {
             case 'Translate': {
                 const by = this.arg(a[1], src);
@@ -347,10 +347,10 @@ class Evaluator {
                     if (!q) this.problem(msg('geogebra.problem.needsPoint', { name: n.name, text: src.slice(a[1].s, a[1].e) }));
                     map = { scale: 1, f: (p) => p.map((x, i) => 2 * (q[i] ?? 0) - x) };
                 }
-                if (!map) this.problem(msg('geogebra.problem.needsPoint', { name: n.name, text: src.slice(a[1].s, a[1].e) }));
             }
         }
-        const m = map as PointMap;
+        if (!map) return this.problem(msg('geogebra.problem.needsPoint', { name: n.name, text: src.slice(a[1].s, a[1].e) }));
+        const m = map;
         const view = this.ctx.view;
         const sample = (o: Extract<GObj, { k: 'function' }>) => {
             const from = Number.isFinite(o.from) ? Math.max(o.from, view.xmin) : view.xmin;
@@ -506,6 +506,8 @@ function draw2(obj: GObj, t: GeoGebraTool, ctx: SceneCtx, out: SceneOutput): voi
                 const size: MarkerSize = t.size || 'normal';
                 out.markers.push({ x: single[0], y: single[1], color, size });
                 out.points = [single];
+                // A point written as two numbers, `A = (1, 2)`, is dragged by its numbers (drag to edit).
+                if (t.named && /^\(\s*[^,()]+,\s*[^,()]+\)$/.test(t.command.trim())) (out.handles = out.handles || []).push({ ref: { part: 'point', index: 0, item: 0 }, point: view2(single) });
                 labelAt(view2(single), UP_RIGHT, size, undefined, true, color);
                 return;
             }

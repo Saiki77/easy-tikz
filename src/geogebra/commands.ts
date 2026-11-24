@@ -312,11 +312,12 @@ export function geogebraCall(c: ValueCompiler, n: VCall): Part | null {
                 if (!isPointShape(p.shape) && p.shape.k !== 'any') fail('geogebra.problem.notPoint', { name: n.name, what: shapeText(p.shape) }, a[i].s);
             });
             const fs = parts.map((p) => p.f);
-            const n0 = parts[parts.length - 1].shape.k === 'vec' ? (parts[parts.length - 1].shape as { n: number }).n : 2;
+            const last = parts[parts.length - 1].shape;
+            const n0 = last.k === 'vec' ? last.n : 2;
             return fold(parts, () => {
-                const ps = fs.map((f) => pointNumbers(f()));
-                if (ps.some((p) => !p)) return NaN;
-                const [p, q] = ps as number[][];
+                const p = pointNumbers(fs[0]());
+                const q = fs.length > 1 ? pointNumbers(fs[1]()) : null;
+                if (!p || (fs.length > 1 && !q)) return NaN;
                 if (!q) return vec(p);
                 if (p.length !== q.length) return NaN;
                 return vec(q.map((x, i) => x - p[i]));

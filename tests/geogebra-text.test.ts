@@ -151,3 +151,18 @@ test('a GeoGebra name twice, or a name that a slider has, is a problem; a name m
     assert.match(read('A = (1, 2)\nA = (3, 4)').problems.join('\n'), /2:1 .*A/);
     assert.deepEqual(read('c = Circle(A, 3)\nA = (1, 2)').problems, []);
 });
+
+test('no built-in chart reads differently: only the GeoGebra guide and examples have GeoGebra lines', async () => {
+    const { GUIDES, V6_EXAMPLES, showcaseExamples } = await import('../src/guides');
+    const { EXAMPLES } = await import('../src/migrate');
+    const charts: Array<[string, Data]> = [];
+    for (const g of GUIDES) {
+        charts.push([g.id, g.chart]);
+        g.steps.forEach((s, i) => s.chart && charts.push([`${g.id} step ${i + 1}`, s.chart]));
+    }
+    for (const e of [...EXAMPLES, ...V6_EXAMPLES, ...showcaseExamples()]) charts.push([e.id, e.data]);
+    const ggOwn = (id: string) => id.startsWith('geogebra');
+    const found = charts.filter(([id, data]) => !ggOwn(id) && ((data.tools as Data[] | undefined) ?? []).some((t) => t.type === 'geogebra')).map(([id]) => id);
+    assert.deepEqual(found, []);
+    assert.ok(charts.some(([id, data]) => ggOwn(id) && ((data.tools as Data[] | undefined) ?? []).some((t) => t.type === 'geogebra')));
+});

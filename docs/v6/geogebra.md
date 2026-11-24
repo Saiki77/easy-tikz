@@ -23,7 +23,7 @@ GeoGebra's names, argument orders, 1-based positions and list braces, plain and 
 | `Root(f, a)`, `Root(f, a, b)`, `Integral(f, a, b)`, `Derivative(f[, n])` | numeric: Newton from a, bisection in [a, b], Simpson with 2000 steps, central differences at the field's x (orders 1 to 3). f is a function's name or a formula in x |
 | `Translate(P, v)`, `Rotate(P, angle[, C])`, `Dilate(P, k[, C])`, `Reflect(P, Q)` | of points and lists of points (of objects: on their own line) |
 
-Lists: `{1, 2, 3}`, matrices `{{1, 2}, {3, 4}}` (rows of different lengths are a list of lists). `ί` (GeoGebra's imaginary unit) and `i` are both i, `ℯ` is e. A start point of `IterationList` in a formula of complex numbers (`z^3` of a point) is the complex number x + iy. Problems say how a command is written: "Sequence is written Sequence(<expression>, <variable>, <from>, <to>[, <step>]) or Sequence(<n>)".
+Lists: `{1, 2, 3}`, matrices `{{1, 2}, {3, 4}}` (rows of different lengths are a list of lists). Literal lists and points work in GeoGebra lines, let lines and the value fields (`mark the points of ...`); in a field of numbers (a function, a region, a bound) use them by name or through a command, as with part A's vectors: `L = {1, 2, 3}` and `plot g(x) = Sum(L) x`, `Length(Sequence(k, k, 1, n))`. The export writes a command that reads no variable as its number (`Sum(L) x` is `(6*x)`). `ί` (GeoGebra's imaginary unit) and `i` are both i, `ℯ` is e. A start point of `IterationList` in a formula of complex numbers (`z^3` of a point) is the complex number x + iy. Problems say how a command is written: "Sequence is written Sequence(<expression>, <variable>, <from>, <to>[, <step>]) or Sequence(<n>)".
 
 ## GeoGebra lines as chart lines
 
@@ -47,7 +47,7 @@ Lists: `{1, 2, 3}`, matrices `{{1, 2}, {3, 4}}` (rows of different lengths are a
 - **Prints back as written.** The line keeps its text; options go after it: `c = Circle(A, 3) in red, dashed`. Options: a colour, `thin`, `thick`, `dashed`, `small`, `large`, `opacity 0.3` (fill of a polygon or circle), `labelled` (the name), `no label`, `labelled "text"`, `hidden` (a hidden value is still usable).
 - **Full LaTeX:** `\geogebra[red, dashed]{c = Circle(A, 3)}`, `\geogebra{IterationList(z^2 + c, z, {0}, 20)}`.
 - **Data:** tool type `geogebra`: `command`, `named` (false: a bare command), `color` (`''`: GeoGebra's), `thickness` (`''`: thick), `dashed`, `size` (`''`), `fillOpacity` (-1: GeoGebra's), `nameLabel` (`auto`, `shown`, `hidden`), `label`. Sliders: a parameter with `geogebra: true`. Prefix G.
-- **Editor:** Build tab card (command, value now, Name chip, line); + Add, section GeoGebra: Point, Triangle and its circumcircle. Rename rewrites the commands (texts in quotes stay).
+- **Editor:** Build tab card (command, value now, Name chip, line); + Add, section GeoGebra: Point, Triangle and its circumcircle. Rename rewrites the commands (texts in quotes stay). Drag to edit: a point written as two numbers (`A = (1, 2)`, also `(a, 2)` with a slider) is dragged by them, and what reads it follows.
 - **Fit:** points, circles, polygons, curves, texts; lines and rays set nothing; functions as the generic rule.
 - **Export:** scene primitives, so pgfplots draws the same picture as numeric coordinates (markers as `only marks` plots).
 
@@ -59,7 +59,7 @@ Lists: `{1, 2, 3}`, matrices `{{1, 2}, {3, 4}}` (rows of different lengths are a
 
 - Names: `B'` and names with spaces are no names (write `B_1`); `x`, `y`, `z`, `r`, `t` are taken. `f(x) = x^2` is the chart's own function line (printed `plot f(x) = x^2`).
 - `f = x^2` is a function of x as in GeoGebra; a formula in x and y without a command stays the chart's curve (GeoGebra would make a function of two variables).
-- Points are not draggable in the preview (change the numbers, or use `mark P at (1, 2)`, which GeoGebra lines read by name).
+- Only points written as two numbers can be dragged (in the editor); a point on an object (GeoGebra's `Point(c)`) does not exist.
 - A slider starts at its low end; GeoGebra's other Slider arguments (speed, width, ...) are ignored.
 - Points and lists are not labelled with their values; `Text` writes values with 2 decimals.
 - In formulas of complex numbers, a point given as `(x, y)` is x + iy only as the start of `IterationList`; elsewhere write the complex number (`c = -0.4 + 0.6ί`).
@@ -68,6 +68,7 @@ Lists: `{1, 2, 3}`, matrices `{{1, 2}, {3, 4}}` (rows of different lengths are a
 
 ## Not done
 
-- Drag of GeoGebra points in the editor; Ask the curve questions for GeoGebra objects; hover cards of GeoGebra formulas in notes.
+- Drag of objects (a circle, a segment) and of dependent points; Ask the curve questions for GeoGebra objects; hover cards of GeoGebra formulas in notes.
+- Literal lists and points in fields of numbers (`plot f(x) = Sum({1, 2}) x`): use a name (part A's vectors are the same).
 - 3D: circles, lines, rays, functions and texts draw nothing (an info says 2D only).
 - Chart words: GeoGebra lines have no English words, so there are no pieces for them.

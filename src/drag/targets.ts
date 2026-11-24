@@ -59,6 +59,9 @@ export function fieldText(ref: FieldRef, data: ChartData): string | null {
             return t.type === 'value' ? str(t.expression) : null;
         case 'map':
             return t.type === 'transform' ? str(t.map) : null;
+        // 6.0 G
+        case 'command':
+            return t.type === 'geogebra' ? str(t.command) : null;
     }
     return null;
 }
@@ -114,6 +117,11 @@ export function setFieldText(ref: FieldRef, data: ChartData, text: string): bool
         case 'map':
             if (t.type !== 'transform') return false;
             t.map = text;
+            return true;
+        // 6.0 G
+        case 'command':
+            if (t.type !== 'geogebra') return false;
+            t.command = text;
             return true;
     }
     return false;
@@ -343,6 +351,16 @@ function levelTarget(shape: HitShape, hit: Hit, item: number, ctx: DragContext):
 }
 
 function pointTarget(shape: HitShape, item: number, ctx: DragContext): DragTarget {
+    // 6.0 G: a free GeoGebra point, `A = (1, 2)`: its two numbers.
+    const own = toolById(shape.itemKey, ctx);
+    if (own && own.type === 'geogebra') {
+        const base = baseFrom(shape, own.name);
+        base.cardSource = own.name;
+        base.cardField = 'command';
+        base.points = shape.point ? [shape.point] : [];
+        const ref: FieldRef = { kind: 'tool', id: own.id, field: 'command' };
+        return { ...base, kind: 'point', units: [{ ref, role: 'tupleCoord', item: 0, coord: 0 }, { ref, role: 'tupleCoord', item: 0, coord: 1 }], allowSliders: true, virtual: [], shift: 'straight' };
+    }
     const tool = toolById(shape.itemKey, ctx) as PointsTool | null;
     const name = tool ? tool.name : shape.source;
     const subject = item >= 0 ? pointName(name, item) : name;

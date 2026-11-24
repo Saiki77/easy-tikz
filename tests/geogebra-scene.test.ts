@@ -199,3 +199,20 @@ test('the export draws the same picture as numeric coordinates', () => {
     assert.match(code, /coordinates \{\(1,0\) \(2,0\) \(3,0\)\}/);
     assert.match(code, /\{\$A\$\}/);
 });
+
+test('a function that reads a GeoGebra value exports as pgfmath: a command without a variable is its number', () => {
+    const code = settingsOf('show x from -2 to 2 and y from -10 to 10\nL = {1, 2, 3}\nn = Slider(1, 5, 1), starting at 3\nplot f(x) = Sum(L) x\nplot g(x) = Length(Sequence(k, k, 1, n)) x^2').generateTikzCode();
+    assert.match(code, /\{\(6\*x\)\}/);
+    assert.match(code, /\{\(3\*\(x\^2\)\)\}/);
+});
+
+test('drag to edit: a free GeoGebra point moves by its numbers, A = (1, 2) becomes A = (3, 1)', async () => {
+    const { makeChart, targetOf, drag, committedText } = await import('./_drag');
+    const chart = makeChart({ ...parseChartText('show x from -1 to 5 and y from -1 to 5\nA = (1, 2)\nc = Circle(A, 1)').data });
+    const tool = (chart.data.tools as Array<{ id: string; name: string }>).find((x) => x.name === 'A');
+    assert.ok(tool);
+    const target = targetOf(chart.ctx, `${tool.id}#point:0`, { x: 1, y: 2 });
+    assert.equal(target.kind, 'point');
+    const run = drag(chart.ctx, target, { x: 1, y: 2 }, { x: 3, y: 1 }, { apply: chart });
+    assert.equal(committedText(run, { kind: 'tool', id: tool.id, field: 'command' }, chart.data), '(3, 1)');
+});

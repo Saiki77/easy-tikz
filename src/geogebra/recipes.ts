@@ -24,7 +24,8 @@ function free(kit: GeoGebraKit, ctx: RecipeContext, names: string[], taken: stri
 
 /** A GeoGebra line `name = command`. */
 function line(kit: GeoGebraKit, ctx: RecipeContext, name: string, command: string): GeoGebraTool {
-    const tool = kit.tool('geogebra', ctx) as GeoGebraTool;
+    const tool = kit.tool('geogebra', ctx);
+    if (tool.type !== 'geogebra') throw new Error('geogebra');
     tool.name = name;
     tool.command = command;
     tool.named = true;
