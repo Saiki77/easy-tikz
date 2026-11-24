@@ -13,7 +13,7 @@
 import { Annotation, Function3DParameters, FunctionParameters, Parameter, Tool } from '../types';
 import { ValidateResult, fmtNum } from '../mathcontext';
 import { ChartExample, EXAMPLES, Recipe, RecipeContext, newId, nextFunctionName, nextToolName, recipes } from '../migrate';
-import { showcaseExamples } from '../guides';
+import { V6_EXAMPLES, showcaseExamples } from '../guides'; // 6.0 F2: V6_EXAMPLES
 import { BUILT_IN_2D, BUILT_IN_3D } from '../templates';
 import { RANGE_DEFAULTS, RangeKey, SettingsManager } from '../settings';
 import { SVGRenderer } from '../renderer';
@@ -31,6 +31,7 @@ import '../notes6/cards';
 // 6.0 A
 import '../values/cards';
 import '../iterate/cards'; // 6.0 E
+import { pixelImage } from '../iterate/paint'; // 6.0 F2
 import { CardUiState, FunctionCardHandle, createFunctionCard, createSurfaceCard } from './functionCards';
 import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, textButton, trapEscape } from './kit';
 import { PickerContent, PickerGroup, PickerItem, addPicker } from './addPicker';
@@ -331,6 +332,11 @@ function exampleThumbnail(example: ChartExample): SVGSVGElement | null {
         svg.removeAttribute('height');
         svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         svg.setAttribute('aria-hidden', 'true');
+        // 6.0 F2: a picture layer is a canvas, and the copies below would lose it: keep it as an <image> (painted on the CPU).
+        svg.querySelectorAll('foreignObject.etz-pixels').forEach((fo) => {
+            const img = pixelImage(fo);
+            if (img) fo.replaceWith(img);
+        });
         THUMBNAILS.set(example.id, svg);
     }
     return svg.cloneNode(true) as SVGSVGElement;
@@ -703,7 +709,8 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
         const grid = emptyEl.createDiv({ cls: 'etz-build-examples' });
         // Examples of the current mode first; the others switch the chart to their mode.
         // The Showcase charts (5.2) first: parts that follow each other.
-        const all: ChartExample[] = [...showcaseExamples(), ...EXAMPLES];
+        // 6.0 F2: the examples of version 6 after the others.
+        const all: ChartExample[] = [...showcaseExamples(), ...EXAMPLES, ...V6_EXAMPLES];
         const examples = [...all.filter((e) => e.is3D === is3D), ...all.filter((e) => e.is3D !== is3D)];
         const thumbs: Array<[HTMLElement, ChartExample]> = [];
         for (const example of examples) {

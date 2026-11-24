@@ -22,6 +22,11 @@ import { SHAPES_GUIDES } from './shapes';
 import { SPACE_GUIDES } from './space';
 import { NOTES_GUIDES } from './notes';
 import { REFERENCE_GUIDES } from './reference';
+// 6.0 F2: the guides of version 6 (each file holds guides of several categories; GUIDES sorts them)
+import { VALUES_GUIDES } from './values';
+import { INTERACT_GUIDES } from './interact';
+import { LINEAR_GUIDES } from './linear';
+import { DYNAMICS_GUIDES } from './dynamics';
 import { localGuide } from './ja';
 
 /** Categories in display order (the order of the GuideCategory union). */
@@ -32,6 +37,9 @@ export const GUIDE_CATEGORIES: readonly GuideCategory[] = [
     'Functions and sliders',
     'Calculus',
     'Regions and optimisation',
+    // 6.0 F2
+    'Linear algebra and complex numbers',
+    'Dynamics and fractals',
     'Data and probability',
     'Points, lines and labels',
     '3D',
@@ -47,6 +55,9 @@ const CATEGORY_KEYS: Readonly<Record<GuideCategory, MessageKey>> = {
     'Functions and sliders': 'help.category.functionsSliders',
     Calculus: 'help.category.calculus',
     'Regions and optimisation': 'help.category.regionsOptimisation',
+    // 6.0 F2
+    'Linear algebra and complex numbers': 'help.category.linearComplex',
+    'Dynamics and fractals': 'help.category.dynamicsFractals',
     'Data and probability': 'help.category.dataProbability',
     'Points, lines and labels': 'help.category.pointsLinesLabels',
     '3D': 'help.category.threeD',
@@ -102,6 +113,11 @@ export const GUIDES: Guide[] = [
     ...SPACE_GUIDES,
     ...NOTES_GUIDES,
     ...REFERENCE_GUIDES,
+    // 6.0 F2
+    ...VALUES_GUIDES,
+    ...INTERACT_GUIDES,
+    ...LINEAR_GUIDES,
+    ...DYNAMICS_GUIDES,
 ]
     .map((guide, index) => ({ guide, index }))
     .sort((a, b) => categoryRank(a.guide.category) - categoryRank(b.guide.category) || a.index - b.index)
@@ -112,6 +128,8 @@ export function guideById(id: string): Guide | undefined {
 }
 
 export { localGuide };
+// 6.0 F2: one example for each main new line (the editor and the AI tools list them)
+export { V6_EXAMPLES } from './examples';
 
 /**
  * The finished charts of the Showcase guides as examples for the editor

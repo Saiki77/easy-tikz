@@ -141,6 +141,7 @@ screen. Add a term here before using a new one in several places.
 | What's new | 新機能 |
 | Getting started / Functions and sliders / Regions and optimisation | はじめに / 関数とスライダー / 領域と最適化 |
 | Points, lines and labels / Notes and export / Reference | 点・線・ラベル / ノートと出力 / リファレンス |
+| Linear algebra and complex numbers / Dynamics and fractals (6.0) | 線形代数と複素数 / 力学系とフラクタル |
 | Start here / Core / Advanced (guide levels) | ここから / 基本 / 応用 |
 | Colours by height (a surface's colour map) | 高さで色分け |
 | Your colour (a surface's own colour, light to dark) | 指定した色 |

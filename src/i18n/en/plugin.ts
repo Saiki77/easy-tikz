@@ -42,7 +42,7 @@ export const plugin = {
     'plugin.settings.chartLanguage.full': 'Full LaTeX',
     'plugin.settings.formulaHover.name': 'Charts for formulas',
     'plugin.settings.formulaHover.desc': 'Rest the pointer on a $...$ formula in a note (on a phone: tap it) to see its chart, with a slider for each letter, Insert chart and Open in the editor.',
-    'plugin.command.whatsNew': "Show what's new in Easy Graphs Charts and TikZ 5",
+    'plugin.command.whatsNew': "Show what's new in Easy Graphs Charts and TikZ 6",
     'plugin.command.copyAiGuide': 'Copy the guide for AI chats (ChatGPT, Claude, Gemini)',
 
     // Settings.

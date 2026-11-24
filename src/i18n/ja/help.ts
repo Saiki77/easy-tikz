@@ -10,7 +10,7 @@ export const help: Messages<typeof en> = {
     'help.search.guides': 'ガイド {count} 件',
     'help.search.sections': 'リファレンスの項目 {count} 件',
     'help.search.both': 'ガイド {guides} 件、リファレンスの項目 {sections} 件',
-    'help.whatsNew': 'Easy Graphs Charts and TikZ 5 の新機能',
+    'help.whatsNew': 'Easy Graphs Charts and TikZ 6 の新機能',
     'help.categories': 'カテゴリ',
     'help.referenceSections': 'リファレンスの項目',
     'help.category.gettingStarted': 'はじめに',
@@ -24,6 +24,9 @@ export const help: Messages<typeof en> = {
     'help.category.showcase': 'ショーケース',
     'help.category.calculus': '微分積分',
     'help.category.dataProbability': 'データと確率',
+    // 6.0 F2
+    'help.category.linearComplex': '線形代数と複素数',
+    'help.category.dynamicsFractals': '力学系とフラクタル',
     'help.level.start': 'ここから',
     'help.level.core': '基本',
     'help.level.advanced': '応用',

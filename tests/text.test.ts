@@ -6,13 +6,20 @@
  * change (comments included).
  */
 import { test, assert } from './_lib';
-import { EXAMPLES } from '../src/migrate';
+import { EXAMPLES, defaultTool } from '../src/migrate';
 import { GUIDES } from '../src/guides';
 import { canonical } from '../src/chartdata';
 import { isChartText, parseChartText } from '../src/text/parse';
 import { printChartText, writeChartText } from '../src/text/print';
 
 type Data = Record<string, unknown>;
+
+/** 6.0 F2: a colour an object is not drawn in now (a tool without a colour is drawn in its default one: the basis vectors in green). */
+function otherColour(item: Data): string {
+    let drawn = item.color;
+    if (drawn === undefined && typeof item.type === 'string') drawn = (defaultTool(item.type as never, { is3D: false, tools: [], functions: [] }) as unknown as Data).color;
+    return drawn === 'green' ? 'purple' : 'green';
+}
 
 function builtInCharts(): Array<{ id: string; data: Data }> {
     const out: Array<{ id: string; data: Data }> = EXAMPLES.map((e) => ({ id: `example ${e.id}`, data: e.data as Data }));
@@ -223,7 +230,7 @@ test('text: recolouring any object of any built-in chart rewrites that one line'
             const items = (parsed[key] as Data[] | undefined) ?? [];
             items.forEach((item, i) => {
                 const next = JSON.parse(JSON.stringify(parsed)) as Data;
-                const color = item.color === 'green' ? 'purple' : 'green';
+                const color = otherColour(item); // 6.0 F2
                 (next[key] as Data[])[i] = { ...item, color };
                 const out = writeChartText(text, next);
                 if (canonical(parseChartText(out).data) !== canonical(next)) {

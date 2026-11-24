@@ -2,6 +2,32 @@
 
 [Overview](../README.md) · [Guides](guides/README.md) · [Reference](reference.md) · [Changelog](../CHANGELOG.md)
 
+## 6.0: every idea is a picture
+
+<p align="center">
+  <img src="media/v6-fractal.png" alt="A Julia set of z² + c coloured by the plugin, with the sliders a and b that set c = a + bi under it." width="100%">
+</p>
+
+- **Colour the plane.** A formula colours every point of the plane: the Mandelbrot set (`colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 200 steps`), Julia sets with c on sliders, Newton basins, domain colouring of a complex function, and heat maps of f(x, y). The GPU paints it at once, so sliders and a dragged point move it live; the CPU takes over without WebGL and deep in a zoom. The PDF gets it as a PNG beside the `.tex` file. [Iterate and colour the plane](reference.md#iterate-and-colour-the-plane-60)
+- **A matrix moves the plane.** `draw the grid`, `draw the basis vectors`, `shade the unit square, labelled`, then `then transform the plane by A`: Play moves the grid to A while det A shows on the square. Also complex maps (`$z \mapsto z^2$`), eigenvectors, spans, 3D space, and î and ĵ you can drag. [Linear algebra and complex maps](reference.md#linear-algebra-and-complex-maps-60)
+- **Charts that move.** `then` puts a chart in steps, with Previous, Play and Next in your notes; `frames` puts every step side by side in the PDF. Vector fields with moving particles and their rest points, and the solutions of systems in 2D and 3D, such as the Lorenz attractor. [Charts that move](reference.md#charts-that-move-steps-the-clock-vector-fields-and-systems-60)
+- **Ask the curve.** Click a curve in the editor, or in the chart under a block: a menu of questions opens (where is f ≤ 0, where do f and g cross, the tangent here, the area between them, Newton's method from here, ...). Point at one to see its answer; choose it and it becomes a line of the chart. [Ask the curve](reference.md#ask-the-curve-60)
+- **Hover reads sets and maps.** Sets, maps, conditions, intervals, Jensen's inequality, matrices, recurrences and sums in your notes open a chart too, with the functions and matrices taken from the note. [Every formula is a chart](reference.md#every-formula-is-a-chart)
+- **Values and sums.** Complex numbers, vectors, matrices and lists in every formula; names with `let`; `\sum`, `\prod`, `n!` and `\binom{n}{k}` with sliders in their bounds; vectors as arrows and lists as points. [Values](reference.md#values-complex-numbers-vectors-matrices-and-sums-60)
+- **Also new.** Orbits (gradient descent too), cobwebs, bifurcation diagrams, Newton's method and Fourier circles; sets on an axis in set notation and the chord of Jensen's inequality; a chart with an x range only fits y to what it draws; charts from formulas keep the function's name.
+- **What's new** shows 6.0 as a slideshow with live charts: a Julia set on two sliders, a matrix that plays, a vector field, and a chart you can ask.
+
+```easy-tikz
+show x from -4.5 to 4.5 and y from -3 to 3
+equal scale
+let $A = \begin{pmatrix} 1.5 & 1 \\ 0.5 & 2 \end{pmatrix}$
+draw the grid
+draw the basis vectors
+shade the unit square, labelled
+then transform the plane by A
+then draw the eigenvectors of A, labelled
+```
+
 ## 5.0: every formula is a chart, LaTeX as the chart language
 
 - **Every formula is a chart.** Rest the pointer on a formula in a note (`$...$` or `$$...$$`, in Reading view and Live Preview): its chart opens next to it, with a slider for each letter. **Insert chart** puts it under the paragraph. On a phone, tap the formula. A dotted line marks the formulas that have a chart (setting **Highlight formulas in notes**), and **Default chart for formulas** gives all of them your look.

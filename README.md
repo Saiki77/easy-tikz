@@ -1,8 +1,8 @@
 <video src="https://github.com/user-attachments/assets/b44ad2a6-ff7e-42fe-89c7-6e0a994c8397" controls muted width="100%"></video>
 
-<h3 align="center">Every formula in your notes is a chart.</h3>
+<h3 align="center">Every idea is a picture.</h3>
 
-<p align="center">Easy Graphs Charts and TikZ is an Obsidian plugin for math charts. Rest the pointer on a formula, or write a chart in LaTeX. It draws on phones too, and exports pgfplots code that compiles with pdflatex.</p>
+<p align="center">Easy Graphs Charts and TikZ is an Obsidian plugin for math charts. Rest the pointer on a formula, or write a chart in LaTeX: functions, fractals, matrices that move the plane, vector fields, and charts that answer your questions. It draws on phones too, and exports pgfplots code that compiles with pdflatex.</p>
 
 ### A complete editor
 
@@ -12,7 +12,43 @@ Click any chart to open it. Everything is connected: drag a line, a point or a l
 
 <img src="docs/media/readme/picker.png" alt="The editor with the + Add picker open: a search field on top, the groups Functions, Regions, Curves and lines, Points, Segments and arrows, Data, Probability, Calculus, Labels, Sliders and Templates on the left, and the five items of Points on the right, each with a line about what it does: points from a list, intersections of two functions, corner points of a region, the optimum over a region and the integer points in a region." width="100%">
 
-**+ Add** holds a wide range of ready-made parts, sorted into groups and found by search: regions, curves and lines, crossings, corners and the optimum of a region, arrows and braces, data with a regression line, probability, Riemann sums, slope fields, labels, sliders and templates.
+**+ Add** holds a wide range of ready-made parts, sorted into groups and found by search: regions, curves and lines, crossings, corners and the optimum of a region, arrows and braces, data with a regression line, probability, Riemann sums, slope fields, values and vectors, linear algebra, motion, iterations, coloured planes, labels, sliders and templates.
+
+### Every idea is a picture
+
+<img src="docs/media/v6-fractal.png" alt="The Mandelbrot set, coloured by how fast each point escapes, with a point P dragged to its edge and the orbit of 0 for c = P spiralling inward as a red path. Beside it a Julia set with its sliders a and b." width="100%">
+
+A formula colours the plane: the Mandelbrot set, Julia sets on sliders, Newton basins and complex functions. The GPU paints it while you drag.
+
+### A matrix moves the plane
+
+<img src="docs/media/v6-matrix.png" alt="The grid, the basis vectors î and ĵ and the unit square, half way through the move to the matrix A = [[1.5, 1], [0.5, 2]]: the grid lines lean, the old grid stays faint behind them, and the strip under the chart shows Play and Step 2 of 3. Beside it the finished picture with the eigenvectors labelled λ₁ = 2.5 and λ₂ = 1 and the square labelled det A = 2.5." width="100%">
+
+Draw the grid and î, ĵ, then transform the plane by a matrix or by z ↦ z². Press Play and the plane moves, with det A and the eigenvectors.
+
+### Charts that move
+
+<img src="docs/media/v6-motion.png" alt="Two charts. The damped pendulum: arrows coloured by length, particles flowing along them, and the rest points labelled stable spiral and saddle. The Lorenz attractor in 3D, its two wings coloured by time from dark purple to yellow." width="100%">
+
+Vector fields with moving particles and their rest points, solutions of systems in 2D and 3D, and charts that play in steps.
+
+### Ask the curve
+
+<img src="docs/media/v6-ask.png" alt="The editor with the parabola g(x) = x² − 4 and the line h(x) = 2 − x. A click on g opened a menu of questions: where is g ≤ 0, where does g cross the x-axis, its maxima and minima, the tangent here, where do g and h cross, the area between g and h. The pointer rests on the first question, and its answer shows faintly in the chart: the bar from −2 to 2 on the x-axis labelled {x ∣ g(x) ≤ 0} = [−2, 2]." width="100%">
+
+Click a curve and ask: where is f ≤ 0, where do f and g cross, the tangent here, the area between them. The answer becomes a line of the chart.
+
+### Notes that read sets and maps
+
+<img src="docs/media/v6-hover.png" alt="A note that defines g(x) = x² − 4 and says that the set {x ∈ ℝⁿ ∣ g(x) ≤ 0} is convex. The pointer rests on the set, and its card shows the parabola with the set marked on the x-axis from −2 to 2, a switch n = 1 / n = 2, and the line: g(x) = x^2 − 4 comes from this note." width="100%">
+
+Sets, maps, intervals, inequalities, matrices, recurrences and sums in your notes open a chart too, with g taken from the note.
+
+### Values, sums and iterations
+
+<img src="docs/media/v6-iterate.png" alt="Four charts. The Taylor polynomial of sin(x) as a sum with n on a slider, hugging the sine. The 7th roots of unity joined into a heptagon, each labelled. The cobweb of the logistic map at r = 3.7. The bifurcation diagram of the logistic map from r = 2.5 to 4." width="100%">
+
+Complex numbers, vectors, matrices and sums in every formula; orbits, cobwebs, bifurcation diagrams, Newton's method and Fourier circles.
 
 ### Write charts in LaTeX
 
@@ -52,7 +88,7 @@ The Help tab is a gallery of 39 short guides. Each step shows its chart live wit
 
 ---
 
-**39 step-by-step guides** in the Help tab and [on GitHub](docs/guides/README.md) · [What's new in 5.0](docs/whats-new.md) · [Make charts with AI](docs/ai.md) · [Reference](docs/reference.md) · [Changelog](CHANGELOG.md)
+**39 step-by-step guides** in the Help tab and [on GitHub](docs/guides/README.md) · [What's new in 6.0](docs/whats-new.md) · [Make charts with AI](docs/ai.md) · [Reference](docs/reference.md) · [Changelog](CHANGELOG.md)
 
 **Privacy:** nothing goes to the internet, and there is no telemetry. AI access (off by default) answers on `127.0.0.1` only, with your token. [All details](docs/reference.md#privacy-and-permissions)
 
