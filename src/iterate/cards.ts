@@ -160,7 +160,7 @@ class OrbitCard extends IterateCard<OrbitTool> {
             },
             chips: [
                 {
-                    label: t('iterate.card.path'),
+                    label: t('python.card.path'),
                     get: () => tool.path,
                     set: (v) => {
                         tool.path = v;
@@ -524,12 +524,34 @@ class CirclesCard extends IterateCard<FourierCirclesTool> {
                 tool.sum = v;
             },
         });
+        // 6.0 P: a list of coefficients from a script: how many circles (a formula: a slider n).
+        this.row(t('python.card.circles'), {
+            id: 'count',
+            kind: 'value',
+            optional: true,
+            placeholder: t('python.card.circlesPlaceholder'),
+            get: () => tool.count ?? '',
+            set: (v) => {
+                if (v.trim()) tool.count = v;
+                else delete tool.count;
+            },
+        });
         const showField = field(this.body, { label: t('beyond.card.show'), layout: 'inline' });
         const wave = chip(showField.controlEl, {
             label: t('iterate.card.wave'),
             value: tool.wave,
             onChange: (v) => {
                 tool.wave = v;
+                this.changed();
+            },
+        });
+        // 6.0 P: the path the tip draws.
+        const path = chip(showField.controlEl, {
+            label: t('iterate.card.path'),
+            value: tool.path === true,
+            onChange: (v) => {
+                if (v) tool.path = true;
+                else delete tool.path;
                 this.changed();
             },
         });
@@ -543,6 +565,7 @@ class CirclesCard extends IterateCard<FourierCirclesTool> {
         const speed = speedRow(this.body, tool, () => this.frame()); // 6.0 F4: how fast the circles turn
         this.onSync(() => {
             wave.setValue(tool.wave);
+            path.setValue(tool.path === true); // 6.0 P
             line.thickness.setValue(tool.thickness);
             speed.sync();
         });

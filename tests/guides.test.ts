@@ -54,6 +54,7 @@ import { VALUES_GUIDES } from '../src/guides/values';
 import { INTERACT_GUIDES } from '../src/guides/interact';
 import { LINEAR_GUIDES } from '../src/guides/linear';
 import { DYNAMICS_GUIDES } from '../src/guides/dynamics';
+import { PYTHON_GUIDES } from '../src/guides/python'; // 6.0 P
 
 /** The guides SPEC4 section 3 lists, per data file. README, docs/guides and the release posts link to them by id. */
 const DOCUMENTED: Record<string, string[]> = {
@@ -77,6 +78,7 @@ const DOCUMENTED: Record<string, string[]> = {
     interact: ['ask-curve', 'sets-convexity', 'formula-cards', 'steps-frames'],
     linear: ['vectors-arrows', 'matrix-plane', 'complex-maps'],
     dynamics: ['fractals', 'orbits-cobwebs', 'vector-fields', 'systems', 'descent-newton'],
+    python: ['python-chart', 'python-heart', 'python-plot', 'python-wave'], // 6.0 P
 };
 const FILES: Record<string, Guide[]> = {
     start: START_GUIDES,
@@ -95,6 +97,7 @@ const FILES: Record<string, Guide[]> = {
     interact: INTERACT_GUIDES,
     linear: LINEAR_GUIDES,
     dynamics: DYNAMICS_GUIDES,
+    python: PYTHON_GUIDES, // 6.0 P
 };
 
 const EM_DASH = String.fromCharCode(0x2014);

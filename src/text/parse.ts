@@ -1996,8 +1996,10 @@ function iterateLine(b: Builder, name: string | null, read: IterateRead | null):
 // ------------------------------------------------------------ 6.0 P: python
 
 /** A python block (src/python/text.ts) as its tool; a block with no script lines is a problem. */
-function pythonLine(b: Builder, blk: { name: string | null; nameAt: number; code: string }) {
+function pythonLine(b: Builder, blk: { name: string | null; nameAt: number; color: string | null; code: string }) {
     if (!blk.code.trim()) return b.problem(blk.nameAt, msg('python.problem.noBlock'));
     const name = blk.name ? b.claim(blk.name, blk.nameAt) : null;
-    b.tools.push({ type: 'python', name: name ?? b.nextName(TOOL_PREFIX.python), code: blk.code });
+    const tool: Data = { type: 'python', name: name ?? b.nextName(TOOL_PREFIX.python), code: blk.code };
+    if (blk.color) tool.color = COLOR_ALIASES[blk.color.toLowerCase()] ?? (COLORS.has(blk.color.toLowerCase()) ? blk.color.toLowerCase() : blk.color);
+    b.tools.push(tool);
 }

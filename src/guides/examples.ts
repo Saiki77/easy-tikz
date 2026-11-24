@@ -12,6 +12,7 @@
 import { language } from '../i18n';
 import type { ChartExample } from '../migrate';
 import { chart } from './chart';
+import { PYTHON_EXAMPLES } from './examplesPython'; // 6.0 P
 
 interface ExampleText {
     title: string;
@@ -158,6 +159,8 @@ const SOURCES: ExampleSource[] = [
         ja: { title: 'ニュートン法の吸引域', description: 'すべての点から z³ - 1 にニュートン法を使います。色は行き着く根を表します。' },
         lines: ['show x from -1.8 to 1.8 and y from -1.2 to 1.2', 'equal scale', 'colour the plane by $z_{n+1} = z_n - \\frac{z_n^3 - 1}{3z_n^2}$, $z_0 = x + iy$, 40 steps'],
     },
+    // 6.0 P: Python in a chart
+    ...PYTHON_EXAMPLES,
 ];
 
 /** The examples of version 6, their texts in the reader's language. */

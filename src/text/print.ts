@@ -422,8 +422,8 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
     const name = str(full.name);
     // 6.0 P: a python block, its script as written (a name only when something shows it).
     if (type === 'python') {
-        if (!NAME_RE.test(name) || /^(title|xlabel|ylabel|zlabel)$/i.test(name) || Object.keys(full).some((k) => !['type', 'name', 'id', 'code', 'color'].includes(k)) || (str(full.color) && str(full.color) !== 'blue')) return raw('tool', min);
-        return pythonWords(str(full.code), ctx.shown.has(name) ? name : null) ?? raw('tool', min);
+        if (!NAME_RE.test(name) || /^(title|xlabel|ylabel|zlabel)$/i.test(name) || Object.keys(full).some((k) => !['type', 'name', 'id', 'code', 'color'].includes(k))) return raw('tool', min);
+        return pythonWords(str(full.code), ctx.shown.has(name) ? name : null, str(full.color) || null) ?? raw('tool', min);
     }
     const o = new Options(min, []);
     let head: string | null = null;
@@ -1032,6 +1032,8 @@ function rewrite(oldText: string, data: Data, form: Form): string {
         const indent = /^\s*/.exec(source)?.[0] ?? '';
         if (t.part) {
             if (kept) kept.text += '\n' + source;
+            // A chart comment between the lines of a script written anew (or deleted) stays, after it.
+            else if (/^\s*(?:%|\/\/)/.test(source)) out.push({ text: source, list: null });
             continue;
         }
         kept = null;
@@ -1048,9 +1050,12 @@ function rewrite(oldText: string, data: Data, form: Form): string {
             const was = before.get(t.line);
             // keepThen: 6.0 C, a changed line stays in its step.
             const same = !!was && withoutId(was) === withoutId(f.item);
-            const line: OutLine = { text: same ? source : str(f.item.type) === 'python' ? indent + f.line : indent + keepThenIn(source, keepForm(source, f.line), form, printed.say), list: f.list, key: k }; // python: 6.0 P
+            // 6.0 P: a python block whose script stayed: its head line anew, its script lines as they were.
+            const script = str(f.item.type) === 'python' && !!was && str(was.code) === str(f.item.code);
+            const pyText = script ? indent + f.line.split('\n')[0].trim() : indent + f.line;
+            const line: OutLine = { text: same ? source : str(f.item.type) === 'python' ? pyText : indent + keepThenIn(source, keepForm(source, f.line), form, printed.say), list: f.list, key: k };
             out.push(line);
-            if (same) kept = line; // 6.0 P
+            if (same || script) kept = line; // 6.0 P
             continue;
         }
         if (t.chart.length) {

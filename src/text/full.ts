@@ -44,7 +44,7 @@ import { readIterateDraw, readIteratePlane } from '../iterate/text';
 import { givenParts, isPlaneColormap } from '../iterate/tools';
 import { readRecurrence } from '../values/recurrence';
 // 6.0 P
-import { FULL_PY_END, fullPythonHead, pythonFull, readPythonWords } from '../python/text';
+import { FULL_PY_END, fullHead as pythonFullHead, fullPythonHead, pythonFull, pythonHead, readPythonWords } from '../python/text';
 
 /** 6.0 A: the lines of values in Full LaTeX need no let names: they are written in the forms that say what they are. */
 const NO_LETS: ReadonlySet<string> = new Set();
@@ -1074,9 +1074,6 @@ export interface FullRead {
     columns: number[][];
     /** What the block itself gets wrong: a bracket not closed, an option \axis does not know. */
     problems: TextProblem[];
-    // 6.0 P
-    /** Lines (1-based) of the block that close a python block (\end{python}): they belong to its tool. */
-    pythonEnds?: number[];
 }
 
 /**
@@ -1094,13 +1091,13 @@ export function readFull(text: string): FullRead {
         if (script || fullPythonHead(line) !== null) {
             let m: Mapped;
             if (!script) {
-                const name = fullPythonHead(line);
-                m = new Mapped().put(name ? `${name}: python:` : 'python:', line.length - line.trimStart().length);
+                const head = fullPythonHead(line);
+                m = new Mapped().put(pythonHead(head?.name ?? null, head?.color ?? null) ?? 'python:', line.length - line.trimStart().length);
                 script = true;
             } else if (FULL_PY_END.test(line)) {
-                m = new Mapped();
+                // It stays: the words parser closes the block there, and the line belongs to it.
+                m = new Mapped().copy(line, 0);
                 script = false;
-                (out.pythonEnds ??= []).push(i + 1);
             } else m = line.trim() ? new Mapped().put('    ', 0).copy(line, 0) : new Mapped();
             words.push(m.text);
             out.lines.push(i + 1);
@@ -1142,15 +1139,6 @@ export function mapFull(read: FullRead, parsed: TextChart, lineCount: number, tr
             if (tr.object) into.object = tr.object;
             if (tr.part) into.part = true; // 6.0 P
             for (const k of tr.chart) if (!into.chart.includes(k)) into.chart.push(k);
-        }
-        // 6.0 P: \end{python} belongs to the block above it.
-        for (const at of read.pythonEnds ?? []) {
-            const into = lines[at - 1];
-            const above = lines[at - 2];
-            if (into && above?.object) {
-                into.object = above.object;
-                into.part = true;
-            }
         }
         out.lines = lines;
     }
@@ -1626,7 +1614,7 @@ export function axisLines(lines: string[]): string[] {
 export function fullLine(line: string): string {
     // 6.0 P: a python block.
     const py = readPythonWords(line);
-    if (py) return pythonFull(py.code, py.name);
+    if (py) return pythonFull(py.code, py.name, py.color);
     return objectFull(line) ?? genericFull(line) ?? line.trim();
 }
 
@@ -1634,7 +1622,8 @@ export function fullLine(line: string): string {
 export function withName(line: string, name: string): string {
     const lead = /^\s*/.exec(line)?.[0] ?? '';
     // 6.0 P
-    if (fullPythonHead(line.split('\n')[0]) !== null) return line.replace(/^(\s*\\begin\s*\{\s*python\s*\})(?:\[[^\]]*\])?/, `$1[name=${name}]`);
+    const pyHead = fullPythonHead(line.split('\n')[0]);
+    if (pyHead) return line.replace(/^\s*\\begin\s*\{\s*python\s*\}(?:\s*\[[^\]]*\])?/, `${lead}${pythonFullHead(name, pyHead.color)}`);
     const cmd = lexCommand(line);
     if (!cmd || BEGIN.test(line.trim()) || END.test(line.trim())) return `${lead}${name}: ${line.trim()}`;
     const known = cmd.options.find((o) => o.key === 'name');
@@ -1721,7 +1710,7 @@ export function wordsToFull(text: string, opts: { builtin?: boolean } = {}): str
         const line = lines[e.from];
         // 6.0 P: a python block from its tool.
         const obj0 = objectAt(e.from);
-        if (obj0 && obj0.item.type === 'python' && e.level < 2) return pythonFull(typeof obj0.item.code === 'string' ? obj0.item.code : '', null);
+        if (obj0 && obj0.item.type === 'python' && e.level < 2) return pythonFull(typeof obj0.item.code === 'string' ? obj0.item.code : '', null, typeof obj0.item.color === 'string' ? obj0.item.color : null);
         for (;;) {
             let out: string | null = null;
             if (e.level === 0) {

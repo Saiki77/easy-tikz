@@ -19,7 +19,7 @@ import type { LiveShapes } from '../motion6/liveprims';
 import { emptyShapes } from '../motion6/liveprims';
 import type { PixelPrim } from '../iterate/pixels';
 import { mapRgb } from '../iterate/colour';
-import { Draw, Figure, MAP_RGB } from './pyplot';
+import { Draw, FIRST, Figure, MAP_RGB } from './pyplot';
 import { PyError } from './errors';
 import { chartProgram, inputsOf } from './defs';
 import { programOf } from './program';
@@ -113,9 +113,10 @@ export function computePython(t: Tool, ctx: SceneCtx): SceneOutput | null {
     const fit: Pt[] = [];
     const fig = result.figure;
     const draws = fig.draws.filter((_, i) => fig.blocks[i] === block);
-    drawInto(out, draws, view, fit, false);
+    const first = t.color || 'blue';
+    drawInto(out, draws, view, fit, false, first);
     // The axes' own texts (title, labels, legend) go with the first block.
-    if (block === 0) axesTexts(out, fig, view);
+    if (block === 0) axesTexts(out, fig, view, first);
     if (fig.xlim) fit.push({ x: fig.xlim[0], y: NaN }, { x: fig.xlim[1], y: NaN });
     if (fig.ylim) fit.push({ x: NaN, y: fig.ylim[0] }, { x: NaN, y: fig.ylim[1] });
     // frame(t) is drawn by the block that defines it (the last block when none says `def frame(`).
@@ -128,7 +129,7 @@ export function computePython(t: Tool, ctx: SceneCtx): SceneOutput | null {
                 key: `${t.id}:frame`,
                 at: (time) => {
                     const f = result.frameAt(time);
-                    return liveShapes(f.figure.draws, view);
+                    return liveShapes(f.figure.draws, view, first);
                 },
             },
         ];
@@ -148,7 +149,7 @@ export function pythonMotion(tool: Tool | undefined, out: SceneOutput, frame: Mo
     if (!held || !held.moves) return null;
     const f = held.result.frameAt(clockTime(frame));
     const still = newOutput();
-    drawInto(still, f.figure.draws, held.view, null, true);
+    drawInto(still, f.figure.draws, held.view, null, true, tool.color || 'blue');
     return {
         strokes: still.strokes,
         fills: still.fills,
@@ -288,7 +289,8 @@ function anchorOf(a: string): SceneTextSpec['anchor'] {
 }
 
 /** Draws as primitives into `out` (`fit` collects the points the fit holds); `still`: the still frame of something that moves. */
-function drawInto(out: SceneOutput, draws: readonly Draw[], view: View, fit: Pt[] | null, still: boolean): void {
+function drawInto(out: SceneOutput, raw: readonly Draw[], view: View, fit: Pt[] | null, still: boolean, first: string): void {
+    const draws = withFirst(raw, first);
     const ms = (p: StrokePrim): StrokePrim => (still ? { ...p, still: true } : p);
     const mf = (p: FillPrim): FillPrim => (still ? { ...p, still: true } : p);
     const mm = (p: MarkerPrim): MarkerPrim => (still ? { ...p, still: true } : p);
@@ -362,7 +364,7 @@ function drawInto(out: SceneOutput, draws: readonly Draw[], view: View, fit: Pt[
 }
 
 /** The figure's title, axis labels and legend, as texts in the plot (the chart's own title and labels are its lines). */
-function axesTexts(out: SceneOutput, fig: Figure, view: View): void {
+function axesTexts(out: SceneOutput, fig: Figure, view: View, first: string): void {
     const w = view.xmax - view.xmin;
     const h = view.ymax - view.ymin;
     const cx = view.xmin + w / 2;
@@ -370,7 +372,7 @@ function axesTexts(out: SceneOutput, fig: Figure, view: View): void {
     if (fig.xlabel) out.texts.push(textSpec(view.xmax - 0.02 * w, view.ymin + 0.02 * h, fig.xlabel, 'black', 'normal', 'above left'));
     if (fig.ylabel) out.texts.push(textSpec(view.xmin + 0.02 * w, view.ymax - 0.02 * h, fig.ylabel, 'black', 'normal', 'below right'));
     if (!fig.legend) return;
-    const entries = fig.draws.filter((d) => 'label' in d && d.label);
+    const entries = withFirst(fig.draws, first).filter((d) => 'label' in d && d.label);
     entries.slice(0, 12).forEach((d, i) => {
         const y = view.ymax - (fig.title ? 0.14 : 0.07) * h - i * 0.075 * h;
         const x0 = view.xmax - 0.3 * w;
@@ -438,7 +440,8 @@ function sum(a: Float64Array): number {
 // ------------------------------------------------------------ the live canvas
 
 /** frame(t)'s draws as shapes of the live canvas (lines, rings, dots, fills, texts). */
-export function liveShapes(draws: readonly Draw[], view: View): LiveShapes {
+export function liveShapes(raw: readonly Draw[], view: View, first: string): LiveShapes {
+    const draws = withFirst(raw, first);
     const out = emptyShapes();
     for (const d of draws) {
         switch (d.k) {
@@ -490,4 +493,23 @@ export function liveShapes(draws: readonly Draw[], view: View): LiveShapes {
         }
     }
     return out;
+}
+
+/** The draws with the first colour of the cycle (C0) as the block's colour. */
+function withFirst(draws: readonly Draw[], first: string): Draw[] {
+    const c = (x: string) => (x === FIRST ? first : x);
+    return draws.map((d) => {
+        switch (d.k) {
+            case 'dots':
+                return d.colors.includes(FIRST) ? { ...d, colors: d.colors.map(c) } : d;
+            case 'fill':
+                return d.color === FIRST || d.edge === FIRST ? { ...d, color: c(d.color), edge: d.edge === null ? null : c(d.edge) } : d;
+            case 'circle':
+                return d.color === FIRST || d.fill === FIRST ? { ...d, color: c(d.color), fill: d.fill === null ? null : c(d.fill) } : d;
+            case 'image':
+                return d;
+            default:
+                return d.color === FIRST ? { ...d, color: first } : d;
+        }
+    });
 }

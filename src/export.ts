@@ -35,6 +35,7 @@ import { boxFactors } from './box3d';
 import { TickAxis, axisTicks, tickOptions } from './ticks';
 import { stillFrame } from './motion6/clock'; // 6.0 C
 import { pixelsTikz } from './iterate/export'; // 6.0 E
+import { pythonComments } from './python/text'; // 6.0 P
 
 // ------------------------------------------------------------------ tuning
 
@@ -624,7 +625,7 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
     if (anyFill || pictures.length) opts.push('set layers'); // pictures: 6.0 E
     if (legends) opts.push(`legend pos=north east, legend cell align=left, legend style={font=${LEGEND_FONT}}`);
 
-    const picture = ['\\begin{tikzpicture}', ...colors.lines(), ...layers.boxes, ...axisBlock(opts), ...pictures, ...layers.render(view), '\\end{axis}', '\\end{tikzpicture}']; // pictures: 6.0 E
+    const picture = ['\\begin{tikzpicture}', ...pythonComments(config.tools) /* 6.0 P */, ...colors.lines(), ...layers.boxes, ...axisBlock(opts), ...pictures, ...layers.render(view), '\\end{axis}', '\\end{tikzpicture}']; // pictures: 6.0 E
     return wrap(settings.isStandalone(), libs, picture);
 }
 

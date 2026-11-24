@@ -50,8 +50,11 @@ export function newFigure(): Figure {
 
 // ------------------------------------------------------------ colours
 
+/** The first colour of the cycle (C0): the colour of the block (blue unless `python in red:`), set by the scene. */
+export const FIRST = '@C0';
+
 /** matplotlib's colour cycle as the plugin's colours (C8 olive and C9 cyan as near ones). */
-const CYCLE = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'gray', '#bcbd22', 'teal'];
+const CYCLE = [FIRST, 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'gray', '#bcbd22', 'teal'];
 
 const NAMES: Record<string, string> = {
     b: 'blue',

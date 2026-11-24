@@ -14,6 +14,7 @@ import { ChartData, Guide, GuideCategory, GuideLevel } from './types';
 import { START_GUIDES } from './start';
 import { LANGUAGE_GUIDES } from './language';
 import { SHOWCASE_GUIDES } from './showcase';
+import { PYTHON_GUIDES } from './python'; // 6.0 P
 import { FUNCTIONS_GUIDES } from './functions';
 import { CALCULUS_GUIDES } from './calculus';
 import { OPTIMISATION_GUIDES } from './optimisation';
@@ -118,6 +119,7 @@ export const GUIDES: Guide[] = [
     ...INTERACT_GUIDES,
     ...LINEAR_GUIDES,
     ...DYNAMICS_GUIDES,
+    ...PYTHON_GUIDES, // 6.0 P
 ]
     .map((guide, index) => ({ guide, index }))
     .sort((a, b) => categoryRank(a.guide.category) - categoryRank(b.guide.category) || a.index - b.index)
