@@ -61,6 +61,13 @@ export const PIECES: readonly Piece[] = [
     // Beyond functions (5.0): data from the table above the chart or typed in it.
     piece('use-the-table-above', 'use the table above', 'lines', 'beyond.words.what.useTheTableAbove'),
     piece('data', 'data', 'lines', 'beyond.words.what.data'),
+    // 6.0 F1: the lines of version 6 (parts A to E).
+    piece('let', 'let', 'lines', 'values.words.what.let'),
+    piece('then', 'then', 'lines', 'motion6.words.what.then'),
+    piece('frames', 'frames', 'lines', 'motion6.words.what.frames'),
+    piece('transform-the-plane-by', 'transform the plane by', 'lines', 'linear.words.what.transformThePlaneBy'),
+    piece('transform-space-by', 'transform space by', 'lines', 'linear.words.what.transformSpaceBy'),
+    piece('colour-the-plane-by', 'colour the plane by', 'lines', 'iterate.words.what.colourThePlaneBy'),
 
     piece('from', 'from', 'phrases', 'panels.words.what.from'),
     piece('to', 'to', 'phrases', 'panels.words.what.to'),
@@ -103,6 +110,31 @@ export const PIECES: readonly Piece[] = [
     piece('parts', 'parts', 'phrases', 'beyond.words.what.parts'),
     piece('the-slope-field-of', 'the slope field of', 'phrases', 'beyond.words.what.theSlopeFieldOf'),
     piece('the-solution-through', 'the solution through', 'phrases', 'beyond.words.what.theSolutionThrough'),
+    // 6.0 F1: the phrases of version 6 (parts A to E).
+    piece('as-an-arrow', 'as an arrow', 'phrases', 'values.words.what.asAnArrow'),
+    piece('as-arrows', 'as arrows', 'phrases', 'values.words.what.asArrows'),
+    piece('the-points-of', 'the points of', 'phrases', 'values.words.what.thePointsOf'),
+    piece('the-points', 'the points', 'phrases', 'values.words.what.thePoints'),
+    piece('on-the-x-axis', 'on the x-axis', 'phrases', 'notes6.words.what.onTheXAxis'),
+    piece('on-the-y-axis', 'on the y-axis', 'phrases', 'notes6.words.what.onTheYAxis'),
+    piece('the-chord-of', 'the chord of', 'phrases', 'notes6.words.what.theChordOf'),
+    piece('the-vector-field', 'the vector field', 'phrases', 'motion6.words.what.theVectorField'),
+    piece('the-rest-points-of', 'the rest points of', 'phrases', 'motion6.words.what.theRestPointsOf'),
+    piece('the-solution-of', 'the solution of', 'phrases', 'motion6.words.what.theSolutionOf'),
+    piece('through', 'through', 'phrases', 'motion6.words.what.through'),
+    piece('the-grid', 'the grid', 'phrases', 'linear.words.what.theGrid'),
+    piece('the-basis-vectors', 'the basis vectors', 'phrases', 'linear.words.what.theBasisVectors'),
+    piece('the-eigenvectors-of', 'the eigenvectors of', 'phrases', 'linear.words.what.theEigenvectorsOf'),
+    piece('the-image-of', 'the image of', 'phrases', 'linear.words.what.theImageOf'),
+    piece('the-unit-square', 'the unit square', 'phrases', 'linear.words.what.theUnitSquare'),
+    piece('the-unit-cube', 'the unit cube', 'phrases', 'linear.words.what.theUnitCube'),
+    piece('the-span-of', 'the span of', 'phrases', 'linear.words.what.theSpanOf'),
+    piece('the-orbit-of', 'the orbit of', 'phrases', 'iterate.words.what.theOrbitOf'),
+    piece('the-cobweb-of', 'the cobweb of', 'phrases', 'iterate.words.what.theCobwebOf'),
+    piece('the-bifurcation-diagram-of', 'the bifurcation diagram of', 'phrases', 'iterate.words.what.theBifurcationDiagramOf'),
+    piece('newtons-method-for', "Newton's method for", 'phrases', 'iterate.words.what.newtonsMethodFor'),
+    piece('the-circles-of', 'the circles of', 'phrases', 'iterate.words.what.theCirclesOf'),
+    piece('steps', 'steps', 'phrases', 'iterate.words.what.steps'),
 
     piece('in-colour', 'in', 'options', 'panels.words.what.inColour', { beforeColour: true }),
     piece('dashed', 'dashed', 'options', 'panels.words.what.dashed'),
@@ -133,6 +165,15 @@ export const PIECES: readonly Piece[] = [
     piece('mesh', 'mesh', 'options', 'panels.words.what.mesh'),
     // A slider that moves with the sliders of the same name in the note's other charts (5.0).
     piece('connected', 'connected', 'options', 'panels.words.what.connected'),
+    // 6.0 F1: the options of version 6 (parts A to E).
+    piece('tip-to-tail', 'tip to tail', 'options', 'values.words.what.tipToTail'),
+    piece('joined', 'joined', 'options', 'values.words.what.joined'),
+    piece('with-moving-particles', 'with moving particles', 'options', 'motion6.words.what.withMovingParticles'),
+    piece('with-streamlines', 'with streamlines', 'options', 'motion6.words.what.withStreamlines'),
+    piece('coloured-by-length', 'coloured by length', 'options', 'motion6.words.what.colouredByLength'),
+    piece('coloured-by-time', 'coloured by time', 'options', 'motion6.words.what.colouredByTime'),
+    piece('as-a-path', 'as a path', 'options', 'iterate.words.what.asAPath'),
+    piece('with-its-wave', 'with its wave', 'options', 'iterate.words.what.withItsWave'),
 
     piece('red', 'red', 'colours', 'panels.words.what.red'),
     piece('blue', 'blue', 'colours', 'panels.words.what.blue'),
@@ -215,7 +256,7 @@ export function clean(w: Partial<ChartWords>): ChartWords {
         const seen = new Set<string>();
         const kept = list
             .map((s) => (typeof s === 'string' ? s.trim().replace(/\s+/g, ' ') : ''))
-            .filter((s) => s && !seen.has(s.toLowerCase()) && seen.add(s.toLowerCase()) && s.toLowerCase() !== PIECE_BY_ID.get(id)?.builtin);
+            .filter((s) => s && !seen.has(s.toLowerCase()) && seen.add(s.toLowerCase()) && s.toLowerCase() !== PIECE_BY_ID.get(id)?.builtin.toLowerCase());
         if (kept.length) words[id] = kept;
     }
     const bundles = (Array.isArray(w.bundles) ? w.bundles : [])
@@ -230,8 +271,8 @@ export function wordProblem(word: string, id: string | null, w: ChartWords): str
     if (!/^[\p{L}][\p{L}\p{N}' -]*$/u.test(word)) return t('panels.words.problem.letters', { word });
     if (RESERVED.has(lower)) return t('panels.words.problem.reserved', { word });
     const own = id ? PIECE_BY_ID.get(id) : undefined;
-    if (BUILTIN_WORDS.has(lower) && (!own || own.builtin !== lower)) {
-        const other = PIECES.find((p) => p.builtin === lower);
+    if (BUILTIN_WORDS.has(lower) && (!own || own.builtin.toLowerCase() !== lower)) {
+        const other = PIECES.find((p) => p.builtin.toLowerCase() === lower);
         return t('panels.words.problem.builtin', { word, piece: other ? other.builtin : lower });
     }
     for (const [other, list] of Object.entries(w.words)) {
@@ -554,7 +595,7 @@ export function wordsFromText(text: string, write: ChartWords['write'] = 'yours'
             return;
         }
         const m = /^(.+?)\s*=\s*(.+)$/.exec(line);
-        const p = m ? PIECES.find((x) => x.builtin === m[1].trim().toLowerCase() && !x.beforeColour) ?? PIECES.find((x) => x.id === m[1].trim().toLowerCase()) : undefined;
+        const p = m ? PIECES.find((x) => x.builtin.toLowerCase() === m[1].trim().toLowerCase() && !x.beforeColour) ?? PIECES.find((x) => x.id === m[1].trim().toLowerCase()) : undefined;
         if (!m || !p) {
             problems.push(t('panels.words.problem.line', { line: i + 1, text: line }));
             return;

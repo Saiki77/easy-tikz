@@ -91,4 +91,13 @@ export const values: Messages<typeof en> = {
     'values.problem.fromPoint': '始点が {what} です: (1, 1) のような点を書きます',
     'values.problem.recurrenceTakes': '漸化式は z_(n+1) = z_n^2 + c のように書きます',
     'values.problem.dimension': '{text} には {n} 個の数がありますが、このグラフのベクトルは {dim} 個です',
+
+    // ---- 6.0 F1: chart words, what each piece is (Settings, Chart words)
+    'values.words.what.let': '行：値や関数の名前：let v = (2, 1)',
+    'values.words.what.asAnArrow': '矢印で描いたベクトル：draw v as an arrow',
+    'values.words.what.asArrows': '矢印で描いた複数のベクトル：draw v and w as arrows',
+    'values.words.what.thePointsOf': 'リストの点：mark the points of S',
+    'values.words.what.thePoints': '行に書いたリストの点：mark the points [1, 2i]',
+    'values.words.what.tipToTail': '和の矢印を順につなげる：draw v + w tip to tail',
+    'values.words.what.joined': 'リストの点を閉じた経路で結ぶ',
 };

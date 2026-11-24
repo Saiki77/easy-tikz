@@ -108,4 +108,15 @@ export const linear: Messages<typeof en> = {
     'linear.drag.column': '{name} の第 {k} 列',
     'linear.drag.notNumbers': '{name} は数字で書かれていないので、ドラッグでは変えられません。',
     'linear.drag.moved': '{name} を {value} に変更しました',
+
+    // ---- 6.0 F1: chart words, what each piece is (Settings, Chart words)
+    'linear.words.what.transformThePlaneBy': '行：行列や写像で平面を動かす：transform the plane by A',
+    'linear.words.what.transformSpaceBy': '行：行列で空間を動かす（3D）：transform space by B',
+    'linear.words.what.theGrid': '変換で動く格子線：draw the grid',
+    'linear.words.what.theBasisVectors': '基本ベクトル î と ĵ：draw the basis vectors',
+    'linear.words.what.theEigenvectorsOf': '行列の固有ベクトル：draw the eigenvectors of A',
+    'linear.words.what.theImageOf': '上にある変換で動かした単位正方形',
+    'linear.words.what.theUnitSquare': '単位正方形：shade the unit square',
+    'linear.words.what.theUnitCube': '単位立方体（3D）：shade the unit cube',
+    'linear.words.what.theSpanOf': 'ベクトルの張る空間：draw the span of v and w',
 };

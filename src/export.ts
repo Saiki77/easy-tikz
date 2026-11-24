@@ -664,7 +664,11 @@ function addFunctions(layers: Layers, config: RendererConfig, ctx: MathContext, 
     for (const info of ctx.functions()) {
         const f = funcs[info.index];
         if (!f || info.hidden || info.error || info.domainError || !String(f.expression ?? '').trim()) continue;
-        if (moved.has(info.index)) continue; // 6.0 D
+        if (moved.has(info.index)) {
+            // 6.0 D: a transform draws it. 6.0 F1: its legend entry stays, with a legend image of its line.
+            if (f.showLegend && movedLegend(layers, info, f, colors, ctx)) legends = true;
+            continue;
+        }
         if (info.kind === 'parametric' && !String(f.expressionY ?? '').trim()) continue;
         let body: string;
         let pieces: Array<[string, string, number]>;
@@ -713,6 +717,21 @@ function addFunctions(layers: Layers, config: RendererConfig, ctx: MathContext, 
         });
     }
     return legends;
+}
+
+/** 6.0 F1: the legend entry of a function a transform draws: a legend image of its line (no plot of its own). */
+function movedLegend(layers: Layers, info: FunctionInfo, f: RendererConfig['functions'][number], colors: ColorSet, ctx: MathContext): boolean {
+    let legend: string;
+    try {
+        legend = legendText(info, f.expression, f.expressionY, f.legendLabel, ctx);
+    } catch {
+        return false;
+    }
+    if (!legend) return false;
+    const style = [colors.use(f.color), lineWidth(f.thickness)];
+    if (f.dashed) style.push('dashed');
+    layers.functions.push(comment(info.name), `\\addlegendimage{${style.join(', ')}}`, `\\addlegendentry{${legendEntry(legend, layers)}}`);
+    return true;
 }
 
 /**

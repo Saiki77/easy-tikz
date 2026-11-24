@@ -42,6 +42,7 @@ import { playerFor } from './src/motion6/host';
 import { atStep } from './src/motion6/steps';
 // 6.0 B: Ask the curve under a block in Live Preview.
 import { AskController, svgBoxOf } from './src/notes6/askHost';
+import { LongPress } from './src/notes6/press'; // 6.0 F1
 import { writeAnswerIntoBlock } from './src/notes6/liveAsk';
 import type { DrawnScene, RenderLayout } from './src/renderer';
 
@@ -1323,17 +1324,28 @@ class InlineChart {
             focusEl: () => this.box,
         });
         let down: { id: number; x: number; y: number; touch: boolean } | null = null;
+        // 6.0 F1: a long press of a finger asks too, while it rests.
+        const press = new LongPress((x, y) => !!this.ask?.at(x, y, true));
         box.addEventListener('pointerdown', (e) => {
             if (e.button === 0) down = { id: e.pointerId, x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch' };
+            press.down(e);
+        });
+        box.addEventListener('pointermove', (e) => press.move(e));
+        box.addEventListener('contextmenu', (e) => {
+            if (press.busy()) e.preventDefault();
         });
         box.addEventListener('pointerup', (e) => {
             const d = down;
             down = null;
+            if (press.end(e)) return;
             // A click that did not move: a drag or a scroll is no question.
             if (!d || d.id !== e.pointerId || Math.hypot(e.clientX - d.x, e.clientY - d.y) > (d.touch ? 10 : 5)) return;
             this.ask?.at(e.clientX, e.clientY, d.touch);
         });
-        box.addEventListener('pointercancel', () => (down = null));
+        box.addEventListener('pointercancel', (e) => {
+            down = null;
+            press.end(e);
+        });
         box.addEventListener('keydown', (e: KeyboardEvent) => {
             if (e.target !== box) return;
             if (e.key === 'Enter' || e.key === ' ' || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {

@@ -88,4 +88,13 @@ export const values = {
     'values.problem.fromPoint': 'The start is {what}: write a point such as (1, 1)',
     'values.problem.recurrenceTakes': 'Write a recurrence as z_(n+1) = z_n^2 + c',
     'values.problem.dimension': '{text} has {n} numbers, a vector of this chart {dim}',
+
+    // ---- 6.0 F1: chart words, what each piece is (Settings, Chart words)
+    'values.words.what.let': 'Line: a name for a value or a function: let v = (2, 1)',
+    'values.words.what.asAnArrow': 'A vector drawn as an arrow: draw v as an arrow',
+    'values.words.what.asArrows': 'Vectors drawn as arrows: draw v and w as arrows',
+    'values.words.what.thePointsOf': 'The points of a list: mark the points of S',
+    'values.words.what.thePoints': 'The points of a list written in the line: mark the points [1, 2i]',
+    'values.words.what.tipToTail': 'The arrows of a sum end to end: draw v + w tip to tail',
+    'values.words.what.joined': 'The points of a list joined into a closed path',
 };

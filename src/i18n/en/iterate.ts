@@ -89,6 +89,15 @@ export const iterate = {
     'iterate.ask.group': 'Iterate',
     'iterate.ask.newton': "Newton's method from here",
     'iterate.ask.cobweb': 'The cobweb from here',
+    // 6.0 F1: Ask the curve on an orbit and on a coloured plane
+    'iterate.ask.title.orbit': 'Orbit {name}',
+    'iterate.ask.title.plane': 'Coloured plane {name}',
+    'iterate.ask.orbitGroup': 'Orbit {name}',
+    'iterate.ask.moreSteps': 'More steps ({steps})',
+    'iterate.ask.fewerSteps': 'Fewer steps ({steps})',
+    'iterate.ask.labelPoints': 'Label its points',
+    'iterate.ask.planeGroup': 'Coloured plane {name}',
+    'iterate.ask.orbitHere': 'The orbit of this point',
 
     // ---- hover cards
     'iterate.hover.recurrence': 'Recurrence',
@@ -103,4 +112,15 @@ export const iterate = {
     'iterate.export.saved': 'Copied. The picture of the plane is saved as {files}: put it beside the .tex file.',
     'iterate.export.failed': 'Copied, but the picture of the plane could not be saved: {error}',
     'iterate.export.needs': 'the picture {file} beside this .tex file (Copy LaTeX in the editor saves it)',
+
+    // ---- 6.0 F1: chart words, what each piece is (Settings, Chart words)
+    'iterate.words.what.colourThePlaneBy': 'Line: colour every point of the plane: colour the plane by f(z) = z^2',
+    'iterate.words.what.theOrbitOf': 'The orbit of a recurrence: draw the orbit of z_(n+1) = z_n^2 + c',
+    'iterate.words.what.theCobwebOf': 'A cobweb: draw the cobweb of x_(n+1) = f(x_n) from 0.2',
+    'iterate.words.what.theBifurcationDiagramOf': 'A bifurcation diagram: draw the bifurcation diagram of x_(n+1) = r x_n (1 - x_n) for r from 2.5 to 4',
+    'iterate.words.what.newtonsMethodFor': "Newton's method: draw Newton's method for f from 2.5",
+    'iterate.words.what.theCirclesOf': 'Turning circles of a sum: draw the circles of ...',
+    'iterate.words.what.steps': 'After the number of steps: 40 steps',
+    'iterate.words.what.asAPath': 'An orbit as a line without dots',
+    'iterate.words.what.withItsWave': 'The wave that turning circles draw',
 };
