@@ -196,8 +196,11 @@ python:
     assert.equal(item.fills.filter((f) => f.opacity === 0.3).length, 1);
     const texts = item.texts.map((t) => t.text);
     assert.ok(texts.includes('top'));
-    assert.ok(texts.includes('Waves'));
     assert.ok(texts.includes('sin'));
+    // The chart takes the script's title (it has none of its own).
+    const settings = settingsOf(text);
+    assert.equal(settings.toRendererConfig(settings.createMathContext()).title, 'Waves');
+    assert.ok(!texts.includes('Waves'));
 });
 
 test('a chart without a range shows what the script draws (or its xlim and ylim)', () => {
@@ -282,4 +285,33 @@ test('charts without a python block print as before', () => {
         const r = parseChartText(text);
         assert.equal(printWordsText(r.data), text);
     }
+});
+
+test('the colour of a block is the first colour of its cycle; comments between its lines stay', () => {
+    const text = 'show x from 0 to 3 and y from 0 to 3\npython in red:\n    import matplotlib.pyplot as plt\n% a chart comment\n    plt.plot([0, 1], [0, 1])\n    plt.plot([0, 1], [1, 2])';
+    const r = parseChartText(text);
+    assert.deepEqual(r.problems, []);
+    const tool = (r.data.tools as Array<Record<string, unknown>>)[0];
+    assert.equal(tool.color, 'red');
+    assert.equal(tool.code, 'import matplotlib.pyplot as plt\nplt.plot([0, 1], [0, 1])\nplt.plot([0, 1], [1, 2])');
+    const scene = sceneOf(text);
+    assert.deepEqual(scene.items[0].strokes.map((s) => s.color), ['red', 'orange']);
+    assert.equal(printChartText(r.data), 'show x from 0 to 3 and y from 0 to 3\npython in red:\n    import matplotlib.pyplot as plt\n    plt.plot([0, 1], [0, 1])\n    plt.plot([0, 1], [1, 2])');
+    // Recolouring writes the head line only; the comment stays.
+    const data = JSON.parse(JSON.stringify(r.data));
+    (data.tools as Array<Record<string, unknown>>)[0].color = 'green';
+    assert.equal(writeChartText(text, data), text.replace('python in red:', 'python in green:'));
+    const full = wordsToFull(text, { builtin: true });
+    assert.match(full, /\\begin\{python\}\[red\]/);
+    assert.equal(JSON.stringify(parseChartText(full).data.tools), JSON.stringify(r.data.tools));
+});
+
+test('renaming a slider renames it in the script', async () => {
+    const { renameInCode } = await import('../src/python/tools');
+    assert.equal(renameInCode('k = a * 2  # a\nb = "a"\nc = f(a=a) + x.a', 'a', 'amp'), 'k = amp * 2  # a\nb = "a"\nc = f(a=amp) + x.a');
+});
+
+test('a frame(t) that fails names its line', () => {
+    const scene = sceneOf('show x from 0 to 1 and y from 0 to 1\npython:\n    def frame(t):\n        return 1 / 0');
+    assert.ok(scene.issues.some((i) => i.message === 'Line 2 of the script, in frame(t): division by zero'), JSON.stringify(scene.issues));
 });

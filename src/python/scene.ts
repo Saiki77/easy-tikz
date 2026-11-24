@@ -363,27 +363,72 @@ function drawInto(out: SceneOutput, raw: readonly Draw[], view: View, fit: Pt[] 
     }
 }
 
-/** The figure's title, axis labels and legend, as texts in the plot (the chart's own title and labels are its lines). */
+/** A script's title or axis name the chart can take as its own (a template has no braces of its own). */
+export function chartTakes(text: string | null): boolean {
+    return !!text && !/[{}]/.test(text);
+}
+
+/**
+ * The script's title, xlabel and ylabel: the chart takes them where it has
+ * none (settings.toRendererConfig); one it cannot take (braces in it) is a
+ * text in the plot. The legend is a key in the corner where it covers the
+ * least of what is drawn (matplotlib's 'best').
+ */
 function axesTexts(out: SceneOutput, fig: Figure, view: View, first: string): void {
     const w = view.xmax - view.xmin;
     const h = view.ymax - view.ymin;
     const cx = view.xmin + w / 2;
-    if (fig.title) out.texts.push(textSpec(cx, view.ymax - 0.02 * h, fig.title, 'black', 'large', 'below'));
-    if (fig.xlabel) out.texts.push(textSpec(view.xmax - 0.02 * w, view.ymin + 0.02 * h, fig.xlabel, 'black', 'normal', 'above left'));
-    if (fig.ylabel) out.texts.push(textSpec(view.xmin + 0.02 * w, view.ymax - 0.02 * h, fig.ylabel, 'black', 'normal', 'below right'));
+    if (fig.title && !chartTakes(fig.title)) out.texts.push(textSpec(cx, view.ymax - 0.02 * h, fig.title, 'black', 'large', 'below'));
+    if (fig.xlabel && !chartTakes(fig.xlabel)) out.texts.push(textSpec(view.xmax - 0.02 * w, view.ymin + 0.02 * h, fig.xlabel, 'black', 'normal', 'above left'));
+    if (fig.ylabel && !chartTakes(fig.ylabel)) out.texts.push(textSpec(view.xmin + 0.02 * w, view.ymax - 0.02 * h, fig.ylabel, 'black', 'normal', 'below right'));
     if (!fig.legend) return;
-    const entries = withFirst(fig.draws, first).filter((d) => 'label' in d && d.label);
-    entries.slice(0, 12).forEach((d, i) => {
-        const y = view.ymax - (fig.title ? 0.14 : 0.07) * h - i * 0.075 * h;
-        const x0 = view.xmax - 0.3 * w;
+    const draws = withFirst(fig.draws, first);
+    const entries = draws.filter((d): d is Extract<Draw, { label: string | null }> => 'label' in d && !!d.label).slice(0, 12);
+    if (!entries.length) return;
+    const row = 0.075 * h;
+    const boxW = 0.34 * w;
+    const boxH = entries.length * row + 0.03 * h;
+    const pts: Array<[number, number]> = [];
+    for (const d of draws) {
+        if (d.k === 'line') pts.push(...d.pts);
+        else if (d.k === 'dots') pts.push(...d.pts);
+        else if (d.k === 'fill') pts.push(...d.ring);
+    }
+    const corners = [
+        { x0: view.xmax - boxW, y1: view.ymax },
+        { x0: view.xmin + 0.02 * w, y1: view.ymax },
+        { x0: view.xmax - boxW, y1: view.ymin + boxH },
+        { x0: view.xmin + 0.02 * w, y1: view.ymin + boxH },
+    ];
+    let best = corners[0];
+    let fewest = Infinity;
+    for (const c of corners) {
+        let n = 0;
+        for (const [x, y] of pts) if (x >= c.x0 && x <= c.x0 + boxW && y <= c.y1 && y >= c.y1 - boxH) n++;
+        if (n < fewest) {
+            fewest = n;
+            best = c;
+        }
+    }
+    entries.forEach((d, i) => {
+        const y = best.y1 - 0.05 * h - i * row;
+        const x0 = best.x0 + 0.02 * w;
         const x1 = x0 + 0.06 * w;
-        const color = d.k === 'dots' ? (d.colors[0] ?? 'blue') : d.k === 'line' || d.k === 'fill' || d.k === 'hline' || d.k === 'vline' ? d.color : 'black';
-        if (d.k === 'fill') out.fills.push({ rings: [[{ x: x0, y: y - 0.02 * h }, { x: x1, y: y - 0.02 * h }, { x: x1, y: y + 0.02 * h }, { x: x0, y: y + 0.02 * h }]], color, opacity: d.opacity, pattern: 'solid' });
+        const color = d.k === 'dots' ? (d.colors[0] ?? 'blue') : d.color;
+        if (d.k === 'fill') out.fills.push({ rings: [[{ x: x0, y: y - 0.02 * h }, { x: x1, y: y - 0.02 * h }, { x: x1, y: y + 0.02 * h }, { x: x0, y: y + 0.02 * h }]], color, opacity: Math.max(0.3, d.opacity), pattern: 'solid' });
         else if (d.k === 'dots') out.markers.push({ x: (x0 + x1) / 2, y, color, size: 'small' });
-        else out.strokes.push({ lines: [[{ x: x0, y }, { x: x1, y }]], color, width: 'line' in d ? 'thick' : d.k === 'line' ? d.width : 'thick', dashed: d.k === 'line' || d.k === 'hline' || d.k === 'vline' ? d.dashed : false, exact: true });
-        const label = 'label' in d && d.label ? d.label : '';
-        out.texts.push({ ...textSpec(x1 + 0.01 * w, y, label, 'black', 'small', 'right'), halo: true });
+        else out.strokes.push({ lines: [[{ x: x0, y }, { x: x1, y }]], color, width: d.width, dashed: d.dashed, exact: true });
+        out.texts.push({ ...textSpec(x1 + 0.01 * w, y, d.label ?? '', 'black', 'small', 'right'), halo: true });
     });
+}
+
+/** The title and axis names a chart's scripts set (null when it has no python block). */
+export function pythonAxes(tools: unknown, math: MathContext): { title: string | null; xlabel: string | null; ylabel: string | null } | null {
+    const program = chartProgram(tools);
+    if (!program) return null;
+    const env = math.envFor('value');
+    const fig = program.run(inputsOf(program, (name) => (NAME_RE.test(name) ? env.scalar(name)?.read() : undefined))).figure;
+    return { title: chartTakes(fig.title) ? fig.title : null, xlabel: chartTakes(fig.xlabel) ? fig.xlabel : null, ylabel: chartTakes(fig.ylabel) ? fig.ylabel : null };
 }
 
 /** imshow as a pixel layer over its extent (nearest cell; row 0 at the top unless origin='lower'). */

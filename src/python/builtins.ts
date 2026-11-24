@@ -25,7 +25,6 @@ import {
     PySlice,
     PyTuple,
     PyValue,
-    isNum,
     iterate,
     length,
     repr,
@@ -128,7 +127,7 @@ function sumOf(args: PyValue[], kw: Kwargs | null): PyValue {
     // Numbers add without objects.
     if (typeof total === 'number' && items.every((x) => typeof x === 'number')) {
         let s = total;
-        for (const x of items as number[]) s += x;
+        for (const x of items) s += Number(x);
         return s;
     }
     for (const x of items) total = binop('+', total, x);

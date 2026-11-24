@@ -130,8 +130,8 @@ export class PyExceptionType {
     ) {}
 
     isA(other: PyExceptionType): boolean {
-        for (let t: PyExceptionType | null = this; t; t = t.parent) if (t === other) return true;
-        return false;
+        if (other === this) return true;
+        return this.parent ? this.parent.isA(other) : false;
     }
 }
 
@@ -377,7 +377,7 @@ function keyText(k: unknown): string {
     if (typeof k === 'string') return k.startsWith('\u0000') ? k : `s${k.length}:${k}`;
     if (typeof k === 'number') return `n${k}`;
     if (k === null) return 'None';
-    return `o${String(k)}`;
+    return `o${typeof k === 'boolean' ? String(k) : 'object'}`;
 }
 
 // ------------------------------------------------------------ iteration

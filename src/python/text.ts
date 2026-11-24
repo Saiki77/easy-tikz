@@ -159,8 +159,8 @@ export function pythonComments(tools: unknown): string[] {
     const out: string[] = [];
     for (const t of tools) {
         if (!t || typeof t !== 'object' || Reflect.get(t, 'type') !== 'python') continue;
-        const code = Reflect.get(t, 'code');
-        const name = Reflect.get(t, 'name');
+        const code: unknown = Reflect.get(t, 'code');
+        const name: unknown = Reflect.get(t, 'name');
         if (typeof code !== 'string' || !code.trim()) continue;
         out.push(`% Python ${typeof name === 'string' ? name : ''} (Easy TikZ ran it; its drawing is the coordinates below):`.replace('  ', ' '));
         for (const line of normalizeCode(code).split('\n')) out.push(line ? `%   ${line}` : '%');

@@ -653,14 +653,18 @@ class Parser {
             case 'str': {
                 const parts: FPart[] = [];
                 let plain = true;
+                let text = '';
                 while (this.tok.t === 'str') {
                     const s = this.toks[this.i++];
                     if (s.f) {
                         plain = false;
                         parts.push(...this.fstring(s));
-                    } else parts.push(s.v);
+                    } else {
+                        parts.push(s.v);
+                        text += s.v;
+                    }
                 }
-                if (plain) return { k: 'str', v: parts.join(''), ...at };
+                if (plain) return { k: 'str', v: text, ...at };
                 return { k: 'fstr', parts, ...at };
             }
             case 'name': {

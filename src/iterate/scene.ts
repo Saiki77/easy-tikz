@@ -689,14 +689,19 @@ function circlesAt(c: Circles, tau: number, view: View): CircleParts {
 /** The parts as live shapes: faint circles, the arms in the tool's colour, the wave in red with a dashed line to the tip. */
 function circleShapes(p: CircleParts, c: Circles, tau = 0): LiveShapes {
     const out = emptyShapes();
-    // 6.0 P: `with its path`: the path the tip has drawn this turn, in the colour of the circles.
-    if (c.path && c.trace.length > 1) {
+    // 6.0 P: `with its path`: the last turn of the tip behind it, in the colour of the circles, older parts fainter (nothing jumps when a turn ends).
+    if (c.path && c.trace.length > 2) {
         const turn = 2 * Math.PI;
+        const n = c.trace.length - 1;
         const done = ((tau % turn) + turn) % turn;
-        const k = Math.round((done / turn) * (c.trace.length - 1));
-        const pts = c.trace.slice(0, k + 1);
-        pts.push(p.tip);
-        if (pts.length > 1) out.lines.push({ pts, color: c.color, width: c.width });
+        const k = Math.floor((done / turn) * n);
+        const tail = [...c.trace.slice(k + 1, n), ...c.trace.slice(0, k + 1), p.tip];
+        const pieces = 16;
+        const per = Math.ceil(tail.length / pieces);
+        for (let j = 0; j < pieces; j++) {
+            const pts = tail.slice(j * per, Math.min(tail.length, (j + 1) * per + 1));
+            if (pts.length > 1) out.lines.push({ pts, color: c.color, width: c.width, opacity: Math.round(((j + 1) / pieces) * 100) / 100 });
+        }
     }
     for (const r of p.rings) out.rings.push({ ...r, color: 'gray', opacity: 0.4 });
     if (p.arms.length > 1) out.lines.push({ pts: p.arms, color: c.color, width: 'thin' });

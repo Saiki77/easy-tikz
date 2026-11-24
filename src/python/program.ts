@@ -230,7 +230,7 @@ export function fromChartValue(v: Value): PyValue {
         case 'mat':
             return new NDArray([v.rows, v.cols], Float64Array.from(v.a), 'float');
         case 'list':
-            if (v.items.every((x) => typeof x === 'number')) return fromNumbers(v.items as number[]);
+            if (v.items.every((x) => typeof x === 'number')) return fromNumbers(v.items.map((x) => (typeof x === 'number' ? x : NaN)));
             if (v.items.every((x) => typeof x === 'number' || x.kind === 'complex')) {
                 const re = Float64Array.from(v.items, (x) => (typeof x === 'number' ? x : x.kind === 'complex' ? x.re : NaN));
                 const im = Float64Array.from(v.items, (x) => (typeof x !== 'number' && x.kind === 'complex' ? x.im : 0));
@@ -290,7 +290,7 @@ export class Program {
         const holder = { fig: figure };
         // plt draws into holder.fig: the run's figure, or a frame's.
         const proxy: Figure = new Proxy(figure, {
-            get: (_t, p) => Reflect.get(holder.fig, p),
+            get: (_t, p): unknown => Reflect.get(holder.fig, p),
             set: (_t, p, v) => Reflect.set(holder.fig, p, v),
         });
         const { plt, matplotlib } = pyplotModule(proxy, () => block);

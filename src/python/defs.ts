@@ -38,7 +38,7 @@ export function pythonDefinitions(tools: unknown): ValueDefinition[] {
         const name = d.name;
         const native: NativeValue = {
             key: program.key,
-            value(read): Value {
+            value: (read): Value => {
                 const r = program.run(inputsOf(program, read));
                 const v = r.globals.get(name);
                 if (v === undefined || v instanceof PyFunction) return NaN;

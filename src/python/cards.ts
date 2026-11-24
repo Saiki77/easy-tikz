@@ -160,7 +160,9 @@ class PythonCard extends ToolCard<PythonTool> {
         }
         const env = this.host.math().envFor('value');
         const result = program.run(inputsOf(program, (name) => (NAME_RE.test(name) ? env.scalar(name)?.read() : undefined)));
-        const names = program.defined.map((d) => (d.params ? `${d.name}(${d.params.join(', ')})` : d.name)).filter((n) => !n.startsWith('frame('));
+        // Only the names the chart gets (x, y, t and the sliders' names stay the chart's).
+        const table = this.host.math().valueTable();
+        const names = program.defined.filter((d) => table.has(d.name)).map((d) => (d.params ? `${d.name}(${d.params.join(', ')})` : d.name));
         const parts = [`${t('python.card.names')}: ${names.length ? squash(names.join(', '), 80) : t('python.card.noNames')}`];
         if (program.reads.length) parts.push(`${t('python.card.reads')}: ${program.reads.join(', ')}`);
         parts.push(t('python.card.ran', { ms: result.ms }));

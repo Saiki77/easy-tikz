@@ -7,7 +7,7 @@
  * Obsidian.
  */
 import { PyError, indexError, typeError, valueError } from './errors';
-import { DType, Kwargs, MAX_ITEMS, NDArray, PyBuiltin, PyComplex, PyRange, PySlice, PyTuple, PyValue, floatRepr, hooks, isNum, iterate, typeName } from './values';
+import { DType, Kwargs, MAX_ITEMS, NDArray, PyBuiltin, PyComplex, PyRange, PySlice, PyTuple, PyValue, floatRepr, hooks, isNum, iterate, repr, typeName } from './values';
 
 // ------------------------------------------------------------ making arrays
 
@@ -519,7 +519,7 @@ export function axisArg(a: NDArray, v: PyValue | undefined): number | null {
     if (v === undefined || v === null) return null;
     let ax = intOf(v);
     if (ax < 0) ax += a.ndim;
-    if (ax < 0 || ax >= Math.max(1, a.ndim)) throw new PyError('AxisError', 'python.numpy.axis', { axis: String(v), ndim: a.ndim });
+    if (ax < 0 || ax >= Math.max(1, a.ndim)) throw new PyError('AxisError', 'python.numpy.axis', { axis: repr(v), ndim: a.ndim });
     return ax;
 }
 
@@ -661,7 +661,7 @@ function selection(a: NDArray, index: PyValue): { sels: AxisSel[]; newAxes: numb
         } else {
             let k = intOf(it);
             if (k < 0) k += n;
-            if (k < 0 || k >= n) throw indexError('python.index.axisRange', { index: String(it), axis, n });
+            if (k < 0 || k >= n) throw indexError('python.index.axisRange', { index: repr(it), axis, n });
             sels.push({ idx: Int32Array.of(k), keep: false, fancy: false });
         }
         axis++;

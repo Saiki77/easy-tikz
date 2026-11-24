@@ -218,6 +218,17 @@ plt.legend()
     console.log(`    speed: heart FFT worst ${tHeart.toFixed(2)} ms, 200-point plot (5 curves) worst ${tPlot.toFixed(2)} ms`);
     assert.ok(tHeart < 30, `heart ${tHeart} ms`);
     assert.ok(tPlot < 30, `plot ${tPlot} ms`);
+    // frame(t): one call per frame of the clock (three 300-point curves).
+    const wave = new Program(['import numpy as np\nimport matplotlib.pyplot as plt\nx = np.linspace(0, 4 * np.pi, 300)\ndef frame(t):\n    a = np.sin(x - 2 * t)\n    b = np.sin(1.2 * x + t)\n    plt.plot(x, a, color="C0")\n    plt.plot(x, b, color="C3")\n    plt.plot(x, a + b, color="C4")']).run({});
+    let tFrame = 0;
+    for (let i = 0; i < 60; i++) {
+        const t0 = performance.now();
+        const f = wave.frameAt(i / 60);
+        tFrame = Math.max(tFrame, performance.now() - t0);
+        assert.equal(f.figure.draws.length, 3);
+    }
+    console.log(`    speed: frame(t) of three 300-point waves worst ${tFrame.toFixed(2)} ms`);
+    assert.ok(tFrame < 16, `frame ${tFrame} ms`);
     // The cache: the same inputs do not run again.
     const p = new Program([plot]);
     const a = p.run({ a: 1 });

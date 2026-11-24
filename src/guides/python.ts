@@ -79,7 +79,7 @@ const PYTHON_CHART: Guide = {
 
 // ------------------------------------------------------------------ a heart drawn by circles
 
-const HT_VIEW = ['size 12 x 9', 'show x from -20 to 20 and y from -15 to 15', 'equal scale'];
+const HT_VIEW = ['size 12 x 9', 'show x from -22 to 22 and y from -19 to 14', 'equal scale'];
 const htCount = (n: number) => `slider n from 1 to 120, starting at ${n}, in steps of 1`;
 const HT_SAMPLE = py(
     'import numpy as np',

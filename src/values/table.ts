@@ -30,9 +30,9 @@ export interface NativeValue {
     /** The script it comes from (part of a context's structure key). */
     key: string;
     /** The value now; `read` gives a chart name's number, or undefined. */
-    value(read: (name: string) => number | undefined): Value;
+    value: (read: (name: string) => number | undefined) => Value;
     /** A function of the script: its value for the arguments. */
-    call?(args: Value[], read: (name: string) => number | undefined): Value;
+    call?: (args: Value[], read: (name: string) => number | undefined) => Value;
 }
 
 /** What the table needs of its MathContext. */
@@ -94,7 +94,9 @@ export class ValueTable implements Definitions {
                 params: Array.isArray(raw.params) ? raw.params.filter((p: unknown): p is string => typeof p === 'string') : [],
                 expression: typeof raw.expression === 'string' ? raw.expression : '',
             };
-            if (raw.native) def.native = raw.native; // 6.0 P
+            // 6.0 P
+            const native: unknown = Reflect.get(raw, 'native');
+            if (native && typeof native === 'object' && typeof Reflect.get(native, 'value') === 'function') def.native = native as NativeValue;
             const rec: Rec = { def, state: 0, ast: null, part: null, version: -1, cached: NaN, instances: new Map(), building: new Set() };
             this.order.push(rec);
             if (!NAME_RE.test(def.name)) {
