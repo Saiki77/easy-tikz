@@ -42,10 +42,11 @@ function tex(n: VNode, isVector: (name: string) => boolean): Tex {
             if (n.op === '/') return { s: `\\frac{${l.s}}{${r.s}}`, p: P_ATOM };
             return { s: `${paren(l, P_ATOM)}^{${r.s}}`, p: P_ATOM };
         }
+        // Kernel LaTeX (the export has no amsmath): (2, 1) and an array in brackets.
         case 'vec':
-            return { s: `\\begin{pmatrix} ${n.items.map((it) => tex(it, isVector).s).join(' \\\\ ')} \\end{pmatrix}`, p: P_ATOM };
+            return { s: `\\left(${n.items.map((it) => tex(it, isVector).s).join(', ')}\\right)`, p: P_ATOM };
         case 'mat':
-            return { s: `\\begin{pmatrix} ${n.rows.map((row) => row.map((it) => tex(it, isVector).s).join(' & ')).join(' \\\\ ')} \\end{pmatrix}`, p: P_ATOM };
+            return { s: `\\left(\\begin{array}{${'c'.repeat(n.rows[0].length)}} ${n.rows.map((row) => row.map((it) => tex(it, isVector).s).join(' & ')).join(' \\\\ ')} \\end{array}\\right)`, p: P_ATOM };
         case 'call':
             return { s: `${texName(n.name)}\\left(${n.args.map((a) => tex(a, isVector).s).join(', ')}\\right)`, p: P_ATOM };
         default:

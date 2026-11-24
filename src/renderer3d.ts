@@ -1128,7 +1128,8 @@ export class SVG3DRenderer {
             this.markerMarks.push({
                 sx: q.sx,
                 sy: q.sy,
-                r: MARKER_RADIUS[p.size] || MARKER_RADIUS.normal,
+                // 6.0 A: a bare point is its label alone.
+                r: p.bare ? 0 : MARKER_RADIUS[p.size] || MARKER_RADIUS.normal,
                 color: this.colorInfo(p.color).css,
                 label: p.label ? labelDisplayText(p.label, stripLatex) : '',
             });
@@ -1324,6 +1325,7 @@ export class SVG3DRenderer {
             }
         }
         for (const m of this.markerMarks) {
+            if (!m.r) continue;
             const circle = createSvg('circle');
             circle.setAttribute('cx', m.sx.toFixed(2));
             circle.setAttribute('cy', m.sy.toFixed(2));
@@ -1646,6 +1648,7 @@ export class SVG3DRenderer {
         ctx.lineCap = 'butt';
 
         for (const m of this.markerMarks) {
+            if (!m.r) continue;
             ctx.beginPath();
             ctx.arc(m.sx, m.sy, m.r, 0, Math.PI * 2);
             ctx.fillStyle = m.color;

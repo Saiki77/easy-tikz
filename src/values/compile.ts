@@ -568,9 +568,13 @@ export class ValueCompiler {
         throw unknownFunctionError(n, env, this.scope.src);
     }
 
-    /** `a(x + 1)` with a value a: a times (x + 1). */
+    /** `a(x + 1)` with a value a: a times (x + 1); `A(1, 2)` is A times the vector (1, 2). */
     private implicit(n: VCall, left: Part): Part {
-        if (n.args.length !== 1) fail('problems.expr.notAFunction', { name: n.name }, n.ns);
+        if (!n.args.length) fail('problems.expr.notAFunction', { name: n.name }, n.ns);
+        if (n.args.length > 1) {
+            const open = n.ns + n.name.length;
+            return this.product(left, this.node({ t: 'vec', items: n.args, s: open, e: n.e }), n.s, true);
+        }
         return this.product(left, this.node(n.args[0]), n.s, true);
     }
 

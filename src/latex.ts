@@ -83,6 +83,8 @@ function convert(s: string): string {
     const fnArg = (): string => {
         spaces();
         if (s[i] === '(') return '';
+        // 6.0 A: \Im \overline{z}, \Re \frac{z}{2}: a command with its argument.
+        if (/^\\(?:overline|bar|frac|dfrac|sqrt|binom)(?![A-Za-z])/.test(s.slice(i))) return `(${command()})`;
         if (s[i] === '{') return `(${group()})`;
         // `\ln|x|`: the bars are the argument.
         if (s[i] === '|') {

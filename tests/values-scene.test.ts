@@ -159,3 +159,22 @@ test('the recipes: a definition, an arrow with its definition, the roots of unit
     assert.deepEqual(roots.parameters?.map((p) => p.name), ['n']);
     assert.ok(recipes(true).some((r) => r.id === 'vector-arrow'));
 });
+
+test('3D: labels of arrows sit at the tips (the middles, tip to tail), without markers; the export draws no marks for them', () => {
+    const text = '3d\nlet u = (1, 2, 1)\nlet v = (1, 0, 1.5)\ndraw u as an arrow, labelled\ndraw u + v tip to tail in red, labelled';
+    const s = scene3Of(text);
+    assert.deepEqual(issues(s), []);
+    assert.deepEqual(
+        s.points.map((p) => [p.label, p.bare, [p.x, p.y, p.z]]),
+        [
+            ['$\\vec{u}$', true, [1, 2, 1]],
+            ['$\\vec{u}$', true, [0.5, 1, 0.5]],
+            ['$\\vec{v}$', true, [1.5, 2, 1.75]],
+            ['$\\vec{u} + \\vec{v}$', true, [1, 1, 1.25]],
+        ]
+    );
+    const settings = settingsOf(text);
+    const tex = settings.generateTikzCode(settings.createMathContext());
+    assert.ok(!tex.includes('only marks'), tex);
+    assert.match(tex, /\{\$\\vec\{u\} \+ \\vec\{v\}\$\}/);
+});

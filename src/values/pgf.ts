@@ -172,6 +172,8 @@ class ValuePgf {
                 return this.negate(a);
             }
             case 'binary':
+                // e^w is exp(w), for a complex w too.
+                if (n.op === '^' && n.left.t === 'name' && n.left.name === 'e' && !locals.has('e') && !this.env.scalar('e')) return this.cexp(this.cx(this.node(n.right, locals)));
                 return this.binary(n.op, this.node(n.left, locals), this.node(n.right, locals), !!n.cross);
             case 'cmp': {
                 const args = n.args.map((a) => this.text(this.real(this.node(a, locals), 'a comparison')));

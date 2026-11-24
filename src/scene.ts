@@ -371,6 +371,9 @@ interface Point3Spec {
     size: MarkerSize;
     part: number;
     locals: Record<string, number>;
+    /** 6.0 A: a label that is no template (an arrow's vector in LaTeX), and no marker (a label alone, at an arrow's tip). */
+    literal?: string;
+    bare?: boolean;
 }
 
 /** One node's result. Cached outputs are shared across frames and never mutated. */
@@ -3567,7 +3570,8 @@ export function edgeLabelSide3D(
 }
 
 export interface Scene3D {
-    points: Array<{ x: number; y: number; z: number; color: string; size: MarkerSize; label?: string }>;
+    /** 6.0 A: `bare` is a label without its marker (vector arrows). */
+    points: Array<{ x: number; y: number; z: number; color: string; size: MarkerSize; label?: string; bare?: boolean }>;
     segments: Array<{
         a: [number, number, number];
         b: [number, number, number];
@@ -3727,8 +3731,13 @@ function scene3D(input: SceneInput3D): Scene3D {
         const formatter = labelFormatter(node, math, scene.issues);
         for (const p of out.points3 || []) {
             const point: Scene3D['points'][number] = { x: p.x, y: p.y, z: p.z, color: p.color, size: p.size };
-            const label = formatter({ template: 'label', part: p.part, locals: p.locals });
+            // 6.0 A: a literal label, and a label without its marker.
+            const label = formatter({ template: 'label', part: p.part, locals: p.locals, literal: p.literal });
             if (label.trim()) point.label = label;
+            if (p.bare) {
+                if (!point.label) continue;
+                point.bare = true;
+            }
             scene.points.push(point);
         }
         for (const s of out.segments3 || []) scene.segments.push(s);

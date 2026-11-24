@@ -101,3 +101,48 @@ test('values as text', () => {
     assert.equal(formatValue({ kind: 'complex', re: 0, im: -1 }), '-i');
     assert.equal(formatValue({ kind: 'mat', rows: 2, cols: 2, a: [1, 2, 3, 4] }), '[[1, 2], [3, 4]]');
 });
+
+test('complex functions, conjugates, parts and arguments', () => {
+    // z is an axis variable (3D), so no let name: q here.
+    const ctx = ctxOf([let_('q', '3 - 4i'), let_('u', '(1, 0, 0)'), let_('w', '(0, 1, 0)')]);
+    assert.equal(ctx.value('\\Re q + \\Im q'), -1);
+    assert.equal(ctx.value('|\\bar q|'), 5);
+    assert.equal(ctx.value('\\Im \\overline{q}'), 4);
+    near(ctx.value('\\arg q'), Math.atan2(-4, 3), 1e-15);
+    // A real function of a real number stays real (no value outside its domain); a complex number makes it complex.
+    assert.ok(Number.isNaN(ctx.value('\\sqrt{-4}')));
+    assert.equal(ctx.value('\\Im \\sqrt{-4 + 0i}'), 2);
+    assert.equal(ctx.formatTemplate('{sqrt(q)}'), '2 - i');
+    assert.equal(ctx.formatTemplate('{u \\times w}, {norm(u + w):3}'), '(0, 0, 1), 1.414');
+    assert.equal(ctx.formatTemplate('{(1 + i)^2}, {i^2}'), '2i, -1');
+});
+
+test('matrices: products, powers, the inverse and the transpose', () => {
+    const ctx = ctxOf([let_('A', '\\begin{pmatrix} 1.5 & 1 \\\\ 0.5 & 2 \\end{pmatrix}'), let_('B', '[[0, 1], [1, 0]]'), let_('R', '\\begin{pmatrix} \\cos t & -\\sin t \\\\ \\sin t & \\cos t \\end{pmatrix}', ['t'])]);
+    assert.equal(ctx.formatTemplate('{A B}'), '[[1, 1.5], [2, 0.5]]');
+    assert.equal(ctx.formatTemplate('{A^(-1)}'), '[[0.8, -0.4], [-0.2, 0.6]]');
+    assert.equal(ctx.formatTemplate('{A^T}'), '[[1.5, 0.5], [1, 2]]');
+    assert.equal(ctx.formatTemplate('{B^3}'), '[[0, 1], [1, 0]]');
+    assert.equal(ctx.formatTemplate('{R(\\pi/2) (1, 0)}'), '(0, 1)');
+    assert.equal(ctx.value('\\det(A B)'), -2.5);
+    assert.throws(() => ctx.valueTable().compileField('A (1, 2, 3)', ctx.envFor('value')), /Cannot multiply a 2 x 2 matrix by a vector of 3 numbers/);
+});
+
+test('lists: ranges, lengths, a sum over a range of vectors', () => {
+    const ctx = ctxOf([let_('S', '\\{(k, k^2) : k = 1, \\dots, n\\}'), let_('T', '[1, 2, 3]')], [slider('n', 4)]);
+    assert.equal(ctx.value('len(S)'), 4);
+    assert.equal(ctx.formatTemplate('{S}'), '[(1, 1), (2, 4), (3, 9), (4, 16)]');
+    assert.equal(ctx.formatTemplate('{2T}'), '[2, 4, 6]');
+    assert.equal(ctx.formatTemplate('{sum((k, 1), k, 1, 3)}'), '(6, 3)');
+    ctx.setParamValues({ n: 2 });
+    assert.equal(ctx.value('len(S)'), 2);
+});
+
+test('plain formulas compile as before (no value hooks run them)', () => {
+    const ctx = ctxOf([]);
+    const f = ctx.fn1('x^2 + 1');
+    assert.equal(f(3), 10);
+    assert.equal(ctx.pgf('2*pi*x', 'fn1'), '(2*pi)*x');
+    // `i` of a label of points stays the point number.
+    assert.equal(ctx.formatTemplate('{i}', { i: 3 }), '3');
+});

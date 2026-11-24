@@ -789,11 +789,8 @@ export class MathContext {
     /** 6.0 A: a placeholder that is a value (not a real number) as text, or null. */
     private valueText(src: string, decimals: number): string | null {
         try {
-            const ast = parse(src);
-            const env = this.env('value', 'cartesian', null);
-            if (!this.letHooks.needs(ast, env, src)) return null;
-            const v = this.letTable.evaluate(src, env);
-            return v === null || (typeof v === 'number' && !Number.isFinite(v)) ? null : formatValue(v, decimals);
+            const v = this.letTable.evaluate(src, this.env('value', 'cartesian', null));
+            return v === null || typeof v === 'number' ? null : formatValue(v, decimals);
         } catch {
             return null;
         }

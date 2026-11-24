@@ -86,5 +86,6 @@ export const values = {
     'values.problem.notPoints': 'The points are {what}: write a list of complex numbers or points',
     'values.problem.tipToTail': 'Tip to tail needs a sum such as v + w',
     'values.problem.fromPoint': 'The start is {what}: write a point such as (1, 1)',
+    'values.problem.recurrenceTakes': 'Write a recurrence as z_(n+1) = z_n^2 + c',
     'values.problem.dimension': '{text} has {n} numbers, a vector of this chart {dim}',
 };

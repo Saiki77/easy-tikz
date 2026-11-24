@@ -40,18 +40,13 @@ export function formatValue(v: Value, decimals = 3): string {
     }
 }
 
-/** A value in LaTeX: complex numbers as a + bi, vectors and matrices as pmatrix (for $...$ labels). */
+/** A value in kernel LaTeX (for $...$ labels; the export has no amsmath): a + bi, (2, 1), a matrix as an array in brackets. */
 export function valueTex(v: Value, decimals = 3): string {
-    if (typeof v === 'number' || v.kind === 'complex') return formatValue(v, decimals);
-    switch (v.kind) {
-        case 'vec':
-            return `\\begin{pmatrix} ${v.v.map((x) => num(x, decimals)).join(' \\\\ ')} \\end{pmatrix}`;
-        case 'mat': {
-            const rows: string[] = [];
-            for (let i = 0; i < v.rows; i++) rows.push(v.a.slice(i * v.cols, (i + 1) * v.cols).map((x) => num(x, decimals)).join(' & '));
-            return `\\begin{pmatrix} ${rows.join(' \\\\ ')} \\end{pmatrix}`;
-        }
-        default:
-            return formatValue(v, decimals);
+    if (typeof v === 'number' || v.kind === 'complex' || v.kind === 'vec') return formatValue(v, decimals);
+    if (v.kind === 'mat') {
+        const rows: string[] = [];
+        for (let i = 0; i < v.rows; i++) rows.push(v.a.slice(i * v.cols, (i + 1) * v.cols).map((x) => num(x, decimals)).join(' & '));
+        return `\\left(\\begin{array}{${'c'.repeat(v.cols)}} ${rows.join(' \\\\ ')} \\end{array}\\right)`;
     }
+    return formatValue(v, decimals);
 }

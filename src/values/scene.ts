@@ -228,6 +228,15 @@ function computeVectors(t: VectorTool, ctx: SceneCtx, dim: 2 | 3): SceneOutput {
             dashed: dashed || a.part,
             arrow: 'forward',
         }));
+        // Labels at the tips, without markers.
+        if (label || t.valueLabel) {
+            out.points3 = arrows.map((a, i) => {
+                // Tip to tail: at the middles (the tips of a part and of the sum meet).
+                const at = t.tipToTail ? a.from.map((c, k) => (c + a.to[k]) / 2) : a.to;
+                const p = { x: at[0], y: at[1], z: at[2], color, size: 'small' as const, part: i, locals: { x: a.v[0], y: a.v[1], z: a.v[2], i: i + 1 }, bare: true };
+                return label || a.tex === null ? p : { ...p, literal: `$${a.tex}$` };
+            });
+        }
         return out;
     }
     arrows.forEach((a, i) => {

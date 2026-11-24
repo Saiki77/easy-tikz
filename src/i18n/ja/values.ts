@@ -89,5 +89,6 @@ export const values: Messages<typeof en> = {
     'values.problem.notPoints': '点が {what} です: 複素数か点のリストを書きます',
     'values.problem.tipToTail': 'つなげて描くには v + w のような和が必要です',
     'values.problem.fromPoint': '始点が {what} です: (1, 1) のような点を書きます',
+    'values.problem.recurrenceTakes': '漸化式は z_(n+1) = z_n^2 + c のように書きます',
     'values.problem.dimension': '{text} には {n} 個の数がありますが、このグラフのベクトルは {dim} 個です',
 };

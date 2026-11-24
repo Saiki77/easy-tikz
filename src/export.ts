@@ -1436,7 +1436,8 @@ function pointCmds(scene: Scene3D, box: Box, colors: ColorSet): string[] {
         if (!in3D(at, box, 0)) continue;
         const c = colors.use(p.color);
         const size = MARK_SIZE[p.size] || MARK_SIZE.normal;
-        out.push(`\\addplot3[only marks, mark=*, mark size=${size}, ${c}, forget plot] coordinates {${tuple3(at)}};`);
+        // 6.0 A: a bare point is its label alone.
+        if (!p.bare) out.push(`\\addplot3[only marks, mark=*, mark size=${size}, ${c}, forget plot] coordinates {${tuple3(at)}};`);
         const label = labelText(p.label || '');
         if (label) out.push(`\\node[${c}, anchor=south west, font=${FONT.small}] at (axis cs:${tuple3(at).slice(1)} {${label}};`);
     }
