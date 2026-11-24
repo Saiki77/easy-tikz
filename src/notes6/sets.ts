@@ -69,12 +69,13 @@ export function intervalCondition(cond: string, variable?: string): string {
 }
 
 /**
- * The condition compiled for one axis (`axis` x: the variable is x, y is not
- * set; y: the other way round). Throws ExprError like the region conditions.
+ * The condition compiled for one axis: on the x-axis y is 0 and x runs, on
+ * the y-axis the other way round, so `x^2 + y^2 = 4` on the x-axis is where
+ * the circle crosses it. Throws ExprError like the region conditions.
  */
 export function compileCondition(math: MathContext, condIn: string, axis: 'x' | 'y'): Condition1 {
     const cond = intervalCondition(condIn, axis);
-    const at = (F: (x: number, y: number) => number) => (axis === 'x' ? (t: number) => F(t, NaN) : (t: number) => F(NaN, t));
+    const at = (F: (x: number, y: number) => number) => (axis === 'x' ? (t: number) => F(t, 0) : (t: number) => F(0, t));
     if (isEquation(cond)) return { disjuncts: [], zeros: at(math.equation(cond).F) };
     const entry = math.conditions([cond])[0];
     if (!entry) return { disjuncts: [] };

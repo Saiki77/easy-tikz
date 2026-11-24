@@ -193,8 +193,10 @@ test('notes6: a set follows its slider and publishes its ends', () => {
     near(s9.derived.AX1_x2, 3, 1e-9);
 });
 
-test('notes6: a condition in the other variable is named', () => {
-    const scene = sceneOf(`${G}mark where y > 0 on the x-axis`);
+test('notes6: on the x-axis y is 0: where a curve crosses it; a condition with no value there is named', () => {
+    const it = item(sceneOf('show x from -3 to 3 and y from -3 to 3\nmark where x^2 + y^2 = 4 on the x-axis, labelled'), 'AX1');
+    assert.equal(it.texts[0].text, '$\\{x \\mid x^{2} + y^{2} = 4\\} = \\{-2, 2\\}$');
+    const scene = sceneOf(`${G}mark where sqrt(-1 - x^2) > 0 on the x-axis`);
     assert.ok(scene.issues.some((i) => i.source === 'AX1' && /no value on the x-axis/.test(i.message)), JSON.stringify(scene.issues));
 });
 
@@ -306,4 +308,97 @@ test('notes6: a chart from a formula keeps the name and gives x only', () => {
     assert.equal(parseChartText(block).data.fitY, true);
     // Equations and regions fit both axes as before.
     assert.equal(formulaChart('x^2 + y^2 = 1')?.[0], 'show x from -1.2 to 1.2 and y from -1.2 to 1.2');
+});
+
+// ------------------------------------------------------ Ask the curve
+
+import { AskTarget, answerPresent, applyAnswer, askContext, askQuestions, pickTarget, registerQuestions, removeAnswer } from '../src/notes6/ask';
+
+function askOf(text: string, target: AskTarget) {
+    const settings = settingsOf(text);
+    const data = settings.serialize();
+    const math = settings.createMathContext({ memo: false });
+    math.setParams((data.parameters as Parameter[]) ?? []);
+    const view = settings.resolveView(math).view;
+    return { data, ctx: askContext(target, data, view, math) };
+}
+
+const ASK = 'show x from -5 to 5 and y from -6 to 10\nplot $g(x) = x^2 - 4$\nplot h(x) = x + 1\n';
+
+test('ask: the questions of a function, with a pair of questions for each other function', () => {
+    const { ctx } = askOf(ASK, { kind: 'function', name: 'g', x: 1, y: -3 });
+    const qs = askQuestions(ctx);
+    const ids = qs.map((q) => q.id);
+    for (const id of ['le', 'ge', 'lt', 'gt', 'zeros', 'extrema', 'tangent', 'value', 'chord', 'area', 'riemann', 'cross:h', 'below:h', 'between:h']) assert.ok(ids.includes(id), `${id} in ${ids.join(', ')}`);
+    const line = (id: string) => qs.find((q) => q.id === id)?.answer.lines ?? [];
+    assert.deepEqual(line('le'), ['mark where $g(x) \\le 0$ on the x-axis, labelled']);
+    assert.deepEqual(line('area'), ['shade under g from x = -2 to 2']);
+    assert.deepEqual(line('cross:h'), ['mark where g and h cross, with coordinates']);
+    assert.deepEqual(line('value'), ['mark (1, g(1)), with coordinates']);
+    assert.equal(line('between:h')[0], 'shade between g and h from x = -1.8 to 2.8');
+    assert.deepEqual(qs.find((q) => q.id === 'tangent')?.answer.patch?.on, { tangent: true, tangentPoint: '1' });
+});
+
+test('ask: an answer goes in, is found there, and comes out again', () => {
+    const { data, ctx } = askOf(ASK, { kind: 'function', name: 'g', x: 1, y: -3 });
+    const qs = askQuestions(ctx);
+    for (const q of qs) {
+        assert.equal(answerPresent(data, q.answer), false, q.id);
+        const next = applyAnswer(data, q.answer);
+        assert.ok(next, `${q.id} does not read`);
+        assert.ok(answerPresent(next, q.answer), `${q.id} is not found after it went in`);
+        // The chart with the answer draws without a problem.
+        const parsed = parseChartText(printChartText(next));
+        assert.deepEqual(parsed.problems, [], q.id);
+        const back = removeAnswer(next, q.answer);
+        assert.equal(answerPresent(back, q.answer), false, `${q.id} is still there after it came out`);
+        assert.equal((back.tools as unknown[]).length, (data.tools as unknown[]).length, q.id);
+    }
+    // The chord brings its slider λ along, the Riemann sum its n.
+    const chord = applyAnswer(data, qs.find((q) => q.id === 'chord')!.answer)!;
+    assert.ok((chord.parameters as Parameter[]).some((p) => p.name === 'lambda'));
+    assert.match(printChartText(chord), /draw the chord of g from 1 to 3\.5 at \$\\lambda\$, labelled/);
+});
+
+test('ask: regions, curves and points have questions of their own', () => {
+    const text = 'show x from -1 to 6 and y from -1 to 5\nR: shade where x + y <= 4, x >= 0, y >= 0\nC: draw x^2 + y^2 = 4\nP: mark (1, 1)';
+    const region = askQuestions(askOf(text, { kind: 'region', name: 'R', x: 1, y: 1 }).ctx).map((q) => q.answer.lines?.[0] ?? q.id);
+    assert.ok(region.includes('mark the corners of R, with coordinates'));
+    assert.ok(region.includes('mark the maximum of y in R, with coordinates'));
+    const curve = askQuestions(askOf(text, { kind: 'curve', name: 'C', x: 2, y: 0 }).ctx).map((q) => q.answer.lines?.[0]);
+    assert.ok(curve.includes('mark where $x^2 + y^2 = 4$ on the x-axis, labelled'));
+    const { data, ctx } = askOf(text, { kind: 'point', name: 'P', x: 1, y: 1 });
+    const drop = askQuestions(ctx).find((q) => q.id === 'drop')!;
+    const next = applyAnswer(data, drop.answer)!;
+    assert.equal((next.tools as Data[]).find((x) => x.name === 'P')?.dropLines, true);
+    assert.equal((removeAnswer(next, drop.answer).tools as Data[]).find((x) => x.name === 'P')?.dropLines, false);
+});
+
+test('ask: providers can be added (parts D and E) and taken away', () => {
+    const off = registerQuestions('function', (ctx) => [{ id: 'extra', group: 'More', label: 'An extra question', answer: { lines: [`mark (0, ${ctx.target.name}(0))`] } }]);
+    try {
+        const { ctx } = askOf(ASK, { kind: 'function', name: 'g', x: 1, y: -3 });
+        assert.ok(askQuestions(ctx).some((q) => q.id === 'extra'));
+    } finally {
+        off();
+    }
+    const { ctx } = askOf(ASK, { kind: 'function', name: 'g', x: 1, y: -3 });
+    assert.ok(!askQuestions(ctx).some((q) => q.id === 'extra'));
+});
+
+test('ask: what a click hits', () => {
+    const drawn = {
+        curves: [{ name: 'g', kind: 'cartesian', lines: [[{ x: -2, y: 0 }, { x: 0, y: -4 }, { x: 2, y: 0 }]] }],
+        items: [
+            { source: 'R', kind: 'tool' as const, key: 'r', fills: [{ rings: [[{ x: 3, y: 3 }, { x: 5, y: 3 }, { x: 5, y: 5 }, { x: 3, y: 5 }]], color: 'blue', opacity: 0.3, pattern: 'solid' as const }], strokes: [], guides: [], markers: [], braces: [], texts: [] },
+            { source: 'P', kind: 'tool' as const, key: 'p', fills: [], strokes: [], guides: [], markers: [{ x: 0, y: -4, color: 'red', size: 'normal' as const }], braces: [], texts: [] },
+        ],
+    };
+    const tools = parseChartText('R: shade where x >= 3\nP: mark (0, -4)').data.tools as never;
+    // 50 px per unit; a point first, then the curve, then the region.
+    assert.equal(pickTarget(drawn, tools, { x: 0.02, y: -3.98 }, 50, 50, 10)?.kind, 'point');
+    const onCurve = pickTarget(drawn, tools, { x: 1, y: -2.1 }, 50, 50, 10);
+    assert.equal(onCurve?.kind, 'function');
+    assert.equal(pickTarget(drawn, tools, { x: 4, y: 4 }, 50, 50, 10)?.kind, 'region');
+    assert.equal(pickTarget(drawn, tools, { x: -4, y: 4 }, 50, 50, 10), null);
 });

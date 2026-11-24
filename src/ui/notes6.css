@@ -1,0 +1,145 @@
+/* Notes and interaction (6.0 B): the menu of Ask the curve (src/notes6/askMenu.ts) and the
+   faint answer it shows; the parts of the hover card for sets, maps and inequalities. */
+
+/* ------------------------------------------------------------ Ask the curve */
+
+.etz-ask-menu {
+    position: fixed;
+    top: var(--etz-ask-top, 0);
+    left: var(--etz-ask-left, 0);
+    z-index: var(--layer-menu);
+    width: 280px;
+    max-width: calc(100vw - 16px);
+    max-height: min(70vh, 520px);
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-l);
+    color: var(--text-normal);
+}
+
+.etz-ask-title {
+    padding: 6px 8px 4px;
+    font-size: var(--etz-font-small);
+    font-weight: 600;
+    color: var(--text-normal);
+    overflow-wrap: anywhere;
+}
+
+.etz-ask-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.etz-ask-group {
+    padding: 8px 8px 2px;
+    font-size: var(--etz-font-meta);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+button.etz-ask-item {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 9px;
+    width: 100%;
+    height: auto;
+    min-height: 30px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--etz-radius-m);
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-normal);
+    font-size: var(--etz-font);
+    font-weight: 500;
+    line-height: 1.25;
+    text-align: left;
+    white-space: normal;
+    cursor: pointer;
+}
+
+button.etz-ask-item:hover,
+button.etz-ask-item:focus-visible {
+    background-color: var(--etz-accent-tint);
+    outline: none;
+}
+
+.etz-ask-box {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--text-muted);
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--text-on-accent);
+}
+
+button.etz-ask-item[aria-checked='true'] .etz-ask-box {
+    background-color: var(--interactive-accent);
+    border-color: var(--interactive-accent);
+}
+
+.etz-ask-empty,
+.etz-ask-hint {
+    padding: 6px 8px;
+    font-size: var(--etz-font-meta);
+    color: var(--text-faint);
+}
+
+/* The answer a question would add, shown faintly while the question is pointed at. */
+.etz-ask-faint {
+    opacity: 0.42;
+}
+
+/* The chart under a block in Live Preview answers questions: its curves are clickable. */
+.etz-inline-live .etz-inline-box.etz-askable {
+    cursor: pointer;
+}
+
+.etz-inline-live .etz-inline-box.etz-askable:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+}
+
+/* ------------------------------------------------------------- hover card */
+
+.etz-formula-note {
+    margin: 6px 0 0;
+    font-size: var(--etz-font-meta, 11px);
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.etz-formula-switch {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-top: 6px;
+}
+
+button.etz-formula-n {
+    height: 24px;
+    padding: 0 10px;
+    font-size: 12px;
+    border-radius: var(--radius-s, 4px);
+    background-color: var(--background-secondary);
+    box-shadow: none;
+}
+
+button.etz-formula-n[aria-pressed='true'] {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}

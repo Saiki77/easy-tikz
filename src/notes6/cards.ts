@@ -13,6 +13,7 @@ import { recipes } from '../migrate';
 import { t } from '../i18n';
 import { errorText } from '../util';
 import { compileCondition } from './sets';
+import { latexToPlain } from '../latex';
 
 // ----------------------------------------------------------- set on an axis
 
@@ -91,7 +92,7 @@ class AxisSetCard extends ToolCard<AxisSetTool> {
     }
 
     protected summary(): string {
-        const cond = squash(this.tool.condition);
+        const cond = squash(latexToPlain(this.tool.condition).replace(/<=/g, '≤').replace(/>=/g, '≥'));
         if (!cond) return t('notes6.axisSet.empty');
         return t('notes6.axisSet.summary', { condition: cond, axis: t(this.tool.axis === 'y' ? 'notes6.axisSet.yAxis' : 'notes6.axisSet.xAxis') });
     }

@@ -116,7 +116,9 @@ function computeAxisSet(t: AxisSetTool, ctx: SceneCtx): SceneOutput {
     const label = str(t.label).trim();
     if (label || t.valueLabel) {
         const mid = Number.isFinite(first) && Number.isFinite(last) ? (Math.max(first, lo) + Math.min(last, hi)) / 2 : (lo + hi) / 2;
-        const spec = { ...at(mid), template: 'label' as const, color, size: 'small' as const, dir: axis === 'x' ? { x: 0, y: 1 } : { x: 1, y: 0 } };
+        // The label may slide along the bar to a spot where nothing crosses it.
+        const bar = Number.isFinite(first) && Number.isFinite(last) && last > first ? [at(Math.max(first, lo)), at(Math.min(last, hi))] : undefined;
+        const spec = { ...at(mid), template: 'label' as const, color, size: 'small' as const, dir: axis === 'x' ? { x: 0, y: 1 } : { x: 1, y: 0 }, ...(bar ? { slide: bar } : {}) };
         if (label) out.texts.push(spec);
         else out.texts.push({ ...spec, literal: setLabel(axis, ctx.math.tex(intervalCondition(src, axis)), pieces) });
     }

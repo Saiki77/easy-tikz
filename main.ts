@@ -36,6 +36,10 @@ import { rewordNote } from './src/text/reword';
 import { ChartWordsModal } from './src/ui/wordsModal';
 import { LANGUAGE_NAMES, languageSetting, resolveLanguage, setLanguage, t } from './src/i18n';
 import type { Extension } from '@codemirror/state';
+// 6.0 B: Ask the curve under a block in Live Preview.
+import { AskController, svgBoxOf } from './src/notes6/askHost';
+import { writeAnswerIntoBlock } from './src/notes6/liveAsk';
+import type { DrawnScene, RenderLayout } from './src/renderer';
 
 type FenceTag = 'easy-tikz' | 'tikz';
 type Align = 'left' | 'center' | 'right';
@@ -1142,6 +1146,9 @@ class InlineChart {
     private table: NoteTable | null | undefined = undefined;
     /** Line of the block's opening fence when the table was read (1-based), to find the block again. */
     private blockLine = 0;
+    // 6.0 B: Ask the curve under a block in Live Preview, and what the last full 2D drawing drew.
+    private ask: AskController | null = null;
+    private askDrawn: { layout: RenderLayout; drawn: DrawnScene; pixelScale: number } | null = null;
 
     constructor(
         plugin: EasyTikzPlugin,
@@ -1250,7 +1257,10 @@ class InlineChart {
             window.requestAnimationFrame((t) => this.moveFromBefore(t));
         }
 
-        if (this.live) return;
+        if (this.live) {
+            this.askable(); // 6.0 B
+            return;
+        }
         this.box.addEventListener('click', () => this.openEditor());
         this.box.addEventListener('keydown', (e: KeyboardEvent) => {
             // Only the focused box itself opens the editor, never keys meant for a control.
@@ -1264,6 +1274,60 @@ class InlineChart {
 
     private openEditor() {
         this.plugin.openBlockEditor(this.sourcePath, this.source, this.data, this.fenceTag, this.format, this.table);
+    }
+
+    /**
+     * 6.0 B: the chart under a block in Live Preview answers questions. A
+     * click (or tap) that does not move on a curve, a region or a point opens
+     * its questions; Enter (or the menu key) opens those of the first
+     * function. The answer goes into the block's text.
+     */
+    private askable() {
+        const box = this.box;
+        box.addClass('etz-askable');
+        box.setAttr('tabindex', '0');
+        box.setAttr('role', 'button');
+        box.setAttr('aria-haspopup', 'menu');
+        const name = visuallyHidden(box, t('notes6.ask.liveLabel'));
+        name.id = uniqueId('live-chart');
+        box.setAttr('aria-labelledby', name.id);
+        this.ask = new AskController({
+            data: () => ({ ...this.manager.serialize(), parameters: this.params.map((p) => ({ ...p })) }),
+            math: () => {
+                this.math.setParams(this.params);
+                return this.math;
+            },
+            drawn: () => {
+                const svg = this.chartEl;
+                const d = this.askDrawn;
+                if (!d || !(svg instanceof SVGElement) || !svg.isConnected) return null;
+                const b = svgBoxOf(svg, d.layout);
+                return b ? { layout: d.layout, drawn: d.drawn, svg, box: b, pixelScale: d.pixelScale } : null;
+            },
+            noteTable: () => this.table,
+            apply: (next) => {
+                if (!writeAnswerIntoBlock(this.el, this.fenceTag, this.source, this.format === 'json' ? 'json' : 'text', this.data, this.saved, next)) new Notice(t('plugin.display.notFound'));
+            },
+            focusEl: () => this.box,
+        });
+        let down: { id: number; x: number; y: number; touch: boolean } | null = null;
+        box.addEventListener('pointerdown', (e) => {
+            if (e.button === 0) down = { id: e.pointerId, x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch' };
+        });
+        box.addEventListener('pointerup', (e) => {
+            const d = down;
+            down = null;
+            // A click that did not move: a drag or a scroll is no question.
+            if (!d || d.id !== e.pointerId || Math.hypot(e.clientX - d.x, e.clientY - d.y) > (d.touch ? 10 : 5)) return;
+            this.ask?.at(e.clientX, e.clientY, d.touch);
+        });
+        box.addEventListener('pointercancel', () => (down = null));
+        box.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.target !== box) return;
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+                if (this.ask?.fromKeyboard()) e.preventDefault();
+            }
+        });
     }
 
     // ------------------------------------------------------------ rendering
@@ -1347,6 +1411,7 @@ class InlineChart {
 
     /** The block left the page: stop drawing, and keep only the picture's data for the block's next drawing. */
     unload() {
+        this.ask?.dropPreview(); // 6.0 B
         if (this.memory) {
             // Where the picture is now: mid-glide, the next drawing starts there; pop-ins under way carry on.
             if (this.shown) this.memory.state = this.shown;
@@ -1473,6 +1538,7 @@ class InlineChart {
     }
 
     private render2D(config: RendererConfig, math: MathContext, quality: 'draft' | 'full', cache: SceneCache = this.cache): SceneIssue[] {
+        this.ask?.dropPreview(); // 6.0 B
         // Grid cells in on-screen px: measured on full renders only, never per drag frame.
         if ((quality === 'full' || !this.boxSize.w) && this.box.isConnected) {
             this.boxSize = { w: this.box.clientWidth, h: this.box.clientHeight };
@@ -1482,6 +1548,8 @@ class InlineChart {
         const svg = renderer.render();
         svg.addClass('etz-inline-svg');
         this.placeChart(svg);
+        // 6.0 B: what was drawn, for the questions of a click.
+        if (this.live && renderer.layout && renderer.drawn) this.askDrawn = { layout: renderer.layout, drawn: renderer.drawn, pixelScale };
         // A new `$...$` label is measured before MathJax has styled it: draw once more when it has.
         void renderer.mathSettled?.then((redraw) => {
             if (!redraw) this.mathRedraws = 0;

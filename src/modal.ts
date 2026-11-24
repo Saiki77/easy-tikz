@@ -16,6 +16,8 @@ import { showcaseExamples } from './guides';
 import { beyondToolReads, renameInBeyondTool } from './beyond/tools';
 // 6.0 B
 import { notes6ToolReads, renameInNotes6Tool } from './notes6/tools';
+import { AskController } from './notes6/askHost';
+import type { AskTarget } from './notes6/ask';
 import type { NoteTable } from './beyond/table';
 import type { ChartDraft } from './templates';
 import type { BlockFormat } from './blockjson';
@@ -406,6 +408,9 @@ export class TikzModal extends Modal implements PanelHost {
     private renderer3d: SVG3DRenderer | null = null;
     private chartMode: '2d' | '3d' | null = null;
     private chartSvg: SVGElement | null = null;
+    // 6.0 B: Ask the curve (src/notes6/askHost.ts) and what the last full 2D render drew.
+    private ask: AskController | null = null;
+    private askDrawn: SVGRenderer['drawn'] = null;
     private layout: RenderLayout | null = null;
 
     // DOM
@@ -936,6 +941,7 @@ export class TikzModal extends Modal implements PanelHost {
     onClose() {
         this.isOpen = false;
         this.ready = false;
+        this.ask?.close(); // 6.0 B
         // A running drag restores its start texts before the draft flush; a keyboard nudge keeps its texts.
         this.abortObjectDrag(false);
         this.dropKeySession();
@@ -1384,6 +1390,8 @@ export class TikzModal extends Modal implements PanelHost {
     }
 
     private render2D(config: RendererConfig, math: MathContext, quality: 'draft' | 'full'): SceneIssue[] {
+        // 6.0 B: an answer shown faintly gives way to the real picture.
+        this.ask?.dropPreview();
         const chart = this.chartEl as HTMLElement;
         // Leaving 3D: drop its canvas first, so a failing first 2D frame never leaves the 3D picture up.
         if (this.chartMode !== '2d') {
@@ -1411,6 +1419,7 @@ export class TikzModal extends Modal implements PanelHost {
             }
         });
         this.afterRender2D(renderer.drawn);
+        this.askDrawn = renderer.drawn; // 6.0 B
         return quality === 'full' ? this.withViewErrors(renderer.issues ?? [], math) : [];
     }
 
@@ -1799,6 +1808,8 @@ export class TikzModal extends Modal implements PanelHost {
         if (drag.kind === 'rotate') this.applyRotation(Math.round(num(this.settings.getValue('rotationZ'), 45)) % 360, Math.round(num(this.settings.getValue('rotationX'), 30)));
         // Released under the threshold: a click selects the object.
         if (drag.kind === 'press' && !cancelled) this.select(drag.target, drag.grab);
+        // 6.0 B: and asks it a question (a click that did not move: no pan, no drag).
+        if (drag.kind === 'press' && !cancelled) this.asker().at(drag.startX, drag.startY, drag.touch);
         if (e.pointerType !== 'touch' && e.buttons === 0) this.updateHover(e.clientX, e.clientY, null, e.pointerType, true);
     }
 
@@ -2380,15 +2391,83 @@ export class TikzModal extends Modal implements PanelHost {
     }
 
     private onClick(click: PendingClick) {
+        // 6.0 B: a click (or tap) asks what is there: a computed point, a region, a curve.
+        const asked = !this.is3D() && this.asker().at(click.startX, click.startY, click.touch);
         if (click.lock) {
-            this.showTransientChip(lockChip(click.lock), LOCK_CHIP_MS);
+            if (!asked) this.showTransientChip(lockChip(click.lock), LOCK_CHIP_MS);
             return;
         }
         if (click.tap) {
             this.select(click.tap.target, click.tap.grab);
             return;
         }
-        this.clearSelection();
+        if (!asked) this.clearSelection();
+    }
+
+    // 6.0 B: Ask the curve.
+    private asker(): AskController {
+        if (!this.ask) {
+            this.ask = new AskController({
+                data: () => cloneData(this.settings.serialize()),
+                math: () => {
+                    const m = this.math();
+                    m.setParams(this.list<Parameter>('parameters'));
+                    return m;
+                },
+                drawn: () => {
+                    const box = this.svgBox();
+                    if (this.is3D() || !this.layout || !this.askDrawn || !this.chartSvg || !box) return null;
+                    return { layout: this.layout, drawn: this.askDrawn, svg: this.chartSvg, box, pixelScale: this.gridScale };
+                },
+                noteTable: () => this.settings.noteTable,
+                apply: (next, before, label) => this.applyAnswer(next, before, label),
+                focusEl: () => this.chartEl,
+                trapEscape: (fn) => trapEscape(this, fn),
+            });
+        }
+        return this.ask;
+    }
+
+    /** What the selection is, as a question's target (the questions of a function, a region, a curve or a point). */
+    private askTargetOfSelection(): AskTarget | undefined {
+        const sel = this.selected;
+        if (!sel) return undefined;
+        const name = sel.target.source;
+        if (this.list<FunctionParameters>('functions').some((f) => f.name === name)) return { kind: 'function', name, x: sel.grab.x, y: sel.grab.y };
+        const tool = this.list<Tool>('tools').find((x) => x.name === name);
+        const kind = tool?.type === 'region' ? 'region' : tool?.type === 'curve' ? 'curve' : tool?.type === 'points' ? 'point' : null;
+        return kind ? { kind, name, x: sel.grab.x, y: sel.grab.y } : undefined;
+    }
+
+    /** An answer goes in (or out): the chart's lists, with Undo and Redo as for other edits. */
+    private applyAnswer(next: Record<string, unknown>, before: Record<string, unknown>, label: string) {
+        const keys = ['parameters', 'functions', 'tools', 'annotations'];
+        const copy = (v: unknown): unknown => JSON.parse(JSON.stringify(v ?? [])) as unknown;
+        const lists = (d: Record<string, unknown>) => keys.map((k) => copy(Array.isArray(d[k]) ? d[k] : []));
+        const was = lists(before);
+        const now = lists(next);
+        const put = (v: unknown[]) => {
+            keys.forEach((k, i) => this.settings.setValue(k, copy(v[i])));
+            this.commit();
+        };
+        const holds = (v: unknown[]) => keys.every((k, i) => JSON.stringify(this.settings.getValue(k) ?? []) === JSON.stringify(v[i]));
+        put(now);
+        const entry: HistoryEntry = {
+            label,
+            undo: () => {
+                if (!holds(now)) return false;
+                put(was);
+                return true;
+            },
+            redo: () => {
+                if (!holds(was)) return false;
+                put(now);
+                return true;
+            },
+        };
+        this.history.push(entry);
+        this.showUndoBar(entry);
+        this.announce(label);
     }
 
     private onDoubleClick(e: MouseEvent) {
@@ -3119,6 +3198,13 @@ export class TikzModal extends Modal implements PanelHost {
     }
 
     private onPreviewKey(e: KeyboardEvent) {
+        // 6.0 B: the questions of the selection, or of the first function, from the keyboard.
+        if (!this.is3D() && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10') || e.key === '?') && !e.ctrlKey && !e.metaKey) {
+            if (this.asker().fromKeyboard(this.askTargetOfSelection())) {
+                e.preventDefault();
+                return;
+            }
+        }
         const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
         // The view stays fixed while an object is pressed or dragged (its px map belongs to the drag), as for the wheel.
         if (this.drag && (this.drag.kind === 'press' || this.drag.kind === 'object') && keys.includes(e.key)) {
