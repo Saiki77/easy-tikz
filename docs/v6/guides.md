@@ -27,7 +27,7 @@ Japanese: `src/guides/{values,interact,linear,dynamics}.ja.ts`, registered in sr
 
 The title of `sets-convexity` has no "axis": the search test wants "ax" to find the formulas guide first, and a title word "axis" would win it.
 
-## Showcase pages (6, English and Japanese)
+## Showcase pages (6 of F2, English and Japanese)
 
 In src/guides/showcase.ts (and showcase.ja.ts), first in the Showcase, so the Help's gallery and the empty Build tab open with them.
 
@@ -39,6 +39,28 @@ In src/guides/showcase.ts (and showcase.ja.ts), first in the Showcase, so the He
 | `pendulum-field` | A pendulum as a vector field | 4 |
 | `domain-colouring` | Colour the plane by a complex function | 3 |
 | `fourier-circles` | Circles that draw a square wave | 3 |
+
+### 6.0 showcase: the other prototypes of the plan page (5 new, 2 changed)
+
+Every prototype of the plan page has a Showcase page now. In src/guides/showcase.ts (and showcase.ja.ts), English and Japanese, each step a live chart.
+
+| id | Title | Steps | What moves |
+|---|---|---|---|
+| `complex-two-ways` | Complex functions, seen two ways | 6 | z², 1/z and e^z each bend a grid in a `then` step (Play), then colour the plane (domain colouring); the e^z grid runs from -π to π, so it wraps once round |
+| `two-valleys` | Gradient descent in a bowl and two valleys | 5 | slider `eta`, start P (`mark P at`, or `P: mark (a, 1.6)` on a slider; both drag in the editor), the path `traced`; η = 0.27 zigzags out of the bowl; in two valleys the ridge at x = 0.15 decides the valley |
+| `julia-newton` | Julia sets and Newton basins | 5 | c = a + bi on sliders (rabbit, -0.8 + 0.156i, dust at 0.45 + 0.45i); Newton basins of z³ - 1 with P on sliders and its orbit `traced` |
+| `logistic-map` | The logistic map: bifurcation and cobweb | 5 | the diagram with the slider r as a dashed line, then the cobweb at 3.2, 3.5, 3.9 |
+| `unity-roots` | Roots of unity on a slider | 4 | n from 2 to 10 (labels ω⁰ to ω⁹: `labelled "$\omega^ {i - 1}$"`, a value cannot go inside a LaTeX group), the orbit of z ↦ ωz `traced`, the colouring of zⁿ - 1 |
+| `lorenz-butterfly` (changed) | Two paths of the Lorenz system | 3 | both paths `traced` (and `turning` as before): they draw themselves and part while you watch |
+| `fourier-circles` (changed) | Circles that draw square and sawtooth waves | 4 | five circles first (the plan's n), and a last step with a sawtooth: `\sum_{k=1}^{n} \frac{2(-1)^{k+1}}{\pi k} e^{ikt}` |
+
+The ids avoid the ids of V6_EXAMPLES (`roots-of-unity`, `julia`, ...): the test wants ids unique among examples and guides.
+
+**Order.** The gallery orders guides by category (GUIDE_CATEGORIES) and inside a category as the data file lists them; nothing else was reordered. SHOWCASE_GUIDES starts with the 11 pages of version 6, the ones that move first: Lorenz, complex functions, Fourier circles, two valleys, Mandelbrot orbit, pendulum, Julia and Newton, matrix grid, logistic map, domain colouring, roots of unity; then the 5.2 pages. The Showcase chip so shows the 6.0 pages first, and in the "All" view (Chart language has two tiles besides the tour) Lorenz and complex functions are tiles 3 and 4, in the first row. The empty Build tab and the editor's menu list the Showcase charts in the same order.
+
+**Tests.** tests/guides.test.ts: the new ids in DOCUMENTED; the Showcase starts with the 6.0 pages and the gallery shows two of them in its first four tiles; the moving parts move (`turning` and `traced` on the Lorenz paths, traced orbits, a `then` transform on every grid step of `complex-two-ways`, a sawtooth sum in the last Fourier step); the numbers the steps name (the bowl settles at 0 for η = 0.2 and leaves at 0.27; right of x = 0.15 the shallow valley, left of it the deep one; the titles print c, inside the Mandelbrot set at step 1 and outside at step 3; P reaches the root 1; the cobweb at r = 3.2 ends on one of its two values; n steps of z ↦ ωz come back to 1). tests/guides-ja.test.ts covers the Japanese as for every guide.
+
+Screenshots (isolated Obsidian): `scratchpad/showcase-shots/` (the gallery with the Showcase chip, one picture per new page).
 
 ## Examples (12)
 
