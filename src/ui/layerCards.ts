@@ -189,6 +189,13 @@ const TOOL_KIND: Record<Tool['type'], MessageKey> = {
     value: 'values.kind.value',
     vector: 'values.kind.vector',
     listPoints: 'values.kind.listPoints',
+    // 6.0 E
+    orbit: 'iterate.kind.orbit',
+    cobweb: 'iterate.kind.cobweb',
+    bifurcation: 'iterate.kind.bifurcation',
+    newton: 'iterate.kind.newton',
+    colourPlane: 'iterate.kind.colourPlane',
+    fourierCircles: 'iterate.kind.fourierCircles',
 };
 
 // --------------------------------------------------------------- helpers

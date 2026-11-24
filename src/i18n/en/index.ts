@@ -17,7 +17,9 @@ import { motion6 } from './motion6'; // 6.0 C
 import { notes6 } from './notes6';
 // 6.0 A
 import { values } from './values';
+// 6.0 E
+import { iterate } from './iterate';
 
-export const EN = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...motion6, ...notes6, ...values };
+export const EN = { ...common, ...editor, ...build, ...panels, ...plugin, ...problems, ...help, ...beyond, ...motion6, ...notes6, ...values, ...iterate };
 
 export type MessageKey = keyof typeof EN;

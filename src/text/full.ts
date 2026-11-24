@@ -37,6 +37,10 @@ import { boxRatioOf } from '../box3d';
 import { AXIS_FLAGS, readAxisSet, readChord } from '../notes6/text';
 // 6.0 A
 import { readListPoints, vectorFull, vectorWords } from '../values/text';
+// 6.0 E
+import { readIterateDraw, readIteratePlane } from '../iterate/text';
+import { givenParts, isPlaneColormap } from '../iterate/tools';
+import { readRecurrence } from '../values/recurrence';
 
 /** 6.0 A: the lines of values in Full LaTeX need no let names: they are written in the forms that say what they are. */
 const NO_LETS: ReadonlySet<string> = new Set();
@@ -101,6 +105,13 @@ export const FULL_OPTION_HELP: Record<string, string> = {
     // 6.0 B
     axisSet: 'a colour, thin, thick, labelled, label={text}, hidden; x-axis or y-axis says the axis',
     chord: 'a colour, thin, thick, dashed, labelled, label={text}, hidden; chord, from=a, to=b and at=λ say the chord',
+    // 6.0 E
+    orbit: 'z_0=a start, c=a value, steps=40, a colour, thin, thick, small, large, as a path, labelled, hidden',
+    cobweb: 'from=x_0, steps=40, a colour, thin, thick, hidden',
+    bifurcation: 'r=a:b, x_0=a start, a colour, hidden',
+    newton: 'from=x_0, steps=5, a colour, thin, thick, labelled, hidden',
+    colourPlane: 'z_0=a start, c=a value, steps=200, colormap/viridis (heat, cool, diverging, rainbow, greyscale, cyclic), opacity=0.5, hidden',
+    fourierCircles: 'wave, a colour, thin, thick, hidden',
 };
 
 // ------------------------------------------------------------ text pieces
@@ -985,6 +996,15 @@ function lineWords(line: string, no: number, problems: TextProblem[]): Mapped[] 
         case 'restpoints':
         case 'solution':
             return [motionWords(cmd)];
+        // 6.0 E: orbits, cobwebs, bifurcation diagrams, Newton's method, coloured planes, turning circles
+        case 'orbit':
+        case 'cobweb':
+        case 'bifurcation':
+        case 'newton':
+        case 'colourplane':
+        case 'colorplane':
+        case 'circles':
+            return [iterateWords(cmd)];
         default:
             return [genericWords(cmd)];
     }
@@ -1371,6 +1391,8 @@ function objectFull(raw: string): string | null {
     const options = split.options;
     const motion = motionFull(own, rest, options); // 6.0 C
     if (motion !== undefined) return motion;
+    const iterate = iterateFull(own, rest, options); // 6.0 E
+    if (iterate !== undefined) return iterate;
     if (DEFINITION.test(rest)) return command('plot', own, options.map((o) => optionFull(o, SURFACE_HEAD.test(rest) ? 'surface' : 'function')), rest);
     const kw = /^([A-Za-z0-9]+)\b\s*([\s\S]*)$/.exec(rest);
     const word = kw ? kw[1].toLowerCase() : '';
@@ -1781,4 +1803,99 @@ function motionFull(own: string, rest: string, options: string[]): string | null
         else out.push(opt(o));
     }
     return command('solution', own, out, sol[1].trim());
+}
+
+// ------------------------------------------------------------ 6.0 E: iterate
+
+/** The commands of part E, by tool type. */
+const ITERATE_COMMANDS: Record<string, string> = { orbit: 'orbit', cobweb: 'cobweb', bifurcation: 'bifurcation', newton: 'newton', colourPlane: 'colourplane', fourierCircles: 'circles' };
+/** Keys of these commands that are no name a recurrence reads. */
+const ITERATE_KEYS = new Set(['name', 'steps', 'from', 'to', 'opacity', 'color', 'colour', 'colormap', 'label', 'thickness', 'size', 'step']);
+
+/**
+ * \orbit[z_0=0, c=P, steps=40, as a path]{z_{n+1} = z_n^2 + c}, \cobweb[from=0.2, steps=80]{x_{n+1} = f(x_n)},
+ * \bifurcation[r=2.5:4]{x_{n+1} = r x_n (1 - x_n)}, \newton[from=2.5, steps=5]{f},
+ * \colourplane[z_0=0, c=x + iy, steps=200, colormap/cyclic]{z_{n+1} = z_n^2 + c} and \circles[wave]{\sum ...}
+ * in words: `draw the orbit of $...$, $z_0 = 0$, $c = P$, 40 steps | as a path`, and so on.
+ */
+function iterateWords(cmd: Command): Mapped {
+    const m = new Mapped();
+    const opts = cmd.options;
+    namedInto(m, opts);
+    const arg = argOf(cmd);
+    const kind = cmd.name.toLowerCase();
+    const taken = new Set<Opt>();
+    const steps = valueOf(opts, 'steps');
+    const from = valueOf(opts, 'from');
+    const head: Record<string, string> = { orbit: 'draw the orbit of ', cobweb: 'draw the cobweb of ', bifurcation: 'draw the bifurcation diagram of ', newton: "draw Newton's method for ", colourplane: 'colour the plane by ', colorplane: 'colour the plane by ', circles: 'draw the circles of ' };
+    m.put(head[kind] ?? 'draw ', cmd.at);
+    if (kind === 'newton') m.copy(arg.text, arg.at);
+    else mathInto(m, arg.text, arg.at);
+    // A bifurcation's parameter: r=2.5:4 is `for r from 2.5 to 4`.
+    if (kind === 'bifurcation') {
+        const range = opts.find((o) => o.value !== null && !ITERATE_KEYS.has(o.key) && rangeOf(o.value, o.valueAt));
+        const r = range && range.value !== null ? rangeOf(range.value, range.valueAt) : null;
+        if (range && r) {
+            taken.add(range);
+            m.put(` for ${range.name} from `, range.at).copy(r[0].text, r[0].at).put(' to ', range.valueAt).copy(r[1].text, r[1].at);
+        }
+    }
+    if ((kind === 'cobweb' || kind === 'newton') && from) {
+        taken.add(from);
+        const v = inner(from.value ?? '', from.valueAt);
+        m.put(' from ', from.at).copy(v.text, v.at);
+    }
+    // The start and the names the recurrence reads: $z_0 = 0$, $c = P$.
+    if (kind !== 'circles' && kind !== 'newton') {
+        for (const o of opts) {
+            if (o.value === null || ITERATE_KEYS.has(o.key) || taken.has(o) || o.key.includes(' ')) continue;
+            taken.add(o);
+            const v = inner(o.value, o.valueAt);
+            m.put(', $', o.at).copy(o.name, o.at).put(' = ', o.valueAt).copy(v.text, v.at).put('$', o.valueAt + o.value.length - 1);
+        }
+    }
+    if (steps && kind !== 'circles' && kind !== 'bifurcation') {
+        taken.add(steps);
+        const v = inner(steps.value ?? '', steps.valueAt);
+        m.put(', ', steps.at).copy(v.text, v.at).put(' steps', steps.at);
+    }
+    barInto(
+        m,
+        opts.filter((o) => !taken.has(o)),
+        'other',
+        'x',
+        new Set(['name'])
+    );
+    return m;
+}
+
+/** A line of part E in words as its Full LaTeX command; undefined for any other line, null when no command fits it. */
+function iterateFull(own: string, rest: string, options: string[]): string | null | undefined {
+    const draw = /^draw\s+([\s\S]+)$/i.exec(rest);
+    const colour = /^colou?r\s+([\s\S]+)$/i.exec(rest);
+    const piece = { text: (draw ?? colour)?.[1] ?? '', at: 0 };
+    const read = draw ? readIterateDraw(piece, []) : colour ? readIteratePlane(piece, []) : null;
+    if (!read) return undefined;
+    if (read.problem) return null;
+    const f = read.fields;
+    const str = (v: unknown) => (typeof v === 'string' ? v : '');
+    const opts: string[] = [];
+    const formula = str(f.recurrence) || str(f.formula);
+    const rec = formula ? readRecurrence(formula) : null;
+    if (read.type === 'bifurcation') opts.push(`${str(f.parameter)}=${encBound(str(f.from))}:${encBound(str(f.to))}`);
+    if (read.type === 'cobweb' || read.type === 'newton') {
+        if (f.start !== undefined) opts.push(`from=${encValue(str(f.start))}`);
+    } else if (f.start !== undefined && rec) opts.push(`${rec.state}_0=${encValue(str(f.start))}`);
+    for (const g of givenParts(str(f.given))) opts.push(`${g.name}=${encValue(g.value)}`);
+    if (f.steps !== undefined) opts.push(`steps=${encValue(str(f.steps))}`);
+    if (f.wave === true) opts.push('wave');
+    for (const raw of [...read.extra.map((p) => p.text), ...options]) {
+        const o = raw.trim().replace(/^(?:with\s+(?:its\s+|the\s+)?|in\s+)(?=[A-Za-z])/i, '');
+        const lower = o.toLowerCase();
+        if (read.type === 'colourPlane' && isPlaneColormap(lower)) opts.push(`colormap/${lower}`);
+        else if (lower === 'wave') opts.push('wave');
+        else opts.push(optionFull(o, 'other'));
+    }
+    const arg = read.type === 'newton' ? str(f.function) : read.type === 'fourierCircles' ? str(f.sum) : formula;
+    return command(ITERATE_COMMANDS[read.type], own, opts, arg);
 }

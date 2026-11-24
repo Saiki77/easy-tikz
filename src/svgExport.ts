@@ -6,6 +6,7 @@
  */
 import { stripLatex } from './util';
 import { t } from './i18n';
+import { pixelImage } from './iterate/paint'; // 6.0 E
 
 /**
  * A copy of `svg` that renders on its own: MathJax labels (foreignObject)
@@ -18,6 +19,14 @@ export function exportableSvg(svg: SVGElement, doc: Document, opts: { white?: bo
     const clone = svg.cloneNode(true) as SVGElement;
     clone.removeAttribute('class');
     clone.removeAttribute('style');
+
+    // 6.0 E: a picture layer (a canvas the page painted) becomes an <image> with its PNG, painted again on the CPU.
+    const layers = Array.from(svg.querySelectorAll('foreignObject.etz-pixels'));
+    clone.querySelectorAll('foreignObject.etz-pixels').forEach((fo, i) => {
+        const img = layers[i] ? pixelImage(layers[i]) : null;
+        if (img) fo.replaceWith(img);
+        else fo.remove();
+    });
 
     // MathJax labels live in <foreignObject> nodes whose rendering
     // depends on MathJax's document-level stylesheet: serialized

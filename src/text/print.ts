@@ -34,6 +34,8 @@ import type { StepList } from '../motion6/steps';
 import { axisSetHead, chordHead } from '../notes6/text';
 // 6.0 A
 import { letHead, listPointsHead, vectorHead } from '../values/text';
+// 6.0 E
+import { ITERATE_KINDS, iterateHead, iterateOptions } from '../iterate/text';
 
 // ---------------------------------------------------------------- values
 
@@ -438,6 +440,7 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
     } else if (type === 'axisSet' || type === 'chord') head = notes6Head(full, o); // 6.0 B
     else if (BEYOND_HEADS[type]) head = BEYOND_HEADS[type](full, o, ctx);
     else if (MOTION_KINDS.has(type)) head = motionHead(full, o, { is3D: ctx.is3D, shown: ctx.shown.has(name) }); // 6.0 C
+    else if (ITERATE_KINDS.has(type)) head = iterateHead(full, o); // 6.0 E
     // `title: ...` would read as a title line, so such a name only fits a raw line.
     if (!head || !NAME_RE.test(name) || /^(title|xlabel|ylabel|zlabel)$/i.test(name)) return raw('tool', min);
     if (type === 'region') {
@@ -466,6 +469,8 @@ function toolLine(min: Data, full: Data, ctx: Ctx): string {
         beyondOptions(type, o);
     } else if (MOTION_KINDS.has(type)) {
         motionOptions(type, o, full); // 6.0 C
+    } else if (ITERATE_KINDS.has(type)) {
+        iterateOptions(type, o); // 6.0 E
     } else {
         o.common();
         o.label();

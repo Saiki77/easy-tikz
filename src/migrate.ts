@@ -18,6 +18,8 @@ import { t } from './i18n';
 import { MOTION_PREFIX, completeMotionTool, keptStep, restPointsDefaults, trajectoryDefaults, vectorFieldDefaults } from './motion6/tools';
 // 6.0 B
 import { axisSetDefaults, chordDefaults, completeAxisSet, completeChord } from './notes6/tools';
+// 6.0 E
+import { ITERATE_PREFIX, completeIterateTool, iterateDefaults } from './iterate/tools';
 import { notes6Recipes } from './notes6/recipes';
 import {
     Annotation,
@@ -132,6 +134,8 @@ const TOOL_PREFIX: Record<ToolType, string> = {
     value: 'L',
     vector: 'V',
     listPoints: 'LP',
+    // 6.0 E
+    ...ITERATE_PREFIX,
 };
 
 const PARAMETER_LETTERS = ['a', 'b', 'c', 'd', 'k', 'm', 'n', 'p', 'q', 'r', 's', 'u', 'v', 'w'];
@@ -1176,7 +1180,10 @@ function convertTool(src: Record<string, unknown>, ctx: ConvertContext): { body:
         default: {
             // 6.0 C: vector fields, rest points, solutions of systems
             const motion = completeMotionTool(src, ctx.dim);
-            return motion ? { body: motion, hidden: false } : null;
+            if (motion) return { body: motion, hidden: false };
+            // 6.0 E: orbits, cobwebs, bifurcation diagrams, Newton's method, coloured planes, turning circles
+            const iterate = completeIterateTool(src);
+            return iterate ? { body: iterate, hidden: false } : null;
         }
     }
 }
@@ -1780,6 +1787,14 @@ export function defaultTool(type: ToolType, opts: { is3D: boolean; tools: Tool[]
             return newVector(opts);
         case 'listPoints':
             return newListPoints(opts);
+        // 6.0 E
+        case 'orbit':
+        case 'cobweb':
+        case 'bifurcation':
+        case 'newton':
+        case 'colourPlane':
+        case 'fourierCircles':
+            return { ...(iterateDefaults(type) as Omit<Tool, 'id' | 'name' | 'hidden'>), ...identity(type, opts) } as Tool;
     }
 }
 
