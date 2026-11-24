@@ -79,10 +79,12 @@ export function iterateHoverCard(texIn: string): IterateHoverCard | null {
             const sliders = c ? ['slider a from -2 to 1, starting at -0.12', 'slider b from -1.5 to 1.5, starting at 0.75'] : [];
             const rest = letters.slice(1).map((l) => `slider ${l} from -2 to 2, starting at 1`);
             const given = c ? `, $${c} = a + b i$` : '';
+            // Behind the orbit, faint: the plane of c, each point coloured by its own orbit (the Mandelbrot set for z^2 + c).
+            const plane = c ? [`colour the plane by $${tex}$, $${rec.state}_0 = 0$, $${c} = x + i y$, 100 steps, opacity 0.35`] : [];
             return {
                 kind: 'recurrence',
                 note: 'iterate.hover.recurrenceNote',
-                lines: ['show x from -2 to 1 and y from -1.5 to 1.5', 'equal scale', ...sliders, ...rest, `draw the orbit of $${tex}$, $${rec.state}_0 = 0$${given}, 40 steps`],
+                lines: ['show x from -2 to 1 and y from -1.5 to 1.5', 'equal scale', ...sliders, ...rest, ...plane, `draw the orbit of $${tex}$, $${rec.state}_0 = 0$${given}, 40 steps`],
             };
         }
         const sliders = letters.map((l, i) => `slider ${l} from 0 to 4, starting at ${i === 0 ? 3.7 : 1}`);
@@ -109,7 +111,7 @@ export function iterateHoverCard(texIn: string): IterateHoverCard | null {
         return {
             kind: 'sum',
             note: 'iterate.hover.sumNote',
-            lines: ['show x from 0 to 31', slider, ...extra, `mark the points $\\{(${m}, \\sum_{${sum.k}=${sum.lo}}^{${m}} ${sum.body}) : ${m} = 1, \\dots, ${n}\\}$, joined`],
+            lines: [`show x from 0 to ${n} + 1`, slider, ...extra, `mark the points $\\{(${m}, \\sum_{${sum.k}=${sum.lo}}^{${m}} ${sum.body}) : ${m} = 1, \\dots, ${n}\\}$`],
         };
     }
     // A function of z: f(z) = ..., or a formula in z alone.

@@ -14,7 +14,7 @@
  *
  * Pure: no DOM, no Obsidian.
  */
-import type { Colormap, PlaneColormap } from '../types';
+import type { PlaneColormap } from '../types';
 import { COLORMAP_STOPS, colormapRgb } from '../colormaps';
 import { glslNumber } from '../values';
 
@@ -140,7 +140,7 @@ function glslStops(name: string, stops: Array<{ at: number; rgb: Rgb }>, cyclic:
 /** GLSL of the map `map` as `vec3 cmap(float t)` (the same colours as mapRgb). */
 export function glslMap(map: PlaneColormap): string {
     if (map === 'cyclic') return glslStops('cmap', CYCLIC.map((rgb, i) => ({ at: i, rgb })), true);
-    const stops = COLORMAP_STOPS[map as Colormap].map((s) => ({ at: s.at, rgb: [s.rgb[0] / 255, s.rgb[1] / 255, s.rgb[2] / 255] as Rgb }));
+    const stops = COLORMAP_STOPS[map].map((s): { at: number; rgb: Rgb } => ({ at: s.at, rgb: [s.rgb[0] / 255, s.rgb[1] / 255, s.rgb[2] / 255] }));
     return glslStops('cmap', stops, false);
 }
 

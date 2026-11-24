@@ -492,9 +492,9 @@ function computePlane(t: PlaneColourTool, ctx: SceneCtx): SceneOutput {
     const sources = [formula, str(t.start), str(t.given), str(t.steps)];
     const key = (extra: unknown[]) => JSON.stringify(['plane', kind, formula, str(t.start), str(t.given), t.colormap ?? '', opacity, ...extra, ctx.math.depsKey(sources)]);
     let prim: PixelPrim;
+    const rec = readRecurrence(formula);
     try {
-        if (kind === 'escape') {
-            const rec = readRecurrence(formula) as Recurrence;
+        if (rec) {
             const steps = stepsOf(t.steps, 200, 1000, t.name, ctx, out);
             if (steps === null) return out;
             const given = givenParts(t.given);

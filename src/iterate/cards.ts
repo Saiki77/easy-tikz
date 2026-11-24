@@ -368,7 +368,7 @@ class NewtonCard extends IterateCard<NewtonTool> {
 // ------------------------------------------------------- coloured plane
 
 class PlaneCard extends IterateCard<PlaneColourTool> {
-    private recurrenceRows: HTMLElement[] = [];
+    private recurrenceRows: Element[] = [];
     private mapRow!: HTMLElement;
 
     constructor(parent: HTMLElement, item: LayerItem, tool: PlaneColourTool, host: PanelHost, actions: LayerCardActions) {
@@ -431,7 +431,7 @@ class PlaneCard extends IterateCard<PlaneColourTool> {
                 tool.steps = v;
             },
         });
-        this.recurrenceRows = Array.from(this.body.children).slice(before) as HTMLElement[];
+        this.recurrenceRows = Array.from(this.body.children).slice(before);
         const maps = field(this.body, { label: t('iterate.card.colormap'), layout: 'inline' });
         this.mapRow = maps.el;
         const fallback = () => (planeKind(tool.formula) === 'escape' ? 'cyclic' : 'viridis');
