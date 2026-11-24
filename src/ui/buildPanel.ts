@@ -121,7 +121,7 @@ const SECTION_ICONS: Record<string, string> = {
     Motion: 'wind', // 6.0 C
     // 6.0 A
     Values: 'braces',
-    'Linear algebra': 'grid-3x3', // 6.0 D
+    'Linear algebra': 'grid', // 6.0 D
 };
 
 /** More words that find a recipe in the + Add picker (English, as people search): vector finds Arrow. */

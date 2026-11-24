@@ -257,3 +257,12 @@ test('the fit holds the moved basis vectors and the unit square, not the grid', 
     assert.ok(fit.x.max >= 3 && fit.x.max < 6, `x ${JSON.stringify(fit.x)}`);
     assert.ok(fit.y.max >= 2 && fit.y.max < 5, `y ${JSON.stringify(fit.y)}`);
 });
+
+test('frames: every step exported side by side, the transform settled in its own step', () => {
+    const settings = settingsOf(`frames\n${SHEAR}\ndraw the basis vectors\nthen transform the plane by A`);
+    const tex = settings.generateTikzCode();
+    const pictures = tex.split('\\begin{tikzpicture}').slice(1);
+    assert.equal(pictures.length, 2);
+    assert.match(pictures[0], /\(axis cs:0,0\) -- \(axis cs:0,1\)/);
+    assert.match(pictures[1], /\(axis cs:0,0\) -- \(axis cs:1,1\)/);
+});

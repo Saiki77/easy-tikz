@@ -123,7 +123,7 @@ class TransformCard extends ToolCard<TransformTool> {
 
     private build(): void {
         const tool = this.tool;
-        const f = field(this.body, { label: t('linear.card.map'), layout: 'inline' });
+        const f = field(this.body, { label: t('linear.card.map'), layout: 'inline', hint: t('linear.card.mapHint') });
         const input = this.exprField(f.controlEl, {
             id: 'map',
             label: t('linear.card.map'),
@@ -137,7 +137,6 @@ class TransformCard extends ToolCard<TransformTool> {
             check: (src) => checkWith(() => compileMap(this.host.math(), src, dimOf(this.host))),
         });
         f.bind(input.h.input);
-        this.body.createDiv({ cls: 'etz-card-hint', text: t('linear.card.mapHint') });
     }
 
     protected summary(): string {

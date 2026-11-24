@@ -22,7 +22,7 @@ import { addIssue, fail, newOutput } from '../scene';
 import { t as msg } from '../i18n';
 import { errorText } from '../util';
 import { compileValue, isComplex, isVec } from '../values/index';
-import type { Value } from '../values/index';
+import type { Eigenpair, Value } from '../values/index';
 import { stepOf, stepProgress, registerStepMover } from '../motion6/steps';
 import { LinearMap, compileMap, eigenOf, mapLine, mapRing, matrixAt, matrixValue, pointsAt, ringArea, splitMapsto, stillAt } from './maps';
 import { LINEAR_TYPES } from './tools';
@@ -252,6 +252,11 @@ function lineSpot(d: Pt, view: View, k: number): Pt {
     return { x: base.x + k * tmax * d.x, y: base.y + k * tmax * d.y };
 }
 
+/** The eigenpairs with a real value and a vector. */
+function realPairs(pairs: Eigenpair[]): Array<{ value: number; vector: number[] }> {
+    return pairs.flatMap((p) => (typeof p.value === 'number' && p.vector ? [{ value: p.value, vector: p.vector }] : []));
+}
+
 /** A direction of an eigenvector: right-pointing (or up), unit length. */
 function towardRight(v: readonly number[]): Pt {
     const d = unit(v[0], v[1]);
@@ -285,9 +290,9 @@ function eigen2D(t: EigenvectorsTool, ctx: SceneCtx): SceneOutput {
         label(lineSpot({ x: Math.cos(Math.PI / 8), y: Math.sin(Math.PI / 8) }, ctx.view, 0.85), unit(Math.cos(Math.PI / 8), Math.sin(Math.PI / 8)), `${msg('linear.label.everyVector')} $\\lambda = ${nice(lambda)}$`);
         addIssue(out, t.name, 'matrix', msg('linear.problem.everyVector', { value: nice(lambda) }), 'info');
     } else {
-        const real = pairs.filter((p) => typeof p.value === 'number' && p.vector);
+        const real = realPairs(pairs);
         real.forEach((p, i) => {
-            const d = towardRight(p.vector as number[]);
+            const d = towardRight(p.vector);
             lines.push([{ x: -R * d.x, y: -R * d.y }, { x: R * d.x, y: R * d.y }]);
             const name = real.length > 1 ? `\\lambda_${i + 1}` : '\\lambda';
             label(lineSpot(d, ctx.view, i === 0 ? 0.85 : 0.6), d, `$${name} = ${nice(Number(p.value))}$`);
@@ -502,7 +507,7 @@ function chainDet(chain: Active[]): number | null {
 /** The name of the product of a chain of named matrices all the way there (`A`, `BA`), else null. */
 function chainName(chain: Active[]): string | null {
     if (!chain.length || chain.some((a) => !a.map.name || a.p < 1)) return null;
-    const names = chain.map((a) => a.map.name as string).reverse();
+    const names = chain.map((a) => a.map.name ?? '').reverse();
     return names.length === 1 ? names[0] : `(${names.join('')})`;
 }
 
@@ -788,11 +793,11 @@ function eigen3D(t: EigenvectorsTool, ctx: SceneCtx): SceneOutput {
     const [zmin, zmax] = zOf(ctx);
     const R = 3 * Math.max(Math.abs(v.xmin), Math.abs(v.xmax), Math.abs(v.ymin), Math.abs(v.ymax), Math.abs(zmin), Math.abs(zmax));
     const L = 0.8 * Math.min(Math.abs(v.xmax), Math.abs(v.ymax), Math.abs(zmax)) || 1;
-    const real = pairs.filter((p) => typeof p.value === 'number' && p.vector);
+    const real = realPairs(pairs);
     out.segments3 = [];
     out.points3 = [];
     real.forEach((p, i) => {
-        const d = p.vector as number[];
+        const d = p.vector;
         out.segments3?.push(seg([-R * d[0], -R * d[1], -R * d[2]], [R * d[0], R * d[1], R * d[2]], color, width, { dashed: !!t.dashed }));
         if (t.valueLabel) {
             const name = every ? '\\lambda' : real.length > 1 ? `\\lambda_${i + 1}` : '\\lambda';

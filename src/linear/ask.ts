@@ -13,7 +13,7 @@
  *
  * Answers are chart lines in the built-in words. Pure: no DOM, no Obsidian.
  */
-import type { Tool, TransformTool, ValueTool, VectorTool } from '../types';
+import type { Tool, ValueTool } from '../types';
 import { AskContext, Question, registerQuestions } from '../notes6/ask';
 import { t } from '../i18n';
 import { lastStep, stepOf } from '../motion6/steps';
@@ -89,14 +89,14 @@ function vectorQuestions(ctx: AskContext): Question[] {
     if (!tool) return [];
     if (tool.type === 'basisVectors') {
         const q: Question[] = [{ id: 'unit-square', group, label: t('linear.ask.unitSquare'), answer: { lines: ['shade the image of the unit square, labelled'] } }];
-        const mover = moverOf(ctx.tools, tool.name) as TransformTool | null;
-        if (mover && mover.map.trim() && !splitMapsto(mover.map)) {
+        const mover = moverOf(ctx.tools, tool.name);
+        if (mover && mover.type === 'transform' && mover.map.trim() && !splitMapsto(mover.map)) {
             q.push({ id: 'eigenvectors', group, label: t('linear.ask.eigenvectors'), answer: { lines: [`draw the eigenvectors of ${formula(ctx, mover.map.trim())}, labelled`] } });
         }
         return q;
     }
     if (tool.type !== 'vector') return [];
-    const v = (tool as VectorTool).vectors.split(';')[0]?.trim();
+    const v = tool.vectors.split(';')[0]?.trim();
     if (!v || !NAME.test(v)) return [];
     const q: Question[] = [{ id: 'span', group, label: t('linear.ask.vectorSpan', { v }), answer: { lines: [`draw the span of ${v}`] } }];
     const others = new Set<string>(letsOf(ctx, 'vec').filter((w) => w !== v));

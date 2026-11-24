@@ -139,7 +139,7 @@ export function linearHoverCard(tex: string, defs: Map<string, string>): LinearH
     const dim = dimOf(matrix);
     if (dim === 3 && (p.kind === 'product' || p.kind === 'eigen')) return null;
     const slider = `slider ${S} from 0 to 1, starting at 1, in steps of 0.01`;
-    const moving = `transform ${dim === 3 ? 'space' : 'the plane'} by $(1 - ${S}) ${IDENTITY[dim]} + ${S} ${name}$`;
+    const moving = `transform ${dim === 3 ? 'space' : 'the plane'} by $(1 - ${S}) \\cdot ${IDENTITY[dim]} + ${S} ${name}$`;
     const head =
         dim === 3
             ? ['3d', 'show x from -3 to 3 and y from -3 to 3 and z from -3 to 3', slider, `let $${name} = ${matrix}$`]

@@ -91,6 +91,12 @@ test('hover cards: a matrix moves the grid with a t slider; A v, det A and A v =
         assert.ok(card, f);
         const parsed = parseChartText(card.lines.join('\n'));
         assert.deepEqual(parsed.problems, [], `${f}:\n${card.lines.join('\n')}`);
+        // The chart draws without a problem: the grid moves with s.
+        const settings = SettingsManager.fromJSON(parsed.data);
+        const math = settings.createMathContext({ memo: false });
+        const config = settings.toRendererConfig(math);
+        const scene = computeScene2D({ functions: config.functions, tools: config.tools, math, view: { xmin: -4, xmax: 4, ymin: -3, ymax: 3 }, grid: { nx: 40, ny: 40 }, axisStyle: 'box', polar: false, labelMetrics: labelMetricsFor(10, 10) });
+        assert.deepEqual(scene.issues, [], f);
     }
     const m = linearHoverCard(tex, defs)!;
     assert.ok(m.lines.some((l) => /^slider s from 0 to 1/.test(l)));
