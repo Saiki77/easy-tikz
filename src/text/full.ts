@@ -43,6 +43,8 @@ import { LINEAR_FULL_HELP, readLinearDraw, readLinearShade, readTransform } from
 import { readIterateDraw, readIteratePlane } from '../iterate/text';
 import { givenParts, isPlaneColormap } from '../iterate/tools';
 import { readRecurrence } from '../values/recurrence';
+// 6.0 G
+import { GEOGEBRA_FULL_HELP, geogebraFull } from '../geogebra/text';
 
 /** 6.0 A: the lines of values in Full LaTeX need no let names: they are written in the forms that say what they are. */
 const NO_LETS: ReadonlySet<string> = new Set();
@@ -115,6 +117,7 @@ export const FULL_OPTION_HELP: Record<string, string> = {
     newton: 'from=x_0, steps=5, a colour, thin, thick, labelled, hidden',
     colourPlane: 'z_0=a start, c=a value, steps=200, colormap/viridis (heat, cool, diverging, rainbow, greyscale, cyclic), opacity=0.5, hidden',
     fourierCircles: 'wave, a colour, thin, thick, speed=1, hidden',
+    ...GEOGEBRA_FULL_HELP, // 6.0 G
 };
 
 // ------------------------------------------------------------ text pieces
@@ -839,6 +842,19 @@ function rawWords(cmd: Command): Mapped | null {
 }
 
 /** A command no other one is: \<command>[<options>]{<rest>} as <command> <rest>, <options>. */
+/** 6.0 G: \geogebra[options]{line}: the line as written, the options after commas. */
+function geogebraWords(cmd: Command): Mapped {
+    const m = new Mapped();
+    namedInto(m, cmd.options);
+    const arg = argOf(cmd);
+    m.copy(arg.text, arg.at);
+    for (const o of cmd.options) {
+        if (o.key === 'name' && o.value !== null) continue;
+        m.put(', ', o.at).append(optionWords(o, 'other', 'x'));
+    }
+    return m;
+}
+
 function genericWords(cmd: Command): Mapped {
     const m = new Mapped();
     namedInto(m, cmd.options);
@@ -1023,6 +1039,9 @@ function lineWords(line: string, no: number, problems: TextProblem[]): Mapped[] 
         case 'colorplane':
         case 'circles':
             return [iterateWords(cmd)];
+        // 6.0 G: \geogebra[red]{c = Circle(A, 3)}: the GeoGebra line as it is, its options after it.
+        case 'geogebra':
+            return [geogebraWords(cmd)];
         default:
             return [genericWords(cmd)];
     }
@@ -1418,6 +1437,9 @@ function objectFull(raw: string): string | null {
     if (linear !== undefined) return linear;
     const iterate = iterateFull(own, rest, options); // 6.0 E
     if (iterate !== undefined) return iterate;
+    // 6.0 G: GeoGebra lines
+    const geogebra = geogebraFull(own, rest, options, (o) => (/^(no label|labelled|labeled)$/i.test(o.trim()) ? o.trim() : optionFull(o, 'other')));
+    if (geogebra !== undefined) return geogebra;
     if (DEFINITION.test(rest)) return command('plot', own, options.map((o) => optionFull(o, SURFACE_HEAD.test(rest) ? 'surface' : 'function')), rest);
     const kw = /^([A-Za-z0-9]+)\b\s*([\s\S]*)$/.exec(rest);
     const word = kw ? kw[1].toLowerCase() : '';

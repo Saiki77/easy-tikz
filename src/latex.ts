@@ -7,9 +7,13 @@
  */
 // 6.0 A: values (src/values/latex.ts).
 import { MATRIX_ENVS, SUMMAND_ENDS, matrixText, setText } from './values/latex';
+// 6.0 G: GeoGebra's list braces and its ί (src/geogebra/syntax.ts).
+import { geogebraPlain, isGeoGebraFormula } from './geogebra/syntax';
 
 /** A backslash, a brace or a single bar (|x|, not the `||` of or): the formula is LaTeX (the plain syntax has none of them). */
 export function looksLikeLatex(src: string): boolean {
+    // 6.0 G: the braces of GeoGebra's lists are no LaTeX.
+    if (isGeoGebraFormula(src)) return /(^|[^|])\|(?!\|)/.test(src);
     return /[\\{}]/.test(src) || /(^|[^|])\|(?!\|)/.test(src);
 }
 
@@ -48,6 +52,7 @@ const TEXT_COMMANDS = new Set(['operatorname', 'mathrm', 'text', 'mathit', 'math
  * `\left(` is `(`, `|x|` is `abs(x)`, and `\alpha` is the name alpha.
  */
 export function latexToPlain(src: string): string {
+    src = geogebraPlain(src); // 6.0 G
     if (!looksLikeLatex(src)) return src;
     return absolute(convert(src));
 }

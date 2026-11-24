@@ -31,6 +31,9 @@ export interface Parameter {
      * connected too. Text: `slider a from 0 to 2, connected`.
      */
     connected?: boolean;
+    // 6.0 G
+    /** Written the GeoGebra way, `a = Slider(0, 5)`: printed so while its value is its low end. */
+    geogebra?: boolean;
 }
 
 export interface FunctionParameters {
@@ -801,6 +804,37 @@ export interface FourierCirclesTool extends ToolBase {
     speed?: number;
 }
 
+// 6.0 G: GeoGebra input lines (src/geogebra/).
+
+/**
+ * A GeoGebra input line as a chart object: `A = (1, 2)`, `c = Circle(A, 3)`,
+ * `L = Sequence((k, k^2), k, 1, 10)`, a bare `Polygon(A, B, C)`. What its
+ * command or value is decides what it draws, in GeoGebra's default look
+ * (src/geogebra/objects.ts); the line prints back as written. A named
+ * value (a point, a number, a list, a matrix, a function of x) is usable
+ * by name in every formula of the chart, as a let name is.
+ */
+export interface GeoGebraTool extends ToolBase {
+    type: 'geogebra';
+    /** The text after `name =` (or the bare command), as written: `Circle(A, 3)`, `(1, 2)`, `{{1, 2}, {3, 4}}`. */
+    command: string;
+    /** Written with its name (`A = ...`); false for a bare command (named G1, G2, ...). */
+    named: boolean;
+    /** '' = GeoGebra's colour for what it draws (free points blue, polygons brown, the rest black). */
+    color: string;
+    /** '' = GeoGebra's ('thick'). */
+    thickness: string;
+    dashed: boolean;
+    /** '' = GeoGebra's ('normal'; 'small' for lists of more than 100 points). */
+    size: MarkerSize | '';
+    /** Fill of a polygon or a circle, 0..1; -1 = GeoGebra's (0.1 for polygons, none for circles). */
+    fillOpacity: number;
+    /** Its name as a label: 'auto' = GeoGebra's (named points), 'shown', 'hidden'. */
+    nameLabel: 'auto' | 'shown' | 'hidden';
+    /** A label template instead of the name ('' = none). */
+    label: string;
+}
+
 export type Tool =
     | RegionTool
     | CurveTool
@@ -838,7 +872,9 @@ export type Tool =
     | BifurcationTool
     | NewtonTool
     | PlaneColourTool
-    | FourierCirclesTool;
+    | FourierCirclesTool
+    // 6.0 G
+    | GeoGebraTool;
 
 export type ToolType = Tool['type'];
 

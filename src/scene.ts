@@ -61,6 +61,9 @@ import { ITERATE_SCENE_TYPES, IterateOutput, computeIterate, iterateMotion, iter
 import type { PixelPrim } from './iterate/pixels';
 // 6.0 F4
 import type { LivePrim } from './motion6/liveprims';
+// 6.0 G
+import { computeGeoGebra, geogebraSources } from './geogebra/scene';
+import type { GObj } from './geogebra/objects';
 
 export type ArrowHeads = 'forward' | 'backward' | 'both';
 
@@ -461,6 +464,9 @@ interface Output {
     // 6.0 F4
     /** What moves on the clock (src/motion6/liveprims.ts). */
     live?: LivePrim[];
+    // 6.0 G
+    /** The object a GeoGebra line draws, for the lines that read it (Translate(c, v)): src/geogebra/scene.ts. */
+    geogebra?: GObj;
 }
 
 /** A function's decorations or a tool, as a node of the dependency graph. */
@@ -899,7 +905,7 @@ function toolNode(t: Tool, math: MathContext): SceneNode {
             break;
         default:
             // 6.0 A: values (src/values/scene.ts), then the tools beyond functions; 6.0 C: motion; 6.0 D: linear; 6.0 E: iterate.
-            if (!valuesSources(t, scan) && !linearSources(t, scan) && !iterateSources(t, scan)) beyondSources(t, scan, refs);
+            if (!valuesSources(t, scan) && !linearSources(t, scan) && !iterateSources(t, scan) && !geogebraSources(t, scan) /* 6.0 G */) beyondSources(t, scan, refs);
             motionSources(t, scan, refs); // 6.0 C
     }
     return { id: `tool:${t.id}`, name: str(t.name) || str(t.id), tool: t, refs, sources, base: toolBase(t) };
@@ -2361,7 +2367,7 @@ function compute2D(node: SceneNode, ctx: Ctx): Output {
             return computeNotes6(t, ctx) ?? newOutput();
         default:
             // 6.0 A: values (src/values/scene.ts); 6.0 C: motion; 6.0 D: linear; 6.0 E: iterate.
-            return computeValues(t, ctx) ?? computeLinear(t, ctx) ?? computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? computeIterate(t, ctx) ?? newOutput();
+            return computeValues(t, ctx) ?? computeLinear(t, ctx) ?? computeBeyond(t, ctx) ?? computeMotion(t, ctx) ?? computeIterate(t, ctx) ?? computeGeoGebra(t, ctx) /* 6.0 G */ ?? newOutput();
     }
 }
 
@@ -3794,6 +3800,7 @@ function scene3D(input: SceneInput3D): Scene3D {
         else if (MOTION_3D_TYPES.has(t.type)) nodes.push(toolNode(t, math)); // 6.0 C
         // 6.0 A: definitions, vector arrows and points of a list (src/values/scene.ts); 6.0 D: linear algebra.
         else if (VALUE_TYPES.has(t.type) || LINEAR_TYPES.has(t.type)) nodes.push(toolNode(t, math));
+        else if (t.type === 'geogebra') nodes.push(toolNode(t, math)); // 6.0 G
     }
     // Data, probability, Riemann sums and slope fields are drawn in 2D charts only (5.0).
     const only2D: SceneIssue[] = tools
@@ -3815,7 +3822,7 @@ function scene3D(input: SceneInput3D): Scene3D {
             if (t.type === 'points') return computePoints3D(t, ctx);
             if (t.type === 'segment') return computeSegment3D(t, ctx);
             if (t.type === 'plane3D') return computePlane(t, ctx);
-            return computeValues3D(t, ctx) ?? computeLinear3D(t, ctx) ?? computeMotion3D(t, ctx) ?? newOutput(); // 6.0 A, C, D
+            return computeValues3D(t, ctx) ?? computeLinear3D(t, ctx) ?? computeMotion3D(t, ctx) ?? computeGeoGebra(t, ctx) /* 6.0 G */ ?? newOutput(); // 6.0 A, C, D
         },
         new Set()
     );

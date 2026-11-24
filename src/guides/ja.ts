@@ -32,6 +32,8 @@ import { VALUES_JA } from './values.ja';
 import { INTERACT_JA } from './interact.ja';
 import { LINEAR_JA } from './linear.ja';
 import { DYNAMICS_JA } from './dynamics.ja';
+// 6.0 G
+import { GEOGEBRA_JA } from './geogebra.ja';
 
 /** The Japanese texts of one guide. */
 export interface GuideText {
@@ -80,6 +82,7 @@ export const JA_GUIDES: Readonly<Record<string, GuideText>> = {
     ...INTERACT_JA,
     ...LINEAR_JA,
     ...DYNAMICS_JA,
+    ...GEOGEBRA_JA, // 6.0 G
 };
 
 export function localGuide(guide: Guide): Guide {

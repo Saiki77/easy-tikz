@@ -31,6 +31,7 @@ import '../notes6/cards';
 // 6.0 A
 import '../values/cards';
 import '../iterate/cards'; // 6.0 E
+import '../geogebra/cards'; // 6.0 G
 import { pixelImage } from '../iterate/paint'; // 6.0 F2
 import { CardUiState, FunctionCardHandle, createFunctionCard, createSurfaceCard } from './functionCards';
 import { ExprInputHandle, IconButtonHandle, exprInput, group, iconButton, textButton, trapEscape } from './kit';
@@ -128,6 +129,7 @@ const SECTION_ICONS: Record<string, string> = {
     // 6.0 E
     Iterate: 'repeat',
     'Colour the plane': 'palette',
+    GeoGebra: 'shapes', // 6.0 G
 };
 
 /** More words that find a recipe in the + Add picker (English, as people search): vector finds Arrow. */
@@ -193,6 +195,9 @@ const RECIPE_WORDS: Record<string, string> = {
     bifurcation: 'logistic map chaos period doubling',
     'newton-method': 'root tangent iterate zero',
     'fourier-circles': 'epicycles series square wave animation sum',
+    // 6.0 G
+    'geogebra-point': 'geogebra point command paste input',
+    'geogebra-triangle': 'geogebra polygon circle circumcircle construction paste',
 };
 
 /** Menu heading per recipe section (Functions reads Surfaces in 3D charts). */
@@ -215,6 +220,7 @@ const SECTION_TITLES: Record<string, MessageKey> = {
     // 6.0 E
     Iterate: 'iterate.section.iterate',
     'Colour the plane': 'iterate.section.plane',
+    GeoGebra: 'geogebra.section', // 6.0 G
 };
 
 /** One-click links under the starter examples: [text key, recipe id]. */

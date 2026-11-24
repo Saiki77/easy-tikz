@@ -515,6 +515,37 @@ const ITERATE: Record<string, string> = {
     snippet: 'snippet\naxes in the middle\nshow x from -2 to 2 and y from -2 to 2\ncolour the plane by $f(z) = z^3 - 1$',
 };
 
+// 6.0 G: GeoGebra lines: a pasted construction (points, a circle, a polygon, a list, a curve, a text, transforms) and the screenshot's point set.
+const GEOGEBRA: Record<string, string> = {
+    construction: [
+        'show x from -2 to 7 and y from -2 to 6',
+        'equal scale',
+        'a = Slider(1, 3)',
+        'A = (1, 1)',
+        'B = (5, 1)',
+        'C = (2.5, a + 1)',
+        'p = Polygon(A, B, C)',
+        'c = Circle(A, B, C), dashed',
+        'L = Sequence((k, k^2 / 8), k, 0, 6)',
+        'K = Curve(cos(t), sin(2t), t, 0, 2pi) in red',
+        'l = Line(A, C)',
+        'v = Vector(A, Midpoint(B, C))',
+        'm = Reflect(p, l)',
+        'T = Text("|AB| = " + Distance(A, B), (-1, 5))',
+        'f = x^2 / 4 - 1',
+    ].join('\n'),
+    screenshot: [
+        'show x from -2.2 to 0.8 and y from -1.3 to 1.3',
+        'equal scale',
+        'P = Flatten(Sequence(Sequence(a + b ί, a, -2.2, 0.8, 0.04), b, -1.3, 1.3, 0.04)), hidden',
+        'M = KeepIf(abs(Element(IterationList(z^2 + c, z, {0 + 0ί}, 20), 21)) <= 2, c, P)',
+        'c = -0.12 + 0.75ί',
+        'IterationList(z^2 + c, z, {0 + 0ί}, 30), in red',
+        'Z_0 = (0.3, 0.9)',
+        'IterationList(z - (z^3 - 1) / (3z^2), z, {Z_0}, 30), in blue',
+    ].join('\n'),
+};
+
 const BEYOND: Record<string, { text: string; table?: NoteTable | null }> = {
     // The table's points with labels, bars, a line and the regression line with its equation; the headers name the axes.
     dataTable: {
@@ -796,6 +827,7 @@ if (!hasLatex) {
     // 6.0 D
     for (const [k, text] of Object.entries(LINEAR)) cases.push({ name: `linear-${k}`, data: parseChartText(text).data });
     for (const [k, text] of Object.entries(ITERATE)) cases.push({ name: `iterate-${k}`, data: parseChartText(text).data }); // 6.0 E
+    for (const [k, text] of Object.entries(GEOGEBRA)) cases.push({ name: `geogebra-${k}`, data: parseChartText(text).data }); // 6.0 G
 
     const jobs = pool(
         cases.map((c) => ({

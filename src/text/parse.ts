@@ -44,6 +44,9 @@ import { LINEAR_PREFIX } from '../linear/tools';
 import { ITERATE_KINDS, ITERATE_KIND_WORDS, ITERATE_OPTION_HELP, isIterateOption, iterateOption, readIterateDraw, readIteratePlane } from '../iterate/text';
 import type { IterateRead } from '../iterate/text';
 import { ITERATE_PREFIX } from '../iterate/tools';
+// 6.0 G
+import { GEOGEBRA_KIND_WORDS, GEOGEBRA_OPTION_HELP, geogebraName, geogebraOption, isGeoGebraOption, readGeoGebraLine } from '../geogebra/text';
+import type { GeoGebraRead } from '../geogebra/text';
 
 type Data = Record<string, unknown>;
 
@@ -101,7 +104,7 @@ export const PATTERNS = new Set(['solid', 'horizontal', 'vertical', 'crosshatch'
 export const ANCHORS = new Set(['center', 'above', 'below', 'left', 'right']);
 const AXIS_STYLES: Record<string, string> = { middle: 'middle', centre: 'middle', center: 'middle', box: 'box', edges: 'axes', edge: 'axes', axes: 'axes' };
 // 6.0 A: value (L), vector (V), listPoints (LP); 6.0 B: axisSet, chord; 6.0 C: MOTION_PREFIX.
-export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', ...MOTION_PREFIX, axisSet: 'AX', chord: 'CH', value: 'L', vector: 'V', listPoints: 'LP', ...LINEAR_PREFIX /* 6.0 D */, ...ITERATE_PREFIX /* 6.0 E */ };
+export const TOOL_PREFIX: Record<string, string> = { region: 'R', curve: 'C', points: 'P', segment: 'S', plane3D: 'PL', data: 'D', dataPlot: 'DP', distribution: 'X', probability: 'PR', riemann: 'RS', slopeField: 'SF', solution: 'Y', ...MOTION_PREFIX, axisSet: 'AX', chord: 'CH', value: 'L', vector: 'V', listPoints: 'LP', ...LINEAR_PREFIX /* 6.0 D */, ...ITERATE_PREFIX /* 6.0 E */, geogebra: 'G' /* 6.0 G */ };
 const NAME = '[A-Za-z][A-Za-z0-9_]*';
 /** A name the block can spell: letters, digits and _. */
 export const NAME_RE = new RegExp(`^${NAME}$`);
@@ -318,6 +321,7 @@ function isOption(raw: string): boolean {
     if (/^(label|labels|legend)\s+"/i.test(o)) return true;
     if (isMotionOption(o)) return true; // 6.0 C
     if (isIterateOption(o)) return true; // 6.0 E
+    if (isGeoGebraOption(o)) return true; // 6.0 G
     if (/^tangent(\s+at)?\s+\S/i.test(o)) return true;
     if (/^((?:opacity|mesh)\s+[-+\d.e]+|pattern\s+[a-z-]+|samples\s+[\d.]+)$/i.test(o)) return true;
     if (/^(domain|t|theta|θ)\s+\S.*\.\..*\S$/i.test(o)) return true;
@@ -422,6 +426,8 @@ class Builder {
     readonly nearest: Array<{ tool: Data; type: string; field: string; line: number; at: number; missing: MessageKey; candidates?: string[] }> = [];
     /** 6.0 C: the step the lines are in now (`then` starts the next one). */
     step = 0;
+    /** 6.0 G: the names the chart gives without GeoGebra's lines (`a = x^2 + y^2` with a slider a stays a curve). */
+    chartNames: ReadonlySet<string> = new Set();
 
     problem(at: number, message: string) {
         this.problems.push({ line: this.line, column: at + 1, message });
@@ -521,6 +527,7 @@ const OPTION_HELP: Record<string, string> = {
     listPoints: 'in a colour, small, large, thin, thick, joined, labelled, labelled "text", hidden',
     ...LINEAR_OPTION_HELP, // 6.0 D
     ...ITERATE_OPTION_HELP, // 6.0 E
+    ...GEOGEBRA_OPTION_HELP, // 6.0 G
 };
 
 /** Each kind of object in words, for messages. */
@@ -550,6 +557,7 @@ const KIND_WORDS: Record<keyof typeof OPTION_HELP, MessageKey> = {
     listPoints: 'values.text.kindListPoints',
     ...LINEAR_KIND_WORDS, // 6.0 D
     ...ITERATE_KIND_WORDS, // 6.0 E
+    ...GEOGEBRA_KIND_WORDS, // 6.0 G
 };
 
 /** A kind of object in the reader's words, for messages. */
@@ -701,6 +709,8 @@ function applyKindOption(b: Builder, kind: string, target: Data, opt: Piece): bo
     }
     // 6.0 D: grids, basis vectors, transforms, eigenvectors, unit squares, spans
     if (LINEAR_TYPES.has(kind)) return linearOption(kind, target, o, () => b.problem(opt.at, msg('problems.text.needsFraction', { option: opt.text })));
+    // 6.0 G: GeoGebra lines
+    if (kind === 'geogebra') return geogebraOption(target, o, () => b.problem(opt.at, msg('problems.text.needsFraction', { option: opt.text })));
     return beyondOption(b, kind, target, opt);
 }
 
@@ -875,6 +885,7 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
         if (m) b.lets.add(m[1]);
     }
     // Names first, so a line may use a name defined further down; and 3D charts read their tuples as (x, y, z).
+    const ggNames = new Set<string>(); // 6.0 G
     lines.forEach((raw) => {
         // 6.0 C: `then plot g(x) = ...` names g as `plot g(x) = ...` does.
         const t = raw.trim().replace(/^then\s+(?=[A-Za-z\\$])/i, '');
@@ -896,7 +907,13 @@ function parseBuiltin(text: string, opts: { trace?: boolean }): TextChart {
             b.explicit.add(letName[1]);
             for (const p of (letName[2] ?? '').split(',')) if (/^[A-Za-z]{2,}$/.test(p.trim())) b.explicit.add(p.trim());
         }
+        // 6.0 G: `A = (1, 2)`, `c = Circle(A, 3)`: GeoGebra's names, known once every name of the chart is.
+        const gg = explicit ? null : geogebraName(t);
+        if (gg) ggNames.add(gg);
     });
+    // 6.0 G
+    b.chartNames = new Set(b.explicit);
+    for (const n of ggNames) b.explicit.add(n);
     const traces: LineTrace[] = [];
     const outside = namesNow;
     namesNow = new Set([...b.explicit].map((n) => n.toLowerCase()));
@@ -990,6 +1007,9 @@ function statement(b: Builder, line: string) {
     const call = /^([A-Za-z][A-Za-z0-9_]*)\s*\(/.exec(t);
     if (call && RESERVED_NAMES.has(call[1])) return formulaLine(b, name, body, options);
     if (DEFINITION.test(t)) return formulaLine(b, name, body, options);
+    // 6.0 G: a GeoGebra input line, `A = (1, 2)`, `c = Circle(A, 3)`, `IterationList(...)` (src/geogebra/text.ts).
+    const gg = readGeoGebraLine(t, (n) => b.chartNames.has(n));
+    if (gg) return geogebraLine(b, name, body, gg, options);
     const kw = /^([A-Za-z0-9]+)\b\s*(.*)$/.exec(t);
     const word = kw ? kw[1].toLowerCase() : '';
     if (split.bar >= 0 && CHART_WORDS.has(word)) b.problem(split.bar, msg('problems.text.noOptions', { word }));
@@ -1648,6 +1668,23 @@ function beyondOption(b: Builder, kind: string, target: Data, opt: Piece): boole
         return false;
     }
     return false;
+}
+
+/** 6.0 G: a GeoGebra input line (src/geogebra/text.ts): `a = Slider(0, 5)` is a slider, any other line a tool that keeps its text. */
+function geogebraLine(b: Builder, name: string | null, body: Piece, gg: GeoGebraRead, options: Piece[]) {
+    if (gg.slider) {
+        const nums = [gg.slider.min, gg.slider.max, gg.slider.step ?? '0.1', gg.slider.start ?? gg.slider.min].map(numberOf);
+        if (nums.some((v) => v === null) || !(nums[1]! > nums[0]!) || !(nums[2]! > 0)) return b.problem(body.at + gg.commandAt, msg('geogebra.text.sliderTakes'));
+        if (options.length) b.problem(options[0].at, msg('problems.text.noOptions', { word: 'Slider' }));
+        const own = b.claim(gg.name ?? '', body.at + gg.nameAt);
+        if (!own) return;
+        const [min, max, step, value] = nums as number[];
+        b.parameters.push({ name: own, value, min, max, step, geogebra: true });
+        return;
+    }
+    const own = gg.name !== null ? b.claim(gg.name, body.at + gg.nameAt) : name;
+    if (gg.name !== null && !own) return;
+    addTool(b, 'geogebra', own, { command: gg.command, named: gg.name !== null }, options, 'geogebra');
 }
 
 /** 6.0 A: `let v = (2, 1)`, `let f(x, y) = x^2 + 4y^2`: a value tool named by the definition. */

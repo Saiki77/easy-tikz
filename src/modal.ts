@@ -17,6 +17,7 @@ import { beyondToolReads, renameInBeyondTool } from './beyond/tools';
 import { motionToolReads, renameInMotionTool } from './motion6/tools'; // 6.0 C
 import { linearToolReads, renameInLinearTool } from './linear/tools'; // 6.0 D
 import { iterateToolReads, renameInIterateTool } from './iterate/tools'; // 6.0 E
+import { geogebraToolReads, renameInGeoGebraTool } from './geogebra/tools'; // 6.0 G
 import './iterate/ask'; // 6.0 E: the questions of part E in Ask the curve (the editor and the notes)
 import { ExportFile, collectExportFiles } from './iterate/export'; // 6.0 E
 import { savePictures } from './iterate/files'; // 6.0 E
@@ -743,6 +744,7 @@ export class TikzModal extends Modal implements PanelHost {
                     renameInMotionTool(t, { expr, tpl, ref, kind }); // 6.0 C
                     renameInLinearTool(t, { expr, tpl, ref, kind }); // 6.0 D
                     renameInIterateTool(t, { expr, tpl, ref, kind }); // 6.0 E
+                    renameInGeoGebraTool(t, { expr, tpl, ref, kind }); // 6.0 G
             }
         }
         for (const a of this.list<Annotation>('annotations')) {
@@ -3251,7 +3253,7 @@ export class TikzModal extends Modal implements PanelHost {
                     const value = valueToolReads(t, name, reads);
                     if (value !== null) {
                         if (value) return true;
-                    } else if (beyondToolReads(t, reads) || motionToolReads(t, reads) || notes6ToolReads(t, reads) || linearToolReads(t, reads) || iterateToolReads(t, reads)) return true; // 6.0 B, C, D, E
+                    } else if (beyondToolReads(t, reads) || motionToolReads(t, reads) || notes6ToolReads(t, reads) || linearToolReads(t, reads) || iterateToolReads(t, reads) || geogebraToolReads(t, reads)) return true; // 6.0 B, C, D, E, G
                 }
             }
         }

@@ -89,6 +89,10 @@ src/
     gl.ts paint.ts   # the preview: one WebGL context, the CPU in tiles over animation frames, kept pictures
     png.ts export.ts files.ts   # a pure-JS PNG encoder, the `\addplot graphics` export, saving the PNGs Copy LaTeX names
     fourier.ts       # the turning circles on the clock (pure)
+  geogebra/          # GeoGebra commands (6.0): its commands in every formula, its input lines as chart lines (pure but cards.ts)
+    syntax.ts        # GeoGebra's lists {1, 2, 3} and ί read as the plain syntax (same length, so positions stay)
+    commands.ts      # Sequence, IterationList, KeepIf, Element, Zip, Sum, ... compiled into the value engine (src/values/)
+    defs.ts objects.ts   # what a line is (object, function, value), the named values as definitions; circles, lines, polygons, transforms as numbers
   (each new folder also has text.ts: the lines in words both ways, scene.ts: scene primitives, tools.ts: defaults and rename, cards.ts: Build tab cards, recipes.ts: + Add)
   drag/              # drag to edit engine (pure: no DOM, no Obsidian)
     types.ts         # shared types of the engine, the overlay and the modal

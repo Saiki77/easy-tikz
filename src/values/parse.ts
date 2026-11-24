@@ -345,7 +345,8 @@ class ValueParser {
         const close = this.expect(']', open);
         if (items.every((it) => it.t === 'list' && it.items.length > 0)) {
             const rows = items.map((it) => (it.t === 'list' ? it.items : []));
-            if (rows.some((r) => r.length !== rows[0].length)) throw new ExprError(msg('values.problem.rowLengths'), { pos: open.pos });
+            // 6.0 G: rows of different lengths are a list of lists, as GeoGebra reads {{1}, {2, 3}}.
+            if (rows.some((r) => r.length !== rows[0].length)) return { t: 'list', items, s: open.pos, e: close.end };
             return { t: 'mat', rows, s: open.pos, e: close.end };
         }
         return { t: 'list', items, s: open.pos, e: close.end };

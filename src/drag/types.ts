@@ -36,6 +36,8 @@ export type FieldRef =
     | { kind: 'tool'; id: string; field: 'equation' | 'levels' | 'points' | 'path' | 'objective' }
     /** 6.0 D: a let value's formula, a transform's matrix (the tips of arrows, src/linear/drag.ts). */
     | { kind: 'tool'; id: string; field: 'expression' | 'map' }
+    /** 6.0 G: a GeoGebra line's command, `(1, 2)` of a free point `A = (1, 2)`. */
+    | { kind: 'tool'; id: string; field: 'command' }
     | { kind: 'tool'; id: string; field: 'condition'; entry: number }
     | { kind: 'label'; index: number; field: 'x' | 'y' };
 

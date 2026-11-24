@@ -36,6 +36,8 @@ import {
 } from './types';
 import { COMPLEX_FUNCTIONS, VALUE_FUNCTIONS, abs, add, complexFunction, cross, div, mul, neg, pow, realFunction, sub, toReal, transposeOf } from './ops';
 import { MAX_TERMS, termRange } from './special';
+// 6.0 G: GeoGebra's commands in every formula (src/geogebra/commands.ts).
+import { coordinateCall, geogebraCall, geogebraNeeds } from '../geogebra/commands';
 
 /** A local name's value, written before the closures that read it run. */
 export interface Cell {
@@ -216,6 +218,25 @@ export class ValueCompiler {
 
     private with(name: string, cell: Cell, shape: Shape): ValueCompiler {
         return new ValueCompiler({ ...this.scope, locals: new Locals(this.scope.locals, name, cell, shape) });
+    }
+
+    // 6.0 G: for src/geogebra/commands.ts.
+    /** The compiler with one more local name (the variable of Sequence, KeepIf, ...). */
+    bind(name: string, cell: Cell, shape: Shape): ValueCompiler {
+        return this.with(name, cell, shape);
+    }
+
+    /** The name is a function here (a local value, a slider or a let value is not). */
+    isFunctionName(name: string): boolean {
+        const { env, defs, locals } = this.scope;
+        if (locals && locals.find(name)) return false;
+        if (env.scalar(name)) return false;
+        return !!env.fn(name) || !!(defs && defs.has(name) && defs.isFunction(name));
+    }
+
+    /** The whole text of the field. */
+    source(): string {
+        return this.scope.src;
     }
 
     node(n: VNode): Part {
@@ -527,6 +548,9 @@ export class ValueCompiler {
         const { env } = this.scope;
         const index = seriesOf(n);
         if (index !== null) return this.series(n, index);
+        // 6.0 G: x(P), y(P), z(P) of a point; x(x + 1) stays a product.
+        const coordinate = coordinateCall(this, n);
+        if (coordinate) return coordinate;
         const args = (): Part[] => n.args.map((a) => this.node(a));
         const local = this.scope.locals ? this.scope.locals.find(n.name) : null;
         if (local && !n.math) return this.implicit(n, this.name(n.name, n.ns, n.ne));
@@ -555,6 +579,9 @@ export class ValueCompiler {
             return this.implicit(n, this.name(n.name, n.ns, n.ne));
         }
         if (def && def.value) return this.implicit(n, this.name(n.name, n.ns, n.ne));
+        // 6.0 G: GeoGebra's commands, after the chart's own names.
+        const gg = geogebraCall(this, n);
+        if (gg) return gg;
         if (n.name === 'grad') return this.gradient(n);
         if (Object.prototype.hasOwnProperty.call(VALUE_FUNCTIONS, n.name)) {
             const vf = VALUE_FUNCTIONS[n.name];
@@ -852,7 +879,7 @@ export function needsValues(n: VNode, env: Env, defs: Definitions | null, src: s
                 return needsValues(n.args[2], env, defs, src, locals) || needsValues(n.args[3], env, defs, src, locals) || needsValues(n.args[0], env, defs, src, inner);
             }
             const known = builtinFunction(n.name, n.math) || n.math || locals.has(n.name) || inEnv(n.name, env);
-            if (!known && ((defs && defs.has(n.name)) || n.name === 'grad' || Object.prototype.hasOwnProperty.call(VALUE_FUNCTIONS, n.name))) return true;
+            if (!known && ((defs && defs.has(n.name)) || n.name === 'grad' || Object.prototype.hasOwnProperty.call(VALUE_FUNCTIONS, n.name) || geogebraNeeds(n.name) /* 6.0 G */)) return true;
             return n.args.some((a) => needsValues(a, env, defs, src, locals));
         }
         default:

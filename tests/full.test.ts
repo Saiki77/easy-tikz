@@ -168,7 +168,7 @@ const commands = (full: string) =>
 const sameChart = (a: string, b: Data) => canonical(parseChartText(a).data) === canonical(b);
 
 /** 6.0 F2: the Full LaTeX commands of version 6 (src/text/full.ts, docs/v6/*.md). */
-const COMMANDS_6 = ['let', 'then', 'vectorfield', 'restpoints', 'solution', 'transform', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourplane', 'circles'];
+const COMMANDS_6 = ['let', 'then', 'vectorfield', 'restpoints', 'solution', 'transform', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourplane', 'circles', 'geogebra' /* 6.0 G */];
 
 /** 6.0 F2: a colour an object is not drawn in now (a tool without a colour is drawn in its default one: the basis vectors in green). */
 function otherColour(item: Data): string {

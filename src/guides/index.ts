@@ -27,6 +27,8 @@ import { VALUES_GUIDES } from './values';
 import { INTERACT_GUIDES } from './interact';
 import { LINEAR_GUIDES } from './linear';
 import { DYNAMICS_GUIDES } from './dynamics';
+// 6.0 G
+import { GEOGEBRA_GUIDES } from './geogebra';
 import { localGuide } from './ja';
 
 /** Categories in display order (the order of the GuideCategory union). */
@@ -118,6 +120,7 @@ export const GUIDES: Guide[] = [
     ...INTERACT_GUIDES,
     ...LINEAR_GUIDES,
     ...DYNAMICS_GUIDES,
+    ...GEOGEBRA_GUIDES, // 6.0 G
 ]
     .map((guide, index) => ({ guide, index }))
     .sort((a, b) => categoryRank(a.guide.category) - categoryRank(b.guide.category) || a.index - b.index)
