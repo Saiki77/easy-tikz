@@ -45,7 +45,7 @@ export const plugin: Messages<typeof en> = {
     'plugin.settings.chartLanguage.full': 'Full LaTeX',
     'plugin.settings.formulaHover.name': '数式のグラフ',
     'plugin.settings.formulaHover.desc': 'ノートの $...$ の数式にポインターを置くと（スマートフォンではタップ）、そのグラフを表示します。文字ごとのスライダーと「グラフを挿入」「エディタで開く」が付きます。',
-    'plugin.command.whatsNew': 'Easy Graphs Charts and TikZ 5 の新機能を表示',
+    'plugin.command.whatsNew': 'Easy Graphs Charts and TikZ 6 の新機能を表示',
     'plugin.command.copyAiGuide': 'AI チャット用のガイドをコピー（ChatGPT、Claude、Gemini）',
 
     // 設定

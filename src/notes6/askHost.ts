@@ -15,6 +15,7 @@ import { t } from '../i18n';
 import { AskTarget, Question, answerPresent, applyAnswer, askContext, askQuestions, pickTarget, removeAnswer } from './ask';
 import { markNew, openAskMenu, showAskMenu } from './askMenu';
 import '../linear/ask'; // 6.0 D: the questions about arrows and transforms
+import '../iterate/askOrbit'; // 6.0 F1: the questions about orbits and coloured planes
 
 type Data = Record<string, unknown>;
 
@@ -65,6 +66,9 @@ export function askTitle(target: AskTarget, data: Data): string {
     // 6.0 D
     if (target.kind === 'vector') return t('linear.ask.title.vector', { name: target.name });
     if (target.kind === 'transform') return t('linear.ask.title.transform', { name: target.name });
+    // 6.0 F1
+    if (target.kind === 'orbit') return t('iterate.ask.title.orbit', { name: target.name });
+    if (target.kind === 'plane') return t('iterate.ask.title.plane', { name: target.name });
     const key = target.kind === 'region' ? 'notes6.ask.group.region' : target.kind === 'curve' ? 'notes6.ask.group.curve' : 'notes6.ask.group.point';
     return t(key, { name: target.name });
 }

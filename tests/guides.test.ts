@@ -25,11 +25,14 @@ import {
     searchText,
     searchTokens,
     stepChart,
+    // 6.0 F2
+    V6_EXAMPLES,
+    showcaseExamples,
 } from '../src/guides';
 
 import { issueText } from '../src/issues';
 import { FunctionKind, LABEL_LOCALS, MathContext, ValidateKind } from '../src/mathcontext';
-import { SCHEMA_VERSION, migrateSettings } from '../src/migrate';
+import { EXAMPLES, SCHEMA_VERSION, migrateSettings } from '../src/migrate';
 import { SceneIssue, computeScene2D, computeScene3D, labelMetricsFor } from '../src/scene';
 import { SettingsManager } from '../src/settings';
 import { Annotation, FunctionParameters, Parameter, RendererConfig, Tool } from '../src/types';
@@ -46,12 +49,21 @@ import { SHAPES_GUIDES } from '../src/guides/shapes';
 import { SPACE_GUIDES } from '../src/guides/space';
 import { NOTES_GUIDES } from '../src/guides/notes';
 import { REFERENCE_GUIDES } from '../src/guides/reference';
+// 6.0 F2
+import { VALUES_GUIDES } from '../src/guides/values';
+import { INTERACT_GUIDES } from '../src/guides/interact';
+import { LINEAR_GUIDES } from '../src/guides/linear';
+import { DYNAMICS_GUIDES } from '../src/guides/dynamics';
 
 /** The guides SPEC4 section 3 lists, per data file. README, docs/guides and the release posts link to them by id. */
 const DOCUMENTED: Record<string, string[]> = {
     start: ['first-chart', 'notes-formulas', 'drag-to-edit'],
     language: ['chart-language', 'formulas'],
-    showcase: ['tangent-triangle', 'largest-rectangle', 'mean-value', 'taylor-sine', 'gradient-levels', 'crossing-lines', 'sliding-ladder', 'throw-angle'],
+    showcase: [
+        'tangent-triangle', 'largest-rectangle', 'mean-value', 'taylor-sine', 'gradient-levels', 'crossing-lines', 'sliding-ladder', 'throw-angle',
+        // 6.0 F2
+        'mandelbrot-orbit', 'matrix-grid', 'lorenz-butterfly', 'pendulum-field', 'domain-colouring', 'fourier-circles',
+    ],
     functions: ['sliders', 'parametric-polar', 'animate-play'],
     calculus: ['tangents-extrema', 'secant-tangent', 'area-accumulation', 'riemann-sums', 'slope-fields'],
     optimisation: ['regions', 'areas-between', 'tangent-area', 'linear-program', 'integer-program', 'level-curves', 'supply-demand'],
@@ -60,6 +72,11 @@ const DOCUMENTED: Record<string, string[]> = {
     space: ['surfaces-3d'],
     notes: ['charts-in-notes', 'svg-files', 'export-latex'],
     reference: ['from-3x', 'shortcuts'],
+    // 6.0 F2: docs/v6/guides.md lists them
+    values: ['values-let', 'sums-series'],
+    interact: ['ask-curve', 'sets-convexity', 'formula-cards', 'steps-frames'],
+    linear: ['vectors-arrows', 'matrix-plane', 'complex-maps'],
+    dynamics: ['fractals', 'orbits-cobwebs', 'vector-fields', 'systems', 'descent-newton'],
 };
 const FILES: Record<string, Guide[]> = {
     start: START_GUIDES,
@@ -73,6 +90,11 @@ const FILES: Record<string, Guide[]> = {
     space: SPACE_GUIDES,
     notes: NOTES_GUIDES,
     reference: REFERENCE_GUIDES,
+    // 6.0 F2
+    values: VALUES_GUIDES,
+    interact: INTERACT_GUIDES,
+    linear: LINEAR_GUIDES,
+    dynamics: DYNAMICS_GUIDES,
 };
 
 const EM_DASH = String.fromCharCode(0x2014);
@@ -751,4 +773,66 @@ test('guides: one step per screen (5.1): 3 to 6 steps, each with its own chart, 
         if (total > 230) long.push(`${guide.id}: ${total} words`);
     }
     assert.deepEqual(long, []);
+});
+
+// ------------------------------------------------ 6.0 F2: the examples of version 6
+
+test('6.0 examples: ids unique among all examples and guides, texts filled in, every chart loads with zero issues and exports', () => {
+    const ids = [...EXAMPLES.map((e) => e.id), ...V6_EXAMPLES.map((e) => e.id), ...showcaseExamples().map((e) => e.id), ...GUIDES.map((g) => g.id)];
+    assert.equal(new Set(ids).size, ids.length, `an id repeats in ${ids.join(', ')}`);
+    assert.ok(V6_EXAMPLES.length >= 10, `${V6_EXAMPLES.length} examples`);
+    const problems: string[] = [];
+    for (const ex of V6_EXAMPLES) {
+        assert.match(ex.id, /^[a-z0-9]+(-[a-z0-9]+)*$/, ex.id);
+        assert.ok(ex.title.trim() && words(ex.title).length <= 8, `${ex.id}: title '${ex.title}'`);
+        assert.ok(ex.description.trim() && !ex.description.includes('\n') && ex.description.length <= 160, `${ex.id}: description`);
+        assert.equal(JSON.stringify(ex).indexOf(EM_DASH), -1, `${ex.id}: em dash`);
+        assert.equal(ex.is3D, ex.data.dimension === true, `${ex.id}: is3D`);
+        assert.ok(Number(ex.data.v) >= SCHEMA_VERSION, `${ex.id}: chart needs v: ${SCHEMA_VERSION}`);
+        let issues: string[];
+        try {
+            issues = chartIssues(ex.data);
+        } catch (e) {
+            issues = [`could not be computed: ${e instanceof Error ? e.message : String(e)}`];
+        }
+        for (const issue of issues) problems.push(`${ex.id}: ${issue}`);
+        const { settings, math } = chartOf(ex.data);
+        const code = settings.generateTikzCode(math);
+        if (!code.includes('\\begin{tikzpicture}') || !code.includes('\\end{tikzpicture}')) problems.push(`${ex.id}: no complete tikzpicture`);
+        const bad = /\b(NaN|Infinity|undefined)\b/.exec(code);
+        if (bad) problems.push(`${ex.id}: the code contains ${bad[0]}`);
+    }
+    assert.deepEqual(problems, [], problems.join('\n'));
+});
+
+test('6.0 examples: with the Showcase charts, one for every main new line of version 6', () => {
+    const kinds = new Set<string>();
+    for (const data of [...V6_EXAMPLES.map((e) => e.data), ...guidesIn('Showcase').map((g) => g.chart)]) {
+        for (const tool of (data.tools ?? []) as Tool[]) kinds.add(tool.type);
+    }
+    const lines = ['value', 'vector', 'listPoints', 'axisSet', 'chord', 'vectorField', 'restPoints', 'trajectory'];
+    lines.push('planeGrid', 'basisVectors', 'transform', 'eigenvectors', 'unitSquare', 'orbit', 'cobweb', 'bifurcation', 'newton', 'colourPlane', 'fourierCircles');
+    for (const kind of lines) assert.ok(kinds.has(kind), `no example draws a ${kind}`);
+});
+
+test('6.0 guides: the numbers the steps name are the ones the charts compute', () => {
+    // matrix-plane: the area 1 before the move, det A = 2.5 after it, eigenvalues 2.5 and 1.
+    assert.ok(shown(stepOf('matrix-plane', 2)).texts.includes('area $= 1$'), shown(stepOf('matrix-plane', 2)).texts.join(' | '));
+    const moved = shown(stepOf('matrix-plane', 4)).texts;
+    for (const text of ['$\\det A = 2.5$', '$\\lambda_1 = 2.5$', '$\\lambda_2 = 1$']) assert.ok(moved.includes(text), `${text} in ${moved.join(' | ')}`);
+    // sets-convexity: [-2, 2]; the chord above the convex g, below the cubic at 0.7.
+    assert.ok(shown(stepOf('sets-convexity', 1)).texts.some((t) => t.endsWith('= [-2, 2]$')));
+    assert.ok(shown(stepOf('sets-convexity', 3)).derived.CH1_val > 0);
+    const cubic = shown(stepOf('sets-convexity', 4));
+    assert.ok(cubic.derived.CH1_val < 0 && cubic.title === 'gap -2.34', cubic.title);
+    // ask-curve: g and h cross at (-3, 5) and (2, 0), the bounds of the shaded area.
+    assert.deepEqual(shown(stepOf('ask-curve', 3)).texts.filter((t) => t.startsWith('(')), ['(-3, 5)', '(2, 0)']);
+    // descent-newton: the orbit ends at the minimum for eta = 0.2 and runs away past 0.25; Newton reaches the root of 2.
+    assert.ok(Math.hypot(shown(stepOf('descent-newton', 3)).derived.OR1_x, shown(stepOf('descent-newton', 3)).derived.OR1_y) < 0.05);
+    assert.ok(Math.abs(shown(stepOf('descent-newton', 4)).derived.OR1_y) > 10);
+    assert.ok(Math.abs(shown(stepOf('descent-newton', 5)).derived.NM1_x - Math.SQRT2) < 1e-6);
+    // vector-fields: two stable spirals and a saddle.
+    assert.deepEqual(shown(stepOf('vector-fields', 3)).texts.slice().sort(), ['saddle', 'stable spiral', 'stable spiral']);
+    // matrix-grid: det A = 2 - k, below 0 at the last step.
+    assert.ok(shown(stepOf('matrix-grid', 4)).texts.includes('$\\det A = -1$'), shown(stepOf('matrix-grid', 4)).texts.join(' | '));
 });

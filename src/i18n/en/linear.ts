@@ -105,4 +105,15 @@ export const linear = {
     'linear.drag.column': 'column {k} of {name}',
     'linear.drag.notNumbers': '{name} is not written as numbers, so a drag cannot change it.',
     'linear.drag.moved': 'Changed {name} to {value}',
+
+    // ---- 6.0 F1: chart words, what each piece is (Settings, Chart words)
+    'linear.words.what.transformThePlaneBy': 'Line: move the plane by a matrix or a map: transform the plane by A',
+    'linear.words.what.transformSpaceBy': 'Line: move space by a matrix (3D): transform space by B',
+    'linear.words.what.theGrid': 'Grid lines that a transform moves: draw the grid',
+    'linear.words.what.theBasisVectors': 'The basis vectors î and ĵ: draw the basis vectors',
+    'linear.words.what.theEigenvectorsOf': 'The eigenvectors of a matrix: draw the eigenvectors of A',
+    'linear.words.what.theImageOf': 'The unit square moved by the transforms above it',
+    'linear.words.what.theUnitSquare': 'The unit square: shade the unit square',
+    'linear.words.what.theUnitCube': 'The unit cube (3D): shade the unit cube',
+    'linear.words.what.theSpanOf': 'The span of vectors: draw the span of v and w',
 };

@@ -133,6 +133,8 @@ function renderAndMeasure(mathSource: string, color: string, fontSizePx: number)
         display: 'inline-block',
         pointerEvents: 'none',
     });
+    // 6.0 F1: MathJax may break a long inline formula at its operators (mjx-break); a chart label stays on one line.
+    for (const b of Array.from(el.querySelectorAll<HTMLElement>('mjx-break'))) b.setCssStyles({ whiteSpace: 'nowrap' });
     const host = getMeasureHost();
     host.appendChild(el);
     const rect = el.getBoundingClientRect();

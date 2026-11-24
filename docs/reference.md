@@ -124,7 +124,7 @@ Text labels sit at a position such as `(P1_x, P1_y + 0.3)` and can be dragged in
 
 You rarely pick a tool directly: **+ Add** lists recipes in plain words (Area between two functions, Feasible region, Vertical line x = c, Intersections of two functions, Optimum over a region, Integer points in a region, Brace with label, ...), and each of these is a pre-filled card of one of the five tools (the list also adds functions, text labels and sliders). 3.x blocks are converted on open: `areaBetween` and `rectangle` become regions, `verticalLine`, `horizontalLine` and `circle` become curves (a filled circle becomes a region), `intersection` and `point3D` become points, `segment`, `brace` and `segment3D` become segments, and `plane3D` stays a plane.
 
-Names are stable: functions are `f1, f2, ...`, tools `R1, C1, P1, S1, PL1, ...`, all renameable on the card, and a rename updates every formula and label placeholder that uses the name.
+Names are stable: functions are `f1, f2, ...`, tools `R1, C1, P1, S1, PL1, ...` (6.0 adds `V1` arrows, `LP1` point lists, `AX1` sets, `CH1` chords, `VF1` fields, `RP1` rest points, `TR1` solutions, `G1` grids, `BV1` basis vectors, `T1` transforms, `EV1` eigenvectors, `U1` unit squares, `SP1` spans, `OR1` orbits, `CW1` cobwebs, `BD1` bifurcation diagrams, `NM1` Newton's method, `CP1` coloured planes and `FC1` circles; a `let` line is named by its name), all renameable on the card, and a rename updates every formula and label placeholder that uses the name.
 
 Guides: [Shade a region with inequalities](guides/regions.md), [Shade the areas between two curves](guides/areas-between.md), [Shade between a curve and its tangent](guides/tangent-area.md), [Points, intersections and live labels](guides/points-labels.md), [Segments, arrows and braces](guides/arrows-braces.md), [Calculate with computed points](guides/computed-values.md).
 
@@ -169,6 +169,189 @@ draw the solution through P
 ```
 
 Each of these draws in 2D charts only; in a 3D chart its line shows a problem.
+
+## Values: complex numbers, vectors, matrices and sums (6.0)
+
+Every formula field takes more than numbers now: complex numbers, vectors, matrices and lists, plain or in LaTeX, with sliders inside all of them.
+
+| LaTeX                                                        | Plain                                          | Meaning                                                    |
+| ------------------------------------------------------------ | ---------------------------------------------- | ---------------------------------------------------------- |
+| `\sum_{k=1}^{n} \frac{1}{k^2}`, `\prod_{k=1}^{n} k`          | `sum(1/k^2, k, 1, n)`, `prod(k, k, 1, n)`      | sums and products (bounds may be sliders, at most 100000 terms) |
+| `n!`, `\binom{n}{k}`                                         | `factorial(n)`, `binom(n, k)`                  | factorial (the gamma function between whole numbers), binomial coefficient |
+| `-0.8 + 0.156i`, `e^{i\theta}`, `\arg z`, `\bar z`, `\Re z`, `\Im z` | `abs(z)`, `arg(z)`, `conj(z)`, `re(z)`, `im(z)` | complex numbers and their parts                         |
+| `\begin{pmatrix} 2 \\ 1 \end{pmatrix}`, `(2, 1)`             | `(2, 1)`                                       | a vector: `v + w`, `2v`, `v \cdot w`, `v \times w`, `v_x`  |
+| `\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}` (also `bmatrix`) | `[[1, 2], [3, 4]]`                          | a matrix: `A v`, `AB`, `A^{-1}`, `A^T`, `\det A`, `\operatorname{tr} A` |
+| `\{(k, k^2) : k = 1, \dots, 10\}`, `\{1, 2, 3\}`             | `[(k, k^2) : k = 1..10]`, `[1, 2, 3]`          | a list                                                     |
+| `\nabla f(p)`                                                | `grad(f, p)`                                   | the numeric gradient of a let function                     |
+
+The modulus of a complex number and the length of a vector are `|z|` and `|v|`. More functions: `norm`, `dot`, `cross`, `inv`, `transpose`, `len`, `unit`, `angle(v, w)`. A real function of a real number stays real: `\sqrt{-4}` has no value, while `\sqrt{-4 + 0i}` is 2i. A field that needs a number (a function, a bound, a coordinate) takes a complex value whose imaginary part is 0; a vector there is a problem that says so ("This formula gives a vector of 2 numbers, not a number"). Problems name the place and the values: "Cannot multiply a 2 x 2 matrix by a vector of 3 numbers".
+
+**Names: `let`.** A `let` line gives a value or a function a name that every formula of the chart can use, in any order:
+
+```easy-tikz
+show x from -3 to 3 and y from -3 to 3
+equal scale
+let v = (2, 1)
+let w = (-1, 1.5)
+let A = [[0, -1], [1, 0]]
+draw v and w as arrows, labelled
+draw v + w tip to tail in red, labelled
+draw A v as an arrow in green, labelled
+write "det A = {det(A)}" at (1.5, -2)
+```
+
+Also `let $c = -0.8 + 0.156i$`, `let $f(x, y) = x^2 + 4y^2$` (then `f(1, 2)`, `shade where $f(x, y) \le 4$`) and `let $R(\theta) = \begin{pmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{pmatrix}$`. A function's body reads its parameters, sliders and the chart's names. A name is letters, digits and `_`, and never `x`, `y`, `z`, `t`, `theta`, a built-in, a slider or a function. Full LaTeX: `\let{v = (2, 1)}`.
+
+**Arrows.** `draw v as an arrow`, `draw v and w as arrows, labelled`, `draw v as an arrow from (1, 1)` (or from a points tool, so a dragged point moves them) and `draw v + w tip to tail` (the terms end to end, then the sum). A vector is a let name, a formula (`A v`, `(1, 3)`) or a complex number. Options: a colour, `thin`, `thick`, `dashed`, `labelled` (`$\vec{v}$`, `$A \vec{v}$`), `labelled "text"`, `hidden`. 2D and 3D. Full LaTeX: `\draw[vector, labelled]{v, w}`, `\draw[vector, from={(1, 1)}]{v}`, `\draw[vector, tip to tail]{v + w}`. The export draws them as arrows (`\draw[->]`).
+
+**Points of a list.** `mark the points $\{e^{2\pi i k / n} : k = 0, \dots, n - 1\}$, joined, labelled` marks the n-th roots of unity, joined into a polygon; `mark the points of S` marks a let list. Complex numbers are drawn at (re, im). Options: a colour, `small`, `large`, `thin`, `thick`, `joined`, `labelled`, `labelled "text"`, `hidden`. It publishes `LP1_n`, `LP1_x`, `LP1_y`, `LP1_x2`, ... Full LaTeX: `\mark[list, joined, labelled]{...}`.
+
+**Sums in the export.** pgfplots has no sum, so the export writes a sum out term by term at the sliders' values, and the curve is exact. Complex numbers are written as their real and imaginary parts.
+
+```easy-tikz
+show x from -7.5 to 7.5 and y from -3 to 3
+slider n from 0 to 12, starting at 4, in steps of 1
+plot $\sin x$ in gray, thick
+plot $T(x) = \sum_{k=0}^{n} \frac{(-1)^k x^{2k+1}}{(2k+1)!}$ in red, thick
+```
+
+## Sets on an axis and chords (6.0)
+
+**A set on an axis.** `mark where $g(x) \le 0$ on the x-axis, labelled` draws the set of x where a condition holds as a bar on the x-axis, with its label in set notation: {x ∣ g(x) ≤ 0} = [−2, 2], with unions, single points, `∅` and `ℝ`.
+
+```easy-tikz
+show x from -5 to 5
+plot $g(x) = x^2 - 4$ in blue, thick
+mark where $g(x) \le 0$ on the x-axis, labelled
+```
+
+- The condition is anything a region takes, in one variable: `<`, `\le`, `>`, `\ge`, absolute values, chains (`0 \le x < 1`), `and`, `or`, an interval (`x \in [0, 1)`), or an equation (`g(x) = 0`: its zeros, as dots). `on the y-axis` takes a condition in y.
+- A filled dot ends the bar where the end belongs to the set (`\le`, `\ge`), an open dot where it does not (`<`, `>`), and an arrow where the set runs off the view.
+- Options: a colour (default teal), `thin`, `thick`, `labelled`, `labelled "text"`, `hidden`. It publishes `AX1_n` (the ends), `AX1_x`, `AX1_x2`, ... and `AX1_val` (the pieces).
+- Full LaTeX: `\mark[x-axis, labelled]{g(x) \le 0}` (`y-axis`). The export draws the bar, the dots and the arrows; a label with ℝ adds `\usepackage{amssymb}`.
+
+**A chord.** `draw the chord of g from -1 to 3` draws the segment from (a, g(a)) to (b, g(b)). `at $\lambda$` adds the point x = λa + (1 − λ)b on the chord and on the graph and the gap between them: Jensen's inequality, live on a slider.
+
+```easy-tikz
+slider lambda from 0 to 1, starting at 0.3
+plot $g(x) = x^2/2 - 1$ in blue
+draw the chord of g from -1 to 3 at $\lambda$, labelled
+```
+
+Options: a colour (default red), `thin`, `thick`, `dashed`, `labelled`, `labelled "text"` (with `{lambda}`, `{x}`, `{chord}`, `{graph}`, `{gap}`), `hidden`. It publishes `CH1_x`, `CH1_y` and `CH1_val` (the gap: at least 0 for every λ when g is convex). Full LaTeX: `\draw[chord, from=-1, to=3, at=\lambda, labelled]{g}`.
+
+**y follows what is drawn.** A chart whose text gives x and no y (`show x from -5 to 5`) fits y to what it draws, live: when a slider moves, when x changes, when an object is added. Charts with a y range keep it; writing a y range (the Chart tab, a pan, a zoom, Fit) turns it off.
+
+## Charts that move: steps, the clock, vector fields and systems (6.0)
+
+**Steps.** `then` before a line starts the next step. Lines before the first `then` are step 1, and every later line stays in the step of the `then` above it. A `then` alone is a pause.
+
+```easy-tikz
+show x from -4 to 4 and y from -3 to 3
+plot f(x) = sin(x) in blue
+then plot g(x) = cos(x) in red
+then mark (0, 1), with coordinates
+```
+
+- **In notes and the editor**, a chart with steps gets Previous, Play, Next and "Step k of n" in the strip under it (in the editor over the preview). It starts at its last step, as print and the PDF show it; Play starts at step 1 and goes through every step. New objects pop in, and a transform moves while its step comes in. Print hides the strip.
+- **In the editor** each card has a Step row while the chart has steps, and the card menu's **Show in step n** puts an object in a new step. Every object also takes `step=3`.
+- **In the PDF** the export shows the last step. The chart line `frames` (Full LaTeX: `\axis[frames]`) exports every step side by side, one picture per step. Full LaTeX for a step: `\then \plot[red]{g(x) = \cos x}`.
+
+**The animation clock.** Objects that move by themselves (moving particles, turning circles, and the `traced` option of solutions and orbits, which draws the curve over time) run on a clock. A chart with one gets a Pause and Play button in its strip. The clock runs only while the chart is on screen and starts paused when your system asks for reduced motion. The export, print and the SVG files draw a still frame: time 0, or `set stillTime = 1.5`.
+
+**Vector fields and rest points.** `draw the vector field $F(x, y) = (y, -\sin x - 0.25y)$` draws short arrows on a grid over the view, all the same length on screen. `mark the rest points of F, labelled` marks where F is zero: filled when stable, open when not, labelled stable node, unstable node, stable spiral, unstable spiral, saddle or centre.
+
+```easy-tikz
+show x from -6.3 to 6.3 and y from -4.2 to 4.2
+draw the vector field $F(x, y) = (y, -\sin x - 0.25y)$, coloured by length, with moving particles
+mark the rest points of F, labelled
+```
+
+Field options: a colour, `thin`, `thick`, `coloured by length` (viridis, or `coloured by length in heat`), `with moving particles` (each lives 3 s and leaves a fading trail), `with streamlines` (still curves, also in the export), `density=30` (arrows across, 4 to 60), `hidden`. Rest points: a colour, `small`, `large`, `labelled`, `hidden`; they publish `RP1_n`, `RP1_x`, `RP1_y`, ... (at most 40). 2D charts only. Full LaTeX: `\vectorfield[colormap/viridis, particles, streamlines]{F(x, y) = ...}`, `\restpoints[labelled]{F}`.
+
+**Solutions of systems.** `draw the solution of $\dot{p} = (y, -x)$ through P for t from 0 to 10` draws the solution through a points tool (drag P and it follows) or a point, by RK4. The right side has 2 formulas in a 2D chart and 3 in a 3D chart, in x, y (z) and t. In 3D it draws the Lorenz attractor:
+
+```easy-tikz
+3d
+show x from -25 to 25, y from -30 to 30 and z from 0 to 50
+draw the solution of $\dot{p} = (10(y - x), x(28 - z) - y, xy - \frac{8}{3}z)$ through (1, 1, 1) for t from 0 to 72, coloured by time
+```
+
+The left side may be `\dot{p} =`, `p' =`, `\frac{dp}{dt} =` or left out. Options: a colour, `thin`, `thick`, `dashed`, `coloured by time`, `traced`, `hidden`. At most 20000 steps (a longer range gets a coarser step and a note) and 3000 points drawn. Full LaTeX: `\solution[through=P, t=0:10]{\dot{p} = (y, -x)}`.
+
+## Linear algebra and complex maps (6.0)
+
+The grid moves, î and ĵ land on the columns of A, and the old grid stays faint:
+
+```easy-tikz
+show x from -4.5 to 4.5 and y from -3 to 3
+equal scale
+let $A = \begin{pmatrix} 1.5 & 1 \\ 0.5 & 2 \end{pmatrix}$
+draw the grid
+draw the basis vectors
+shade the unit square, labelled
+then transform the plane by A
+then draw the eigenvectors of A, labelled
+```
+
+In a note, step 1 shows the grid, î, ĵ and the unit square; Play moves them to A in 0.7 s, as (1 − t)I + tA; step 3 adds the eigenvectors.
+
+| Line | What it draws | Full LaTeX |
+| --- | --- | --- |
+| `draw the grid`, `draw the grid from -2 to 2 in steps of 0.5` | The lines x = k·s and y = k·s that a transform moves; without a range it reaches twice as far as the view (at most 401 lines per direction). 3D: a grid cube. | `\draw[grid]`, `\draw[grid, from=-2, to=2, spacing=0.5]` |
+| `draw the basis vectors` | î in green and ĵ in red (3D: k̂ in blue), with their names. | `\draw[basis vectors]` |
+| `transform the plane by A` | Moves every object above it, but not the axes or text labels. The map is a matrix (a let name or a literal, sliders allowed), `$z \mapsto z^2$`, `$(x, y) \mapsto (x + y, y)$` or a let function. A map that bends lines cuts them into short pieces first. 3D: `transform space by B`. | `\transform{A}`, `\transform{z \mapsto z^2}` |
+| `draw the eigenvectors of A, labelled` | The lines along the real eigenvectors with λ₁, λ₂; complex eigenvalues draw no line and say so. | `\draw[eigenvectors, labelled]{A}` |
+| `shade the unit square, labelled` | The square [0, 1]², moved by the transforms below it, labelled with its signed area (`det A = 2.5`). `shade the image of the unit square` moves it by the transforms above it too; 3D: `shade the unit cube`. | `\shade[unit square, labelled]`, `\shade[unit square, image]` |
+| `draw the span of v and w, labelled` | The plane (shaded), a line through 0, or 0: `span(v⃗, w⃗) = ℝ²`. | `\draw[span, labelled]{v, w}` |
+
+**Drag the tips.** In the editor, the tips of î and ĵ are drag handles when one matrix moves them all the way: dragging them writes the columns of the matrix, when every entry is a plain number. Arrows of let vectors written as numbers (`let v = (2, 1)`) have handles at their tips too. Undo, Escape and Alt (one more decimal) work as for other drags.
+
+**The export** draws everything at the last step, as coordinates, with the faint grid at 35 % opacity.
+
+## Iterate and colour the plane (6.0)
+
+After the formula, the pieces between commas are the start (`$z_0 = 0$`), the names the recurrence reads (`$c = P$`), the steps (`40 steps`) and the options, in any order. A start or a name may be a formula, a point or a points tool, so dragging P moves the picture.
+
+```easy-tikz
+show x from -2.4 to 1 and y from -1.15 to 1.15
+equal scale
+colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 200 steps
+mark P at (-0.12, 0.75), large
+draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps, as a path
+```
+
+| Line | What it draws | Full LaTeX |
+| --- | --- | --- |
+| `draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps` | The points z₀, z₁, ... joined by a line. Complex numbers and vectors are points of the plane; numbers are drawn as (n, xₙ). Gradient descent: `draw the orbit of $p_{n+1} = p_n - \eta \nabla f(p_n)$, $p_0 = P$, 25 steps`. Options `as a path`, `labelled`, `traced`. | `\orbit[z_0=0, c=P, steps=40]{z_{n+1} = z_n^2 + c}` |
+| `draw the cobweb of $x_{n+1} = f(x_n)$ from 0.2, 80 steps` | The line y = x, the graph of the map, and the path of the orbit between them. | `\cobweb[from=0.2, steps=80]{x_{n+1} = f(x_n)}` |
+| `draw the bifurcation diagram of $x_{n+1} = r x_n (1 - x_n)$ for r from 2.5 to 4` | For each r, where the orbit settles: 400 steps run in, the next 300 drawn as dots. | `\bifurcation[r=2.5:4]{x_{n+1} = r x_n (1 - x_n)}` |
+| `draw Newton's method for f from 2.5, 5 steps, labelled` | Each tangent down to the x-axis and the line up to the graph, for a function of the chart. | `\newton[from=2.5, steps=5, labelled]{f}` |
+| `colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 200 steps` | Escape time: the Mandelbrot set (`c = x + iy`), Julia sets (`z_0 = x + iy`, `c = a + bi`), Newton basins (orbits that settle take the colour of the point they reach). | `\colourplane[z_0=0, c=x + iy, steps=200]{...}` |
+| `colour the plane by $f(z) = \frac{z^2 - 1}{z^2 + 1}$` | Domain colouring: the hue is the angle of f(z), zeros dark, poles white. | `\colourplane{f(z) = ...}` |
+| `colour the plane by $f(x, y) = \sin x \cos y$, in viridis` | A heat map from the lowest value in the view to the highest. | `\colourplane[colormap/viridis]{f(x, y) = ...}` |
+| `draw the circles of $\sum_{k=1}^{n} \frac{4}{\pi (2k - 1)} e^{i(2k - 1)t}$, with its wave` | Turning circles, each term of the sum on the tip of the one before, on the chart's clock, and the wave they draw. | `\circles[wave]{\sum_{k=1}^{n} ...}` |
+
+- **Colour maps** of a coloured plane: `cyclic` (the default for fractals), `viridis`, `heat`, `cool`, `diverging`, `rainbow`, `greyscale`; also `opacity 0.5`. `color the plane by` works too. The plane lies under the grid and everything else.
+- **On screen** the GPU paints a coloured plane at once, and the sliders move it live. Without WebGL, for a formula with no GPU form, or deep in a zoom, the CPU paints it with 64-bit numbers: a coarse picture first, then the full one in tiles, so typing never waits.
+- **In the export** a coloured plane and a bifurcation diagram are a PNG beside the `.tex` file, drawn with `\addplot graphics` over exactly the view; the axes and the labels stay vector. **Copy LaTeX** saves the PNG in the note's attachment folder and says where. The SVG files and Copy SVG / PNG hold the picture in the file.
+- **2D only:** in a 3D chart these lines draw nothing.
+- **Limits**, so that no chart freezes a phone: 2000 steps of an orbit, 1000 of a cobweb, 100 of Newton's method, 1000 per pixel of a coloured plane, 60 terms of turning circles. A larger count is drawn at the limit, with a note.
+
+## Ask the curve (6.0)
+
+Click a curve in the editor's preview, or in the chart under a block in Live Preview: a menu of questions about it opens. Point at a question and its answer shows faintly in the chart; choose it and the answer is added as a line of the chart (in the editor with Undo, under a block in the block's text). A question whose answer is already in the chart is ticked, and choosing it takes the answer away. A click that moves (a pan, a drag) asks nothing. From the keyboard: `?`, the menu key or Shift+F10 in the editor's preview, Enter on a chart under a block; arrow keys, Home and End move in the menu, Escape closes it.
+
+| Clicked | Questions |
+| --- | --- |
+| a function f | where f ≤ 0, ≥ 0, < 0, > 0 and where it crosses the x-axis (a set on the x-axis); its maxima and minima; its inflection points; the tangent and the value here; a chord from here with a slider λ; the area to the x-axis; a Riemann sum; for each other function g: where f and g cross, where f ≤ g, the area between them; Newton's method and the cobweb from here |
+| a region | its corners, its border, the lines of its conditions, its highest, lowest, rightmost and leftmost point |
+| a curve | where it crosses the axes, each function and each other curve |
+| a point | lines to the axes, its coordinates |
+| a transform or the grid | the eigenvectors, the image of the unit square with det, the span of the columns, the inverse in the next step, a function it moves; a shear in the next step |
+| an arrow of a let vector | its span, the span with another vector, the sum tip to tail, A v for each let matrix |
+
+The menu is built from what the chart holds, so it grows with the chart.
 
 ## Sliders and live values
 
@@ -238,7 +421,7 @@ Four guides build such charts step by step: [Solve a linear program in a picture
 
 ## Charts in notes
 
-The plugin registers an `easy-tikz` markdown code-block processor. **Insert into note** writes a text block ([Charts as text](#charts-as-text); JSON if you choose it in the settings); the same renderers that power the editor preview draw the chart in your note, and a chart with sliders gets its own slider strip underneath. Click the rendered chart to re-open the editor pre-filled with every setting: change something, **Save changes**, and the block in the source file is updated in place (a text block line by line, keeping your comments). Hover the chart for alignment and width controls. If something in the chart cannot be drawn, a muted line under the chart names the problem, with its line and column in a text block; the rest of the chart still renders. When a block changes, its chart glides from the old picture to the new one and new objects pop in (setting **Animate chart changes**; never with reduced motion). While you edit a block in Live Preview, its chart sits right under the lines and changes as you type; when the cursor leaves, Obsidian's own chart takes over in the same frame (setting **Chart under the block while you edit**).
+The plugin registers an `easy-tikz` markdown code-block processor. **Insert into note** writes a text block ([Charts as text](#charts-as-text); JSON if you choose it in the settings); the same renderers that power the editor preview draw the chart in your note, and a chart with sliders gets its own slider strip underneath. Click the rendered chart to re-open the editor pre-filled with every setting: change something, **Save changes**, and the block in the source file is updated in place (a text block line by line, keeping your comments). Hover the chart for alignment and width controls. If something in the chart cannot be drawn, a muted line under the chart names the problem, with its line and column in a text block; the rest of the chart still renders. When a block changes, its chart glides from the old picture to the new one and new objects pop in (setting **Animate chart changes**; never with reduced motion). While you edit a block in Live Preview, its chart sits right under the lines and changes as you type; when the cursor leaves, Obsidian's own chart takes over in the same frame (setting **Chart under the block while you edit**). A click on a curve of that chart asks its questions ([Ask the curve](#ask-the-curve-60)). A chart with steps has Previous, Play and Next in its strip, and a chart with moving objects a Pause button ([Charts that move](#charts-that-move-steps-the-clock-vector-fields-and-systems-60)).
 
 Guide: [Charts in your notes](guides/charts-in-notes.md).
 
@@ -249,6 +432,9 @@ Rest the pointer on a formula in a note, `$...$` or `$$...$$`, in Reading view o
 - `y = ax^2 + b` and `f(x) = \frac{1}{2}x^2` are functions, `z = x^2 - y^2` is a surface (3D), `r = 1 + \cos\theta` a polar curve, `x^2 + y^2 = 4` a curve, `x + y \le 4` a region.
 - **Charts for formulas** switches the card off. **Highlight formulas in notes** (on by default) draws a dotted line under each formula that has a chart and tints it under the pointer; switched off, formulas look as usual and their chart still opens. **Sliders in formula charts** leaves out the sliders.
 - **Default chart for formulas:** **Edit** opens the editor on a sample formula chart; set it up as you like (axes, grid, numbers, size, the line, the 3D view) and click **Save as default**. Every formula card and every inserted chart then has this look. **Reset** goes back to the built-in look.
+- **More cards (6.0).** Sets (`\{x \in \mathbb{R}^n \mid g(x) \le 0\}`, `\{(x, y) \mid ...\}`) show the set on the x-axis or the region; maps (`g: \mathbb{R}^n \to \mathbb{R}`) the graph, for n = 2 its level curves; conditions in one variable (`g(x) \le 0`, `x > 0`) and intervals (`\lambda \in [0, 1]`, `(a, b]`) the set on an axis; Jensen's inequality the chord of g with a slider λ; the epigraph `\operatorname{epi} g` the shade above the graph. A matrix, `A v`, `\det A` and `A v = \lambda v` show the grid moving with a slider s; `z_{n+1} = z_n^2 + c` the orbit of 0 with c on sliders; `x_{n+1} = r x_n (1 - x_n)` its cobweb; a sum `\sum_{k=1}^{n} ...` the partial sum with a slider n; `f(z) = ...` its domain colouring.
+- **Names from the note.** A name a formula uses without defining it (g, A, v) comes from the other formulas of the same note (`g(x) = x^2 - 4`, `A = \begin{pmatrix} ... \end{pmatrix}`). When the note has none, the card uses an example and says so. Formulas in ℝⁿ get an n = 1 / n = 2 switch.
+- **Charts from formulas** keep the note's name of a function (`$g(x) = x^2 - 4$` becomes `plot $g(x) = x^2 - 4$`) and write the x range only, so y follows what is drawn.
 
 Plugin setting **"Also render plain `tikz` blocks"** opts in to claim the `tikz` language tag as well; off by default to coexist peacefully with `obsidian-tikzjax` and similar.
 
@@ -264,6 +450,8 @@ The preview and the export draw the same scene, so what you see is what pgfplots
 - **Layers and legend:** fills sit on the axis background layer, below axes, curves and markers. Every `\addplot` without a legend entry (markers, extra pieces of a broken curve) carries `forget plot`, so legend entries stay with their functions.
 - **Text:** labels are escaped, so `50% cut`, `x_1` or `R&D` print as typed, while `$...$` math and LaTeX commands such as `\textbf{A}` pass through.
 - **Size and aspect:** width and height come from Chart > Export size; **Equal scale** (always on in polar charts) exports as `axis equal image`, which keeps your ranges and shrinks the box.
+- **Steps and motion (6.0):** the export draws the last step, and with the line `frames` every step side by side. Moving objects are drawn at their still frame. Sums are written out term by term.
+- **Pictures (6.0):** a coloured plane or a bifurcation diagram is a PNG beside the `.tex` file (`ddplot graphics`); Copy LaTeX saves it in the note's attachment folder.
 
 The editor's **Copy SVG** and **Copy PNG** buttons serialize the live preview with theme colours already resolved.
 
@@ -286,7 +474,7 @@ Settings → Community plugins → **Easy Graphs Charts and TikZ**:
 - **Also render plain `tikz` blocks.** Off by default; on if you want one tag for everything (conflicts with obsidian-tikzjax).
 - **Charts for formulas**, **Highlight formulas in notes**, **Sliders in formula charts** and **Default chart for formulas**: see [Every formula is a chart](#every-formula-is-a-chart).
 - **Charts as SVG files.** Off by default: see [Export](#export).
-- **Show what's new after updates.** On by default. After an update that brings something new, a short popup shows what changed, once. The command **Show what's new in Easy Graphs Charts and TikZ 5** and the link in the Help tab open it at any time.
+- **Show what's new after updates.** On by default. After an update that brings something new, a short popup shows what changed, once. The command **Show what's new in Easy Graphs Charts and TikZ 6** and the link in the Help tab open it at any time.
 - **AI access** (on a computer; phones and tablets show only the guide and the agents' section). **Let AI apps make charts** (off by default) starts the local AI server; below it: its status, the **Port** (default 27150), the **Token** with **Copy** and **New token**, **Connect an AI app** with the line each app needs, **Tell AI agents in this vault** and **Copy the guide for AI chats**. The editor's **AI** tab has the same switch.
 
 ## Live rendering, briefly
@@ -299,6 +487,7 @@ A typical 3D surface (samples=40, 1,600 quads) sits at ~60 fps; the slider's upp
 
 - **Clipboard:** writes TikZ code / SVG / PNG on the *Copy …* buttons, the text of a "type" row when you press **Copy** in a guide, the AI guide, connection lines and token when you press their **Copy** buttons in the AI tab or the settings, and your chart words when you press **Copy your words**. It reads the clipboard only when you press **Paste the chart** in the AI tab.
 - **Active note:** inserts an `easy-tikz` block on **Insert into note** or a formula's **Insert chart** (under its paragraph), replaces an existing block when saving from click-to-edit, updates `displayWidth` / `displayAlign` when you use a chart's width or alignment controls, and adds or removes `connected` on a slider line when you press its link button. Inline sliders never write to the note.
+- **Pictures of coloured planes, on Copy LaTeX:** when the code you copy draws a coloured plane or a bifurcation diagram, the plugin saves its PNG (`plane-<hash>.png`) in the note's attachment folder and says where. The same picture keeps the same name.
 - **SVG files, on request:** with **Charts as SVG files** switched on (off by default), or with the command **Save the charts of this note as SVG files**, the plugin writes one SVG file per chart into your attachment folder, named after the note, and rewrites a file only when its picture changed. It never deletes a file.
 - **Plugin data:** the [plugin settings](#plugin-settings) (with the AI access token), your saved function templates, the state of the **Edit shapes by dragging** switch (and that its first-use tip was shown), which version of the What's new popup was shown and, while the editor is open, an autosaved draft of the chart (cleared when you insert or save).
 - **Notes with charts, after you change your chart words:** the plugin looks through the notes that hold `easy-tikz` blocks for charts that used a word you changed. Only when you agree (**Rewrite N charts**) does it rewrite those lines in your new words, each chart only when it stays exactly the same chart.

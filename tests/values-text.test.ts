@@ -60,7 +60,8 @@ test('let lines: values and functions, plain and LaTeX', () => {
 });
 
 test('let lines print back as written', () => {
-    roundTrip('let v = (2, 1)\nlet A = [[1.5, 1], [0.5, 2]]\nlet $f(x, y) = x^2 + 4y^2$\nplot g(x) = f(x, 1)', 'plot g(x) = f(x, 1)\nlet v = (2, 1)\nlet A = [[1.5, 1], [0.5, 2]]\nlet f(x, y) = x^2 + 4y^2');
+    // 6.0 F1: let lines print right after the sliders, before the functions that use them.
+    roundTrip('let v = (2, 1)\nlet A = [[1.5, 1], [0.5, 2]]\nlet $f(x, y) = x^2 + 4y^2$\nplot g(x) = f(x, 1)', 'let v = (2, 1)\nlet A = [[1.5, 1], [0.5, 2]]\nlet f(x, y) = x^2 + 4y^2\nplot g(x) = f(x, 1)');
     const full = roundTrip('let $c = -0.8 + 0.156i$\nlet $w = \\begin{pmatrix} -1 \\\\ 2 \\end{pmatrix}$', 'let c = -0.8 + 0.156i\nlet $w = \\begin{pmatrix} -1 \\\\ 2 \\end{pmatrix}$');
     assert.match(full, /\\let\{w = \\begin\{pmatrix\} -1 \\\\ 2 \\end\{pmatrix\}\}/);
 });

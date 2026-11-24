@@ -57,7 +57,7 @@ import { VALUE_TYPES, computeValues, computeValues3D, valuesSources } from './va
 import { LINEAR_TYPES, computeLinear, computeLinear3D, linearSources, transformItems, transformScene3D } from './linear/scene';
 import type { LinearOutput, Span3D } from './linear/scene';
 // 6.0 E
-import { IterateOutput, computeIterate, iterateMotion, iterateSources } from './iterate/scene';
+import { ITERATE_SCENE_TYPES, IterateOutput, computeIterate, iterateMotion, iterateSources } from './iterate/scene';
 import type { PixelPrim } from './iterate/pixels';
 // 6.0 F4
 import type { LivePrim } from './motion6/liveprims';
@@ -3797,7 +3797,7 @@ function scene3D(input: SceneInput3D): Scene3D {
     }
     // Data, probability, Riemann sums and slope fields are drawn in 2D charts only (5.0).
     const only2D: SceneIssue[] = tools
-        .filter((t) => (BEYOND_TYPES.has(t.type) || NOTES6_TYPES.has(t.type) || (MOTION_TYPES.has(t.type) && !MOTION_3D_TYPES.has(t.type))) && !t.hidden) // 6.0 B, C
+        .filter((t) => (BEYOND_TYPES.has(t.type) || NOTES6_TYPES.has(t.type) || (MOTION_TYPES.has(t.type) && !MOTION_3D_TYPES.has(t.type)) || ITERATE_SCENE_TYPES.has(t.type)) && !t.hidden) // 6.0 B, C; 6.0 F1: part E
         .map((t) => ({ source: str(t.name), message: msg('beyond.problem.only2D', { name: str(t.name) }), severity: 'error' as const }));
     if (!nodes.length) {
         math.setDerived({});

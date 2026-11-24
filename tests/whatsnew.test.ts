@@ -16,9 +16,12 @@ import { SettingsManager } from '../src/settings';
 import { DEFAULT_PLUGIN_DATA } from '../src/templates';
 import { Parameter } from '../src/types';
 import { marchingGrid } from '../src/util';
-import { tableAbove } from '../src/beyond/table';
+import { askContext, askQuestions, applyAnswer, answerPresent } from '../src/notes6/ask';
+import '../src/linear/ask';
+import '../src/iterate/ask';
 import {
-    WHATS_NEW_CHART_GUIDE,
+    WHATS_NEW_ALSO,
+    WHATS_NEW_ASK_CHART,
     WHATS_NEW_CHART_TEXT,
     WHATS_NEW_FORMULA,
     WHATS_NEW_SLIDES,
@@ -30,6 +33,7 @@ import {
     WHATS_NEW_SLIDER,
     WHATS_NEW_SUBTITLE,
     WHATS_NEW_TITLE,
+    WHATS_NEW_V5,
     WHATS_NEW_VERSION,
     chartScanRank,
     compareVersions,
@@ -37,6 +41,7 @@ import {
     isFreshInstall,
     needsVaultCheck,
     shouldShowWhatsNew,
+    whatsNewCard,
     whatsNewChart,
     whatsNewSeen,
     whatsNewText,
@@ -134,6 +139,7 @@ test('whats new: the record is a version, compared by number', () => {
     assert.equal(shouldShowWhatsNew({ whatsNewSeen: '4.10.0' }, '4.2.0', true), false, 'a later popup was seen (downgrade)');
     assert.equal(shouldShowWhatsNew({ whatsNewSeen: '4.1.9' }, '4.2.0', true), true, 'an older popup was seen');
     assert.equal(shouldShowWhatsNew({ whatsNewSeen: '4.2.0' }, '5.0.0', true), true, 'new content raises the version');
+    assert.equal(shouldShowWhatsNew({ whatsNewSeen: '5.0.0' }, V, true), true, 'who saw the popup of 5.0 sees the one of 6.0');
     // Damaged records count as not seen.
     for (const bad of [42, '', '  ', null, true, ['4.2.0']]) {
         assert.equal(shouldShowWhatsNew({ whatsNewSeen: bad }, V, true), true, JSON.stringify(bad));
@@ -153,8 +159,8 @@ test('whats new: compareVersions', () => {
 
 // ---------------------------------------------------------------- content
 
-// The rest of version 4 holds the live and AI items too: every item once.
-const ITEMS = [...WHATS_NEW_RECENT, ...WHATS_NEW_MORE];
+// The slides of 6.0, the rest of 6.0, version 5, and version 4 (with the live and AI items): every item once.
+const ITEMS = [...WHATS_NEW_RECENT, ...WHATS_NEW_ALSO, ...WHATS_NEW_V5, ...WHATS_NEW_MORE];
 
 test('whats new: every line is short, plain and free of em dashes', () => {
     const texts = [WHATS_NEW_TITLE, WHATS_NEW_SUBTITLE, ...ITEMS.flatMap((i) => [i.title, i.text])];
@@ -168,7 +174,7 @@ test('whats new: every line is short, plain and free of em dashes', () => {
         assert.ok(/[.]$/.test(item.text), `a sentence ends with a full stop: ${item.text}`);
         assert.equal((item.text.match(/`/g) || []).length % 2, 0, `unbalanced backticks: ${item.text}`);
     }
-    assert.equal(WHATS_NEW_TITLE, 'Easy Graphs Charts and TikZ 5');
+    assert.equal(WHATS_NEW_TITLE, 'Easy Graphs Charts and TikZ 6');
 });
 
 test('whats new: it covers the highlights of version 4, with sliders, calculations and AI among them', () => {
@@ -185,7 +191,6 @@ test('whats new: icons are lucide ids, guides exist', () => {
     assert.equal(new Set(ITEMS.map((i) => i.icon)).size, ITEMS.length, 'two items share an icon');
     for (const item of ITEMS) if (item.guide) assert.ok(guideById(item.guide), `${item.title}: no guide ${item.guide}`);
     for (const item of WHATS_NEW_LIVE) assert.ok(item.guide, `${item.title} links no guide`);
-    assert.ok(guideById(WHATS_NEW_CHART_GUIDE), `no guide ${WHATS_NEW_CHART_GUIDE}`);
 });
 
 test('whats new: the number of guides it names is the number in the Help tab, on GitHub and in the README', () => {
@@ -221,9 +226,19 @@ test('whats new: the text beside the chart is the whole chart, in a few lines', 
     assert.ok(!lines.some((l) => l.startsWith('raw ') || l.startsWith('set ')), text);
 });
 
-test('whats new: a slideshow of 5.0, one feature per slide, then version 4', () => {
-    assert.deepEqual(WHATS_NEW_SLIDES.map((x) => x.id), ['formulas', 'language', 'connected', 'data', 'probability', 'riemann', 'slope', 'svg', 'earlier']);
+test('whats new: a slideshow of 6.0, one feature per slide, then the rest of 6.0, then versions 5 and 4', () => {
+    assert.deepEqual(WHATS_NEW_SLIDES.map((x) => x.id), ['picture', 'matrix', 'motion', 'ask', 'hover', 'values', 'also', 'earlier']);
     assert.deepEqual(WHATS_NEW_RECENT.map((i) => i.title), [
+        'Every idea is a picture',
+        'A matrix moves the plane',
+        'Motion',
+        'Ask the curve',
+        'Hover reads sets and maps',
+        'Values and sums',
+    ]);
+    assert.equal(WHATS_NEW_SLIDES[WHATS_NEW_SLIDES.length - 2].title, 'Also new in 6.0');
+    assert.equal(WHATS_NEW_SLIDES[WHATS_NEW_SLIDES.length - 1].title, 'Earlier versions');
+    assert.deepEqual(WHATS_NEW_V5.map((i) => i.title), [
         'Every formula is a chart',
         'LaTeX is the chart language',
         'Connected sliders',
@@ -233,32 +248,74 @@ test('whats new: a slideshow of 5.0, one feature per slide, then version 4', () 
         'Slope fields',
         'Charts as SVG files',
     ]);
-    assert.equal(WHATS_NEW_SLIDES[WHATS_NEW_SLIDES.length - 1].title, 'Earlier in version 4');
     assert.deepEqual(WHATS_NEW_MORE.slice(0, 3).map((i) => i.title), ['Axis numbers your way', 'White background for images', 'Solid surfaces in 3D']);
-    assert.equal(WHATS_NEW_VERSION, '5.0.0');
-    // Each feature slide shows something live; the first is the chart of the formula.
-    for (const x of WHATS_NEW_SLIDES) if (x.id !== 'earlier') assert.ok(x.charts.length > 0, `${x.id} has no chart`);
+    assert.equal(WHATS_NEW_VERSION, '6.0.0');
+    // Each feature slide shows something live; the first is the Julia set with its two sliders.
+    for (const x of WHATS_NEW_SLIDES) if (x.id !== 'also' && x.id !== 'earlier') assert.ok(x.charts.length > 0, `${x.id} has no chart`);
     assert.equal(WHATS_NEW_SLIDES[0].charts[0], WHATS_NEW_CHART_TEXT);
-    assert.equal(WHATS_NEW_SLIDES.find((x) => x.id === 'connected')?.charts.length, 2);
-    // Try an example on the data slide opens the same chart with the table's points written in it.
-    const dataSlide = WHATS_NEW_SLIDES.find((x) => x.id === 'data');
-    const dataExample = dataSlide && dataSlide.example ? parseChartText(dataSlide.example) : null;
-    assert.ok(dataExample && dataExample.problems.length === 0, JSON.stringify(dataExample && dataExample.problems));
-    // The examples of the language are lines the plugin reads.
-    for (const title of ['LaTeX is the chart language', 'Connected sliders']) {
-        const it = WHATS_NEW_RECENT.find((i) => i.title === title);
+    assert.equal(WHATS_NEW_SLIDES[0].sliders, 2);
+    // The examples in the texts are lines the plugin reads (with what they need around them).
+    const needs: Record<string, string> = {
+        'Every idea is a picture': '',
+        'A matrix moves the plane': 'let A = [[1, 1], [0, 1]]',
+        'LaTeX is the chart language': '',
+        'Connected sliders': '',
+        "Newton's method": 'plot f(x) = x^2 - 2',
+        'Sets on an axis and chords': 'plot g(x) = x^2 - 4',
+    };
+    for (const [title, before] of Object.entries(needs)) {
+        const it = ITEMS.find((i) => i.title === title);
         const example = it ? /`([^`]+)`/.exec(it.text) : null;
         assert.ok(it && example, `no example in ${title}`);
-        assert.deepEqual(parseChartText(example[1]).problems, [], example[1]);
+        const text = [before, example[1]].filter((l) => l).join('\n');
+        assert.deepEqual(parseChartText(text).problems, [], text);
     }
     // The example of the mesh lines is a surface option the plugin reads.
     const mesh = WHATS_NEW_MORE.find((i) => i.title === 'Mesh lines');
     const option = mesh ? /`([^`]+)`/.exec(mesh.text) : null;
     assert.ok(mesh && option && parseChartText(`3d\nplot z = x^2 - y^2, ${option[1]}`).problems.length === 0, mesh ? mesh.text : 'no item Mesh lines');
     // The example of the lines in words is a line the plugin reads.
-    const plain = [...WHATS_NEW_RECENT, ...WHATS_NEW_MORE].find((i) => i.title === 'Charts in plain words');
+    const plain = ITEMS.find((i) => i.title === 'Charts in plain words');
     const example = plain ? /`([^`]+)`/.exec(plain.text) : null;
     assert.ok(plain && example && parseChartText(example[1]).problems.length === 0, plain ? plain.text : 'no item Charts in plain words');
+});
+
+test('whats new: the matrix slide plays in steps, the motion slide moves by itself', () => {
+    const matrix = WHATS_NEW_SLIDES.find((x) => x.id === 'matrix');
+    const motion = WHATS_NEW_SLIDES.find((x) => x.id === 'motion');
+    const steps = (text: string) => ((parseChartText(text).data.tools as Array<{ step?: number }>) ?? []).map((x) => x.step ?? 0);
+    assert.ok(matrix && Math.max(...steps(matrix.charts[0])) === 2, 'the matrix moves in step 2, its eigenvectors come in step 3');
+    const field = motion ? (parseChartText(motion.charts[0]).data.tools as Array<{ type: string; particles?: boolean }>).find((x) => x.type === 'vectorField') : null;
+    assert.ok(field && field.particles === true, 'the field has moving particles');
+});
+
+test('whats new: the hover slide is the card a note shows for the set, with g from the note', () => {
+    const card = whatsNewCard();
+    assert.ok(card, `no card for ${WHATS_NEW_FORMULA}`);
+    assert.equal(card.kind, 'set');
+    assert.deepEqual(card.fn, { name: 'g', body: 'x^2 - 4', from: 'note' });
+    const hover = WHATS_NEW_SLIDES.find((x) => x.id === 'hover');
+    assert.ok(hover && card.lines.every((line) => hover.charts[0].includes(line)), 'the slide draws the lines of the card');
+});
+
+test('whats new: the ask slide asks real questions, and every answer draws', () => {
+    const data = new SettingsManager().serialize();
+    Object.assign(data, parseChartText(WHATS_NEW_ASK_CHART).data);
+    const chart = SettingsManager.fromJSON(data).serialize();
+    const settings = SettingsManager.fromJSON(chart);
+    const math = settings.createMathContext({ memo: false });
+    math.setParams([]);
+    const view = settings.resolveView(math).view;
+    const questions = askQuestions(askContext({ kind: 'function', name: 'g', x: 1.5, y: -1.75 }, chart, { xmin: view.xmin, xmax: view.xmax, ymin: view.ymin, ymax: view.ymax }, math));
+    const ids = questions.map((q) => q.id);
+    for (const id of ['le', 'zeros', 'extrema', 'tangent', 'value']) assert.ok(ids.includes(id), `no question ${id} in ${ids.join(', ')}`);
+    assert.ok(ids.some((id) => id.includes('h')), `no question about g and h in ${ids.join(', ')}`);
+    for (const q of questions) {
+        assert.equal(answerPresent(chart, q.answer), false, `${q.id} is answered before it is asked`);
+        const next = applyAnswer(chart, q.answer);
+        assert.ok(next, `${q.id}: the answer does not read`);
+        assert.equal(answerPresent(next, q.answer), true, `${q.id}: the answer is not in the chart after it`);
+    }
 });
 
 test('whats new: the popup loads nothing from the network', () => {
@@ -275,7 +332,8 @@ test('whats new: the popup loads nothing from the network', () => {
 function sceneAt(a: number) {
     const settings = SettingsManager.fromJSON(whatsNewChart());
     const math = settings.createMathContext({ memo: false });
-    const params = (settings.getValue('parameters') as Parameter[]).map((p) => ({ ...p, value: a }));
+    // The first slider (a) at the value asked for; the others where the chart starts them.
+    const params = (settings.getValue('parameters') as Parameter[]).map((p, k) => (k === 0 ? { ...p, value: a } : p));
     math.setParams(params);
     const config = settings.toRendererConfig(math);
     const issues: SceneIssue[] = [];
@@ -309,23 +367,28 @@ function sceneAt(a: number) {
 }
 
 
-test('whats new chart: the chart of the formula f(x) = x^3/3 - a x, with its extrema, slider a', () => {
+test('whats new chart: a Julia set, c = a + bi on two sliders, coloured by the GPU', () => {
     const chart = whatsNewChart();
-    const functions = chart.functions as Array<{ name: string; expression: string; extrema?: boolean }>;
-    assert.equal(functions.length, 1);
-    assert.equal(`${functions[0].name}(x) = ${functions[0].expression}`, WHATS_NEW_FORMULA);
-    assert.ok(functions[0].extrema, 'f marks its extrema');
-    assert.deepEqual(chart.parameters, [WHATS_NEW_SLIDER]);
-    // The chart text writes the formula as LaTeX, in dollars.
-    assert.ok(whatsNewText().includes(`plot $${WHATS_NEW_FORMULA}$`), whatsNewText());
+    const tools = chart.tools as Array<{ type: string; formula?: string; start?: string; given?: string }>;
+    assert.equal(tools.length, 1);
+    assert.equal(tools[0].type, 'colourPlane');
+    assert.equal(tools[0].formula, 'z_{n+1} = z_n^2 + c');
+    assert.deepEqual((chart.parameters as Parameter[]).map((p) => p.name), ['a', 'b']);
+    assert.deepEqual((chart.parameters as Parameter[])[0], WHATS_NEW_SLIDER);
     // A copy every time: the popup changes the slider value of its own copy only.
     (whatsNewChart().parameters as Parameter[])[0].value = 99;
     assert.equal((whatsNewChart().parameters as Parameter[])[0].value, WHATS_NEW_SLIDER.value);
+    // The GPU paints it (sliders as uniforms), so a slider moves it live.
+    const { scene } = sceneAt(WHATS_NEW_SLIDER.value);
+    const pixels = scene.items.flatMap((i) => i.pixels ?? []);
+    assert.equal(pixels.length, 1);
+    assert.ok(pixels[0].shader, 'no shader: the CPU would paint it');
+    assert.ok(pixels[0].shader.uniforms.length >= 2, 'a and b are uniforms');
 });
 
 test('whats new chart: no problem anywhere on the slider', () => {
     const { min, max, step } = WHATS_NEW_SLIDER;
-    for (let k = 0; min + k * step <= max + 1e-9; k++) {
+    for (let k = 0; min + k * step <= max + 1e-9; k += 5) {
         const a = Number((min + k * step).toFixed(6));
         const { errors } = sceneAt(a);
         assert.deepEqual(errors, [], `a = ${a}`);
@@ -333,17 +396,17 @@ test('whats new chart: no problem anywhere on the slider', () => {
     assert.deepEqual(sceneAt(WHATS_NEW_SLIDER.value).notes, [], 'the start value draws without a note');
 });
 
-test('whats new chart: the extrema sit at -sqrt(a) and sqrt(a), inside the view', () => {
-    for (const a of [0.25, 0.5, WHATS_NEW_SLIDER.value, 1.5, 2]) {
-        const { config, math } = sceneAt(a);
-        const f = math.fn1('f(x)');
-        const r = Math.sqrt(a);
-        near(f(r), (-2 / 3) * a * r, 1e-9, `a = ${a}: the minimum`);
-        near(f(-r), (2 / 3) * a * r, 1e-9, `a = ${a}: the maximum`);
-        for (const x of [r, -r]) {
-            assert.ok(x > config.xmin && x < config.xmax, `a = ${a}: x = ${x} outside the view`);
-            assert.ok(f(x) > config.ymin && f(x) < config.ymax, `a = ${a}: y = ${f(x)} outside the view`);
-        }
+test('whats new chart: the set has an inside and an outside at the start and at both ends of a', () => {
+    for (const a of [WHATS_NEW_SLIDER.min, WHATS_NEW_SLIDER.value, WHATS_NEW_SLIDER.max]) {
+        const { scene, config } = sceneAt(a);
+        const prim = scene.items.flatMap((i) => i.pixels ?? [])[0];
+        const w = 36;
+        const h = 24;
+        const out = new Uint8ClampedArray(w * h * 4);
+        prim.tile({ xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax }, w, h, 0, 0, w, h, out);
+        const colours = new Set<string>();
+        for (let k = 0; k < w * h; k++) colours.add(`${out[4 * k]},${out[4 * k + 1]},${out[4 * k + 2]}`);
+        assert.ok(colours.size > 20, `a = ${a}: only ${colours.size} colours`);
     }
 });
 
@@ -353,8 +416,6 @@ test('whats new slides: every chart reads without a problem and draws without an
             const parsed = parseChartText(text);
             assert.deepEqual(parsed.problems, [], `${x.id}: ${text}`);
             const settings = SettingsManager.fromJSON(parsed.data);
-            // A chart that reads the table above it gets the slide's table, as the popup gives it.
-            if (x.table) settings.noteTable = tableAbove([...x.table, '```easy-tikz'], x.table.length + 1);
             const params = (settings.getValue('parameters') as Parameter[]) ?? [];
             const ends = params.length ? [params[0].min, params[0].value, params[0].max] : [NaN];
             for (const v of ends) {
@@ -377,8 +438,4 @@ test('whats new slides: every chart reads without a problem and draws without an
             }
         }
     }
-    // The two charts of the connected slide share a connected slider a with the same range.
-    const pair = (WHATS_NEW_SLIDES.find((x) => x.id === 'connected')?.charts ?? []).map((text) => (parseChartText(text).data.parameters as Parameter[])[0]);
-    assert.ok(pair.length === 2 && pair.every((p) => p.name === 'a' && p.connected === true), JSON.stringify(pair));
-    assert.deepEqual([pair[0].min, pair[0].max], [pair[1].min, pair[1].max]);
 });

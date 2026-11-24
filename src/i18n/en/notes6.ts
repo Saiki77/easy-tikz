@@ -104,4 +104,9 @@ export const notes6 = {
 
     // ---- Chart tab
     'notes6.chart.fitY': 'The text of this chart gives no y range: y follows what the chart draws. Type a y range, pan or zoom to fix it.',
+
+    // ---- 6.0 F1: chart words, what each piece is (Settings, Chart words)
+    'notes6.words.what.onTheXAxis': 'A set on the x-axis: mark where g(x) <= 0 on the x-axis',
+    'notes6.words.what.onTheYAxis': 'A set on the y-axis: mark where y > 1 on the y-axis',
+    'notes6.words.what.theChordOf': 'The chord of a function: draw the chord of g from -1 to 3',
 };

@@ -92,6 +92,15 @@ export const iterate: Messages<typeof en> = {
     'iterate.ask.group': '反復',
     'iterate.ask.newton': 'ここからのニュートン法',
     'iterate.ask.cobweb': 'ここからのクモの巣図',
+    // 6.0 F1: Ask the curve on an orbit and on a coloured plane
+    'iterate.ask.title.orbit': '軌道 {name}',
+    'iterate.ask.title.plane': '平面の色分け {name}',
+    'iterate.ask.orbitGroup': '軌道 {name}',
+    'iterate.ask.moreSteps': 'ステップを増やす ({steps})',
+    'iterate.ask.fewerSteps': 'ステップを減らす ({steps})',
+    'iterate.ask.labelPoints': '点にラベルを付ける',
+    'iterate.ask.planeGroup': '平面の色分け {name}',
+    'iterate.ask.orbitHere': 'この点の軌道',
 
     // ---- hover cards
     'iterate.hover.recurrence': '漸化式',
@@ -106,4 +115,15 @@ export const iterate: Messages<typeof en> = {
     'iterate.export.saved': 'コピーしました。平面の画像は {files} として保存しました。.tex ファイルと同じフォルダーに置いてください。',
     'iterate.export.failed': 'コピーしましたが、平面の画像を保存できませんでした: {error}',
     'iterate.export.needs': 'この .tex ファイルと同じフォルダーに画像 {file} (エディターの LaTeX をコピーで保存されます)',
+
+    // ---- 6.0 F1: chart words, what each piece is (Settings, Chart words)
+    'iterate.words.what.colourThePlaneBy': '行：平面の各点に色を付ける：colour the plane by f(z) = z^2',
+    'iterate.words.what.theOrbitOf': '漸化式の軌道：draw the orbit of z_(n+1) = z_n^2 + c',
+    'iterate.words.what.theCobwebOf': 'クモの巣図：draw the cobweb of x_(n+1) = f(x_n) from 0.2',
+    'iterate.words.what.theBifurcationDiagramOf': '分岐図：draw the bifurcation diagram of x_(n+1) = r x_n (1 - x_n) for r from 2.5 to 4',
+    'iterate.words.what.newtonsMethodFor': "ニュートン法：draw Newton's method for f from 2.5",
+    'iterate.words.what.theCirclesOf': '和の回転する円：draw the circles of ...',
+    'iterate.words.what.steps': 'ステップ数の後：40 steps',
+    'iterate.words.what.asAPath': '点を描かない線だけの軌道',
+    'iterate.words.what.withItsWave': '回転する円が描く波',
 };

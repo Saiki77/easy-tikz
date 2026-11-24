@@ -334,9 +334,38 @@ export function valuesFitShapes(tool: Tool, item: { strokes: Array<{ lines: Pt[]
             return { points: [], lines: [] };
         case 'vector':
             return { points: [], lines: item.strokes.flatMap((s) => s.lines.map((pts) => ({ pts, closed: false }))) };
-        case 'listPoints':
-            return { points: item.markers.map((m) => ({ x: m.x, y: m.y })), lines: [] };
+        case 'listPoints': {
+            const points = item.markers.map((m) => ({ x: m.x, y: m.y }));
+            // 6.0 F1: labelled, the labels sit outward of the points: the fit leaves them room.
+            const labelled = tool.valueLabel || !!str(tool.label).trim();
+            return { points: labelled ? [...points, ...labelRoom(points)] : points, lines: [] };
+        }
         default:
             return null;
     }
+}
+
+/**
+ * 6.0 F1: a point beyond each labelled point of a list where its label
+ * ends: outward of the points (the side the label sits on), about as far
+ * as the label is long. A label of c characters is some 0.02 c of the
+ * view wide (small text in a chart of usual size), 0.06 of it high.
+ */
+export function labelRoom(points: Pt[]): Pt[] {
+    if (!points.length) return [];
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+    if (!(span > 0)) return [];
+    const width = (p: Pt) => {
+        const re = formatValue(p.x, 3);
+        const im = formatValue(Math.abs(p.y), 3);
+        return Math.abs(p.y) < 1e-9 ? re.length : Math.abs(p.x) < 1e-9 ? im.length + 1 : re.length + im.length + 4;
+    };
+    // The view is wider than the points by the room itself: about twice their span at most.
+    const view = span * 1.6;
+    return points.map((p) => {
+        const d = outward(p, points);
+        return { x: p.x + Math.sign(d.x) * (0.02 * width(p) * Math.abs(d.x) + 0.03) * view, y: p.y + Math.sign(d.y) * (0.06 * Math.abs(d.y) + 0.02) * view };
+    });
 }

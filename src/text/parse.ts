@@ -1909,6 +1909,8 @@ function stepped(b: Builder, line: string) {
         for (let i = before[k]; i < l.length; i++) {
             made = true;
             if (b.step > 0 && l[i].step === undefined) l[i].step = b.step;
+            // 6.0 F1: step=0 written out (a line below a `then` that belongs to the first step) is no step.
+            if (l[i].step === 0) delete l[i].step;
         }
     });
     if (cut >= 0 && !made && b.problems.length === problems) b.problem(0, msg('motion6.text.thenObject'));

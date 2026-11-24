@@ -1223,7 +1223,11 @@ export class SVGRenderer {
         const legend: LegendEntry[] = [];
         for (const { info, f } of fns) {
             if (info.hidden || info.error || info.domainError || isBlank(f)) continue;
-            if (this.movedFns.has(info.index)) continue; // 6.0 D: a transform draws it
+            if (this.movedFns.has(info.index)) {
+                // 6.0 D: a transform draws it. 6.0 F1: its legend entry stays.
+                if (f.showLegend) legend.push({ color: this.css(f.color), width: this.strokeWidth(f.thickness), dashed: !!f.dashed, label: this.legendLabel(info, f) });
+                continue;
+            }
             const color = this.css(f.color);
             const width = this.strokeWidth(f.thickness);
             const lines = this.sampleFunction(info);

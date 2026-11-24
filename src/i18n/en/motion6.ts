@@ -90,4 +90,16 @@ export const motion6 = {
     'motion6.chart.turning': 'Turns by itself',
     'motion6.chart.turningHint': 'In notes and the editor the 3D view turns slowly; a drag turns it too. The export shows the view as set.',
     'motion6.orbit.traced': 'Traced',
+
+    // ---- 6.0 F1: chart words, what each piece is (Settings, Chart words)
+    'motion6.words.what.then': 'Line: the next step starts here: then plot g(x) = cos(x)',
+    'motion6.words.what.frames': 'Line: the export shows every step side by side',
+    'motion6.words.what.theVectorField': 'A vector field: draw the vector field (y, -x)',
+    'motion6.words.what.theRestPointsOf': 'The rest points of a vector field: mark the rest points of F',
+    'motion6.words.what.theSolutionOf': "The solution of a system: draw the solution of p' = (y, -x) through P",
+    'motion6.words.what.through': 'The points a solution starts from',
+    'motion6.words.what.withMovingParticles': 'Particles that flow along a vector field',
+    'motion6.words.what.withStreamlines': 'Still curves along a vector field',
+    'motion6.words.what.colouredByLength': 'Arrows coloured by their length',
+    'motion6.words.what.colouredByTime': 'A solution coloured by the time',
 };
