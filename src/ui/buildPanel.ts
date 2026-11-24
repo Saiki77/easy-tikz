@@ -18,6 +18,7 @@ import { BUILT_IN_2D, BUILT_IN_3D } from '../templates';
 import { RANGE_DEFAULTS, RangeKey, SettingsManager } from '../settings';
 import { SVGRenderer } from '../renderer';
 import { SVG3DRenderer } from '../renderer3d';
+import { toolInChart } from '../scene'; // 6.0
 import type { SceneIssue } from '../scene';
 import { PanelHost } from './host';
 import { cloneData } from '../util';
@@ -254,11 +255,9 @@ function setShown(el: HTMLElement, shown: boolean): void {
     el.toggleClass('tikz-hidden', !shown);
 }
 
-/** Tools drawn in the current dimension (the 'tools' list is shared by 2D and 3D). */
+/** Tools of the current dimension (the 'tools' list is shared by 2D and 3D; 6.0: toolInChart in scene.ts, the 3D tools of version 6 too). */
 function inDimension(tool: Tool, is3D: boolean): boolean {
-    if (tool.type === 'plane3D') return is3D;
-    if (tool.type === 'points' || tool.type === 'segment') return (tool.dim === 3) === is3D;
-    return !is3D;
+    return toolInChart(tool, is3D);
 }
 
 function shortText(text: string, max = 24): string {

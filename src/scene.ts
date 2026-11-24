@@ -3764,6 +3764,30 @@ function computePlane(t: PlaneTool, ctx: Ctx): Output {
     return out;
 }
 
+/**
+ * 6.0: the tools a 3D chart draws: planes, 3D points and segments, 3D
+ * solutions (C), values and their arrows (A), linear algebra (D) and
+ * GeoGebra lines (G).
+ */
+function drawnIn3D(t: Tool): boolean {
+    if (t.type === 'plane3D') return true;
+    if (t.type === 'points' || t.type === 'segment') return t.dim === 3;
+    return MOTION_3D_TYPES.has(t.type) || VALUE_TYPES.has(t.type) || LINEAR_TYPES.has(t.type) || t.type === 'geogebra';
+}
+
+/**
+ * 6.0: the tools that belong to a chart of this dimension (the list of
+ * tools is shared by 2D and 3D). In 3D: what scene3D draws, and python
+ * blocks (their names work in 3D, their drawing does not). In 2D: all but
+ * planes and 3D points and segments. The Build tab shows a card for each.
+ */
+export function toolInChart(t: Tool, is3D: boolean): boolean {
+    if (is3D) return drawnIn3D(t) || t.type === 'python';
+    if (t.type === 'plane3D') return false;
+    if (t.type === 'points' || t.type === 'segment') return t.dim !== 3;
+    return true;
+}
+
 /** 3D scene: dim-3 points (list source) and segments, planes. Other tools are skipped. Never throws. */
 export function computeScene3D(input: SceneInput3D): Scene3D {
     try {
@@ -3798,13 +3822,8 @@ function scene3D(input: SceneInput3D): Scene3D {
         zRange: [v && Number.isFinite(v.zmin) ? v.zmin : -5, v && Number.isFinite(v.zmax) ? v.zmax : 5], // 6.0 D
     };
     const nodes: SceneNode[] = [];
-    for (const t of tools) {
-        if (t.type === 'plane3D' || ((t.type === 'points' || t.type === 'segment') && t.dim === 3)) nodes.push(toolNode(t, math));
-        else if (MOTION_3D_TYPES.has(t.type)) nodes.push(toolNode(t, math)); // 6.0 C
-        // 6.0 A: definitions, vector arrows and points of a list (src/values/scene.ts); 6.0 D: linear algebra.
-        else if (VALUE_TYPES.has(t.type) || LINEAR_TYPES.has(t.type)) nodes.push(toolNode(t, math));
-        else if (t.type === 'geogebra') nodes.push(toolNode(t, math)); // 6.0 G
-    }
+    // 6.0 A, C, D, G: see drawnIn3D (the Build tab lists the same tools)
+    for (const t of tools) if (drawnIn3D(t)) nodes.push(toolNode(t, math));
     // Data, probability, Riemann sums and slope fields are drawn in 2D charts only (5.0).
     const only2D: SceneIssue[] = tools
         .filter((t) => (BEYOND_TYPES.has(t.type) || NOTES6_TYPES.has(t.type) || (MOTION_TYPES.has(t.type) && !MOTION_3D_TYPES.has(t.type)) || ITERATE_SCENE_TYPES.has(t.type)) && !t.hidden) // 6.0 B, C; 6.0 F1: part E
