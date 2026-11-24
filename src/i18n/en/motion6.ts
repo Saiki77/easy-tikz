@@ -45,7 +45,7 @@ export const motion6 = {
     'motion6.trajectory.summary': "p' = {expression} through {through}",
     'motion6.trajectory.empty': 'No system yet',
     'motion6.step.label': 'Step',
-    'motion6.step.hint': 'The step this object arrives in: 0 from the start, 1 after the first "then", and so on.',
+    'motion6.step.hint': 'Step 1 is the start; every "then" starts the next step.',
     'motion6.step.newStep': 'Show in step {step}',
 
     // ---- the kinds of rest points (labels)

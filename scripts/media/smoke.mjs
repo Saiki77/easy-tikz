@@ -342,18 +342,19 @@ if (started) {
         }
 
         // The + Add picker (5.1): a search finds an item by another word, Enter adds it and closes the picker.
-        await check('Build: + Add searches (vector finds Arrow) and Enter adds it', async () => {
+        // 6.0 C: "vector" finds the vector fields too now; "gradient" finds only Arrow.
+        await check('Build: + Add searches (gradient finds Arrow) and Enter adds it', async () => {
             await obs.showTab('build');
             const before = await obs.call(() => document.querySelectorAll('.modal.tikz-modal .etz-card').length);
             await obs.call(() => document.querySelector('.modal.tikz-modal .etz-build-add').click());
             await obs.waitFor(async () => obs.call(() => !!document.querySelector('.etz-picker .etz-picker-input')), { timeout: 2000, interval: 50, message: 'the picker to open' });
             const found = await obs.call(() => {
                 const input = document.querySelector('.etz-picker .etz-picker-input');
-                input.value = 'vector';
+                input.value = 'gradient';
                 input.dispatchEvent(new Event('input'));
                 return Array.from(document.querySelectorAll('.etz-picker .etz-picker-item .etz-picker-label')).map((e) => e.textContent);
             });
-            assert(found.length === 1 && found[0] === 'Arrow', `vector finds ${JSON.stringify(found)}`);
+            assert(found.length === 1 && found[0] === 'Arrow', `gradient finds ${JSON.stringify(found)}`);
             await obs.key('Enter');
             await obs.sleep(300);
             const after = await obs.call(() => ({ cards: document.querySelectorAll('.modal.tikz-modal .etz-card').length, open: !!document.querySelector('.etz-picker') }));

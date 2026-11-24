@@ -214,3 +214,24 @@ test('clock: only moving particles ask for it', () => {
     assert.deepEqual(stillFrame(undefined), STILL);
     assert.equal(stillFrame(2).time, 2);
 });
+
+// -------------------------------------------------------------- rename
+
+import { renameInMotionTool, motionToolReads } from '../src/motion6/tools';
+import { renameIdentifier, renameToolReferences } from '../src/mathcontext';
+import type { Tool } from '../src/types';
+
+test('rename: a slider in a system, a field name in its rest points', () => {
+    const data = parseChartText('slider k from 0 to 2\nmark P at (1, 0)\ndraw the vector field F(x, y) = (k y, -x)\nmark the rest points of F\ndraw the solution of (y, -k x) through P for t from 0 to k').data;
+    const tools = list(data, 'tools') as unknown as Tool[];
+    const param = { expr: (s: string) => renameIdentifier(s, 'k', 'm'), tpl: (s: string) => s, ref: (n: string) => n, kind: 'parameter' as const };
+    for (const t of tools) renameInMotionTool(t, param);
+    assert.equal((tools[1] as { expression: string }).expression, '(m y, -x)');
+    assert.equal((tools[3] as { expression: string; to: string }).expression, '(y, -m x)');
+    assert.equal((tools[3] as { to: string }).to, 'm');
+    const tool = { expr: (s: string) => renameToolReferences(s, 'P', 'Q'), tpl: (s: string) => s, ref: (n: string) => (n === 'F' ? 'G' : n), kind: 'tool' as const };
+    for (const t of tools) renameInMotionTool(t, tool);
+    assert.equal((tools[2] as { field: string }).field, 'G');
+    assert.equal((tools[3] as { through: string }).through, 'Q');
+    assert.equal(motionToolReads(tools[3], (s) => !!s && /\bm\b/.test(s)), true);
+});

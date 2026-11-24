@@ -48,7 +48,7 @@ export const motion6: Messages<typeof en> = {
     'motion6.trajectory.summary': "{through} を通る p' = {expression}",
     'motion6.trajectory.empty': '方程式がまだありません',
     'motion6.step.label': 'ステップ',
-    'motion6.step.hint': 'このオブジェクトが現れるステップです。0 は最初から、1 は最初の "then" のあと、以下同様です。',
+    'motion6.step.hint': 'ステップ 1 が最初です。"then" ごとに次のステップが始まります。',
     'motion6.step.newStep': 'ステップ {step} で表示',
 
     // ---- the kinds of rest points (labels)
