@@ -527,7 +527,7 @@ function optionWords(o: Opt, kind: Kind, variable: string): Mapped {
 }
 
 /** Keys the commands take with a value (name=R1, at=..., in=R1, levels=..., labels=..., text=...); the others they take as flags (max, ->, plane). */
-const TAKES_VALUE = new Set(['name', 'at', 'in', 'levels', 'labels', 'text', 'from', 'to' /* 6.0 A, B */]);
+const TAKES_VALUE = new Set(['name', 'at', 'in', 'levels', 'labels', 'text', 'from', 'to' /* 6.0 A, B */, 'through' /* 6.0 F1 */]);
 
 /** The options of an object after a bar (`head | red, dashed`), but those its line itself takes. */
 function barInto(m: Mapped, opts: Opt[], kind: Kind, variable: string, taken: ReadonlySet<string>, extra: Mapped[] = []) {
@@ -1795,6 +1795,7 @@ function motionFull(own: string, rest: string, options: string[]): string | null
     const opt = (o: string): string => {
         const c = /^colou?red\s+by\s+(?:length|size|time)(?:\s+in\s+([a-z]+))?$/i.exec(o.trim());
         if (c) return `colormap/${(c[1] ?? 'viridis').toLowerCase()}`;
+        if (isColormap(o.trim().toLowerCase())) return `colormap/${o.trim().toLowerCase()}`; // 6.0 F1: the words of \vectorfield[colormap/heat] (a bar option)
         if (/^moving\s+particles$/i.test(o.trim())) return 'particles';
         return optionFull(o, 'other');
     };

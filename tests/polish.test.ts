@@ -8,7 +8,8 @@
 import { test, assert } from './_lib';
 import { canonical } from '../src/chartdata';
 import { parseChartText } from '../src/text/parse';
-import { printChartText, writeChartText } from '../src/text/print';
+import { printChartText, printFullText, writeChartText } from '../src/text/print';
+import { fullToWords, wordsToFull } from '../src/text/full';
 import { rewordNote } from '../src/text/reword';
 import { ChartWords, NO_WORDS, PIECES, clean, setChartWords, wordProblem, wordsFromText, wordsToText } from '../src/text/words';
 import { insertTool, letLines } from '../src/values/order';
@@ -420,4 +421,47 @@ test('polish: in a 3D chart, the lines of part E are named as 2D only', () => {
         scene.issues.map((i) => i.message),
         ['CP1 is drawn in 2D charts only', 'OR1 is drawn in 2D charts only']
     );
+});
+
+// ------------------------------------------------------------ Full LaTeX and steps
+
+test('polish: Full LaTeX keeps the points of a solution once, several points, and a colour map of a vector field', () => {
+    const full = ['\\begin{chart}', '\\vectorfield[colormap/heat]{F(x, y) = (y, -x)}', '\\mark[name=P]{(1, 0)}', '\\solution[through=P, t=0:8]{\\dot{p} = (y, -x)}', '\\end{chart}'].join('\n');
+    const back = wordsToFull(fullToWords(full));
+    assert.ok(back.includes('\\vectorfield[colormap/heat]{F(x, y) = (y, -x)}'), back);
+    assert.ok(back.includes('\\solution[through=P, t=0:8]{\\dot{p} = (y, -x)}'), back);
+    const two = read('show x from -3 to 3 and y from -3 to 3\nmark P at (1, 0)\ndraw the solution of $\\dot{p} = (y, -x)$ through P and (1.5, 1)');
+    const printed = printFullText(two);
+    assert.ok(printed.includes('\\solution[through={P, (1.5, 1)}, t=0:10]{\\dot{p} = (y, -x)}'), printed);
+    assert.equal(canonical(read(printed)), canonical(two));
+});
+
+test('polish: an object added to a chart with steps goes into its step; every other line stays as written', () => {
+    const base = ['% the grid', 'draw the grid', '% the move', 'then transform the plane by [[1, 1], [0, 1]]', '% the basis', 'then draw the basis vectors', '% end'].join('\n');
+    const add = (fn: (d: Data) => void) => {
+        const data = JSON.parse(JSON.stringify(read(base))) as Data;
+        fn(data);
+        const out = writeChartText(base, data);
+        assert.equal(canonical(read(out)), canonical(data), out);
+        for (const line of base.split('\n')) assert.ok(out.split('\n').includes(line), `${line} lost:\n${out}`);
+        return out.split('\n');
+    };
+    // In the first step, between the objects of that step and the next `then`.
+    assert.deepEqual(
+        add((d) => (d.tools as Data[]).splice(1, 0, { type: 'region', name: 'R1', conditions: ['x <= 1'] })),
+        ['% the grid', 'draw the grid', '% the move', 'shade where x <= 1', 'then transform the plane by [[1, 1], [0, 1]]', '% the basis', 'then draw the basis vectors', '% end']
+    );
+    // In the last step (as Ask answers are): after the lines of that step.
+    assert.equal(add((d) => (d.functions = [{ name: 'g', expression: 'x/2', color: 'red', step: 2 }])).pop(), 'plot g(x) = x/2 in red');
+    // A new last step starts with then.
+    assert.equal(add((d) => (d.tools as Data[]).push({ type: 'region', name: 'R1', conditions: ['x <= 1'], step: 3 })).pop(), 'then shade where x <= 1');
+    // Added at the end of the list but in the first step (the editor's + Add): its step written out.
+    assert.ok(add((d) => (d.tools as Data[]).push({ type: 'region', name: 'R1', conditions: ['x <= 1'] })).includes('shade where x <= 1, step=0'));
+    // The same in Full LaTeX.
+    const full = printFullText(read(base));
+    const data = JSON.parse(JSON.stringify(read(full))) as Data;
+    (data.tools as Data[]).push({ type: 'region', name: 'R1', conditions: ['x <= 1'], step: 2 });
+    const out = writeChartText(`% note\n${full}`, data);
+    assert.equal(canonical(read(out)), canonical(data), out);
+    assert.ok(out.startsWith('% note\n\\begin{chart}'), out);
 });

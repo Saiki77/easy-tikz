@@ -27,7 +27,7 @@ import { looksLikeLatex } from '../latex';
 import { eventNames } from '../beyond/event';
 import { boxRatioOf } from '../box3d';
 // 6.0 C
-import { MOTION_KINDS, OWN_NAME_TYPES, keepThen, motionHead, motionOptions } from '../motion6/text';
+import { MOTION_KINDS, OWN_NAME_TYPES, keepThen, motionHead, motionOptions, thenPrefix } from '../motion6/text';
 import { STEP_LISTS, hasSteps, stepOf, stepsInOrder, withoutStep } from '../motion6/steps';
 import type { StepList } from '../motion6/steps';
 // 6.0 B
@@ -946,6 +946,8 @@ interface Fresh {
     list: ObjectList;
     line: string;
     item: Data;
+    /** 6.0 F1: the printed line in words (before the block's form), for a step written out. */
+    words: string;
 }
 
 function rewrite(oldText: string, data: Data, form: Form): string {
@@ -964,7 +966,7 @@ function rewrite(oldText: string, data: Data, form: Form): string {
         order[key] = [];
         list(newFull[key]).forEach((item, i) => {
             const k = itemKey(key, item, i);
-            fresh.set(k, { list: key, line: form.object(printed.objects[key][i]), item });
+            fresh.set(k, { list: key, line: form.object(printed.objects[key][i]), item, words: printed.objects[key][i] });
             order[key].push(k);
         });
     }
@@ -1060,6 +1062,8 @@ function rewrite(oldText: string, data: Data, form: Form): string {
     }
 
     // New objects: after the last line of their kind, else before the first line of a later kind, else at the end.
+    // 6.0 F1: in a chart with steps, at the end of their step (stepSpot).
+    const stepped = hasSteps(newFull) || out.some((l) => startsStep(l.text, form.full));
     for (const key of LIST_NAMES) {
         for (const k of order[key]) {
             if (placed.has(k)) continue;
@@ -1079,7 +1083,8 @@ function rewrite(oldText: string, data: Data, form: Form): string {
             }
             // 6.0 F1: a new let line that leads the tools goes after the let lines, else after the sliders.
             if (key === 'tools' && order.tools.slice(0, order.tools.indexOf(k) + 1).every((x) => fresh.get(x)?.item.type === 'value') && !stepOf(f.item)) at = letSpot(out, fresh, at);
-            out.splice(at, 0, { text: f.line, list: key, key: k });
+            const put = stepped ? stepSpot(out, at, k, f, order[key], form, printed.say, end()) : { at, text: f.line }; // 6.0 F1
+            out.splice(put.at, 0, { text: put.text, list: key, key: k });
             placed.add(k);
         }
     }
@@ -1104,6 +1109,43 @@ function keepThenIn(source: string, printed: string, form: Form, say: (line: str
     if (out === printed) return out;
     const lead = /^\s*/.exec(out)?.[0] ?? '';
     return `${lead}${say('then')}${out.slice(lead.length + 'then'.length)}`;
+}
+
+/** 6.0 F1: does a line of the block start a step (`then ...`, a person's word for then, `\\then`)? */
+function startsStep(text: string, full: boolean): boolean {
+    if (full) return /^\s*\\then\b/.test(text);
+    const words = chartWords();
+    return thenPrefix(hasWords(words) ? readWords(text, words).text : text) >= 0;
+}
+
+/**
+ * 6.0 F1: where a new line goes in a chart with steps, and its text: at the
+ * end of its step (before the line that starts the next one, or at the end;
+ * `then` before it when it starts a new last step), when the order of its
+ * list allows that; else where its list puts it, with its step written out.
+ */
+function stepSpot(out: OutLine[], at: number, k: string, f: Fresh, order: string[], form: Form, say: (line: string) => string, last: number): { at: number; text: string } {
+    const step = stepOf(f.item);
+    const starts = out.map((l) => startsStep(l.text, form.full));
+    const stepAt = (i: number) => starts.slice(0, i).filter(Boolean).length;
+    const idx = order.indexOf(k);
+    // The lines of its list above the spot hold the objects before it, those below the ones after it.
+    const fits = (c: number) => out.every((l, i) => l.list !== f.list || !l.key || (i < c ? order.indexOf(l.key) < idx : order.indexOf(l.key) > idx));
+    if (stepAt(at) === step && fits(at)) return { at, text: f.line };
+    const total = stepAt(out.length);
+    if (step <= total) {
+        let c = last;
+        for (let i = 0; i < out.length; i++) {
+            if (starts[i] && stepAt(i) === step) {
+                c = i;
+                break;
+            }
+        }
+        if (fits(c)) return { at: c, text: f.line };
+    } else if (step === total + 1 && fits(last)) {
+        return { at: last, text: form.full ? `\\then ${f.line}` : `${say('then')} ${f.line}` };
+    }
+    return { at, text: /\bstep=/.test(f.words) ? f.line : form.object(`${f.words}, step=${step}`) };
 }
 
 /** 6.0 F1: where a new let line goes: after the last let line, else after the last slider line, else before the first object line (`fallback` when none). */
