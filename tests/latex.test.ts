@@ -534,8 +534,9 @@ const GEOGEBRA: Record<string, string> = {
         'T = Text("|AB| = " + Distance(A, B), (-1, 5))',
         'f = x^2 / 4 - 1',
     ].join('\n'),
+    // 6.0 AI: y to 1.45, so the Newton orbit from Z_0 fits (its third point is (-1.99, 1.302)).
     screenshot: [
-        'show x from -2.2 to 0.8 and y from -1.3 to 1.3',
+        'show x from -2.2 to 0.8 and y from -1.45 to 1.45',
         'equal scale',
         'P = Flatten(Sequence(Sequence(a + b ί, a, -2.2, 0.8, 0.04), b, -1.3, 1.3, 0.04)), hidden',
         'M = KeepIf(abs(Element(IterationList(z^2 + c, z, {0 + 0ί}, 20), 21)) <= 2, c, P)',

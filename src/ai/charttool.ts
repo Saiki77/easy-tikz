@@ -20,6 +20,7 @@ import type { Pt } from '../geometry';
 import type { Annotation, RendererConfig, Tool, ToolType } from '../types';
 import { Data, LIST_KEYS, canonical, clone, minimize } from '../chartdata';
 import { inEnglish } from '../i18n';
+import { chartLines, newReport, toolLine2D, toolLines3D, valuesLine } from './report6'; // 6.0 AI
 
 export type { Data };
 export { canonical, clone, minimize };
@@ -143,11 +144,15 @@ function knownKeys(part: string, defaults: Record<string, Data>): Set<string> {
         keys.add('frames');
         keys.add('stillTime');
         keys.add('turning'); // 6.0 F4
+        keys.add('turnSpeed'); // 6.0 AI: `turning, speed 2`
     }
     if (part === 'vectorField' || part === 'trajectory') keys.add('colormap');
     // 6.0 F4: a solution coloured by time in the default ramp; solutions and orbits that draw themselves.
     if (part === 'trajectory') keys.add('byTime');
     if (part === 'trajectory' || part === 'orbit') keys.add('traced');
+    // 6.0 AI: the options of moving things (6.0 F4): speed, and the particles of a field.
+    if (part === 'trajectory' || part === 'orbit' || part === 'fourierCircles' || part === 'vectorField') keys.add('speed');
+    if (part === 'vectorField') for (const k of ['count', 'trails', 'particleWidth', 'arrows']) keys.add(k);
     if (part === 'colourPlane') keys.add('colormap'); // 6.0 E
     // 6.0 P: circles of a list of coefficients: how many, and the path of the tip.
     if (part === 'fourierCircles') {
@@ -316,7 +321,7 @@ function pt(p: ArrayLike<number>): string {
     return `(${Array.from(p).map(n).join(', ')})`;
 }
 
-function bbox(points: Pt[]): string {
+function bbox(points: Array<{ x: number; y: number }>): string {
     let x0 = Infinity;
     let x1 = -Infinity;
     let y0 = Infinity;
@@ -361,7 +366,7 @@ function texts(items: SceneItem2D[]): string {
  * chart before it draws or writes it). Far above any real chart; they keep a
  * small request from costing minutes of work on Obsidian's main thread.
  */
-export const LIMITS = { functions: 50, tools: 50, labels: 100, surfaces: 10, sliders: 50, conditions: 50, levels: 200, points: 1000, text: 2000, expansion: 1000 };
+export const LIMITS = { functions: 50, tools: 100, labels: 100, surfaces: 10, sliders: 50, conditions: 50, levels: 200, points: 1000, text: 2000, expansion: 1000, script: 20000 }; // 6.0 AI: tools 100 (a pasted GeoGebra construction is a tool per line), script
 
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const strOf = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -385,8 +390,8 @@ export function costProblems(data: Data): string[] {
     count('functions3D', 'surfaces', LIMITS.surfaces);
     count('parameters', 'sliders', LIMITS.sliders);
 
-    const longText = (where: string, v: unknown) => {
-        if (strOf(v).length > LIMITS.text) out.push(`${where} is ${strOf(v).length} characters long (at most ${LIMITS.text})`);
+    const longText = (where: string, v: unknown, max = LIMITS.text) => {
+        if (strOf(v).length > max) out.push(`${where} is ${strOf(v).length} characters long (at most ${max})`);
     };
     for (const [k, v] of Object.entries(data)) if (typeof v === 'string') longText(`"${k}"`, v);
     list(data.tools).forEach((t, i) => {
@@ -394,7 +399,8 @@ export function costProblems(data: Data): string[] {
         const tool = t as Data;
         const where = `tools[${i}]`;
         for (const [k, v] of Object.entries(tool)) {
-            if (typeof v === 'string') longText(`${where} "${k}"`, v);
+            // 6.0 AI: a Python script runs under its own budgets (steps, time, items); its text may be longer.
+            if (typeof v === 'string') longText(`${where} "${k}"`, v, tool.type === 'python' && k === 'code' ? LIMITS.script : LIMITS.text);
             if (Array.isArray(v)) v.forEach((x, j) => longText(`${where} "${k}"[${j}]`, x));
         }
         if (list(tool.conditions).length > LIMITS.conditions) out.push(`${where}: too many conditions (at most ${LIMITS.conditions})`);
@@ -520,11 +526,13 @@ function checkChart(data: Data, sliders: Record<string, number>): Report {
         L.push(`Sliders: ${config.parameters.map((p) => `${p.name} = ${n(p.value)} (${n(p.min)}..${n(p.max)}, step ${n(p.step)})`).join('; ')}`);
     }
 
+    const report6 = newReport(); // 6.0 AI
     if (config.is3D) {
         const scene = computeScene3D({
             tools: config.tools,
             math,
             view: { xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax, zmin: config.zmin, zmax: config.zmax },
+            report: report6, // 6.0 AI
         });
         issues.push(...scene.issues);
         (config.functions3D || []).forEach((surface, i) => {
@@ -540,9 +548,16 @@ function checkChart(data: Data, sliders: Record<string, number>): Report {
             }
             L.push(`${source}: z = ${surface.expression}${surface.hidden ? ' (hidden)' : ''}${note}`);
         });
-        if (scene.points.length) L.push(`Points: ${scene.points.map((p) => pt([p.x, p.y, p.z]) + (p.label ? ` "${p.label}"` : '')).join(' ')}`);
-        if (scene.segments.length) L.push(`Segments: ${scene.segments.map((s) => `${pt(s.a)} to ${pt(s.b)}`).join('; ')}`);
+        // 6.0 AI: per tool (long curves and grids have thousands of segments).
+        const v6 = config.tools.some((t) => !['points', 'segment', 'plane3D'].includes(t.type));
+        if (v6) L.push(...toolLines3D(config.tools, scene, report6, math));
+        else {
+            if (scene.points.length) L.push(`Points: ${scene.points.map((p) => pt([p.x, p.y, p.z]) + (p.label ? ` "${p.label}"` : '')).join(' ')}`);
+            if (scene.segments.length) L.push(`Segments: ${scene.segments.map((s) => `${pt(s.a)} to ${pt(s.b)}`).join('; ')}`);
+        }
         if (scene.planes.length) L.push(`Planes: ${scene.planes.map((p) => `${p.axis} = ${n(p.value)}`).join('; ')}`);
+        const derived3 = Object.entries(scene.derived).filter(([, v]) => Number.isFinite(v));
+        if (v6 && derived3.length) L.push(`Computed values: ${derived3.map(([k, v]) => `${k} = ${n(v)}`).join(', ')}`);
         for (const tool of config.tools) {
             if (tool.type !== 'plane3D') continue;
             const v = math.tryValue(tool.value);
@@ -578,6 +593,8 @@ function checkChart(data: Data, sliders: Record<string, number>): Report {
             axisStyle: config.axisStyle,
             polar: config.coordinateSystem === 'polar',
             labelMetrics: labelMetricsFor(config.paperWidthCm ?? 10, config.paperHeightCm ?? 10),
+            equalScale: !!config.equalScale, // 6.0 AI: as the renderer draws it
+            report: report6, // 6.0 AI
         });
         issues.push(...scene.issues);
         for (const info of infos) {
@@ -600,11 +617,17 @@ function checkChart(data: Data, sliders: Record<string, number>): Report {
             if (f.extrema) parts.push(extrema.length ? `extrema: ${extrema.join(', ')}` : 'extrema: none in the view');
             if (parts.length) L.push(`  ${info.name}: ${parts.join('; ')}`);
         }
-        for (const tool of config.tools) L.push(toolLine(tool, scene));
+        const view = { xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax };
+        for (const tool of config.tools) L.push(toolLine2D(tool, config.tools, scene, report6, math, view, { texts, bbox }) ?? toolLine(tool, scene)); // 6.0 AI
         // A points tool without an objective publishes no value (NaN): leave it out.
         const derived = Object.entries(scene.derived).filter(([, v]) => Number.isFinite(v));
         if (derived.length) L.push(`Computed values: ${derived.map(([k, v]) => `${k} = ${n(v)}`).join(', ')}`);
     }
+
+    // 6.0 AI: the let names with their values; steps, the clock and pictures.
+    const values = valuesLine(math, config.tools);
+    if (values) L.push(values);
+    L.push(...chartLines(settings.serialize()));
 
     const title = String(config.title ?? '').trim();
     if (title) {
@@ -721,6 +744,8 @@ function fixHint(message: string): string {
         if (/^[a-z][a-z]+$/.test(name) && name.length > 1 && name.length <= 3) {
             return ` -> if "${name}" is a product, write it with a space or * (for example "${name.split('').join(' ')}"); if it is a slider, add {"name": "${name}", "value": 1, "min": 0, "max": 10, "step": 0.1} to "parameters"`;
         }
+        // 6.0 AI: a capital name is often a matrix or a point that was never defined.
+        if (/^[A-Z]/.test(name)) return ` -> define it: a let line (let ${name} = [[1, 0], [0, 1]], let ${name} = (1, 2)), a GeoGebra line (${name} = (1, 2)) or a named points tool (${name}: mark (1, 2)); or a slider`;
         return ` -> add a slider: {"name": "${name}", "value": 1, "min": 0, "max": 10, "step": 0.1} in "parameters", or use a defined name`;
     }
     return '';

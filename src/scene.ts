@@ -294,6 +294,16 @@ export interface SceneInput2D {
     // 6.0 C
     /** The clock's time and the step shown (src/motion6/clock.ts); absent: the still frame. */
     motion?: MotionFrame;
+    // 6.0 AI
+    /** Filled with what each object computed, by its name (the AI checker, src/ai/report6.ts). */
+    report?: SceneReport;
+}
+
+// 6.0 AI
+/** What each object of a scene computed (its output, and in 3D where its points and segments are in the scene). */
+export interface SceneReport {
+    outputs: Map<string, Output>;
+    spans3D: Map<string, { points: [number, number]; segments: [number, number] }>;
 }
 
 /** Plot size and font sizes for label placement, in pt. */
@@ -2216,6 +2226,7 @@ function scene2D(input: SceneInput2D): Scene2D {
     const seen = new Set<string>();
     const outs = runNodes(nodes, ctx, state, frameKey, (node) => compute2D(node, ctx), seen);
     prune(state, seen);
+    if (input.report) nodes.forEach((node, i) => input.report?.outputs.set(node.name, outs[i])); // 6.0 AI
 
     const derived: Record<string, number> = {};
     for (const out of outs) Object.assign(derived, out.derived);
@@ -3697,6 +3708,8 @@ export interface SceneInput3D {
     // 6.0 D
     /** The step shown and its progress (a transform moves space while its step comes in); absent: the still frame. */
     motion?: MotionFrame;
+    // 6.0 AI
+    report?: SceneReport;
 }
 
 function computePoints3D(t: PointsTool, ctx: Ctx): Output {
@@ -3877,7 +3890,9 @@ function scene3D(input: SceneInput3D): Scene3D {
         span.points[1] = scene.points.length;
         span.segments[1] = scene.segments.length;
         spans.push(span);
+        input.report?.spans3D.set(node.name, { points: span.points, segments: span.segments }); // 6.0 AI
     });
+    if (input.report) nodes.forEach((node, i) => input.report?.outputs.set(node.name, outs[i])); // 6.0 AI
     transformScene3D(scene, spans, input.motion); // 6.0 D: transforms move what is drawn before them
     return scene;
 }

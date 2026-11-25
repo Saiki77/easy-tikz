@@ -28,8 +28,10 @@ export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 /** What the server tells an AI app when it connects (MCP `instructions`). */
 export const INSTRUCTIONS = [
-    'Easy Graphs Charts and TikZ draws charts in Obsidian notes from `easy-tikz` code blocks: a few lines of text per chart, one line per object, written the way the math reads (function plots, tangents, areas between curves, feasible regions and linear programs, level curves, 3D, live sliders; since 6.0 also vectors and matrices, sums, vector fields and systems, matrices that move the plane, orbits, fractals and charts that play in steps).',
-    'Before your first chart, read the guide with get_guide (the sections "Rules that prevent most mistakes" and "The text syntax" at least).',
+    'Easy Graphs Charts and TikZ draws charts in Obsidian notes from `easy-tikz` code blocks: a few lines of text per chart, one line per object, written the way the math reads (function plots, tangents, areas between curves, feasible regions and linear programs, level curves, 3D, live sliders).',
+    // 6.0 AI
+    'Version 6 adds: let names for vectors, matrices, complex numbers and lists, sums; sets on an axis and chords; steps (`then`) that play; vector fields with moving particles, rest points, solutions of systems in 2D and 3D (the Lorenz attractor, turning and traced); a matrix that moves the grid, eigenvectors, the unit square; orbits, cobwebs, bifurcation diagrams, Newton\'s method, fractals and coloured planes, Fourier circles; GeoGebra input lines and commands; a Python block (NumPy, matplotlib-style drawing, frame(t)).',
+    'Before your first chart, read the guide with get_guide (the sections "Rules that prevent most mistakes" and "The text syntax" at least; a 6.0 topic by name, such as get_guide "Python" or "GeoGebra").',
     'Then: start from get_example, run check_chart until it reports no problems and its computed values match the request, look at it with render_chart, and put it into the note with add_chart (it refuses charts with problems).',
     'Never write easy-tikz blocks into notes by hand while these tools are available. The plugin does not differentiate or integrate: slopes and areas in labels are formulas you work out.',
 ].join('\n');
@@ -274,7 +276,7 @@ const TOOLS: ToolDef[] = [
     {
         name: 'get_guide',
         title: 'Read the Easy Graphs Charts and TikZ guide',
-        description: 'How Easy Graphs Charts and TikZ charts are written: the workflow, the rules that prevent most mistakes, every field, formulas, labels and recipes. Read it before the first chart. Give "section" (a heading, such as "Rules" or "points") for one part.',
+        description: 'How Easy Graphs Charts and TikZ charts are written: the workflow, the rules that prevent most mistakes, every line and field, formulas, labels and recipes. Read it before the first chart. Give "section" (words of a heading, such as "Rules", "points", "Linear algebra", "Python" or "GeoGebra") for one part; a main section comes with its subsections.',
         inputSchema: { type: 'object', properties: { section: { type: 'string', description: 'Optional: words from a heading of the guide.' } } },
         annotations: { readOnlyHint: true },
         async run(args) {
@@ -283,9 +285,25 @@ const TOOLS: ToolDef[] = [
             if (!section) return text(guide);
             const parts = guide.split(/\n(?=#{2,3} )/);
             const want = section.toLowerCase();
-            const hit = parts.filter((p) => (p.split('\n')[0] || '').toLowerCase().includes(want));
+            const head = (p: string) => p.split('\n')[0] || '';
+            // 6.0 AI: a ## section comes with its ### subsections (The text syntax holds the lines of version 6).
+            const hit: string[] = [];
+            parts.forEach((p, i) => {
+                if (!head(p).toLowerCase().includes(want) || hit.includes(p)) return;
+                if (!head(p).startsWith('## ')) {
+                    // A subsection of a section that matched already is in it.
+                    let j = i - 1;
+                    while (j >= 0 && !head(parts[j]).startsWith('## ')) j--;
+                    if (j >= 0 && head(parts[j]).toLowerCase().includes(want)) return;
+                    hit.push(p);
+                    return;
+                }
+                let end = i + 1;
+                while (end < parts.length && !head(parts[end]).startsWith('## ')) end++;
+                hit.push(parts.slice(i, end).join('\n'));
+            });
             if (!hit.length) {
-                const heads = parts.map((p) => p.split('\n')[0]).filter((h) => h.startsWith('#'));
+                const heads = parts.map(head).filter((h) => h.startsWith('#'));
                 throw new ToolError(`No section matches "${section}". Sections: ${heads.map((h) => h.replace(/^#+ /, '')).join('; ')}`);
             }
             return text(hit.join('\n\n'));
@@ -295,7 +313,7 @@ const TOOLS: ToolDef[] = [
         name: 'list_examples',
         title: 'List example charts',
         // 6.0 F2: and the examples of version 6
-        description: 'Ready-made charts to start from: id, title and what each shows (linear program, areas between curves, tangent, level curves, market surplus, 3D, vectors, sums, fractals, orbits, systems, and the finished chart of every guide).',
+        description: 'Ready-made charts to start from: id, title and what each shows (linear program, areas between curves, tangent, level curves, market surplus, 3D; since 6.0 vectors, sums, sets, systems, a matrix that moves the grid, fractals, orbits, cobwebs, Fourier circles, GeoGebra and Python charts; and the finished chart of every guide and Showcase page).',
         inputSchema: { type: 'object', properties: {} },
         annotations: { readOnlyHint: true },
         async run() {
@@ -327,7 +345,8 @@ const TOOLS: ToolDef[] = [
     {
         name: 'check_chart',
         title: 'Check a chart',
-        description: "Check a chart with the plugin's own code. Lists problems (including fields the plugin would ignore) and what the chart computes: where regions are shaded, where curves are drawn, computed points and values, the final text and place of every label. Use \"sliders\" to check other slider values.",
+        description:
+            "Check a chart with the plugin's own code. Lists problems (including fields the plugin would ignore) and what the chart computes: where regions are shaded, where curves are drawn, computed points and values, the final text and place of every label; for version 6 objects also the values of let names (a matrix with det and eigenvalues), sets on an axis as intervals, rest points and their kinds, where solutions and orbits end, eigenvalues, GeoGebra objects, what a Python script gives the chart and draws (its problems name the script line), the steps and what moves on the clock. Use \"sliders\" to check other slider values.",
         inputSchema: { type: 'object', properties: { chart: CHART_SCHEMA, sliders: SLIDERS_SCHEMA }, required: ['chart'] },
         annotations: { readOnlyHint: true },
         async run(args) {
@@ -337,7 +356,8 @@ const TOOLS: ToolDef[] = [
     {
         name: 'render_chart',
         title: 'Show a chart',
-        description: 'A picture of the chart (PNG), drawn by the plugin as the note will show it. Look at it before you add the chart: overlapping labels, a view that cuts things off, colours.',
+        description:
+            'A picture of the chart (PNG), drawn by the plugin as the note will show it: the last step of a chart with steps, the still frame of what moves (particles, traced curves, turning circles, frame(t) of a script), a 3D chart in its set view, coloured planes and script drawings as they look. Look at it before you add the chart: overlapping labels, a view that cuts things off, colours.',
         inputSchema: { type: 'object', properties: { chart: CHART_SCHEMA, sliders: SLIDERS_SCHEMA }, required: ['chart'] },
         annotations: { readOnlyHint: true },
         async run(args, host) {
@@ -467,11 +487,17 @@ const TOOLS: ToolDef[] = [
     {
         name: 'export_latex',
         title: 'Export a chart as LaTeX',
-        description: 'The pgfplots code the plugin exports (it compiles with pdflatex). Sliders are written with their current values. "standalone" false gives only the tikzpicture.',
+        description:
+            'The pgfplots code the plugin exports (it compiles with pdflatex). Sliders are written with their current values; a chart with steps exports its last step (every step side by side with the chart line frames); moving things are drawn still. A coloured plane or a bifurcation diagram is a PNG picture the code names: this tool gives the code only. "standalone" false gives only the tikzpicture.',
         inputSchema: { type: 'object', properties: { chart: CHART_SCHEMA, standalone: { type: 'boolean', description: 'Default true: a complete document.' } }, required: ['chart'] },
         annotations: { readOnlyHint: true },
         async run(args) {
-            return text(tikzOf(chartArg(args.chart).data, args.standalone !== false));
+            const code = tikzOf(chartArg(args.chart).data, args.standalone !== false);
+            // 6.0 AI: where the pictures of pixel layers go.
+            const pictures = Array.from(code.matchAll(/^% The picture (\S+\.png)/gm), (m) => m[1]);
+            if (!pictures.length) return text(code);
+            const files = Array.from(new Set(pictures)).join(', ');
+            return text(`${code}\n\n(Not part of the code.) The code draws ${files} with \\addplot graphics: put ${pictures.length > 1 ? 'these PNG files' : 'that PNG file'} beside the .tex file. This tool gives the code only; in Obsidian, the editor's Copy LaTeX (action bar or Code tab) saves the PNG in the note's attachment folder.`);
         },
     },
     {

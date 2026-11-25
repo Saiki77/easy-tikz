@@ -564,7 +564,9 @@ export class ValueCompiler {
         if (n.math) throw unknownFunctionError(n, env, this.scope.src);
         const def = this.def(n.name, n.ns);
         if (def && def.fn) return this.letCall(n, def.fn);
-        if (inEnv(n.name, env)) {
+        // 6.0 AI: a label's placeholder named like a function (the unit square's {det}) is the function when called: {det(A)}.
+        const placeholder = Object.prototype.hasOwnProperty.call(VALUE_FUNCTIONS, n.name) && env.scalar(n.name)?.kind === 'local';
+        if (!placeholder && inEnv(n.name, env)) {
             const ref = env.fn(n.name);
             if (ref) {
                 if (ref.kind === 'parametric') fail('problems.expr.parametricCall', { name: n.name }, n.ns);

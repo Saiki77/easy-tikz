@@ -548,6 +548,28 @@ test('full: random editor edits on every built-in chart keep every comment, the 
     assert.deepEqual(failures.slice(0, 3), []);
 });
 
+// 6.0 AI
+test('full: deleting the distribution a shade reads rewrites the shade line alone (as a raw line in Full LaTeX), the rest and the comments stay', () => {
+    const guide = GUIDES.find((g) => g.id === 'probability');
+    if (!guide) throw new Error('no guide "probability"');
+    const chart = JSON.parse(JSON.stringify(guide.chart)) as Data;
+    for (const full of [true, false]) {
+        const lines: string[] = (full ? printFullText(chart) : printWordsText(chart)).split('\n');
+        const text = lines.flatMap((l: string, i: number) => (i > 0 && i < lines.length - 1 && i % 2 === 1 ? [`% note ${i}`, l] : [l])).join('\n');
+        const data = JSON.parse(JSON.stringify(parseChartText(text).data)) as Data;
+        data.tools = (data.tools as Data[]).slice(1);
+        const out = writeChartText(text, data);
+        assert.ok(sameChart(out, data), out);
+        const notes = (t: string) => t.split('\n').filter((l) => l.startsWith('% note')).length;
+        assert.equal(notes(out), notes(text), out);
+        const changed = out.split('\n').filter((l) => !text.split('\n').includes(l));
+        // The shade line, and the line of the distribution left, which now writes its name.
+        assert.equal(changed.length, 2, out);
+        if (full) assert.match(out, /^\\raw\[tool\]\{\{"type":"probability"/m);
+        else assert.match(out, /^shade \$P\(5 - a \\le X \\le 5 \+ a\)\$ of X1/m);
+    }
+});
+
 test('full: a block keeps its form, whatever the setting says for new charts', () => {
     setChartLanguage('full');
     try {

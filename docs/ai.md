@@ -1,13 +1,13 @@
 # Easy Graphs Charts and TikZ: guide for AI assistants
 
-[Easy Graphs Charts and TikZ](https://github.com/Saiki77/easy-tikz) is an Obsidian plugin that draws charts from `easy-tikz` code blocks in Markdown notes: function plots, tangents, areas between curves, feasible regions and linear programs, optimum and intersection points, level curves, arrows, parametric and polar curves and 3D surfaces; since version 6 also complex numbers, vectors, matrices and sums, sets on an axis, vector fields and systems, matrices that move the plane, orbits, fractals and coloured planes, and charts that play in steps. All with live sliders, plus LaTeX (pgfplots) export. A chart is a few lines of text, one line per object, in plain words: `plot f(x) = x^2 in blue`, `shade where x + y <= 4 and x >= 0`. You write it, Obsidian renders it in the note, and the user can click the chart to change it with sliders or by dragging. Users do not need to learn the editor when you write the block for them.
+[Easy Graphs Charts and TikZ](https://github.com/Saiki77/easy-tikz) is an Obsidian plugin that draws charts from `easy-tikz` code blocks in Markdown notes: function plots, tangents, areas between curves, feasible regions and linear programs, optimum and intersection points, level curves, arrows, parametric and polar curves and 3D surfaces; since version 6 also complex numbers, vectors, matrices and sums, sets on an axis and chords, vector fields with moving particles, systems in 2D and 3D, matrices that move the plane, eigenvectors, orbits, cobwebs, fractals and coloured planes, Fourier circles, GeoGebra input lines and Python scripts (NumPy and matplotlib style), and charts that play in steps. All with live sliders, plus LaTeX (pgfplots) export. A chart is a few lines of text, one line per object, in plain words: `plot f(x) = x^2 in blue`, `shade where x + y <= 4 and x >= 0`. You write it, Obsidian renders it in the note, and the user can click the chart to change it with sliders or by dragging. Users do not need to learn the editor when you write the block for them.
 
 This guide is everything you need. It is served by the plugin's local AI server (see the end), published at `https://github.com/Saiki77/easy-tikz/blob/main/docs/ai.md`, and can be pasted into any chat.
 
 ## How to work
 
 1. **Understand the chart.** Which functions, regions, lines and points; which numbers should be sliders; which part of the plane must be visible. Ask only when the request is ambiguous in a way that changes the picture.
-2. **Start from an example.** With the AI server, `list_examples` and `get_example` give ready-made charts (linear program, areas between curves, tangent, level curves, market surplus, 3D, and one finished chart per guide). Otherwise adapt one of the blocks in this guide.
+2. **Start from an example.** With the AI server, `list_examples` and `get_example` give ready-made charts (linear program, areas between curves, tangent, level curves, market surplus, 3D, vectors, fractals, orbits, systems, GeoGebra and Python charts, and one finished chart per guide). Otherwise adapt one of the blocks in this guide ([Recipes](#recipes) has the striking ones).
 3. **Write the block.** One line per object: a `show` line first, so everything that matters is inside with a margin, then sliders, functions, shapes and labels. Leave out what the plugin fills in by itself.
 4. **Check it.** With the AI server, `check_chart` runs the plugin's own code. Fix every problem it reports (a problem in the text names its line and column). Then read what it computed: where each region is shaded or that it is empty, where curves are drawn, the coordinates of computed points, the final text and position of every label, and how much of each function lies inside the view. Check the ends of each slider's range too (`sliders` argument). `render_chart` shows you a picture of the result.
 5. **Put it in the note.** With the AI server, `add_chart` writes the block into the note (the open note, a named note, or a new one) and Obsidian shows it at once. Without it, write the block into the note yourself, or give it to the user as a fenced code block to paste into a note.
@@ -22,11 +22,15 @@ This guide is everything you need. It is served by the plugin's local AI server 
 - Shading is `shade where ...` with `<=` and `>=` conditions joined by `and`. A line or circle is an equation such as `draw 2x + 3y = 12`. A region condition never uses a single `=`.
 - Colours: `black`, `gray`, `red`, `orange`, `brown`, `green`, `teal`, `blue`, `purple`, `magenta`, written `in red`. Nothing else exports. A surface may take a colour map instead (`in viridis`, see 3D).
 - Labels are templates in quotes: `labelled "z = {c}"`; `{c}` or `{P1_val:2}` print a live value, `$x^2$` is math.
-- Names for values: `let v = (2, 1)`, `let A = [[1, 2], [3, 4]]`, `let $f(x, y) = x^2 + 4y^2$`. A let name is never `x`, `y`, `z`, `t` or `theta` (axis and time variables), a built-in (`e`, `pi`, `sin`) or the name of a slider or function: `let t = 2` is a problem.
+- Names for values: `let v = (2, 1)`, `let A = [[1, 2], [3, 4]]`, `let $f(x, y) = x^2 + 4y^2$`. A let name (and a GeoGebra name) is never `x`, `y`, `z`, `t` or `theta` (axis and time variables), a built-in (`e`, `i`, `pi`, `sin`) or the name of a slider, function or another object: `let t = 2` is a problem.
 - Real stays real: `\sqrt{-4}` has no value, so nothing is drawn. A complex number makes the formula complex: `\sqrt{-4 + 0i}` is 2i. A field that needs a number (a function, a bound, a coordinate, a label value) takes a complex value only when its imaginary part is 0, and a vector or a matrix there is a problem ("This formula gives a vector of 2 numbers, not a number"): print `{v_x}`, `{det(A)}`. Do not name a slider `i` in a chart with complex numbers.
 - Braces in labels: outside `$...$`, a placeholder holds no LaTeX braces. Write `"{2^(n+1)}"`, not `"{2^{n+1}}"` (that prints `8}`). Inside `$...$` write LaTeX as usual: `"$\det A = {det(A)}$"`. In a JSON block every backslash is doubled: `"label": "$\\det A$"`.
-- Steps: `then` goes before a line that draws something (`then plot ...`, `then transform the plane by A`), never before a chart line such as `show` or a slider.
-- 2D only: sets on an axis, chords, vector fields and rest points, orbits, cobwebs, bifurcation diagrams, Newton's method, coloured planes and turning circles. A 3D chart takes arrows, point lists, the grid, the basis vectors, `transform space by`, the unit cube, spans and solutions of systems with 3 formulas.
+- Version 6 formulas go in `$...$` as LaTeX: sets `$\{e^{2\pi i k / n} : k = 0, \dots, n - 1\}$` (braces escaped), recurrences `$z_{n+1} = z_n^2 + c$` with each start and name in its own `$z_0 = 0$`, `$c = P$`, systems `$\dot{p} = (y, -x)$`, matrices `$\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}$`. Outside dollars write the plain forms: `[[1, 2], [3, 4]]`, `[1, 2, 3]`, `sum(1/k^2, k, 1, n)`.
+- Steps: `then` goes before a line that draws something (`then plot ...`, `then transform the plane by A`), never before a chart line such as `show` or a slider (a problem). Every line below a `then` stays in its step until the next `then`. A transform moves only while its own step comes in: write `then transform the plane by A` to see the grid move; without `then` it is applied at once.
+- 2D only: sets on an axis, chords, vector fields and rest points, orbits, cobwebs, bifurcation diagrams, Newton's method, coloured planes, turning circles, a script's drawing, and GeoGebra circles, lines, functions and texts. A 3D chart takes arrows, point lists, the grid, the basis vectors, `transform space by`, the unit cube, spans, eigenvectors of 3 x 3 matrices, solutions of systems with 3 formulas and `turning`.
+- GeoGebra counts from 1: `Element(L, 1)` is the first item. Lists are `{1, 2, 3}`; a GeoGebra line is `name = command` with a name the chart does not have yet.
+- Python: `import numpy as np` and `import matplotlib.pyplot as plt` before you use them. Only the subset in [Python scripts](#python-scripts) exists (no classes, no `with`, no pandas or scipy). The names a script sets are names of the chart; sliders are its variables.
+- Moving things (particles, `traced`, turning circles, `frame(t)`, `turning`) move only in notes; `check_chart`, `render_chart`, print and the export show the still frame, and a chart with steps shows its last step. Tell the user to press Play.
 - Never invent options. The checker reports every word it does not know, with the options that object takes.
 - The plugin does not differentiate or integrate. A slope or an area in a label is a formula you work out (for example `3a^2 - 3` or an antiderivative as a hidden function); tell the user it is yours.
 - The LaTeX export is a snapshot: sliders are written with their current value.
@@ -189,93 +193,92 @@ The sum is published as `RS1_val`.
 
 A solution belongs to the nearest slope field line above it (else the first below); `draw the solution of SF2 through P` names another.
 
-**Values** (version 6)
+**Anything else:** every object takes `key=value` options for its fields in the tables below, the value as JSON: `plot f(x) = x^2, filled, fillOpacity=0.4`, `mark (1, 2), dim=2`. And `raw tool {...}`, `raw function {...}`, `raw surface {...}`, `raw label {...}` hold one object as JSON. The editor writes these lines for what the words cannot say; you rarely need them.
+
+A block can also be one JSON object (`"v": 4` first, then the fields below); the plugin reads both, and the editor keeps the form a block has. Write text.
+
+The sections below are the lines of version 6. Each line also has a Full LaTeX form ([Full LaTeX](#full-latex)) and JSON fields ([Fields](#fields)).
+
+### Values: let, arrows, points of a list, sums
 
 | Line | Means |
 | --- | --- |
-| `let v = (2, 1)`, `let $w = \begin{pmatrix} -1 \\ 2 \end{pmatrix}$` | A vector (2, 3 or more numbers). Every formula of the chart can use it by name, in any order: `v + w`, `2v`, `v \cdot w`, `v_x`, its length `abs(v)`. |
-| `let A = [[1.5, 1], [0.5, 2]]`, `let $A = \begin{pmatrix} 1.5 & 1 \\ 0.5 & 2 \end{pmatrix}$` | A matrix (`bmatrix` too): `A v`, `AB`, `A^{-1}`, `A^T`, `\det A`, `\operatorname{tr} A`. |
-| `let $c = -0.8 + 0.156i$` | A complex number: `abs(c)`, `\arg c`, `\bar c`, `\Re c`, `\Im c`, `e^{i\theta}`. |
-| `let $f(x, y) = x^2 + 4y^2$` | A function of one or more variables: `f(1, 2)`, `\nabla f(p)` (its numeric gradient), `shade where $f(x, y) \le 4$`. Its body reads its parameters, sliders and let names, no axis variable of its own. |
-| `let $S = \{(k, k^2) : k = 1, \dots, 10\}$` | A list (plain: `[(k, k^2) : k = 1..10]`, `[1, 2, 3]`). |
-| `draw v as an arrow`, `draw v and w as arrows, labelled` | Arrows from the origin. A vector is a let name, a formula (`A v`, `(1, 3)`) or a complex number (its real and imaginary parts). |
-| `draw v as an arrow from (1, 1)` (also `draw v from P`) | Arrows from a point or a points tool (drag P and they follow). |
+| `let v = (2, 1)`, `let $w = \begin{pmatrix} -1 \\ 2 \end{pmatrix}$` | A vector (2, 3 or more numbers). |
+| `let A = [[1.5, 1], [0.5, 2]]`, `let $A = \begin{pmatrix} 1.5 & 1 \\ 0.5 & 2 \end{pmatrix}$` | A matrix, row by row (`bmatrix` too). |
+| `let $c = -0.8 + 0.156i$` | A complex number. |
+| `let $f(x, y) = x^2 + 4y^2$`, `let $R(\theta) = \begin{pmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{pmatrix}$` | A function of one or more variables. Its body reads its parameters, sliders and let names. |
+| `let $S = \{(k, k^2) : k = 1, \dots, 10\}$`, `let L = [1, 2, 3]`, `let L = {1, 2, 3}` | A list (plain: `[(k, k^2) : k = 1..10]`; GeoGebra braces work too). |
+| `draw v as an arrow`, `draw v and w as arrows, labelled`, `draw A v as an arrow in green`, `draw (1, 3) as an arrow` | Arrows from the origin. A vector is a let name, a formula or a complex number (its real and imaginary parts). |
+| `draw v as an arrow from (1, 1)`, `draw v from P` | Arrows from a point or a points tool (drag P and they follow). |
 | `draw v + w tip to tail` | The terms end to end (dashed, thin), then the sum. |
-| `mark the points $\{e^{2\pi i k / n} : k = 0, \dots, n - 1\}$, joined, labelled`, `mark the points of S` | The points of a list of complex numbers or points. `joined` draws the closed polygon through them in their order. |
+| `mark the points $\{e^{2\pi i k / n} : k = 0, \dots, n - 1\}$, joined, labelled`, `mark the points of S` | The points of a list of complex numbers or points (a formula that starts with `\{` or `[`, or `of` a name). `joined`: the closed polygon through them in order. |
 
-A let line draws nothing; its option is `hidden`. Arrow options: a colour, `thin`, `thick` (the default), `dashed`, `labelled` (`$\vec{v}$`, `$A \vec{v}$`), `labelled "text"` (one per arrow with `;`, placeholders `{x}` `{y}` `{z}` `{i}`), `hidden`. Point list options: a colour, `small`, `large`, `thin`, `thick`, `joined`, `labelled` (each point's value, `0.5 + 0.866i`), `labelled "text"`, `hidden`; it publishes `LP1_n`, `LP1_x`, `LP1_y`, `LP1_x2`, ... Arrows and point lists work in 3D too. In every formula: `\sum_{k=1}^{n}` and `\prod_{k=1}^{n}` (bounds may be sliders, at most 100000 terms), `n!`, `\binom{n}{k}`; see [Formulas](#formulas).
+Let names are usable in every formula, label and line of the chart, in any order: `v + w`, `2v`, `v \cdot w`, `v_x`, `|v|`, `A v`, `\det A`, `f(1, 2)`, `\nabla f(p)`, `{det(A)}` in a label. A let line draws nothing (option `hidden` only). Options of arrows: a colour, `thin`, `thick` (default), `dashed`, `labelled` (`$\vec{v}$`, `$A \vec{v}$`), `labelled "text"` (one per arrow with `;`, placeholders `{x}` `{y}` `{z}` `{i}`), `hidden`. Options of a point list: a colour, `small`, `large`, `thin`, `thick`, `joined`, `labelled` (each value, `0.5 + 0.866i`), `labelled "text"`, `hidden`. Arrows and point lists work in 3D. In every formula field: `\sum_{k=1}^{n} ...` and `\prod_{k=1}^{n} ...` (bounds may be sliders), `n!`, `\binom{n}{k}`: `plot $T(x) = \sum_{k=0}^{n} \frac{(-1)^k x^{2k+1}}{(2k+1)!}$` is a Taylor polynomial on a slider n. See [Formulas](#formulas).
 
-**Sets on an axis and chords** (2D charts)
-
-| Line | Means |
-| --- | --- |
-| `mark where $g(x) \le 0$ on the x-axis, labelled` | The set of x where a condition in x holds, as a bar on the x-axis: `<`, `\le`, `>`, `\ge`, `abs(x - 1) < 2`, chains (`0 \le x < 1`), `and`, `or`, an interval `x \in [0, 1)`, or an equation (`g(x) = 0`: its zeros, as dots). Filled end dots belong to the set, open ones do not; an arrow where it runs off the view. `labelled` writes it in set notation, such as {x ∣ g(x) ≤ 0} = [-2, 2]. |
-| `mark where $y > 1$ on the y-axis` | The same with a condition in y, on the y-axis. |
-| `draw the chord of g from -1 to 3 at $\lambda$, labelled` | The chord from (a, g(a)) to (b, g(b)) of a function of the chart; `at λ` adds the point x = λa + (1 − λ)b on the chord and on the graph and the gap between them (Jensen's inequality). a, b and λ are formulas (sliders). |
-
-Set options: a colour (default teal), `thin`, `thick` (default very thick), `labelled`, `labelled "text"`, `hidden`; it publishes `AX1_n` (ends), `AX1_x`, `AX1_x2`, ... (`AX1_y`, ... on the y-axis) and `AX1_val` (pieces). Chord options: a colour (default red), `thin`, `thick`, `dashed`, `labelled`, `labelled "text"` (placeholders `{lambda}` `{x}` `{chord}` `{graph}` `{gap}`), `hidden`; it publishes `CH1_x`, `CH1_y` and `CH1_val` (the gap, chord minus graph).
-
-**Steps** (charts that play)
+### Sets on an axis and chords
 
 | Line | Means |
 | --- | --- |
-| `then plot g(x) = cos(x) in red` | `then` before an object line starts the next step. Lines before the first `then` are step 1; every later line stays in the step of the `then` above it. In the note, Previous, Play and Next under the chart go through the steps; the chart starts at its last step. |
+| `mark where $g(x) \le 0$ on the x-axis, labelled` | The set of x where a condition holds, as a bar on the x-axis: `<`, `\le`, `>`, `\ge`, `abs(x - 1) < 2`, chains `0 \le x < 1`, `and`, `or`, an interval `x \in [0, 1)`, or an equation `g(x) = 0` (its zeros, as dots). Filled end dots belong to the set, open ones do not; an arrow where it runs off the view. `labelled` writes it in set notation: {x ∣ g(x) ≤ 0} = [-2, 2]. |
+| `mark where $y > 1$ on the y-axis` | The same with a condition in y. |
+| `draw the chord of g from -1 to 3 at $\lambda$, labelled` | The chord from (a, g(a)) to (b, g(b)) of a function of the chart; `at λ` adds the point x = λa + (1 − λ)b on the chord and on the graph and the gap between them (Jensen's inequality). a, b and λ are formulas (`slider lambda from 0 to 1`). |
+
+Set options: a colour (default teal), `thin`, `thick` (default very thick), `labelled`, `labelled "text"`, `hidden`. A slider `lambda` is `\lambda` in `$...$` (Greek names read as the slider of that name). Chord options: a colour (default red), `thin`, `thick`, `dashed`, `labelled`, `labelled "text"` (placeholders `{lambda}` `{x}` `{chord}` `{graph}` `{gap}`), `hidden`. A chart with `show x from a to b` and no y range fits y to what it draws.
+
+### Steps and moving charts
+
+| Line | Means |
+| --- | --- |
+| `then plot g(x) = cos(x) in red`, `then transform the plane by A` | `then` before an object line starts the next step. Lines before the first `then` are step 1; every later line stays in the step of the `then` above it. In a note, Previous, Play and Next under the chart go through the steps; the chart starts at its last step. |
 | `then` (alone) | A step with nothing new: a pause. |
-| `frames` | The LaTeX export draws every step side by side (one tikzpicture each). Without it, the export draws the last step. |
-| `set stillTime = 1.5` | Moving objects (particles, turning circles) are drawn at this time in seconds in the export, print and SVG files (default 0). |
+| `frames` | The LaTeX export draws every step side by side. Without it the export draws the last step. |
+| `set stillTime = 1.5` | Moving things are drawn at this time (seconds) in the export, print and SVG files (default 0). |
+| `turning` (3D), `turning, speed 2` | The 3D view turns slowly by itself in notes; a drag turns it too. The export shows the view as set. |
 
-Every object also takes `step=3` (its step as a number). A transform in a step moves while its step comes in (see Linear algebra).
+Every object also takes `step=3` (its step as a number). Things that move by themselves run on the chart's clock (Pause and Play in the strip under the chart): moving particles, `traced` solutions and orbits (the curve draws itself, then starts again), turning circles and a script's `frame(t)`. `speed 2` doubles the speed of any of them. The export, print, SVG files, check_chart and render_chart show the still frame.
 
-**Vector fields and systems**
-
-| Line | Means |
-| --- | --- |
-| `draw the vector field $F(x, y) = (y, -\sin x - 0.25y)$` | Short arrows on a grid over the view, all the same length on screen. The formula is a pair (P, Q) in x and y; `F(x, y) =` names the field (without it: VF1). 2D charts. |
-| `mark the rest points of F, labelled` | The zeros of F in the view: filled when stable, open when not; `labelled` writes the kind (stable node, unstable node, stable spiral, unstable spiral, saddle, centre). `mark the rest points` takes the nearest field above. 2D charts. |
-| `draw the solution of $\dot{p} = (y, -x)$ through P for t from 0 to 10` | The solution of a system through points tools or points (several with `and`), by RK4. 2D chart: 2 formulas in x, y and t; 3D chart: 3 formulas in x, y, z and t, `through (1, 1, 1)`. The left side may be `\dot{p} =`, `p' =`, `\frac{dp}{dt} =` or left out. `for t from a to b` defaults to 0 to 10. |
-
-Field options: a colour, `thin`, `thick`, `coloured by length` (viridis; `coloured by length in heat`, ...), `with moving particles` (they move on the chart's clock; the export draws faint arrows and a few streamlines), with them `speed 2`, `300 particles`, `trails 0.9`, `width 1.4`, `arrows 0.025` or `no arrows`, `with streamlines`, `density=30` (arrows across, 4 to 60), `hidden`. Rest point options: a colour, `small`, `large`, `labelled`, `hidden`; they publish `RP1_n`, `RP1_x`, `RP1_y`, `RP1_x2`, ... Solution options: a colour, `thin`, `thick`, `dashed`, `coloured by time` (`in heat`, ...), `traced` (the curve draws itself over time on the clock; `speed 2` draws it twice as fast), `hidden`. The 5.0 line `draw the solution through P` of a slope field is unchanged.
-
-**Linear algebra** (the grid moves, î and ĵ land on the columns of A)
+### Vector fields and systems
 
 | Line | Means |
 | --- | --- |
-| `draw the grid`, `draw the grid from -2 to 2 in steps of 0.5` | The lines x = k·s and y = k·s that a transform moves (formulas, sliders). Without a range it reaches twice as far as the view. 3D: a grid cube. |
-| `draw the basis vectors` | î = (1, 0) in green and ĵ = (0, 1) in red (3D: k̂ in blue), labelled. Another colour draws all of them in it; `valueLabel=false` leaves the labels out. |
-| `transform the plane by A` | Moves every object above it (and the functions of its step or before), not the axes, text labels or objects after it; the old grid stays faint. The map: a matrix (a let name, `[[2, 0], [0, 0.5]]`, `$\begin{pmatrix} 0 & -1 \\ 1 & 0 \end{pmatrix}$`, sliders allowed), `$z \mapsto z^2$` (complex), `$(x, y) \mapsto (x + y, y)$`, or a let function. 3D: `transform space by B`. With `then` it moves while its step comes in: (1 − t)I + tA, or (1 − t)z + t f(z). |
-| `draw the eigenvectors of A, labelled` | The lines through 0 along the real eigenvectors of a 2 x 2 (3D: 3 x 3) matrix, with `λ₁ = 2.5`, `λ₂ = 1`. Complex eigenvalues draw no line and say so. |
-| `shade the unit square, labelled` | The square [0, 1]², shaded; a transform below it moves it, and `labelled` shows its signed area (`det A = 2.5` once one matrix moved it all the way). `labelled "det A = {det(A)}"` is a label of your own (placeholders `{area}` `{det}`). `shade the image of the unit square` moves it by the transforms above it too. 3D: `shade the unit cube`. |
-| `draw the span of v and w, labelled` | The span of vectors: the plane (shaded), a line through 0, or 0. `labelled`: `span(v⃗, w⃗) = ℝ²`. |
+| `draw the vector field $F(x, y) = (y, -\sin x - 0.25y)$` | Short arrows on a grid, all the same length on screen. The formula is a pair (P, Q) in x and y; `F(x, y) =` names the field (without it: VF1). 2D charts. |
+| `mark the rest points of F, labelled` | The zeros of F in the view: filled when stable, open when not; `labelled` writes the kind (stable node, unstable node, stable spiral, unstable spiral, saddle, centre). Without `of F`: the nearest field above. 2D charts. |
+| `draw the solution of $\dot{p} = (y, -x)$ through P for t from 0 to 10` | The solution of a system through points tools or points (several with `and`), by RK4. 2D chart: 2 formulas in x, y and t; 3D chart: 3 formulas in x, y, z and t, `through (1, 1, 1)`. The left side may be `\dot{p} =`, `p' =`, `\frac{dp}{dt} =` or left out. Default `for t from 0 to 10`. |
 
-Options: grid, a colour (default blue), `thin`, `thick`, `hidden`; basis vectors, a colour, `thin`, `thick`, `hidden`; transform, `hidden`; eigenvectors, a colour (default orange), `thin`, `thick`, `dashed`, `labelled`, `hidden`; unit square, a colour (default purple), `opacity 0.3`, `labelled`, `labelled "text"`, `hidden`; span, a colour (default teal), `thin`, `thick`, `opacity 0.15`, `labelled`, `hidden`. In the editor, the tips of î and ĵ (and of arrows of let vectors written as numbers) can be dragged: the numbers in the text change.
+Field options: a colour, `thin`, `thick`, `coloured by length` (viridis; `coloured by length in heat`), `with streamlines`, `with moving particles` and with them `speed 2`, `300 particles`, `trails 0.9` (0 to 0.99), `width 1.4` (pixels), `arrows 0.025` or `no arrows`; `density=30` (arrows across, 4 to 60), `hidden`. Rest point options: a colour, `small`, `large`, `labelled`, `hidden`. Solution options: a colour, `thin`, `thick` (2D default; 3D: thin), `dashed`, `coloured by time` (cobalt to amber; `coloured by time in viridis`), `traced`, `speed 2`, `hidden`. A field and a solution need no slope field; a solution needs no field either. The 5.0 line `draw the solution through P` of a slope field is unchanged.
 
-```easy-tikz
-show x from -4.5 to 4.5 and y from -3 to 3
-equal scale
-let $A = \begin{pmatrix} 1.5 & 1 \\ 0.5 & 2 \end{pmatrix}$
-draw the grid
-draw the basis vectors
-shade the unit square, labelled
-then transform the plane by A
-then draw the eigenvectors of A, labelled
-```
+### Linear algebra
 
-**Iterate and colour the plane** (2D charts)
-
-After the formula, the pieces between commas are the start (`$z_0 = 0$`), the names the recurrence reads (`$c = P$`, `$c = a + bi$`), the steps (`40 steps`) and the options, in any order. A start or a name is a formula, a point `(1, 2)` or a points tool `P` (drag P and the picture follows). A recurrence is written `z_{n+1} = F` with the state as `z_n` in F (also `x_{n+1}`, `p_{n+1}`, `\theta_{n+1}`).
+The grid moves, î and ĵ land on the columns of the matrix, the old grid stays faint.
 
 | Line | Means |
 | --- | --- |
-| `draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps` | The points z₀, z₁, ... joined by a line. Complex numbers and vectors of 2 are points of the plane (a points tool P is x + iy); numbers are drawn as (n, x_n). Gradient descent: `draw the orbit of $p_{n+1} = p_n - \eta \nabla f(p_n)$, $p_0 = P$, 25 steps` with `let $f(x, y) = ...$` and a slider `eta`. |
-| `draw the cobweb of $x_{n+1} = f(x_n)$ from 0.2, 80 steps` | The line y = x, the graph of the map, and the path (x₀, 0), (x₀, x₁), (x₁, x₁), ... `draw the cobweb of f from 0.2` is short for it. Defaults: from 0.2, 40 steps. |
-| `draw the bifurcation diagram of $x_{n+1} = r x_n (1 - x_n)$ for r from 2.5 to 4` | For each r on the x-axis, where the orbit of x₀ settles, as dots (a picture). Optional start `$x_0 = 0.3$` (default 0.5). |
+| `draw the grid`, `draw the grid from -2 to 2 in steps of 0.5` | The lines a transform moves (formulas, sliders). Without a range: twice as far as the view, step 1. 3D: a grid cube. |
+| `draw the basis vectors` | î in green and ĵ in red (3D: k̂ in blue), labelled. Another colour draws all of them in it; `valueLabel=false` leaves the labels out. |
+| `transform the plane by A` | Moves every object above it (also the functions of its step or before), not the axes, text labels or objects after it. The map: a matrix (a let name, `[[2, 0], [0, 0.5]]`, `$\begin{pmatrix} 0 & -1 \\ 1 & 0 \end{pmatrix}$`, sliders allowed), `$z \mapsto z^2$`, `$(x, y) \mapsto (x + y, y)$`, or a let function. 3D: `transform space by B` (3 x 3). With `then` it moves while its step comes in: (1 − t)I + tA, or (1 − t)z + t f(z). Without `then` it is applied at once. |
+| `draw the eigenvectors of A, labelled` | The lines along the real eigenvectors of a 2 x 2 (3D: 3 x 3) matrix, with λ₁, λ₂ (with or without a transform). Complex eigenvalues draw no line. |
+| `shade the unit square, labelled` | The square [0, 1]², moved by a transform below it; `labelled` shows its signed area (`det A = 2.5`); `labelled "det A = {det(A)}"` is a label of your own (placeholders `{area}` `{det}`). `shade the image of the unit square`: moved by the transforms above it too. 3D: `shade the unit cube`. |
+| `draw the span of v and w, labelled` | The plane (shaded), a line through 0, or 0. |
+
+Options: a colour, `thin`, `thick`, `dashed` (eigenvectors), `opacity 0.3` (unit square, span), `labelled`, `hidden`. In the editor the tips of î and ĵ (and of arrows of let vectors written as numbers) can be dragged: the numbers in the text change.
+
+### Iterate and colour the plane
+
+2D charts. After the formula, the pieces between commas are the start (`$z_0 = 0$`), the names the recurrence reads (`$c = P$`, `$c = a + bi$`), the number of steps (`40 steps`, `n steps`) and the options, in any order. A start or a name is a formula, a point `(1, 2)` or a points tool `P` (a point is the complex number x + iy in a recurrence of complex numbers; drag P and the picture follows). A recurrence is `$z_{n+1} = F$` with the state as `z_n` in F (also `x_{n+1}`, `p_{n+1}`, `\theta_{n+1}`).
+
+| Line | Means |
+| --- | --- |
+| `draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps` | The points z₀, z₁, ... joined by a line. Complex numbers and vectors of 2 are points of the plane; numbers are drawn as (n, x_n). Gradient descent: `draw the orbit of $p_{n+1} = p_n - \eta \nabla f(p_n)$, $p_0 = P$, 25 steps` with `let $f(x, y) = ...$` and `slider eta ...`. |
+| `draw the cobweb of $x_{n+1} = f(x_n)$ from 0.2, 80 steps` | The line y = x, the graph of the map and the cobweb path. The map may be written out with sliders (`$x_{n+1} = r x_n (1 - x_n)$`); `draw the cobweb of f from 0.2` is short for `f(x_n)` of a function of the chart. Defaults: from 0.2, 40 steps. |
+| `draw the bifurcation diagram of $x_{n+1} = r x_n (1 - x_n)$ for r from 2.5 to 4` | For each r on the x-axis, where the orbit settles, as dots on the y-axis (a picture). Optional `$x_0 = 0.3$` (default 0.5). For the logistic map: `show x from 2.5 to 4 and y from 0 to 1`. |
 | `draw Newton's method for f from 2.5, 5 steps, labelled` | For a function of the chart: each tangent down to the x-axis and the line up to the graph. |
-| `colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 200 steps` | Escape time: every pixel runs the orbit with its point x + iy where the line puts it (`c = x + iy`: the Mandelbrot set; `z_0 = x + iy`: Julia sets and Newton basins). Default 200 steps, colour map `cyclic`. The recurrence is one of complex numbers. |
-| `colour the plane by $f(z) = \frac{z^2 - 1}{z^2 + 1}$` | Domain colouring: the hue is the angle of f(z), the light grows with the modulus of f(z) (zeros dark, poles white). |
-| `colour the plane by $f(x, y) = \sin x \cos y$, in viridis` | A heat map from the lowest value in the view to the highest. |
-| `draw the circles of $\sum_{k=1}^{n} \frac{4}{\pi (2k - 1)} e^{i(2k - 1)t}$, with its wave` | Turning circles: each term of a sum in t a circle on the tip of the one before, turning on the chart's clock, and the curve the tip draws. `with its wave`: the imaginary part over time beside them. The export draws the still frame. |
+| `colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 200 steps` | Escape time: every pixel runs the orbit with its point x + iy where the line puts it (`c = x + iy`: the Mandelbrot set; `z_0 = x + iy` with `c = a + bi`: Julia sets; `z_0 = x + iy` alone: Newton basins). Complex numbers only. Default 200 steps, colour map `cyclic`. |
+| `colour the plane by $f(z) = \frac{z^2 - 1}{z^2 + 1}$` | Domain colouring: the hue is the angle of f(z), zeros dark, poles white. |
+| `colour the plane by $f(x, y) = \sin x \cos y$, in viridis` | A heat map from the lowest value in the view to the highest. A let function of the chart: `colour the plane by $f(x, y)$` (with its arguments). |
+| `draw the circles of $\sum_{k=1}^{n} \frac{4}{\pi (2k - 1)} e^{i(2k - 1)t}$, with its wave` | Turning circles: each term of a sum in t a circle on the tip of the one before, turning on the clock, and the curve the tip draws. `with its wave`: the imaginary part over time beside them. |
+| `draw the circles of c, using n circles, with its path` | Circles of a list of complex coefficients `c` (a let list or a script's `np.fft.fft(z) / len(z)`) in NumPy's fft order; they turn in the order 0, 1, −1, 2, −2, ...; `using n circles` keeps the first n; `with its path` draws the path of the tip. |
 
-Options: orbit, a colour (default red), `thin`, `thick`, `small`, `large`, `as a path` (no dots), `labelled` (z₀ to z₅), `traced` (the orbit draws itself over time on the clock), `hidden`, publishing `OR1_n`, `OR1_x`, `OR1_y` (the last point); cobweb, a colour (default orange), `thin`, `thick`, `hidden`, publishing `CW1_x`, `CW1_n`; bifurcation diagram, a colour, `hidden`; Newton's method, a colour (default red), `thin`, `thick`, `labelled` (x₀, x₁, ...), `hidden`, publishing `NM1_x`, `NM1_val`, `NM1_n`; coloured plane, a colour map (`in viridis`, `heat`, `cool`, `diverging`, `rainbow`, `greyscale`, `cyclic`), `opacity 0.5`, `hidden`; circles, a colour (default blue), `thin`, `thick`, `with its wave`, `hidden`. `color the plane by` works too. A coloured plane lies under the grid and everything else. The export writes a coloured plane and a bifurcation diagram as a PNG (`\addplot graphics`) beside the .tex file; `export_latex` gives the code only, with a comment that names the PNG.
+Options: orbit, a colour (default red), `thin`, `thick`, `small`, `large`, `as a path` (no dots), `labelled` (z₀ to z₅), `traced`, `speed 2`, `hidden`; cobweb, a colour, `thin`, `thick`, `hidden`; bifurcation, a colour, `hidden`; Newton, a colour, `thin`, `thick`, `labelled` (x₀, x₁, ...), `hidden`; coloured plane, a colour map (`in viridis`, `heat`, `cool`, `diverging`, `rainbow`, `greyscale`, `cyclic`), `opacity 0.5`, `hidden`; circles, a colour, `thin`, `thick`, `with its wave`, `with its path`, `using n circles`, `speed 2`, `hidden`. `color the plane by` works too. A coloured plane lies under everything else. The export writes a coloured plane and a bifurcation diagram as a PNG beside the .tex file (`\addplot graphics`); `export_latex` gives the code and names the PNG.
 
 ```easy-tikz
 show x from -2.4 to 1 and y from -1.15 to 1.15
@@ -285,38 +288,32 @@ mark P at (-0.12, 0.75), large
 draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps, as a path
 ```
 
-**GeoGebra commands** (version 6)
+### GeoGebra input lines and commands
 
 GeoGebra input lines are chart lines: paste a construction as it is, or write one when the person knows GeoGebra. One object per line, `name = command` or a bare command; each draws in GeoGebra's look (free points blue with their names, dependent points and lists black, polygons brown with a light fill, the rest black) and prints back as written. A named value (a point, a number, a list, a matrix) or a function of x is usable by name in every formula of the chart, as a let name.
 
 | Line | Means |
 | --- | --- |
 | `A = (1, 2)`, `z_1 = 1 + 2ί` | A point (a complex number is a point too). A lower case name of a pair, `u = (3, 1)`, is a vector: an arrow from the origin. |
-| `c = Circle(A, 3)`, `Circle(A, B)`, `Circle(A, B, C)` | A circle by center and radius, center and point, or through three points. |
-| `s = Segment(A, B)`, `l = Line(A, B)`, `Ray(A, B)`, `v = Vector(A, B)` | Segment, line through the view, ray, arrow from A to B (its value is B - A). |
+| `c = Circle(A, 3)`, `Circle(A, B)`, `Circle(A, B, C)` | A circle by centre and radius, centre and point, or through three points. |
+| `s = Segment(A, B)`, `l = Line(A, B)`, `Ray(A, B)`, `v = Vector(A, B)` | Segment, line through the view, ray, arrow from A to B. |
 | `p = Polygon(A, B, C)`, `Polygon(L)`, `Polygon(A, B, 6)`, `Polyline(A, B, C)` | A polygon through points or a list of points; with a number, the regular polygon on A B. |
-| `C = Curve(cos(t), sin(2t), t, 0, 2pi)` | A parametric curve (3 formulas in a 3D chart). |
+| `C = Curve(cos(t), sin(2t), t, 0, 2pi)` | A parametric curve. |
 | `f = x^2 - 2`, `g = Derivative(f)`, `h = Function(f, 0, 2)` | Functions of x, drawn as graphs; `f(x) = x^2` is the chart's own function line. |
-| `L = Sequence((k, k^2), k, 1, 10)`, `M = {{1, 2}, {3, 4}}` | A list (of points: dots) and a matrix (draws nothing). |
+| `L = Sequence((k, k^2), k, 1, 10)`, `M = {{1, 2}, {3, 4}}`, `n = 5` | A list (of points: dots), a matrix and a number (draw nothing). |
 | `Text("d = " + Distance(A, B), (0, 5))` | A text at a point; values after `+` are written with 2 decimals. |
-| `B_1 = Translate(B, v)`, `Rotate(p, pi/3, A)`, `Dilate(c, 2, A)`, `Reflect(p, l)` | Transforms of points and of objects (GeoGebra's `B'` is no name here: write `B_1`). |
+| `B_1 = Translate(B, v)`, `Rotate(p, pi/3, A)`, `Dilate(c, 2, A)`, `Reflect(p, l)` | Transforms of points and of objects. |
 | `a = Slider(0, 5)`, `a = Slider(0, 5, 0.5)` | A slider (it starts at its low end). |
 | `IterationList(z^2 + c, z, {0 + 0ί}, 20)` | A bare command: named G1, G2, ...; a list of complex numbers draws as points. |
 
-Commands in every formula field, with GeoGebra's names, argument orders and 1-based positions: `Sequence(expr, k, a, b[, step])`, `Sequence(n)`, `IterationList(expr, z, {start}, n)` (also `IterationList(f, start, n)`), `Iteration(...)` (the last value), `KeepIf(condition, list)` (the items are `x`), `KeepIf(condition, var, list)`, `CountIf`, `Element(list, i)`, `Element(M, i, j)`, `Zip(expr, var, list, ...)`, `Sum`, `Product` (of a list, or `Sum(expr, k, a, b)`), `Length`, `First(list[, n])`, `Last`, `Append`, `Join`, `Reverse`, `Sort`, `Unique`, `Flatten`, `Take(list, m[, n])`, `Max`, `Min`, `Mean`, `If(condition, a[, b])`, `x(P)`, `y(P)`, `z(P)`, `abs`, `arg`, `conjugate`, `real`, `imaginary`, `Vector`, `UnitVector`, `Dot`, `Cross`, `Determinant`, `Transpose`, `Invert`, `Root(f, a)` and `Root(f, a, b)` (numeric), `Integral(f, a, b)` (numeric), `Derivative(f[, n])` (numeric, at x), `Midpoint`, `Distance`, `Point({x, y})`. Lists are `{1, 2, 3}`, matrices `{{1, 2}, {3, 4}}`; `ί` and `i` are both the imaginary unit. In a field of numbers (a function, a region, a bound) use a list or point by name or through a command (`L = {1, 2, 3}`, then `plot g(x) = Sum(L) x`), not as `{...}` or `(1, 2)` written there. A chart's own name wins over a command of the same name (a slider called `Sum` stays the slider).
+Commands in every formula field, with GeoGebra's names and argument orders: `Sequence(expr, k, a, b[, step])`, `Sequence(n)`, `IterationList(expr, z, {start}, n)` (n + 1 items), `Iteration(...)` (the last), `KeepIf(condition, list)` (the items are `x`), `KeepIf(condition, var, list)`, `CountIf`, `Element(list, i)`, `Element(M, i, j)`, `Zip(expr, var, list, ...)`, `Sum`, `Product` (of a list, or `Sum(expr, k, a, b)`), `Length`, `First(list[, n])`, `Last`, `Append`, `Join`, `Reverse`, `Sort`, `Unique`, `Flatten`, `Take(list, m[, n])`, `Max`, `Min`, `Mean`, `If(condition, a[, b])`, `x(P)`, `y(P)`, `z(P)`, `abs`, `arg`, `conjugate`, `real`, `imaginary`, `Vector`, `UnitVector`, `Dot`, `Cross`, `Determinant`, `Transpose`, `Invert`, `Root(f, a)`, `Root(f, a, b)`, `Integral(f, a, b)`, `Derivative(f[, n])` (numeric), `Midpoint`, `Distance`, `Point({x, y})`.
 
-In the editor a point written as two numbers (`A = (1, 2)`) can be dragged; its numbers change. Options of a GeoGebra line go after it: `c = Circle(A, 3) in red, dashed`; a colour, `thin`, `thick`, `dashed`, `small`, `large`, `opacity 0.3` (a polygon's or circle's fill), `labelled` (its name), `no label`, `labelled "text"`, `hidden` (a value stays usable). Not GeoGebra lines: names `x`, `y`, `z`, `r` and `t` (`y = 2x` stays a function, `r = 2` a polar curve), a name the chart has already (`a = x^2 + y^2` with a slider a stays a curve), a formula in x and y without a command (a curve), and names with `'`. Lists are worked out at most 100000 items long.
+- Positions count from 1, as in GeoGebra: `Element(L, 1)` is the first item; `Element(L, 0)` and a position past the end have no value (a label prints `?`).
+- Lists are `{1, 2, 3}`, matrices `{{1, 2}, {3, 4}}` (in `$...$`: `\{1, 2, 3\}`); `ί` and `i` are both the imaginary unit. In a field of numbers (a function, a region, a bound) use a list or point by name or through a command (`L = {1, 2, 3}`, then `plot g(x) = Sum(L) x`), not as `{...}` or `(1, 2)` written there.
+- Options go after the line: `c = Circle(A, 3) in red, dashed`; a colour, `thin`, `thick`, `dashed`, `small`, `large`, `opacity 0.3` (a fill), `labelled` (its name), `no label`, `labelled "text"`, `hidden` (a value stays usable).
+- Not GeoGebra lines: the names `x`, `y`, `z`, `r` and `t` (`y = 2x` stays a function, `r = 2` a polar curve), a name the chart has already, a formula in x and y without a command (a curve), names with `'` (write `B_1` for GeoGebra's `B'`). No conics, angles, loci, CAS commands, `Execute` or `:=`. In 3D, circles, lines, rays, functions and texts draw nothing. Lists are worked out at most 100000 items long.
 
-```easy-tikz
-show x from -2.2 to 0.8 and y from -1.3 to 1.3
-equal scale
-P = Flatten(Sequence(Sequence(a + b ί, a, -2.2, 0.8, 0.04), b, -1.3, 1.3, 0.04)), hidden
-M = KeepIf(abs(Element(IterationList(z^2 + c, z, {0 + 0ί}, 20), 21)) <= 2, c, P)
-c = -0.12 + 0.75ί
-IterationList(z^2 + c, z, {0 + 0ί}, 30), in red
-```
-
-**Python scripts** (2D charts)
+### Python scripts
 
 A `python:` line and the lines indented below it are a script (any indent; it ends at the first line that is not indented). It runs inside the plugin (no Python install, on phones too) and is printed back exactly as written. Use it for what formulas cannot say: loops, arrays, an FFT, a computed path. Several blocks run in order and share one scope.
 
@@ -332,38 +329,36 @@ python:
 draw the circles of c, using n circles, with its path
 ```
 
-- **Names it sets are values of the chart**, as `let` names: every line and label can use them (`plot g(x) = f(x)`, `mark the points of P`, `{k:2}` in a label). A number is a number; `1 + 2j` a complex number; a NumPy array of 2 or 3 numbers a vector, a longer one a list; an array of shape (n, 2) a list of points (`mark the points of pts, joined`); a square array a matrix; a complex array a list of complex numbers; `def f(x):` a function of the chart (exported as sampled coordinates). Names a slider, a function or an axis variable has (`x`, `y`, `t`, `z`) stay the chart's: the script may use them, the chart does not see them.
-- **Sliders and computed names are variables of the script** (`a`, `n`, `P1_x`): it runs again when one it reads changes (cached by them).
-- **`draw the circles of c, using n circles, with its path`**: `c` a list of complex coefficients in NumPy's `fft` order (index k is frequency k for k < N/2, else k − N); the circles turn in the order 0, 1, −1, 2, −2, ...; `using n circles` keeps the first n (at most 400); `with its path` draws the path of the tip.
-- **matplotlib calls draw** (`plt.` or `ax.` after `fig, ax = plt.subplots()`), in the chart's theme colours: `plot(x, y, 'r--', color=, linewidth=, linestyle=, marker=, label=, alpha=)`, `scatter(x, y, s=, c=, cmap=)`, `fill_between(x, y1, y2, where=, alpha=)`, `fill`, `bar`, `hist(x, bins, density=)`, `stem`, `step`, `arrow(x, y, dx, dy)`, `quiver(X, Y, U, V)`, `text(x, y, s)`, `annotate`, `axhline`, `axvline`, `hlines`, `vlines`, `contour(X, Y, Z, levels)`, `imshow(Z, extent=, origin=, cmap=)` (a picture: a PNG in the export), `plt.Circle`, `plt.Rectangle`, `plt.Polygon` with `add_patch`, `title`, `xlabel`, `ylabel` (the chart's title and axis names where it has none), `legend()` (a key in the corner that covers the least), `xlim`, `ylim`. Colours: `C0` to `C9`, `b g r c m y k w`, names (`red`, `tab:blue`, ...), `#rrggbb`, grey levels `'0.5'`; colour maps map to the plugin's six. A chart with no `show` line takes the script's `xlim` and `ylim`, else what it draws with matplotlib's margins. `grid`, ticks, `figure`, `show`, `savefig`, `colorbar`, `tight_layout` are accepted and do nothing (the chart's own lines set those).
-- **`def frame(t):`** (t in seconds): what it draws moves on the chart's clock (Play and Pause in the strip); the export, print and SVG files draw `frame(0)` (or the chart's `stillTime`). Draw in it; do not change names outside it.
-- **The language:** assignment (also `+=`, tuple unpacking, `a, *rest = ...`), `if/elif/else`, `for`, `while` (with `else`), `break`, `continue`, `pass`, `def` (defaults, keywords, `*args`, `**kwargs`, closures, `nonlocal`, `global`), `return`, `lambda`, comprehensions (list, dict, set, generator), `try/except/finally`, `raise`, `assert`, `del`, f-strings with format specs, `%` and `str.format`, slicing; int, float, complex (`1j`), bool, None, str, list, tuple, dict, set, range. Built-ins: `len range enumerate zip map filter sum min max abs round sorted reversed list tuple dict set float int complex bool str repr format isinstance any all divmod pow print` and more; `print` shows in the chart's problem line as a note. Imports: `numpy` (`as np`), `math`, `cmath`, `random`, `matplotlib.pyplot` (`as plt`), `matplotlib.patches`.
-- **NumPy:** `array asarray linspace arange zeros ones full eye meshgrid concatenate stack vstack hstack column_stack reshape transpose (.T) flatten sum mean std var min max argmin argmax cumsum cumprod diff dot outer matmul (@) cross sin cos tan arcsin arccos arctan arctan2 sinh cosh tanh exp log log10 log2 sqrt abs angle real imag conj floor ceil round clip where sign maximum minimum hypot mod isnan isfinite sort argsort unique roll flip interp trapz polyfit polyval histogram pi e inf nan`, element-wise operators and comparisons with broadcasting, boolean masks, fancy indexing, `a[:, 0]`, `a[None]`; `np.linalg` (`det inv solve eig eigh eigvals norm matrix_power`), `np.fft` (`fft ifft fftfreq fftshift ifftshift rfft rfftfreq`, any length), `np.random` (`seed rand randn random uniform normal randint choice shuffle permutation default_rng`; every run starts from seed 0, so a chart draws the same each time). Complex arrays work in arithmetic, `exp`, `log`, `sqrt`, `sin`, `cos`, `abs`, `angle`.
-- **Not there:** classes, `with`, generators (`yield`), `async`, decorators, other modules (pandas, scipy, sympy, os, files, internet), 3D plots and subplots (a chart is one plot), slices of an array as views (a slice is a copy: `a[1:3] = 0` works, `b = a[1:3]; b[0] = 9` does not change `a`). Whole floats print without `.0` (`2.0` prints as `2`).
-- **Problems** name the script's line: "Line 4 of the script: name 'np' is not defined". A script stops after 2 000 000 steps, 1.5 seconds or 120 calls deep ("an endless loop?"); a list or array holds at most 4 000 000 items.
+- **Import what you use:** `import numpy as np` and `import matplotlib.pyplot as plt` (drawing calls need it; a bare `plot(...)` without `from matplotlib.pyplot import *` is "name 'plot' is not defined").
+- **Names it sets are values of the chart**, as `let` names (`plot g(x) = f(x)`, `mark the points of pts`, `{k:2}` in a label): a number; `1 + 2j` a complex number; an array of 2 or 3 numbers a vector, a longer one a list; an array of shape (n, 2) a list of points; a square array a matrix; a complex array a list of complex numbers; `def f(x):` a function of the chart. Names a slider, a function or an axis variable has (`x`, `y`, `t`, `z`, `theta`) stay the chart's: the script may set them, the chart does not see them. Names that start with `_` stay in the script.
+- **Sliders and computed names are variables of the script** (`a`, `n`, `P1_x`): it runs again when one it reads changes. The script has no axis variable: make arrays with `np.linspace`.
+- **matplotlib calls draw** (`plt.` or `ax.` after `fig, ax = plt.subplots()`), in the chart's theme colours: `plot(x, y, 'r--', color=, linewidth=, linestyle=, marker=, label=, alpha=)`, `scatter(x, y, s=, c=, cmap=)`, `fill_between(x, y1, y2, where=, alpha=)`, `fill`, `bar`, `hist(x, bins, density=)`, `stem`, `step`, `arrow(x, y, dx, dy)`, `quiver(X, Y, U, V)`, `text(x, y, s)`, `annotate`, `axhline`, `axvline`, `hlines`, `vlines`, `contour(X, Y, Z, levels)`, `imshow(Z, extent=, origin=, cmap=)` (a picture: a PNG in the export), `plt.Circle`, `plt.Rectangle`, `plt.Polygon` with `add_patch`, `title`, `xlabel`, `ylabel` (the chart's own where it has none), `legend()`, `xlim`, `ylim`. Colours: `C0` to `C9`, `b g r c m y k w`, names (`red`, `tab:blue`), `#rrggbb`, `'0.5'`. A chart with no `show` line takes the script's `xlim` and `ylim`, else what it draws; a `show` line wins. A script mixes with chart lines: `plot the normal distribution with mean 0 and sd 1` over a script's `plt.hist(...)`. `grid`, ticks, `figure`, `show`, `savefig`, `colorbar`, `tight_layout` do nothing (the chart's own lines set those).
+- **`def frame(t):`** (t in seconds): what it draws moves on the chart's clock; the export, print and SVG files draw `frame(0)` (or `stillTime`). Draw in it; do not change names outside it.
+- **The language:** assignment (also `+=`, tuple unpacking), `if/elif/else`, `for`, `while`, `break`, `continue`, `pass`, `def` (defaults, keywords, `*args`, `**kwargs`, closures), `return`, `lambda`, comprehensions, `try/except/finally`, `raise`, `assert`, `del`, f-strings, `%` and `str.format`, slicing; int, float, complex (`1j`), bool, None, str, list, tuple, dict, set, range. Built-ins: `len range enumerate zip map filter sum min max abs round sorted reversed list tuple dict set float int complex bool str isinstance any all divmod pow print` and more; `print` shows in the chart's problem line as a note. Imports: `numpy`, `math`, `cmath`, `random`, `matplotlib.pyplot`, `matplotlib.patches`.
+- **NumPy:** `array linspace arange zeros ones full eye meshgrid concatenate stack vstack hstack column_stack reshape transpose (.T) flatten sum mean std var min max argmin argmax cumsum cumprod diff dot outer matmul (@) cross sin cos tan arcsin arccos arctan arctan2 sinh cosh tanh exp log log10 log2 sqrt abs angle real imag conj floor ceil round clip where sign maximum minimum hypot mod isnan isfinite sort argsort unique roll flip interp trapz polyfit polyval histogram pi e inf nan`, broadcasting, boolean masks, fancy indexing, `a[:, 0]`; `np.linalg` (`det inv solve eig eigh eigvals norm matrix_power`), `np.fft` (`fft ifft fftfreq fftshift ifftshift rfft rfftfreq`), `np.random` (`seed rand randn random uniform normal randint choice shuffle permutation default_rng`; every run starts from seed 0, so a chart draws the same each time).
+- **Not there:** classes, `with`, `yield`, `async`, decorators, other modules (pandas, scipy, sympy, os, files, the internet), 3D plots and subplots (a chart is one plot; in a 3D chart a script's names work, its drawing does not show), views of arrays (a slice is a copy). `2.0` prints as `2`.
+- **Problems** name the script's line: "Line 4 of the script: name 'np' is not defined". A script stops after 2 000 000 steps, 1.5 seconds or 120 calls deep; an array holds at most 4 000 000 items.
 
-**Limits** (so that no chart freezes a phone). Over a limit, steps are drawn at the limit with a note ("Drawn with 2000 steps at most"); too many grid lines are a problem, and a sum of more than 100000 terms has no value.
+### Limits
+
+So that no chart freezes a phone. Over a limit, steps are drawn at the limit with a note ("Drawn with 2000 steps at most"); too many grid lines are a problem, and a sum of more than 100000 terms has no value.
 
 | What | At most |
 | --- | --- |
-| Terms of a sum or product | 100000 |
+| Terms of a sum or product, items of a GeoGebra list | 100000 |
 | Steps of an orbit | 2000 (dots on the first 400, labels on the first 6) |
 | Steps of a cobweb | 1000 |
 | Steps of Newton's method | 100 |
 | Steps per pixel of a coloured plane | 1000 |
 | A bifurcation diagram, per column | 400 steps run in, 300 drawn |
-| Terms of turning circles | 60 |
-| Circles of a list of coefficients (a script's) | 400 |
-| A script run | 2 000 000 steps, 1.5 s, calls 120 deep, 4 000 000 items in one array |
+| Terms of turning circles (a sum) | 60 |
+| Circles of a list of coefficients | 400 |
+| A script run | 2 000 000 steps, 1.5 s, calls 120 deep, 4 000 000 items in one array, 20 000 drawing calls |
 | A solution of a system | 20000 RK4 steps (a longer range gets a coarser step), 3000 points drawn |
 | Rest points | 40 |
 | Lines of the grid | 401 per direction (3D: 21 values per axis) |
 | Arrows of a vector field | `density` 4 to 60 across |
 | A picture in the export | 150 dpi, at most 900 pixels a side and 600 000 in all |
-
-**Anything else:** every object takes `key=value` options for its fields in the tables below, the value as JSON: `plot f(x) = x^2, filled, fillOpacity=0.4`, `mark (1, 2), dim=2`. And `raw tool {...}`, `raw function {...}`, `raw surface {...}`, `raw label {...}` hold one object as JSON. The editor writes these lines for what the words cannot say; you rarely need them.
-
-A block can also be one JSON object (`"v": 4` first, then the fields below); the plugin reads both, and the editor keeps the form a block has. Write text.
 
 ## Full LaTeX
 
@@ -386,7 +381,8 @@ The linear program of the first section, in Full LaTeX:
 - **Options** are separated by commas: words (`red`, `dashed`, `numbered`) and `key=value`. A value with a comma, a bracket or spaces goes in braces: `label={z = {c}}`, `at={(3, 1.2)}`, `title={Production plan}`. Label templates (`{c}`, `{x:2}`) keep their braces inside.
 - **`\axis[...]`** holds everything about the chart, with the names pgfplots gives them. Write one `\axis` line, after `\begin{chart}`.
 - **Names:** `name=R1` instead of `R1:`. `\mark[corners]`, `\mark[max]{...}` and `\mark[integer]` without `in=R1` use the chart's only region (`the region`).
-- A Python script is `\begin{python}`, its lines as they are, `\end{python}` (`\begin{python}[name=PY2]` names it); `\circles[count=n, path]{c}` draws the circles of a list.
+- A Python script is `\begin{python}`, its lines as they are (no indent needed), `\end{python}` (`\begin{python}[name=PY2, red]` names it and gives its first colour).
+- `\then` goes before a command (`\then \transform{A}`), or stands alone as a pause.
 - `%` starts a comment. A line that is no command is read as a line in words. `\addplot` is `\plot`, a `;` at the end is fine, and TikZ's `\draw[->] (0, 0) -- (3, 2);` and `\node at (1, 2) {A};` work too.
 - **Anything else:** a line in words `<command> <rest>, <options>` is `\<command>[<options>]{<rest>}` (`use the table above, hidden` is `\use[hidden]{the table above}`), `\set{field = value}` sets any chart field as JSON, and `\raw[tool]{...}` (`function`, `surface`, `label`, `slider`) holds one object as JSON.
 
@@ -434,23 +430,26 @@ The linear program of the first section, in Full LaTeX:
 | `mark the points $\{e^{2\pi i k / n} : k = 0, \dots, n - 1\}$, joined`, `mark the points of S` | `\mark[list, joined]{\{e^{2\pi i k / n} : k = 0, \dots, n - 1\}}`, `\mark[list]{S}` |
 | `mark where $g(x) \le 0$ on the x-axis, labelled` (`on the y-axis`) | `\mark[x-axis, labelled]{g(x) \le 0}` (`y-axis`) |
 | `draw the chord of g from -1 to 3 at $\lambda$, labelled` | `\draw[chord, from=-1, to=3, at=\lambda, labelled]{g}` |
-| `then plot g(x) = \cos x in red`, `then` | `\then \plot[red]{g(x) = \cos x}`, `\then` |
-| `frames` | `frames` (in `\axis`) |
+| `then plot g(x) = cos(x) in red`, `then` | `\then \plot[red]{g(x) = cos(x)}`, `\then` |
+| `frames`, `set stillTime = 1.5`, `turning`, `turning, speed 2` | `frames`, `stillTime=1.5`, `turning`, `turning=2` (all in `\axis`) |
 | `draw the vector field $F(x, y) = (y, -\sin x - 0.25y)$, coloured by length, with moving particles and streamlines` | `\vectorfield[colormap/viridis, particles, streamlines]{F(x, y) = (y, -\sin x - 0.25y)}` |
+| `with moving particles, speed 2, 300 particles, trails 0.9, width 1.4, arrows 0.025`, `no arrows` | `particles, speed=2, count=300, trails=0.9, width=1.4, arrows=0.025`, `no arrows` |
 | `mark the rest points of F, labelled` | `\restpoints[labelled]{F}` |
-| `draw the solution of $\dot{p} = (y, -x)$ through P for t from 0 to 10, coloured by time` | `\solution[through=P, t=0:10, colormap/viridis]{\dot{p} = (y, -x)}` |
+| `draw the solution of $\dot{p} = (y, -x)$ through P and (1, 0) for t from 0 to 10, coloured by time, traced` | `\solution[through={P, (1, 0)}, t=0:10, coloured by time, traced]{\dot{p} = (y, -x)}` (`coloured by time in heat`: `colormap/heat`) |
 | `draw the grid from -2 to 2 in steps of 0.5`, `draw the basis vectors` | `\draw[grid, from=-2, to=2, spacing=0.5]`, `\draw[basis vectors]` |
 | `transform the plane by A`, `transform the plane by $z \mapsto z^2$`, `transform space by B` | `\transform{A}`, `\transform{z \mapsto z^2}`, `\transform{B}` |
 | `draw the eigenvectors of A, labelled`, `draw the span of v and w` | `\draw[eigenvectors, labelled]{A}`, `\draw[span]{v, w}` |
 | `shade the unit square, labelled`, `shade the image of the unit square`, `shade the unit cube` | `\shade[unit square, labelled]`, `\shade[unit square, image]`, `\shade[unit cube]` |
-| `draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps, as a path` | `\orbit[z_0=0, c=P, steps=40, as a path]{z_{n+1} = z_n^2 + c}` |
+| `draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps, as a path, traced, speed 2` | `\orbit[z_0=0, c=P, steps=40, as a path, traced, speed=2]{z_{n+1} = z_n^2 + c}` |
 | `draw the cobweb of $x_{n+1} = f(x_n)$ from 0.2, 80 steps` | `\cobweb[from=0.2, steps=80]{x_{n+1} = f(x_n)}` |
 | `draw the bifurcation diagram of $x_{n+1} = r x_n (1 - x_n)$ for r from 2.5 to 4` | `\bifurcation[r=2.5:4]{x_{n+1} = r x_n (1 - x_n)}` (start: `x_0=0.3`) |
 | `draw Newton's method for f from 2.5, 5 steps, labelled` | `\newton[from=2.5, steps=5, labelled]{f}` |
 | `colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 200 steps` | `\colourplane[z_0=0, c=x + iy, steps=200]{z_{n+1} = z_n^2 + c}` (also `\colorplane`) |
 | `colour the plane by $f(x, y) = \sin x \cos y$, in viridis, opacity 0.8` | `\colourplane[colormap/viridis, opacity=0.8]{f(x, y) = \sin x \cos y}` |
 | `draw the circles of $\sum_{k=1}^{n} \frac{4}{\pi (2k - 1)} e^{i(2k - 1)t}$, with its wave` | `\circles[wave]{\sum_{k=1}^{n} \frac{4}{\pi (2k - 1)} e^{i(2k - 1)t}}` |
-| `c = Circle(A, 3) in red, dashed`, `IterationList(z^2 + c, z, {0}, 20)` | `\geogebra[red, dashed]{c = Circle(A, 3)}`, `\geogebra{IterationList(z^2 + c, z, {0}, 20)}` (the GeoGebra line as it is) |
+| `draw the circles of c, using n circles, with its path, speed 2` | `\circles[count=n, path, speed=2]{c}` |
+| `c = Circle(A, 3) in red, dashed`, `IterationList(z^2 + c, z, {0}, 20)`, `a = Slider(0, 5)` | `\geogebra[red, dashed]{c = Circle(A, 3)}`, `\geogebra{IterationList(z^2 + c, z, {0}, 20)}`, `\geogebra{a = Slider(0, 5)}` (the GeoGebra line as it is) |
+| `python:` and its indented lines | `\begin{python}`, the lines, `\end{python}` |
 
 ## Fields
 
@@ -482,6 +481,7 @@ The options above set these fields. A `set` line or a `key=value` option can set
 | `fitY` | `false` | `true`: y fits itself to what the chart draws, live (a text chart with an x range and no y range sets it). |
 | `frames` | `false` | The LaTeX export draws every step side by side (the line `frames`). |
 | `stillTime` | `0` | The time in seconds at which the export, print and SVG files draw moving objects. |
+| `turning` `turnSpeed` | `false` (unset) | 3D: the view turns by itself in notes (the line `turning`), `turnSpeed` times the usual speed (`turning, speed 2`). |
 | `parameters` `functions` `tools` `annotations` `functions3D` | `[]` | Sliders, functions, shapes, text labels and surfaces. Below. |
 
 ### Sliders: `parameters`
@@ -588,7 +588,7 @@ A line such as `y = x + 1` can be a function (then regions can use it by name, `
 
 #### `vectorField`, `restPoints` and `trajectory`
 
-`{"type": "vectorField", "name": "F", "expression": "(y, -sin(x) - 0.25y)", "density": 20, "thickness": "thin", "particles": false, "streamlines": false, "colormap": "viridis"}` (2D; leave out `colormap` for the tool's colour). `{"type": "restPoints", "name": "RP1", "field": "F", "size": "normal", "valueLabel": false}` (2D). `{"type": "trajectory", "name": "TR1", "expression": "(y, -x)", "through": "P; (0, -1)", "from": "0", "to": "10", "dim": 2, "thickness": "thick", "dashed": false}` is a solution of a system (`"dim": 3` with 3 formulas in a 3D chart; `colormap` colours it by time).
+`{"type": "vectorField", "name": "F", "expression": "(y, -sin(x) - 0.25y)", "density": 20, "thickness": "thin", "particles": false, "streamlines": false, "colormap": "viridis"}` (2D; leave out `colormap` for the tool's colour; the particles take `speed`, `count`, `trails`, `particleWidth` and `arrows`, numbers, as the words do). `{"type": "restPoints", "name": "RP1", "field": "F", "size": "normal", "valueLabel": false}` (2D). `{"type": "trajectory", "name": "TR1", "expression": "(y, -x)", "through": "P; (0, -1)", "from": "0", "to": "10", "dim": 2, "thickness": "thick", "dashed": false}` is a solution of a system (`"dim": 3` with 3 formulas in a 3D chart; `"byTime": true` colours it by time in the default ramp, `colormap` in a map; `"traced": true` and `"speed": 2` make it draw itself).
 
 #### `planeGrid`, `basisVectors`, `transform`, `eigenvectors`, `unitSquare` and `span`
 
@@ -596,7 +596,7 @@ A line such as `y = x + 1` can be a function (then regions can use it by name, `
 
 #### `orbit`, `cobweb`, `bifurcation`, `newton`, `colourPlane` and `fourierCircles` (2D only)
 
-`{"type": "orbit", "name": "OR1", "recurrence": "z_{n+1} = z_n^2 + c", "start": "0", "given": "c = P", "steps": "40", "path": false, "size": "small", "thickness": "thin", "valueLabel": false}` (`given`: the names it reads, `c = P; eta = 0.1`). `{"type": "cobweb", "name": "CW1", "recurrence": "x_{n+1} = f(x_n)", "start": "0.2", "steps": "40", "thickness": "thin"}`. `{"type": "bifurcation", "name": "BD1", "recurrence": "x_{n+1} = r x_n (1 - x_n)", "parameter": "r", "from": "2.5", "to": "4", "start": "0.5"}`. `{"type": "newton", "name": "NM1", "function": "f", "start": "2.5", "steps": "5", "thickness": "thin", "valueLabel": false}`. `{"type": "colourPlane", "name": "CP1", "formula": "z_{n+1} = z_n^2 + c", "start": "0", "given": "c = x + iy", "steps": "200", "colormap": "cyclic", "opacity": 1}` (a function of z or of x and y needs no `start`, `given` or `steps`). `{"type": "fourierCircles", "name": "FC1", "sum": "\\sum_{k=1}^{n} \\frac{4}{\\pi (2k - 1)} e^{i(2k - 1)t}", "wave": true, "thickness": "thick"}`.
+`{"type": "orbit", "name": "OR1", "recurrence": "z_{n+1} = z_n^2 + c", "start": "0", "given": "c = P", "steps": "40", "path": false, "size": "small", "thickness": "thin", "valueLabel": false}` (`given`: the names it reads, `c = P; eta = 0.1`; also `"traced": true`, `"speed": 2`). `{"type": "cobweb", "name": "CW1", "recurrence": "x_{n+1} = f(x_n)", "start": "0.2", "steps": "40", "thickness": "thin"}`. `{"type": "bifurcation", "name": "BD1", "recurrence": "x_{n+1} = r x_n (1 - x_n)", "parameter": "r", "from": "2.5", "to": "4", "start": "0.5"}`. `{"type": "newton", "name": "NM1", "function": "f", "start": "2.5", "steps": "5", "thickness": "thin", "valueLabel": false}`. `{"type": "colourPlane", "name": "CP1", "formula": "z_{n+1} = z_n^2 + c", "start": "0", "given": "c = x + iy", "steps": "200", "colormap": "cyclic", "opacity": 1}` (a function of z or of x and y needs no `start`, `given` or `steps`). `{"type": "fourierCircles", "name": "FC1", "sum": "\\sum_{k=1}^{n} \\frac{4}{\\pi (2k - 1)} e^{i(2k - 1)t}", "wave": true, "thickness": "thick"}` (also `"speed": 2`).
 
 #### `geogebra` (version 6)
 
@@ -636,7 +636,18 @@ Examples: a line through the optimum `"2x + 3y = P1_val"`, a region up to a cros
 
 Crossings (intersections) come sorted from left to right, so `P1_x < P1_x2 < ...`. Tools are computed in the order their references need, so a region may use the values of a points tool that comes after it in the list.
 
-Version 6 objects publish values the same way: sets on an axis (`AX1_n`, `AX1_x`, `AX1_val`), chords (`CH1_x`, `CH1_y`, `CH1_val`), point lists (`LP1_n`, `LP1_x`, ...), rest points (`RP1_n`, `RP1_x`, ...), orbits (`OR1_n`, `OR1_x`, `OR1_y`), cobwebs (`CW1_x`, `CW1_n`) and Newton's method (`NM1_x`, `NM1_val`, `NM1_n`).
+Version 6 objects publish values the same way (with their own names when they have one: `F`, `P`):
+
+| Object | Publishes |
+| --- | --- |
+| Set on an axis `AX1` | `AX1_n` (ends), `AX1_x`, `AX1_x2`, ... (the ends from left to right; on the y-axis `AX1_y`, ...), `AX1_val` (pieces) |
+| Chord `CH1` | with `at`: `CH1_x` (x at λ), `CH1_y` (the chord there), `CH1_val` (the gap, chord minus graph); without: its ends `CH1_x`, `CH1_y`, `CH1_x2`, `CH1_y2` |
+| Point list `LP1`, rest points `RP1` | `_n`, `_x`, `_y`, `_x2`, `_y2`, ... as points do |
+| Orbit `OR1` | `OR1_n` (points drawn), `OR1_x`, `OR1_y` (the last point) |
+| Cobweb `CW1` | `CW1_x` (the last x_n), `CW1_n` |
+| Newton's method `NM1` | `NM1_x` (the last x_k), `NM1_val` (f there), `NM1_n` |
+
+Let names, GeoGebra values and the names a script sets are values themselves: `{det(A)}`, `{x(A)}`, `{abs(c)}`, `{len(S)}`, `{Length(L)}`.
 
 ## Formulas
 
@@ -645,13 +656,13 @@ Version 6 objects publish values the same way: sets on an axis (`AX1_n`, `AX1_x`
 - Implicit multiplication: `2x`, `3(x + 1)`, `(x + 1)(x - 1)`, `2 pi`, `a x + b y`. But `ax` is one name: write `a x`. `1/2x` is `(1/2)*x`: write `1/(2x)` when x is below. `a(x - h)^2` is `a*(x - h)^2`; `f1(x + 1)` is a call because `f1` is a function.
 - Functions: `sin cos tan sec csc cot asin acos atan atan2(y, x) sinh cosh tanh asinh acosh atanh exp ln log log10 log2 sqrt cbrt abs sign floor ceil round trunc min max hypot pow(a, b)`. `ln` and `log` are both natural. Trigonometry is in radians.
 - Constants: `pi` (`π`), `e`.
-- Variables: `x` in functions; `x` and `y` in regions, curves and surfaces; `t` in parametric curves; `theta` in polar charts.
+- Variables: `x` in functions; `x` and `y` in regions, curves and surfaces; `t` in parametric curves, systems and turning circles; `theta` in polar charts; `z` in a complex map or a domain colouring (`$z \mapsto z^2$`, `$f(z) = ...$`).
 - Values (version 6), plain or LaTeX: complex numbers (`i`, `-0.8 + 0.156i`, `e^{i\theta}`, `|z|`, `\arg z`, `\bar z`, `\Re z`, `\Im z`; plain `abs`, `arg`, `conj`, `re`, `im`), vectors (`(2, 1)`, `\begin{pmatrix} 2 \\ 1 \end{pmatrix}`, `v + w`, `2v`, `v \cdot w`, `|v|`, `v \times w`, `v_x`; plain `dot`, `cross`, `norm`, `unit`, `angle(v, w)`), matrices (`[[1, 2], [3, 4]]`, `\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}`, `A v`, `AB`, `A^{-1}`, `A^T`, `\det A`, `\operatorname{tr} A`; plain `det`, `tr`, `inv`, `transpose`), lists (`\{1, 2, 3\}`, `\{(k, k^2) : k = 1, \dots, 10\}`; plain `[1, 2, 3]`, `[(k, k^2) : k = 1..10]`, `len`), sums and products (`\sum_{k=1}^{n} \frac{1}{k^2}`, `\prod_{k=1}^{n} k`; plain `sum(1/k^2, k, 1, n)`, `prod(k, k, 1, n)`), `n!`, `\binom{n}{k}` and `\nabla f(p)` (plain `grad(f, p)`). The export writes a sum out term by term at the sliders' values.
-- GeoGebra commands (version 6) in every formula: `Sequence`, `IterationList`, `KeepIf`, `Element` (1-based), `Zip`, `Sum`, `Length`, `x(P)`, `Root`, `Integral`, ..., with lists in braces `{1, 2, 3}`; see GeoGebra commands in [The text syntax](#the-text-syntax).
+- GeoGebra commands (version 6) in every formula: `Sequence`, `IterationList`, `KeepIf`, `Element` (1-based), `Zip`, `Sum`, `Length`, `x(P)`, `Root`, `Integral`, ..., with lists in braces `{1, 2, 3}`; see [GeoGebra input lines and commands](#geogebra-input-lines-and-commands).
 
 ## 3D
 
-Write `3d` and a `show` line with a z range; add `cube` for a box that is a cube whatever the ranges, or `box 1 x 2 x 0.6` for a box with its own lengths x : y : z. Surfaces are `plot s(x, y) = x^2 + y^2 for x from -2 to 2 and y from -2 to 2 in blue, opacity 0.7` (or `plot z = ...`); planes are `draw the plane z = h`; points, segments and text labels take `(x, y, z)`. In JSON: `"dimension": true`, surfaces in `functions3D`, points and segments with `"dim": 3`. Version 6 lines in 3D: arrows of 3D vectors, point lists, `draw the grid` (a grid cube), `draw the basis vectors` (with k̂), `transform space by B` (a 3 x 3 matrix or `(x, y, z) \mapsto ...`), `shade the unit cube`, spans, eigenvectors of a 3 x 3 matrix, and `draw the solution of $\dot{p} = (10(y - x), x(28 - z) - y, xy - \frac{8}{3}z)$ through (1, 1, 1) for t from 0 to 72, coloured by time` (the Lorenz attractor).
+Write `3d` and a `show` line with a z range; add `cube` for a box that is a cube whatever the ranges, or `box 1 x 2 x 0.6` for a box with its own lengths x : y : z. Surfaces are `plot s(x, y) = x^2 + y^2 for x from -2 to 2 and y from -2 to 2 in blue, opacity 0.7` (or `plot z = ...`); planes are `draw the plane z = h`; points, segments and text labels take `(x, y, z)`. In JSON: `"dimension": true`, surfaces in `functions3D`, points and segments with `"dim": 3`. Version 6 lines in 3D: arrows of 3D vectors, point lists, `draw the grid` (a grid cube), `draw the basis vectors` (with k̂), `transform space by B` (a 3 x 3 matrix or `(x, y, z) \mapsto ...`), `shade the unit cube`, spans, eigenvectors of a 3 x 3 matrix, `draw the solution of $\dot{p} = (10(y - x), x(28 - z) - y, xy - \frac{8}{3}z)$ through (1, 1, 1) for t from 0 to 72, coloured by time, traced` (the Lorenz attractor), the chart line `turning`, and GeoGebra points, segments, polygons and curves (`Curve` with 3 formulas). A script's names work in 3D, its drawing does not.
 
 A surface in a colour is shaded by height: light at the bottom of the box, the full colour at the top. A colour map colours it by height instead, written like a colour: `plot z = x^2 - y^2 in viridis`. The maps: `viridis` (dark purple to yellow), `heat` (black, red, yellow, white), `cool` (white, blue, magenta), `diverging` (blue below z = 0, white at 0, red above), `rainbow` (dark blue, cyan, yellow, dark red), `greyscale` (black to white). The colours spread over the z range of the box (`diverging`: from -m to m, m the larger of |zmin| and |zmax|); a wireframe draws its lines in the map's colours. The map is a surface's own option: on anything else it is a problem. In JSON it is the surface field `colormap`: `"colormap": "viridis"`; without it the surface takes its `color`.
 
@@ -684,10 +695,96 @@ draw the plane z = h in orange
 | Parametric and polar curves | `parametric-polar` | `c(t) = (x(t), y(t))`, or `r(theta) = 2cos(k theta)` (a polar chart). |
 | Arrows and braces | `arrows-braces` | `draw an arrow from (0, 0) to (3, 2)` and `draw a brace from (0, 0) to (4, 0)`. |
 | A surface and a plane | `plane3d` | `3d`, a surface and `draw the plane z = h` on a slider. |
+| Vectors, a matrix, tip to tail | `vectors`, `vectors-arrows` | `let v`, `let A`; `draw v and w as arrows`, `draw v + w tip to tail`, `draw A v as an arrow`. |
+| A Taylor or Fourier sum on a slider | `taylor`, `taylor-sine`, `sums-series` | `plot $T(x) = \sum_{k=0}^{n} ...$` with `slider n ..., in steps of 1`. |
+| Roots of unity | `roots-of-unity`, `unity-roots` | `mark the points $\{e^{2\pi i k / n} : k = 0, \dots, n - 1\}$, joined, labelled`. |
+| A set on the x-axis, Jensen's chord | `convex-set`, `sets-convexity` | `mark where $g(x) \le 0$ on the x-axis, labelled`; `draw the chord of g from a to b at $\lambda$`. |
+| A system, a limit cycle, a pendulum | `limit-cycle`, `pendulum-field`, `vector-fields`, `systems` | a vector field with moving particles, its rest points, a solution through a draggable P. |
+| The Lorenz attractor | `lorenz-butterfly` | a 3D solution, `turning`, `traced`, below. |
+| A matrix that moves the grid, eigenvectors | `matrix-grid`, `matrix-plane` | the grid, the basis vectors, the unit square, `then transform the plane by A`, `then draw the eigenvectors of A`. |
+| A complex map | `complex-square`, `complex-two-ways`, `domain-colouring` | `then transform the plane by $z \mapsto z^2$` on a grid; `colour the plane by $f(z) = ...$`. |
+| Fractals | `mandelbrot-orbit`, `julia`, `newton-basins`, `julia-newton`, `fractals` | `colour the plane by $z_{n+1} = ...$` with the plane point `x + iy` as c (Mandelbrot) or as z₀ (Julia, Newton). |
+| Gradient descent | `gradient-descent`, `two-valleys`, `descent-newton` | `let $f(x, y) = ...$`, `slider eta`, `draw the orbit of $p_{n+1} = p_n - \eta \nabla f(p_n)$, $p_0 = P$, 25 steps` over `colour the plane by $f(x, y) = ...$`. |
+| Logistic map, cobweb, bifurcation | `logistic-map`, `cobweb`, `bifurcation`, `orbits-cobwebs` | `draw the cobweb of $x_{n+1} = f(x_n)$ from 0.2`; `draw the bifurcation diagram of $x_{n+1} = r x_n (1 - x_n)$ for r from 2.5 to 4`. |
+| Newton's method | `newton` | `draw Newton's method for f from 2, 5 steps, labelled`. |
+| Fourier circles | `fourier-circles`, `python-heart`, `python-star` | circles of a sum in t, or of a script's `np.fft.fft(z) / len(z)` (the heart in [Python scripts](#python-scripts)). |
+| A matplotlib plot, a moving script, a histogram | `python-plot`, `python-wave`, `python-histogram`, `python-descent` | a `python:` block with `plt.` calls; `def frame(t):`; `np.random` and `plt.hist`. |
+| A GeoGebra construction | `geogebra-construction`, `geogebra-mandelbrot` | the input lines as they are, below. |
+| Steps you can play | `steps-frames` | `then` before each new object; `frames` for the export. |
+
+### A fractal with an orbit
+
+The Mandelbrot set; drag P in the editor and its orbit follows (it stays inside the set and flies off outside it).
+
+```easy-tikz
+show x from -2.2 to 0.8 and y from -1.2 to 1.2
+equal scale
+colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 300 steps
+mark P at (-0.12, 0.75), large
+draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 60 steps, traced
+```
+
+### A matrix that plays
+
+Step 1 shows the grid, î, ĵ and the unit square; Play moves them to A, then the eigenvectors come. The slider s changes one entry of A.
+
+```easy-tikz
+show x from -4.5 to 4.5 and y from -3 to 3
+equal scale
+slider s from 0 to 2, starting at 1, in steps of 0.05
+let A = [[1, s], [0.5, 2]]
+draw the grid
+draw the basis vectors
+shade the unit square, labelled
+then transform the plane by A
+then draw the eigenvectors of A, labelled
+```
+
+### The Lorenz attractor, turning and traced
+
+```easy-tikz
+3d
+turning
+cube
+show x from -20 to 20, y from -30 to 30 and z from 0 to 50
+draw the solution of $\dot{p} = (10(y - x), x(28 - z) - y, xy - \frac{8}{3}z)$ through (1, 1, 1) for t from 0 to 40, coloured by time, traced
+```
+
+### A pendulum as a flow
+
+Particles flow along the field; the rest points are stable spirals (hanging) and saddles (upside down); the friction k is a slider.
+
+```easy-tikz
+size 15 x 10.5
+equal scale
+show x from -6.3 to 6.3 and y from -4.2 to 4.2
+xlabel angle
+ylabel speed
+slider k from 0 to 1, starting at 0.25
+draw the vector field $F(x, y) = (y, -\sin x - k y)$, with moving particles
+mark the rest points of F, labelled
+mark P at (-6, 2.6)
+draw the solution of $\dot{p} = (y, -\sin x - k y)$ through P for t from 0 to 30, traced
+```
+
+### A GeoGebra paste
+
+GeoGebra input lines as pasted: the points c of a grid whose orbit stays near 0 (the Mandelbrot set as dots), the orbit of one c, and Newton's method for z³ − 1 from Z₀.
+
+```easy-tikz
+show x from -2.2 to 0.8 and y from -1.45 to 1.45
+equal scale
+P = Flatten(Sequence(Sequence(a + b ί, a, -2.2, 0.8, 0.04), b, -1.3, 1.3, 0.04)), hidden
+M = KeepIf(abs(Element(IterationList(z^2 + c, z, {0 + 0ί}, 20), 21)) <= 2, c, P)
+c = -0.12 + 0.75ί
+IterationList(z^2 + c, z, {0 + 0ί}, 30), in red
+Z_0 = (0.3, 0.9)
+IterationList(z - (z^3 - 1) / (3z^2), z, {Z_0}, 30), in blue
+```
 
 ## The local AI server
 
-When the user switches on **AI access** (in the editor's AI tab or the Easy Graphs Charts and TikZ settings), the plugin answers on `http://127.0.0.1:27150`. The port can be changed, so use the address the user gives you. Every request needs the token: the header `Authorization: Bearer <token>`, or `?token=<token>` at the end of the address for apps that cannot send headers. A POST must send its body as JSON with `Content-Type: application/json`. The AI tab shows ready-made connection lines for AI apps; agents that work in the vault can also read the token from the plugin's data file, `<config folder>/plugins/easy-tikz/data.json` (field `aiToken`; the config folder is usually `.obsidian`). The server only answers on this computer and refuses requests from web pages. It adds `easy-tikz` blocks to Markdown notes and replaces them, nothing else: never in hidden folders and never in files with instructions for AI agents (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, ...). It computes one chart at a time and refuses charts over its limits (at most 50 functions, 50 shapes, 100 text labels, 10 surfaces, 200 levels per curve, 1000 listed points, 2000 characters per field, and functions that call each other so often that one point costs over 1000 evaluations). Obsidian shows a notice every time it writes, with Undo when it changed an existing note.
+When the user switches on **AI access** (in the editor's AI tab or the Easy Graphs Charts and TikZ settings), the plugin answers on `http://127.0.0.1:27150`. The port can be changed, so use the address the user gives you. Every request needs the token: the header `Authorization: Bearer <token>`, or `?token=<token>` at the end of the address for apps that cannot send headers. A POST must send its body as JSON with `Content-Type: application/json`. The AI tab shows ready-made connection lines for AI apps; agents that work in the vault can also read the token from the plugin's data file, `<config folder>/plugins/easy-tikz/data.json` (field `aiToken`; the config folder is usually `.obsidian`). The server only answers on this computer and refuses requests from web pages. It adds `easy-tikz` blocks to Markdown notes and replaces them, nothing else: never in hidden folders and never in files with instructions for AI agents (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, ...). It computes one chart at a time and refuses charts over its limits (at most 50 functions, 100 shapes, 100 text labels, 10 surfaces, 200 levels per curve, 1000 listed points, 2000 characters per field and 20000 per script, and functions that call each other so often that one point costs over 1000 evaluations). Obsidian shows a notice every time it writes, with Undo when it changed an existing note.
 
 - **MCP:** `POST /mcp` (Streamable HTTP). AI apps that speak MCP get the tools below.
 - **Plain HTTP:** `GET /guide` returns this guide, `GET /tools` lists the tools, and `POST /tools/<name>` with the arguments as a JSON body calls one. For example (with `PORT` and `TOKEN` from the user):
@@ -710,7 +807,7 @@ P1 points (best point of region R1, max 2x + 3y): (3, 1) | label "x* = (3, 1)" a
 Computed values: P1_n = 1, P1_val = 9, P1_x = 3, P1_y = 1
 ```
 
-With problems, the first line is `2 problems: fix them, then check again.`, followed by one `PROBLEM` line each (problems in the text name their line and column). `add_chart` and `update_chart` refuse such a chart with `"ok": false` and the same lines, and write nothing.
+With problems, the first line is `2 problems: fix them, then check again.`, followed by one `PROBLEM` line each (problems in the text name their line and column; a script's problems name the script line too). `add_chart` and `update_chart` refuse such a chart with `"ok": false` and the same lines, and write nothing. A `NOTE` line is information (a step limit reached, what a script printed). For version 6 objects the check also reports, one line each: the value of every let name (a matrix with its determinant, trace, eigenvalues and eigenvectors), a set on an axis as intervals, the rest points with their kinds, where each solution and orbit starts and ends, the map of a transform, the eigenvalues, each GeoGebra object in numbers, what a script gives the chart, reads and draws, the steps (which object arrives in which), what moves on the clock, and which objects are pictures (PNG files in the export).
 
 Every `chart` argument is the text of a block (a string; a fenced block is fine too), in words or in Full LaTeX, or a JSON object. `add_chart` writes the block in the form the user chose in the settings (text by default, in their chart language: text in the other form is written in theirs); `update_chart` keeps the form the chart has in the note (JSON, words or Full LaTeX), and for text it rewrites only the lines whose object changed.
 
@@ -720,9 +817,9 @@ Every `chart` argument is the text of a block (a string; a fenced block is fine 
 | `list_examples` | | Ready-made charts: id, title, one line each. |
 | `get_example` | `id`, `format` (optional: `"json"` for a JSON block) | One of them as a text block, with what the plugin fills in left out. |
 | `check_chart` | `chart`, `sliders` (optional, such as `{"a": 2}`) | Problems, ignored fields, and what the chart computes. |
-| `render_chart` | `chart`, `sliders` (optional) | A PNG picture of the chart. |
+| `render_chart` | `chart`, `sliders` (optional) | A PNG picture of the chart: the last step, the still frame of what moves, a 3D chart in its set view. |
 | `add_chart` | `chart`, `note` (optional: path or name; the open note when left out), `after` (optional: a heading or whole line of the note, such as `## Results` or just `Results`; the chart goes right below it), `replace` (optional: a placeholder line such as `(chart goes here)`: the whole line, once in the note, at most 200 characters), `create` (optional: `true` to make the note when it does not exist) | Checks the chart and writes it into the note. Lines in code blocks and frontmatter never match. Refused while the check reports problems, when `after` or `replace` match no line, for a note that does not exist unless `create` is true, and for instruction files of AI agents. The answer names line numbers, not the note's text. |
 | `list_charts` | `note` (optional) | The charts in a note, numbered, each as the note writes it. |
 | `update_chart` | `index`, `chart`, `note` (optional) | Replaces chart number `index` of the note. |
-| `export_latex` | `chart`, `standalone` (optional, default true) | The pgfplots code the plugin exports. |
+| `export_latex` | `chart`, `standalone` (optional, default true) | The pgfplots code the plugin exports. A coloured plane or bifurcation diagram is a PNG the code names (`\addplot graphics`): the answer says so; the PNG goes beside the .tex file (the editor's Copy LaTeX saves it). |
 | `active_note` | | The open note: path and headings. |

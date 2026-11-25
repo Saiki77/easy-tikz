@@ -1291,6 +1291,41 @@ if (started) {
             assert(listed.ok && /1 chart/.test(listed.text), 'list_charts does not see the chart');
         });
 
+        // 6.0 AI: a chart of version 6 (a coloured plane, an orbit, a matrix that plays, a script) through the tools.
+        const aiChart6 = [
+            'show x from -2.2 to 0.8 and y from -1.2 to 1.2',
+            'equal scale',
+            'colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = x + iy$, 200 steps',
+            'mark P at (-0.12, 0.75), large',
+            'draw the orbit of $z_{n+1} = z_n^2 + c$, $z_0 = 0$, $c = P$, 40 steps, traced',
+            'let A = [[1, 0.5], [0, 1]]',
+            'then draw the eigenvectors of A, labelled',
+            'python:',
+            '    import numpy as np',
+            '    k = np.linalg.det(np.array([[2, 1], [1, 2]]))',
+        ].join('\n');
+
+        await check('AI access: check_chart, render_chart and add_chart know a chart of version 6', async () => {
+            const checked = await aiTool('check_chart', { chart: aiChart6 });
+            assert(checked.ok && /^OK/.test(checked.text), `check_chart: ${checked.text.slice(0, 300)}`);
+            for (const want of [/^CP1 coloured plane: escape time .*a picture/m, /^OR1 orbit of .*41 points from \(0, 0\)/m, /^EV1 eigenvectors of A: lambda1 = 1/m, /^PY1 python script .*gives the chart k/m, /^Values: k = 3/m, /^Steps: 2 /m, /^Moves on the clock: OR1/m]) {
+                assert(want.test(checked.text), `check_chart lacks ${want}:\n${checked.text}`);
+            }
+            const r = await aiTool('render_chart', { chart: aiChart6 });
+            assert(r.ok && r.image && r.image.mimeType === 'image/png', `render_chart: ${r.text}`);
+            const bytes = Buffer.from(r.image.base64, 'base64');
+            // The coloured plane is in the picture: a PNG of a plain chart is far smaller.
+            assert(bytes.length > 150000, `the picture has no coloured plane (${bytes.length} bytes)`);
+            const added = await aiTool('add_chart', { chart: aiChart6, note: 'AI smoke 6', create: true });
+            assert(added.ok, `add_chart: ${added.text.slice(0, 200)}`);
+            await obs.openNote('AI smoke 6');
+            const charts = await obs.noteCharts();
+            assert(charts.length === 1 && charts[0].drawn && !charts[0].issues, `the note shows ${JSON.stringify(charts)}`);
+            const layer = await obs.call(() => !!document.querySelector('.workspace-leaf.mod-active .etz-inline foreignObject.etz-pixels'));
+            assert(layer, 'the note does not draw the coloured plane');
+            return `${Math.round(bytes.length / 1024)} KB picture`;
+        });
+
         await check('AI access: switching it off stops the server', async () => {
             await obs.call(async (id) => {
                 const plugin = app.plugins.plugins[id];
