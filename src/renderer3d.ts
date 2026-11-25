@@ -1156,7 +1156,9 @@ export class SVG3DRenderer {
         }
 
         const css = this.colorInfo(plane.color).css;
-        const opacity = (Number.isFinite(plane.opacity) ? Math.max(0, Math.min(1, plane.opacity)) : 0.2) * this.fadeOf(plane.source); // 6.0 entrances
+        const own = Number.isFinite(plane.opacity) ? Math.max(0, Math.min(1, plane.opacity)) : 0.2;
+        const fade = this.fadeOf(plane.source); // 6.0 entrances
+        const opacity = own * fade;
         for (let i = 0; i < n; i++) {
             for (let j = 0; j < n; j++) {
                 const a = grid[i * stride + j];
@@ -1181,7 +1183,7 @@ export class SVG3DRenderer {
         this.planeOutlines.push({
             pts: [at(uMin, vMin), at(uMax, vMin), at(uMax, vMax), at(uMin, vMax)],
             color: css,
-            opacity: Math.min(1, opacity + 0.3) * this.fadeOf(plane.source),
+            opacity: Math.min(1, own + 0.3) * fade,
         });
     }
 

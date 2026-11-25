@@ -299,7 +299,6 @@ function finitePt(p: Pt | null | undefined): p is Pt {
     return !!p && Number.isFinite(p.x) && Number.isFinite(p.y);
 }
 
-/** Split a polyline at non-finite points; runs shorter than two points are dropped. */
 /** 6.0 entrances: the children of `g` from index `from` on (what one item drew into it). */
 function kidsFrom(g: SVGElement, from: number): Element[] {
     return Array.from(g.children).slice(from);
@@ -311,6 +310,7 @@ function fadeEl(el: Element, k: number): void {
     el.setAttribute('opacity', num((Number.isFinite(before) ? before : 1) * Math.max(0, Math.min(1, k))));
 }
 
+/** Split a polyline at non-finite points; runs shorter than two points are dropped. */
 function finiteRuns(line: Pt[] | null | undefined): Pt[][] {
     const runs: Pt[][] = [];
     let run: Pt[] = [];
