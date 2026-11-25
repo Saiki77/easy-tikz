@@ -3683,9 +3683,11 @@ export function edgeLabelSide3D(
 }
 
 export interface Scene3D {
-    /** 6.0 A: `bare` is a label without its marker (vector arrows). */
-    points: Array<{ x: number; y: number; z: number; color: string; size: MarkerSize; label?: string; bare?: boolean }>;
+    /** 6.0 A: `bare` is a label without its marker (vector arrows). 6.0 entrances: `source`, the tool that drew it. */
+    points: Array<{ x: number; y: number; z: number; color: string; size: MarkerSize; label?: string; bare?: boolean; source?: string }>;
     segments: Array<{
+        /** 6.0 entrances: the name of the tool that drew it (its step decides when it comes in). */
+        source?: string;
         a: [number, number, number];
         b: [number, number, number];
         color: string;
@@ -3702,7 +3704,7 @@ export interface Scene3D {
         trace?: [number, number];
         traceSeconds?: number;
     }>;
-    planes: Array<{ axis: 'x' | 'y' | 'z'; value: number; color: string; opacity: number }>;
+    planes: Array<{ axis: 'x' | 'y' | 'z'; value: number; color: string; opacity: number; source?: string }>;
     issues: SceneIssue[];
     derived: Record<string, number>;
 }
@@ -3880,7 +3882,7 @@ function scene3D(input: SceneInput3D): Scene3D {
         const span: Span3D = { tool: t, out, points: [scene.points.length, 0], segments: [scene.segments.length, 0] }; // 6.0 D
         const formatter = labelFormatter(node, math, scene.issues);
         for (const p of out.points3 || []) {
-            const point: Scene3D['points'][number] = { x: p.x, y: p.y, z: p.z, color: p.color, size: p.size };
+            const point: Scene3D['points'][number] = { x: p.x, y: p.y, z: p.z, color: p.color, size: p.size, source: node.name };
             // 6.0 A: a literal label, and a label without its marker.
             const label = formatter({ template: 'label', part: p.part, locals: p.locals, literal: p.literal });
             if (label.trim()) point.label = label;
@@ -3890,8 +3892,9 @@ function scene3D(input: SceneInput3D): Scene3D {
             }
             scene.points.push(point);
         }
-        for (const s of out.segments3 || []) scene.segments.push(s);
-        for (const p of out.planes3 || []) scene.planes.push(p);
+        // 6.0 entrances: each with the tool that drew it.
+        for (const s of out.segments3 || []) scene.segments.push({ ...s, source: node.name });
+        for (const p of out.planes3 || []) scene.planes.push({ ...p, source: node.name });
         // 6.0 D
         span.points[1] = scene.points.length;
         span.segments[1] = scene.segments.length;

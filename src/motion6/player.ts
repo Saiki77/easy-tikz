@@ -5,7 +5,9 @@
  *
  *   Steps: Previous, Play / Pause, Next and "Step k of n". A chart starts at
  *   its last step (the whole picture, as the export and print show it); Play
- *   goes back to the first step and on through every step.
+ *   goes back to the first step and on through every step. When a step comes
+ *   in, its objects enter by kind; Previous fades the objects of the step
+ *   that leaves (src/motion6/timeline.ts, entrances.ts).
  *   Clock: Pause / Play of the objects that move by themselves. It runs only
  *   while the chart is on screen (IntersectionObserver) and starts paused
  *   when the system asks for less motion.
@@ -18,13 +20,15 @@ import type { MotionFrame } from '../types';
 import { IconButtonHandle, iconButton } from '../ui/kit';
 import { t } from '../i18n';
 import { reducedMotion } from '../motion';
+import { StepTimeline } from './timeline';
+import { entranceMs, entrancesOn } from './entrances';
 
-/** How long a step stays when the steps play. */
-export const STEP_MS = 1600;
-/** How long a step takes to come in (its objects' progress 0 to 1). */
-export const PROGRESS_MS = 700;
+export { STEP_MS, PROGRESS_MS } from './timeline';
+
 /** A frame that came late moves the clock by at most this much. */
 const MAX_FRAME_S = 0.1;
+
+type Data = Record<string, unknown>;
 
 export interface PlayerHost {
     /**
@@ -35,6 +39,8 @@ export interface PlayerHost {
     draw(frame: MotionFrame, clock: boolean): void;
     /** The element on screen whose visibility the clock follows. */
     watched(): Element | null;
+    /** 6.0 entrances: the chart as it is now (its objects enter by kind; `set entrances = off` stops them). Absent: the chart the player was made for. */
+    chart?(): Data;
 }
 
 export interface PlayerOptions {
@@ -44,19 +50,18 @@ export interface PlayerOptions {
     clock: boolean;
     /** Objects move with their step's progress (part D's transforms): frames while a step comes in. */
     moversInSteps?: boolean;
+    /** 6.0 entrances: the chart the player was made for. */
+    chart?: Data;
 }
 
 export class MotionPlayer {
     private readonly host: PlayerHost;
     private readonly opts: PlayerOptions;
-    /** The step shown (opts.last: every step). */
-    private step: number;
-    private progress = 1;
+    /** The steps over time: the step chosen and drawn, how far it has come in (6.0 entrances). */
+    private readonly steps: StepTimeline;
     private time = 0;
     /** The steps play on. */
     private playing = false;
-    /** How long the step shown has been on while the steps play (ms of the frame clock; 6.0 F4: not the wall clock, so a film or a hidden page counts only frames shown). */
-    private stepTime = 0;
     /** The clock runs (when the chart is on screen). */
     private running: boolean;
     private visible = false;
@@ -73,18 +78,19 @@ export class MotionPlayer {
     constructor(host: PlayerHost, opts: PlayerOptions) {
         this.host = host;
         this.opts = opts;
-        this.step = opts.last;
+        this.steps = new StepTimeline(opts.last, !!opts.moversInSteps);
         this.running = opts.clock && !reducedMotion();
     }
 
     /** The frame to draw now. */
     frame(): MotionFrame {
-        return { time: this.time, step: this.step >= this.opts.last ? Infinity : this.step, progress: this.progress };
+        return this.steps.frame(this.time);
     }
 
     /** The step shown, or null while every step shows (the last one). */
     shownStep(): number | null {
-        return this.step >= this.opts.last ? null : this.step;
+        const shown = this.steps.shown();
+        return shown >= this.opts.last ? null : shown;
     }
 
     /** Start following the chart's visibility (call once the chart is on the page). */
@@ -107,9 +113,9 @@ export class MotionPlayer {
         const row = parent.createDiv({ cls: 'etz-motion6-row', attr: { role: 'group', 'aria-label': t('motion6.player.group') } });
         if (first) parent.prepend(row);
         if (this.opts.last > 0) {
-            this.prevBtn = iconButton(row, { icon: 'skip-back', label: t('motion6.player.previous'), size: 'sm', onClick: () => this.go(this.step - 1) });
+            this.prevBtn = iconButton(row, { icon: 'skip-back', label: t('motion6.player.previous'), size: 'sm', onClick: () => this.go(this.steps.step - 1) });
             this.playBtn = iconButton(row, { icon: 'play', label: t('motion6.player.play'), size: 'sm', pressed: false, onClick: () => this.togglePlay() });
-            this.nextBtn = iconButton(row, { icon: 'skip-forward', label: t('motion6.player.next'), size: 'sm', onClick: () => this.go(this.step + 1) });
+            this.nextBtn = iconButton(row, { icon: 'skip-forward', label: t('motion6.player.next'), size: 'sm', onClick: () => this.go(this.steps.step + 1) });
             this.label = row.createSpan({ cls: 'etz-motion6-step', attr: { 'aria-live': 'polite' } });
         }
         if (this.opts.clock) {
@@ -121,17 +127,18 @@ export class MotionPlayer {
 
     /** Show step `k` (clamped); the steps stop playing when a button moves them. */
     go(k: number, fromPlay = false): void {
-        const next = Math.max(0, Math.min(this.opts.last, Math.round(k)));
         if (!fromPlay) this.playing = false;
-        if (next === this.step && !fromPlay) {
+        const chart = this.host.chart ? this.host.chart() : this.opts.chart;
+        const changed = this.steps.go(k, {
+            motion: !reducedMotion(),
+            entrances: !!chart && entrancesOn(chart),
+            enterMs: (step) => (chart ? entranceMs(chart, step) : 0),
+            fromPlay,
+        });
+        if (!changed) {
             this.sync();
             return;
         }
-        const forward = next > this.step;
-        this.step = next;
-        // A step that comes in moves from 0 to 1; going back shows it settled.
-        this.progress = forward && this.opts.moversInSteps && !reducedMotion() ? 0 : 1;
-        this.stepTime = 0;
         this.host.draw(this.frame(), false);
         this.sync();
         this.loop();
@@ -154,7 +161,8 @@ export class MotionPlayer {
             return;
         }
         this.playing = true;
-        this.go(this.step >= this.opts.last ? 0 : this.step + 1, true);
+        const step = this.steps.step;
+        this.go(step >= this.opts.last ? 0 : step + 1, true);
     }
 
     private toggleClock(): void {
@@ -163,10 +171,15 @@ export class MotionPlayer {
         this.loop();
     }
 
+    /** Something to draw on the next animation frames: the clock, the steps playing, or a step coming in or leaving. */
+    private busy(): boolean {
+        return this.visible && ((this.running && this.opts.clock) || this.playing || this.steps.busy());
+    }
+
     /** Run the frame loop while something moves and the chart is on screen; stop it otherwise. */
     private loop(): void {
         if (this.destroyed) return;
-        const busy = this.visible && ((this.running && this.opts.clock) || this.playing || this.progress < 1);
+        const busy = this.busy();
         if (busy && this.raf === null) {
             this.last = 0;
             this.raf = window.requestAnimationFrame((now) => this.tick(now));
@@ -183,27 +196,22 @@ export class MotionPlayer {
         if (el && !el.isConnected) return;
         const dt = this.last ? Math.min(MAX_FRAME_S, Math.max(0, (now - this.last) / 1000)) : 0;
         this.last = now;
-        let draw = false;
+        let clock = false;
         if (this.running && this.opts.clock) {
             this.time += dt;
-            draw = true;
+            clock = true;
         }
-        if (this.progress < 1) {
-            this.progress = Math.min(1, this.progress + (dt * 1000) / PROGRESS_MS);
-            draw = true;
-        }
-        if (draw) this.host.draw(this.frame(), true);
-        if (this.playing) this.stepTime += dt * 1000;
-        if (this.playing && this.stepTime >= STEP_MS) {
-            if (this.step >= this.opts.last) {
+        const step = this.steps.advance(dt * 1000, this.playing);
+        // A step that has come in (or the step before, after a fade) is drawn whole once more: the settled picture.
+        if (step === 'settle') this.host.draw(this.frame(), false);
+        else if (clock || step === 'frame') this.host.draw(this.frame(), true);
+        if (this.playing && this.steps.ready()) {
+            if (this.steps.step >= this.opts.last) {
                 this.playing = false;
                 this.sync();
-            } else this.go(this.step + 1, true);
+            } else this.go(this.steps.step + 1, true);
         }
-        if (this.raf === null) {
-            const busy = this.visible && ((this.running && this.opts.clock) || this.playing || this.progress < 1);
-            if (busy) this.raf = window.requestAnimationFrame((next) => this.tick(next));
-        }
+        if (this.raf === null && this.busy()) this.raf = window.requestAnimationFrame((next) => this.tick(next));
     }
 
     private sync(): void {
@@ -212,9 +220,10 @@ export class MotionPlayer {
             this.playBtn.setLabel(t(this.playing ? 'motion6.player.pause' : 'motion6.player.play'));
             this.playBtn.setPressed(this.playing);
         }
-        this.prevBtn?.setDisabled(this.step <= 0);
-        this.nextBtn?.setDisabled(this.step >= this.opts.last);
-        this.label?.setText(t('motion6.player.step', { step: this.step + 1, count: this.opts.last + 1 }));
+        const step = this.steps.step;
+        this.prevBtn?.setDisabled(step <= 0);
+        this.nextBtn?.setDisabled(step >= this.opts.last);
+        this.label?.setText(t('motion6.player.step', { step: step + 1, count: this.opts.last + 1 }));
         if (this.clockBtn) {
             this.clockBtn.setIcon(this.running ? 'pause' : 'play');
             this.clockBtn.setLabel(t(this.running ? 'motion6.player.clockPause' : 'motion6.player.clockPlay'));
