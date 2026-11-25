@@ -233,7 +233,10 @@ Set options: a colour (default teal), `thin`, `thick` (default very thick), `lab
 | `then` (alone) | A step with nothing new: a pause. |
 | `frames` | The LaTeX export draws every step side by side. Without it the export draws the last step. |
 | `set stillTime = 1.5` | Moving things are drawn at this time (seconds) in the export, print and SVG files (default 0). |
+| `set entrances = off` | The objects of a step appear at once in this chart (without the line they enter by kind, see below). |
 | `turning` (3D), `turning, speed 2` | The 3D view turns slowly by itself in notes; a drag turns it too. The export shows the view as set. |
+
+When a step comes in, each of its objects enters in its own way: functions, curves, solutions, orbits and 3D curves draw themselves along their length (0.7 s); areas, regions, sets on an axis and the unit square sweep in from left to right (0.6 s); points, corners and rest points pop in one after another (0.35 s each); tangents and eigenvector lines grow out of their point, arrows and basis vectors from tail to tip (0.5 s); labels rise in just after their object (0.35 s); vector fields, grids and coloured planes ripple in from the centre (0.6 s); a 3D surface rises from the floor (0.7 s); a transform moves the plane as before (0.7 s). Previous fades the objects of the step that leaves (0.2 s); Play waits until a step is in. Under reduced motion, with `set entrances = off` or with the setting Step entrances off, they appear at once. The export, print, SVG files, check_chart and render_chart draw the still picture, so a chart needs nothing for its entrances.
 
 Every object also takes `step=3` (its step as a number). Things that move by themselves run on the chart's clock (Pause and Play in the strip under the chart): moving particles, `traced` solutions and orbits (the curve draws itself, then starts again), turning circles and a script's `frame(t)`. `speed 2` doubles the speed of any of them. The export, print, SVG files, check_chart and render_chart show the still frame.
 
