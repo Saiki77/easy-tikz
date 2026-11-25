@@ -1428,7 +1428,10 @@ export class SVG3DRenderer {
             const n = (p: number[]) => [(p[0] - this.xCenter) * this.xNormFactor, (p[1] - this.yCenter) * this.yNormFactor, (p[2] - this.zCenter) * this.zNormFactor];
             const a = n(seg.a);
             const b = n(seg.b);
-            const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+            // Only the part in the box counts: a curve draws itself at an even pace over what is seen.
+            const cfg = this.requireConfig();
+            const span = clipToBox(seg.a, seg.b, [cfg.xmin, cfg.ymin, cfg.zmin], [cfg.xmax, cfg.ymax, cfg.zmax]);
+            const len = span ? Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) * (span[1] - span[0]) : 0;
             let list = byTool.get(seg.source);
             if (!list) byTool.set(seg.source, (list = []));
             list.push({ seg, len: Number.isFinite(len) ? len : 0 });

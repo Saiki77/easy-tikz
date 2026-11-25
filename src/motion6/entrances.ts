@@ -420,6 +420,35 @@ export function clipSegment(a: Pt, b: Pt, box: { xmin: number; xmax: number; ymi
     ];
 }
 
+/**
+ * The pieces of polylines inside `box`: a curve that leaves the view draws
+ * itself at an even pace over what is seen (its steep parts far outside
+ * would take most of the time).
+ */
+export function clipLines(lines: Pt[][], box: { xmin: number; xmax: number; ymin: number; ymax: number }): Pt[][] {
+    const out: Pt[][] = [];
+    const tol = 1e-9 * Math.max(1, box.xmax - box.xmin, box.ymax - box.ymin);
+    for (const line of lines) {
+        let piece: Pt[] | null = null;
+        for (let i = 1; i < line.length; i++) {
+            const seg = clipSegment(line[i - 1], line[i], box);
+            if (!seg) {
+                if (piece) out.push(piece);
+                piece = null;
+                continue;
+            }
+            const last = piece ? piece[piece.length - 1] : null;
+            if (piece && last && Math.abs(last.x - seg[0].x) <= tol && Math.abs(last.y - seg[0].y) <= tol) piece.push(seg[1]);
+            else {
+                if (piece) out.push(piece);
+                piece = [seg[0], seg[1]];
+            }
+        }
+        if (piece) out.push(piece);
+    }
+    return out;
+}
+
 /** The middle of a polyline's ends (where a line through the origin starts growing). */
 export function middleOf(line: Pt[]): Pt {
     const a = line[0];

@@ -40,7 +40,7 @@ import { pixelLayer } from './iterate/paint'; // 6.0 E
 import type { LiveLayer } from './motion6/live'; // 6.0 F4
 import { themedColor } from './motion6/liveprims'; // 6.0 F4
 // 6.0 entrances
-import { EntranceKind, StepEntrance, clipSegment, grownLine, labelStart, middleOf, nearestOn, partialLines, popDelay, riseAt, rippleStops, toolKind } from './motion6/entrances';
+import { EntranceKind, StepEntrance, clipLines, clipSegment, grownLine, labelStart, middleOf, nearestOn, partialLines, popDelay, riseAt, rippleStops, toolKind } from './motion6/entrances';
 
 /** 6.0 entrances: how a scene item whose step comes in enters (its object's kind, its start, where its points start popping). */
 interface ItemEntrance {
@@ -1076,17 +1076,23 @@ export class SVGRenderer {
             if (s.arrow === 'backward') return (runs) => runs.map((r) => partialLines([r.slice().reverse()], e, false, this.screenMetric)[0].reverse());
             return (runs) => partialLines(runs, e, false, this.screenMetric);
         }
+        // Each line draws itself over the part of it the view shows (lines side by side at once).
         const e = ent.at('draw', plan.start);
-        return (runs) => partialLines(runs, e, false, this.screenMetric);
+        return (runs) => runs.flatMap((r) => partialLines(clipLines([r], this.seenBox()), e, true, this.screenMetric));
+    }
+
+    /** The view and a little around it: what a line that comes in is cut to. */
+    private seenBox(): { xmin: number; xmax: number; ymin: number; ymax: number } {
+        const v = this.view;
+        const mx = (v.xmax - v.xmin) * 0.02;
+        const my = (v.ymax - v.ymin) * 0.02;
+        return { xmin: v.xmin - mx, xmax: v.xmax + mx, ymin: v.ymin - my, ymax: v.ymax + my };
     }
 
     /** A line grown `e` of the way out of `anchor`, to the edges of the view (a straight line through it is first cut to the view). */
     private grown(run: Pt[], anchor: Pt, e: number): Pt[] {
         if (run.length !== 2) return grownLine(run, anchor, e);
-        const v = this.view;
-        const mx = (v.xmax - v.xmin) * 0.02;
-        const my = (v.ymax - v.ymin) * 0.02;
-        const seen = clipSegment(run[0], run[1], { xmin: v.xmin - mx, xmax: v.xmax + mx, ymin: v.ymin - my, ymax: v.ymax + my });
+        const seen = clipSegment(run[0], run[1], this.seenBox());
         return grownLine(seen ?? run, anchor, e);
     }
 
@@ -1453,7 +1459,7 @@ export class SVGRenderer {
                 drawn.push({ name: info.name, index: info.index, kind: info.kind, lines });
                 // 6.0 entrances: a function that comes in draws itself, its pieces left to right.
                 const ent = this.ent && this.ent.moves(f) ? this.ent : null;
-                const shown = ent && !ent.leaving ? partialLines(lines, ent.at('draw'), true, this.screenMetric) : lines;
+                const shown = ent && !ent.leaving ? partialLines(clipLines(lines, this.seenBox()), ent.at('draw'), true, this.screenMetric) : lines;
                 const attrs: Record<string, string> = {
                     d: shown.map((l) => this.pointsPath(l)).join(''),
                     fill: 'none',

@@ -18,6 +18,7 @@ import {
     RISE_PX,
     StepEntrance,
     chartEntrances,
+    clipLines,
     clipSegment,
     easeOut,
     entranceMs,
@@ -247,6 +248,12 @@ test('shapes: a line draws itself along its length, grows from a point, or from 
     assert.deepEqual(clipSegment({ x: -40, y: 0 }, { x: 40, y: 0 }, box), [{ x: -4, y: 0 }, { x: 4, y: 0 }]);
     assert.equal(clipSegment({ x: -40, y: 5 }, { x: 40, y: 5 }, box), null);
     assert.deepEqual(clipSegment({ x: 0, y: 0 }, { x: 1, y: 1 }, box), [{ x: 0, y: 0 }, { x: 1, y: 1 }]);
+    // A curve that leaves the view and comes back: the pieces the view shows, so it draws at an even pace there.
+    const wave = [{ x: -4, y: 0 }, { x: -2, y: 4 }, { x: 0, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 9 }];
+    const seen = clipLines([wave], box);
+    assert.equal(seen.length, 2);
+    assert.deepEqual(seen[0], [{ x: -4, y: 0 }, { x: -3, y: 2 }]);
+    assert.deepEqual(seen[1], [{ x: -1, y: 2 }, { x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2 + 2 / 9, y: 2 }]);
 });
 
 test('shapes: a ripple spreads from the middle and holds everything at the end', () => {
