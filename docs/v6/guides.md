@@ -129,3 +129,27 @@ The guides are the first built-in charts with 6.0 lines, and tests/full.test.ts 
 - docs/ai.md (F3) still names the old examples for `list_examples`; the tool's description in src/ai/mcp.ts now says vectors, sums, fractals, orbits, systems.
 - A guide step cannot drag (the Help has sliders only), so the steps that drag (î, ĵ, a vector tip, P) say "In the editor" and show the chart after the drag.
 - Media: `npm run media:guides` makes docs/guides/<id>.md for the 20 new ids.
+
+## The Help home (6.0 help)
+
+The gallery with 11 category chips is gone. The home (src/ui/helpPanel.ts) reads its groups from src/guides/home.ts; the guides keep their categories (docs/guides and the AI tools use those).
+
+1. Search; Start here (Getting started); "Write a chart in words", a smaller card.
+2. **New in 6**: `lorenz-butterfly`, `complex-two-ways` (its tile shows step 2, the coloured plane of z²), `fourier-circles`, `mandelbrot-orbit`, as taller tiles.
+3. Topic sections, each a heading, one line, its first 4 tiles and "Show all N" (opens the rest in place):
+
+| Section | Guides |
+|---|---|
+| Basics and the chart language | Chart language (not the tour, GeoGebra, Python, let values), Points, lines and labels |
+| Showcase | Showcase, without the 4 of New in 6 and the 3 Python pages |
+| Functions and calculus | Functions and sliders, Calculus |
+| Regions, optimisation and data | Regions and optimisation, Data and probability |
+| Linear algebra and complex numbers | `values-let` first, then the category |
+| Dynamics and fractals | the category |
+| Scripting: Python and GeoGebra | `python-chart`, `geogebra-commands`, `python-heart`, `python-plot`, `python-wave` |
+| 3D | `surfaces-3d`, and the 3D guides of other sections (`systems`) |
+| Notes, export and AI | Notes and export, and a link to the AI tab |
+
+4. The Reference (its 2 guides and the 15 sections of the cheat sheet) as a compact list at the end.
+
+Four tiles in a row, two at narrow widths: no section is taller than two rows until "Show all". tests/help-home.test.ts: every guide is on the home in one place of its own, New in 6, the sections, the texts in English and Japanese.

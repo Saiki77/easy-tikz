@@ -38,7 +38,7 @@
 }
 
 .etz-help-browse {
-    gap: 24px;
+    gap: 30px;
 }
 
 .etz-help-results {
@@ -814,9 +814,12 @@ button.etz-btn.etz-help-example-btn {
     flex: 0 0 auto;
 }
 
-/* ---------------------------------------------------------------- 5.1: home
-   Start here, the chart language beside its picture, a gallery of real
-   charts with category chips, and the reference. */
+/* ---------------------------------------------------------------- 5.1, 6.0: home
+   Start here, the chart language beside a small picture, New in 6, topic
+   sections of four tiles that open the rest in place (src/guides/home.ts),
+   and the reference as a compact list. Calm: space between the parts, not
+   lines; one tile size per part; a part is at most two rows of tiles until
+   "Show all". */
 .etz-help-home-part {
     display: flex;
     flex-direction: column;
@@ -840,6 +843,43 @@ button.etz-btn.etz-help-example-btn {
     align-items: center;
 }
 
+/* A part's heading and its one line; Show all (and the AI link) at the right. */
+.etz-help-part-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 12px;
+    align-items: flex-end;
+    justify-content: space-between;
+    min-width: 0;
+}
+
+.etz-help-part-titles {
+    display: flex;
+    flex: 1 1 260px;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+h3.etz-help-part-title {
+    margin: 0;
+    color: var(--text-normal);
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.3;
+}
+
+.etz-help-part-about {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    line-height: 1.4;
+}
+
+.etz-help-part-head > button.etz-btn.etz-help-part-link {
+    flex: 0 0 auto;
+}
+
 .etz-help-starts {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -854,24 +894,30 @@ button.etz-help-start {
     gap: 2px;
     height: auto;
     padding: 10px 12px;
-    border: 1px solid var(--background-modifier-border);
+    border: 1px solid transparent;
     border-radius: var(--etz-radius-m);
-    background-color: var(--background-primary);
+    background-color: var(--background-secondary);
     box-shadow: none;
     text-align: start;
     white-space: normal;
     cursor: pointer;
+    transition: border-color var(--etz-transition);
 }
 
-button.etz-help-start:hover,
-button.etz-help-tile:hover {
+button.etz-help-start:hover {
     border-color: var(--etz-accent-border);
+    background-color: var(--background-secondary);
+}
+
+button.etz-help-start:focus-visible {
+    box-shadow: var(--etz-focus-ring);
 }
 
 .etz-help-start-title,
 .etz-help-tile-title {
     color: var(--text-normal);
     font-weight: 600;
+    line-height: 1.35;
 }
 
 .etz-help-start-summary,
@@ -882,7 +928,7 @@ button.etz-help-tile:hover {
 }
 
 .etz-help-tile-meta {
-    color: var(--text-accent);
+    color: var(--text-faint);
     font-size: var(--etz-font-meta);
     font-weight: 600;
 }
@@ -897,11 +943,11 @@ button.etz-help-tile:hover {
     overflow-wrap: break-word;
 }
 
+/* The chart language: a small card, the words beside a small picture. */
 .etz-help-feature {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
     overflow: hidden;
-    border: 1px solid var(--background-modifier-border);
     border-radius: var(--etz-radius-l);
     background-color: var(--background-secondary);
 }
@@ -909,20 +955,29 @@ button.etz-help-tile:hover {
 .etz-help-feature-side {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
-    padding: 16px;
+    padding: 12px 14px;
 }
 
 .etz-help-feature-title {
     margin: 0;
-    font-size: 1.25em;
-    text-wrap: balance;
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.3;
 }
 
 .etz-help-feature-side > .etz-help-p {
     margin: 0;
     color: var(--text-muted);
+    font-size: var(--etz-font-small);
+}
+
+.etz-help-feature .etz-help-words {
+    padding: 4px 0;
+    border-color: transparent;
+    font-size: var(--etz-font-meta);
+    line-height: 1.55;
 }
 
 .etz-help-feature-chart,
@@ -935,9 +990,10 @@ button.etz-help-tile:hover {
 }
 
 .etz-help-feature-chart {
-    min-height: 220px;
-    padding: 8px;
-    border-left: 1px solid var(--background-modifier-border);
+    min-height: 150px;
+    margin: 8px 8px 8px 0;
+    padding: 6px;
+    border-radius: var(--etz-radius-m);
 }
 
 .etz-help-feature-chart > svg,
@@ -948,47 +1004,17 @@ button.etz-help-tile:hover {
     max-width: none;
 }
 
-.etz-help-gallery-head {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.etz-help-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-button.etz-help-chip {
-    height: auto;
-    padding: 3px 11px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 999px;
-    background-color: var(--background-primary);
-    box-shadow: none;
-    color: var(--text-muted);
-    font-size: var(--etz-font-small);
-    cursor: pointer;
-}
-
-button.etz-help-chip:hover {
-    color: var(--text-normal);
-}
-
-button.etz-help-chip.is-on {
-    border-color: var(--etz-accent-border);
-    background-color: var(--etz-accent-tint);
-    color: var(--text-normal);
-    font-weight: 600;
-}
-
+/* Tiles: a framed chart with its title and a line under it, no box around the text. */
 .etz-help-tiles {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-    gap: 12px;
+    gap: 14px 12px;
+}
+
+/* The sections and New in 6: four tiles in a row, two at narrow widths, so four tiles are at most two rows. */
+.etz-help-tiles.mod-section,
+.etz-help-tiles.mod-large {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 button.etz-help-tile {
@@ -996,21 +1022,25 @@ button.etz-help-tile {
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
+    gap: 0;
     height: auto;
     padding: 0;
-    overflow: hidden;
-    border: 1px solid var(--background-modifier-border);
+    border: 0;
     border-radius: var(--etz-radius-m);
-    background-color: var(--background-primary);
+    background-color: transparent;
     box-shadow: none;
     text-align: start;
     white-space: normal;
     cursor: pointer;
-    transition: border-color var(--etz-transition), transform var(--etz-transition);
 }
 
 button.etz-help-tile:hover {
-    transform: translateY(-1px);
+    background-color: transparent;
+    box-shadow: none;
+}
+
+button.etz-help-tile:focus-visible {
+    box-shadow: var(--etz-focus-ring);
 }
 
 .etz-help-tile-chart {
@@ -1019,7 +1049,22 @@ button.etz-help-tile:hover {
     min-height: 0;
     overflow: hidden;
     padding: 4px;
-    border-bottom: 1px solid var(--background-modifier-border);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--etz-radius-m);
+    transition: border-color var(--etz-transition);
+}
+
+button.etz-help-tile:hover > .etz-help-tile-chart {
+    border-color: var(--etz-accent-border);
+}
+
+/* New in 6: taller charts. */
+.etz-help-tiles.mod-large .etz-help-tile-chart {
+    aspect-ratio: 4 / 3;
+}
+
+.etz-help-tiles.mod-large .etz-help-tile-title {
+    font-size: 15px;
 }
 
 .etz-help-tile-chart.is-fallback,
@@ -1031,14 +1076,70 @@ button.etz-help-tile:hover {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 8px 10px 10px;
+    padding: 7px 2px 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    button.etz-help-tile,
-    button.etz-help-tile:hover {
-        transition: none;
-        transform: none;
+/* Two lines of summary at most: the tiles of a row stay one size. */
+.etz-help-tiles.mod-section .etz-help-tile-summary,
+.etz-help-tiles.mod-large .etz-help-tile-summary {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+/* The reference: a compact list of links, three columns where they fit. */
+.etz-help-topics.mod-compact {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0 12px;
+}
+
+.etz-help-topics.mod-compact button.etz-help-topic {
+    padding: 5px 8px;
+    border-color: transparent;
+    border-radius: var(--etz-radius-s);
+}
+
+.etz-help-topics.mod-compact button.etz-help-topic:hover {
+    border-color: transparent;
+    background-color: var(--background-modifier-hover);
+}
+
+.etz-help-topics.mod-compact .etz-help-topic-about {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.etz-help .etz-help-topics.mod-compact button.etz-help-topic > span.etz-help-topic-about {
+    white-space: nowrap;
+}
+
+@container etz-help (max-width: 639px) {
+    .etz-help-tiles.mod-section,
+    .etz-help-tiles.mod-large {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@container etz-help (max-width: 399px) {
+    .etz-help-tiles.mod-section,
+    .etz-help-tiles.mod-large {
+        gap: 12px 10px;
+    }
+
+    .etz-help-tiles.mod-section .etz-help-tile-summary,
+    .etz-help-tiles.mod-large .etz-help-tile-summary {
+        -webkit-line-clamp: 3;
+    }
+
+    .etz-help-tiles.mod-section .etz-help-tile-meta,
+    .etz-help-tiles.mod-large .etz-help-tile-meta {
+        display: none;
+    }
+
+    .etz-help-tiles.mod-large .etz-help-tile-chart {
+        aspect-ratio: 1 / 1;
     }
 }
 
@@ -1197,11 +1298,18 @@ button.etz-help-tile:hover {
     }
 
     .etz-help-feature-chart {
-        border-top: 1px solid var(--background-modifier-border);
-        border-left: 0;
+        min-height: 130px;
+        margin: 0 8px 8px;
     }
 
     .etz-help-keys {
+        display: none;
+    }
+}
+
+/* At phone width the chart language card is its words alone (6.0: a small card). */
+@container etz-help (max-width: 399px) {
+    .etz-help-feature-chart {
         display: none;
     }
 }

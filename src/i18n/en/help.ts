@@ -32,12 +32,31 @@ export const help = {
     /** A step of a guide: the line on a search result card, and the heading of the step (the part before {title} is read only by screen readers). */
     'help.card.step': 'Step {n}: {title}',
 
-    // ------------------------------------------------- home (5.1): start, language, gallery
+    // ------------------------------------------------- home (5.1): start, language; 6.0: sections
     'help.home.start': 'Start here',
-    'help.home.gallery': 'Gallery',
-    'help.home.all': 'All',
-    'help.home.filter': 'Show the guides of a category',
-    'help.home.language.label': 'The chart language',
+    // 6.0: New in 6, the topic sections (a heading and one line each), Show all, and the reference at the end.
+    'help.home.new': 'New in 6',
+    'help.home.about.new': 'The newest charts: paths that draw themselves, turning circles, coloured planes.',
+    'help.home.section.basics': 'Basics and the chart language',
+    'help.home.about.basics': 'Formulas as in your notes, points, arrows and labels.',
+    'help.home.about.showcase': 'Finished charts with sliders: open one and change it.',
+    'help.home.section.calculus': 'Functions and calculus',
+    'help.home.about.calculus': 'Sliders, curves, tangents, areas, sums and slope fields.',
+    'help.home.section.regions': 'Regions, optimisation and data',
+    'help.home.about.regions': 'Shade regions, solve programs, fit data and find probabilities.',
+    'help.home.about.linear': 'Vectors, matrices that move the plane, and complex maps.',
+    'help.home.about.dynamics': 'Orbits, vector fields, systems and fractals.',
+    'help.home.section.scripting': 'Scripting: Python and GeoGebra',
+    'help.home.about.scripting': 'Draw with NumPy and matplotlib, or write GeoGebra commands.',
+    'help.home.about.space': 'Surfaces, planes, points and paths in space.',
+    'help.home.section.notes': 'Notes, export and AI',
+    'help.home.about.notes': 'Charts in your notes, SVG and LaTeX files, steps you can play.',
+    'help.home.about.reference': 'The cheat sheet by topic, the keyboard shortcuts and what changed since 3.x.',
+    /** A link in the section of notes and export: it opens the AI tab. */
+    'help.home.openAi': 'Let an AI write a chart',
+    /** The button under the first tiles of a section ({count}: all its guides). */
+    'help.home.showAll': 'Show all {count}',
+    'help.home.showFewer': 'Show fewer',
     'help.home.language.title': 'Write a chart in words',
     'help.home.language.text': 'A chart is a few lines of English with your formulas in LaTeX, as in your notes.',
     'help.home.language.tour': 'Take the tour',

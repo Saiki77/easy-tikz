@@ -1,8 +1,10 @@
 /*
  * Help tab: guides and the reference.
  *
- * Home is a search field and the guides (src/guides) as cards grouped by
- * category, each with a live thumbnail drawn by the plugin's own renderer.
+ * Home is a search field and the guides (src/guides) as cards, each with a
+ * thumbnail drawn by the plugin's own renderer: Start here, the language
+ * tour, New in 6, topic sections that show four tiles and open the rest in
+ * place, and the reference as a compact list (6.0: src/guides/home.ts).
  * A card opens the guide in the reader: outcomes, then every step on one
  * scrolling page with its copyable "type" rows, a live chart and "Open this
  * step in the editor" (host.loadChart, which asks before replacing a
@@ -25,7 +27,6 @@ import { Notice, Platform, setIcon } from 'obsidian';
 import { ChartExample, EXAMPLES } from '../migrate';
 import {
     ChartData,
-    GUIDE_CATEGORIES,
     Guide,
     GuideStep,
     guideCategoryLabel,
@@ -48,8 +49,8 @@ import { cloneData, fitPixelScale } from '../util';
 import { PanelHost } from './host';
 import { iconButton, textButton, trapEscape, uniqueId, visuallyHidden } from './kit';
 import { LiveChart, detach3D, fitToContent, fluid } from './liveChart';
+import { SECTION_FIRST, TOUR_ID, homeSections, newInSix } from '../guides/home'; // 6.0
 import { printChartText } from '../text/print';
-import type { GuideCategory } from '../guides/types';
 
 type Block =
     /** Paragraph. */
@@ -92,8 +93,6 @@ export interface HelpPanelHandle {
 
 const MOD = Platform.isMacOS ? 'Cmd' : 'Ctrl';
 
-/** The guide of the language tour: its finished chart heads the home page, in words and as a picture. */
-const TOUR_ID = 'chart-language';
 /** Charts start rendering this far (px) before they scroll into view. */
 const LAZY_MARGIN_PX = 240;
 /** Inline code up to this many characters never wraps (it fits the narrowest help pane). */
@@ -949,10 +948,13 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         lazy.add(box, () => draw(0));
     }
 
-    /** A guide (in the reader's language) as a tile: its finished chart, title, summary and steps. `hit` names the step a search found. */
-    function guideCard(grid: HTMLElement, guide: Guide, lazy: LazyJobs, hit?: number | null): HTMLButtonElement {
+    /**
+     * A guide (in the reader's language) as a tile: its finished chart (or
+     * `picture`, 6.0), title, summary and steps. `hit` names the step a search found.
+     */
+    function guideCard(grid: HTMLElement, guide: Guide, lazy: LazyJobs, hit?: number | null, picture?: ChartData): HTMLButtonElement {
         const card = grid.createEl('button', { cls: 'etz-help-tile', attr: { type: 'button' } });
-        drawInto(card.createSpan({ cls: 'etz-help-tile-chart', attr: { 'aria-hidden': 'true' } }), guide.chart, lazy);
+        drawInto(card.createSpan({ cls: 'etz-help-tile-chart', attr: { 'aria-hidden': 'true' } }), picture ?? guide.chart, lazy);
         const text = card.createSpan({ cls: 'etz-help-tile-text' });
         const title = text.createSpan({ cls: 'etz-help-tile-title', text: guide.title });
         if (chartIs3D(guide.chart)) title.createSpan({ cls: 'etz-help-badge', text: '3D' });
@@ -1036,9 +1038,9 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         syncEscape();
     }
 
-    /** Buttons of the reference sections: title and one line about each. */
-    function topicList(parent: HTMLElement, sections: Section[]): void {
-        const list = parent.createDiv({ cls: 'etz-help-topics' });
+    /** Buttons of the reference sections: title and one line about each (in `into`, or a new list in `parent`). */
+    function topicList(parent: HTMLElement, sections: Section[], into?: HTMLElement): void {
+        const list = into ?? parent.createDiv({ cls: 'etz-help-topics' });
         for (const section of sections) {
             const button = list.createEl('button', { cls: 'etz-help-topic', attr: { type: 'button' } });
             button.createSpan({ cls: 'etz-help-topic-title', text: section.title });
@@ -1087,7 +1089,7 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
     searchInput.addEventListener('keydown', (e: KeyboardEvent) => {
         // Mod+Enter belongs to the editor (Insert into note).
         if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
-        const first = resultsEl.querySelector<HTMLElement>('button.etz-help-card, button.etz-help-topic');
+        const first = resultsEl.querySelector<HTMLElement>('button.etz-help-tile, button.etz-help-topic');
         if (!first) return;
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -1121,13 +1123,25 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         });
     }
 
+    /**
+     * 6.0: a part of the home: a heading, one line under it (optional), and
+     * an element for its content. `mod` is a class of the part (mod-new, ...).
+     */
+    function homePart(title: string, about: string | null, mod: string): { section: HTMLElement; head: HTMLElement } {
+        const section = browseEl.createEl('section', { cls: ['etz-help-home-part', mod] });
+        const head = section.createDiv({ cls: 'etz-help-part-head' });
+        const titles = head.createDiv({ cls: 'etz-help-part-titles' });
+        const heading = titles.createEl('h3', { cls: 'etz-help-part-title', text: title });
+        heading.id = uniqueId('help-part');
+        section.setAttr('aria-labelledby', heading.id);
+        if (about) titles.createEl('p', { cls: 'etz-help-part-about', text: about });
+        return { section, head };
+    }
+
     // Start here: the first guides, side by side.
     const firstGuides = guidesIn('Getting started').map(localGuide);
     if (firstGuides.length) {
-        const section = browseEl.createEl('section', { cls: 'etz-help-home-part' });
-        const label = section.createEl('h3', { cls: 'etz-help-label', text: t('help.home.start') });
-        label.id = uniqueId('help-start');
-        section.setAttr('aria-labelledby', label.id);
+        const { section } = homePart(t('help.home.start'), null, 'mod-start');
         const row = section.createDiv({ cls: 'etz-help-starts' });
         for (const guide of firstGuides) {
             const button = row.createEl('button', { cls: 'etz-help-start', attr: { type: 'button' } });
@@ -1141,12 +1155,11 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         }
     }
 
-    // The chart language: the tour's finished chart in words, beside its picture.
+    // The chart language: the tour's finished chart in words, beside a small picture (6.0: a smaller card).
     const tour = localGuideById(TOUR_ID);
     if (tour) {
         const feature = browseEl.createEl('section', { cls: 'etz-help-feature' });
         const side = feature.createDiv({ cls: 'etz-help-feature-side' });
-        side.createSpan({ cls: 'etz-help-label', text: t('help.home.language.label') });
         const title = side.createEl('h3', { cls: 'etz-help-feature-title', text: t('help.home.language.title') });
         title.id = uniqueId('help-language');
         feature.setAttr('aria-labelledby', title.id);
@@ -1156,6 +1169,7 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         const take = textButton(buttons, {
             text: t('help.home.language.tour'),
             variant: 'cta',
+            size: 'sm',
             onClick: () => {
                 leaveHome(take.el);
                 showGuide(tour.id);
@@ -1163,6 +1177,7 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         });
         const sheet = textButton(buttons, {
             text: t('help.home.cheatSheet'),
+            size: 'sm',
             onClick: () => {
                 leaveHome(sheet.el);
                 showReference('text');
@@ -1171,48 +1186,62 @@ export function createHelpPanel(parent: HTMLElement, host: PanelHost): HelpPanel
         drawInto(feature.createDiv({ cls: 'etz-help-feature-chart', attr: { 'aria-hidden': 'true' } }), tour.chart, homeLazy);
     }
 
-    // The gallery: every other guide as a tile, the chips show one category.
-    const galleryCategories = GUIDE_CATEGORIES.filter((c) => c !== 'Getting started' && c !== 'Reference' && guidesIn(c).some((g) => g.id !== TOUR_ID));
-    const gallery = browseEl.createEl('section', { cls: 'etz-help-home-part' });
-    const galleryHead = gallery.createDiv({ cls: 'etz-help-gallery-head' });
-    const galleryLabel = galleryHead.createEl('h3', { cls: 'etz-help-label', text: t('help.home.gallery') });
-    galleryLabel.id = uniqueId('help-gallery');
-    gallery.setAttr('aria-labelledby', galleryLabel.id);
-    const chips = galleryHead.createDiv({ cls: 'etz-help-chips', attr: { role: 'group', 'aria-label': t('help.home.filter') } });
-    const grid = gallery.createDiv({ cls: 'etz-help-tiles' });
-    const tiles: Array<{ el: HTMLElement; category: GuideCategory }> = [];
-    for (const category of galleryCategories) {
-        for (const guide of guidesIn(category).map(localGuide)) {
-            if (guide.id === TOUR_ID) continue;
-            tiles.push({ el: guideCard(grid, guide, homeLazy), category });
-        }
-    }
-    const chipEls: Array<{ el: HTMLButtonElement; category: GuideCategory | null }> = [];
-    const pick = (category: GuideCategory | null): void => {
-        for (const chip of chipEls) {
-            chip.el.toggleClass('is-on', chip.category === category);
-            chip.el.setAttr('aria-pressed', String(chip.category === category));
-        }
-        for (const tile of tiles) tile.el.toggleClass('tikz-hidden', category !== null && tile.category !== category);
-    };
-    for (const category of [null, ...galleryCategories]) {
-        const el = chips.createEl('button', { cls: 'etz-help-chip', text: category ? guideCategoryLabel(category) : t('help.home.all'), attr: { type: 'button', 'aria-pressed': String(category === null) } });
-        if (category === null) el.addClass('is-on');
-        el.addEventListener('click', () => pick(category));
-        chipEls.push({ el, category });
+    // 6.0: the guides in the reader's language, for New in 6 and the sections.
+    const shownGuides = localGuides();
+
+    // 6.0: New in 6, four Showcase pages of version 6 as large tiles.
+    const fresh = newInSix(shownGuides);
+    if (fresh.length) {
+        const { section } = homePart(t('help.home.new'), t('help.home.about.new'), 'mod-new');
+        const grid = section.createDiv({ cls: ['etz-help-tiles', 'mod-large'] });
+        for (const { guide, chart } of fresh) guideCard(grid, guide, homeLazy, null, chart);
     }
 
-    // The reference: its guides, and the sections of the cheat sheet.
-    const reference = browseEl.createEl('section', { cls: 'etz-help-home-part' });
-    const referenceLabel = reference.createEl('h3', { cls: 'etz-help-label', text: guideCategoryLabel('Reference') });
-    referenceLabel.id = uniqueId('help-reference');
-    reference.setAttr('aria-labelledby', referenceLabel.id);
-    const referenceGuides = guidesIn('Reference').map(localGuide);
-    if (referenceGuides.length) {
-        const row = reference.createDiv({ cls: 'etz-help-tiles' });
-        for (const guide of referenceGuides) guideCard(row, guide, homeLazy);
+    // 6.0: the topic sections, each its first tiles and "Show all" for the rest, opened in place.
+    for (const part of homeSections(shownGuides)) {
+        const { section, head } = homePart(t(part.title), t(part.about), 'mod-topic');
+        const grid = section.createDiv({ cls: ['etz-help-tiles', 'mod-section'] });
+        grid.id = uniqueId('help-tiles');
+        const cards = part.guides.map((guide) => guideCard(grid, guide, homeLazy));
+        const more = cards.slice(SECTION_FIRST);
+        for (const card of more) card.addClass('tikz-hidden');
+        if (part.id === 'notes') {
+            // The AI tab writes charts too: a link to it beside the guides of notes and export.
+            textButton(head, { text: t('help.home.openAi'), icon: 'bot', variant: 'link', size: 'sm', cls: 'etz-help-part-link', onClick: () => host.showTab('ai') });
+        }
+        if (!more.length) continue;
+        let open = false;
+        const toggle = textButton(head, {
+            text: t('help.home.showAll', { count: part.guides.length }),
+            variant: 'link',
+            size: 'sm',
+            cls: 'etz-help-part-link',
+            onClick: () => {
+                open = !open;
+                for (const card of more) card.toggleClass('tikz-hidden', !open);
+                toggle.setText(open ? t('help.home.showFewer') : t('help.home.showAll', { count: part.guides.length }));
+                toggle.el.setAttr('aria-expanded', String(open));
+                // Closing from far below: back to the section's heading, so the page does not jump past it.
+                if (!open && section.getBoundingClientRect().top < scroller.getBoundingClientRect().top) scrollToTop(section);
+            },
+        });
+        toggle.el.setAttr('aria-expanded', 'false');
+        toggle.el.setAttr('aria-controls', grid.id);
     }
-    topicList(reference, referenceSections());
+
+    // The reference: its guides and the sections of the cheat sheet, as a compact list at the end (6.0).
+    const { section: reference } = homePart(guideCategoryLabel('Reference'), t('help.home.about.reference'), 'mod-reference');
+    const referenceList = reference.createDiv({ cls: 'etz-help-topics mod-compact' });
+    for (const guide of guidesIn('Reference').map(localGuide)) {
+        const button = referenceList.createEl('button', { cls: 'etz-help-topic', attr: { type: 'button' } });
+        button.createSpan({ cls: 'etz-help-topic-title', text: guide.title });
+        button.createSpan({ cls: 'etz-help-topic-about', text: t('help.guide.steps', { count: guide.steps.length }) });
+        button.addEventListener('click', () => {
+            leaveHome(button);
+            showGuide(guide.id);
+        });
+    }
+    topicList(reference, referenceSections(), referenceList);
 
     // ---------------------------------------------------------------- guide
 
