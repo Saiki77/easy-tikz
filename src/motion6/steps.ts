@@ -67,8 +67,10 @@ export function atStep<T extends Data>(data: T, step: number): T {
 export function stepProgress(frame: MotionFrame | undefined, objectStep: number | undefined): number {
     if (!frame) return 1;
     const s = typeof objectStep === 'number' && objectStep > 0 ? Math.floor(objectStep) : 0;
-    if (s < frame.step) return 1;
-    if (s > frame.step) return 0;
+    // 6.0 entrances: `index` names the last step too (where `step` is Infinity), so a transform in it moves as well.
+    const shown = typeof frame.index === 'number' ? frame.index : frame.step;
+    if (s < shown) return 1;
+    if (s > shown) return 0;
     const p = frame.progress;
     return Number.isFinite(p) ? Math.max(0, Math.min(1, p)) : 1;
 }

@@ -424,6 +424,8 @@ export class TikzModal extends Modal implements PanelHost {
     private sceneCache = new SceneCache();
     // 6.0 C: steps and the clock of the preview (src/motion6/player.ts), and the chart at an earlier step.
     private player: MotionPlayer | null = null;
+    /** 6.0 entrances: the player is drawing (a step, or a frame of one coming in): nothing pops in. */
+    private stepping = false;
     private playerKey = '';
     private playerBar: HTMLElement | null = null;
     // 6.0 F4: the live canvas of a moving 2D chart, the turn of a turning 3D chart.
@@ -1382,8 +1384,10 @@ export class TikzModal extends Modal implements PanelHost {
         }, UPDATE_DEBOUNCE_MS);
     }
 
-    private renderNow(quality: 'draft' | 'full') {
+    /** `frame`: 6.0 entrances, a frame of a step coming in: drawn at full quality, without the work of a full render (problems, the Code tab). */
+    private renderNow(asked: 'draft' | 'full' | 'frame') {
         if (!this.isOpen || !this.chartEl) return;
+        const quality = asked === 'frame' ? 'draft' : asked;
         if (quality === 'full') {
             // A full render supersedes every pending frame.
             if (this.frameRaf !== null) window.cancelAnimationFrame(this.frameRaf);
@@ -1403,7 +1407,7 @@ export class TikzModal extends Modal implements PanelHost {
             if (this.player) config.motion = this.player.frame();
             // 6.0 F4: a turning 3D chart turns from its azimuth on the clock.
             if (this.player && config.is3D && view.settings.getValue('turning') === true) config.turn = this.turn.angle(this.player.frame().time, turnSpeed(view.settings.getValue('turnSpeed')));
-            issues = config.is3D ? this.render3D(config, math, quality) : this.render2D(config, math, quality);
+            issues = config.is3D ? this.render3D(config, math, quality) : this.render2D(config, math, asked === 'frame' ? 'full' : quality);
         } catch (e) {
             // Keep the last good drawing; the problem goes to the status chip, never a Notice.
             issues = [{ source: 'chart', message: t('editor.status.previewFailed', { error: errorText(e) }), severity: 'error' }];
@@ -1433,12 +1437,20 @@ export class TikzModal extends Modal implements PanelHost {
         const player = playerFor(data, {
             draw: (frame, clock) => {
                 if (!this.isOpen) return;
-                // 6.0 F4: a frame of the clock alone moves the live canvas of a 2D chart; the SVG stays.
-                if (clock && frame.progress >= 1 && !this.is3D() && this.liveLayer?.active()) this.liveLayer.paint(frame.time);
-                else if (clock) this.renderNow('draft');
-                else this.renderNow('full');
+                // 6.0 entrances: frames of a step coming in (or leaving) draw the chart, 2D at full quality (its scene is in the memo); nothing pops in.
+                const entering = frame.enter !== undefined || frame.leave !== undefined;
+                this.stepping = !clock || entering;
+                try {
+                    // 6.0 F4: a frame of the clock alone moves the live canvas of a 2D chart; the SVG stays.
+                    if (clock && frame.progress >= 1 && !entering && !this.is3D() && this.liveLayer?.active()) this.liveLayer.paint(frame.time);
+                    else if (clock) this.renderNow(entering && !this.is3D() ? 'frame' : 'draft');
+                    else this.renderNow('full');
+                } finally {
+                    this.stepping = false;
+                }
             },
             watched: () => this.chartEl,
+            chart: () => this.settings.serialize(), // 6.0 entrances
         });
         if (!player || !this.stageEl) return;
         this.player = player;
@@ -1505,7 +1517,8 @@ export class TikzModal extends Modal implements PanelHost {
         this.chartSvg = svg;
         this.layout = renderer.layout;
         if (!this.popIn) this.popIn = new PopIn(drawnNames(svg));
-        this.popIn.apply(svg, this.plugin?.data.animateCharts !== false && !reducedMotion());
+        // 6.0 entrances: a drawing for the steps never pops in (the objects of a step enter by kind).
+        this.popIn.apply(svg, this.plugin?.data.animateCharts !== false && !reducedMotion() && !this.stepping);
         // A new `$...$` label is measured before MathJax has styled it: draw once more when it has.
         void renderer.mathSettled?.then((redraw) => {
             if (!redraw) this.mathRedraws = 0;

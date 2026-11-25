@@ -15,7 +15,7 @@ then mark (0, 1), with coordinates
 ```
 
 - Every function, surface, tool and text label has a step. `then` before a chart line or a slider is a problem ("then goes before a line that draws something").
-- Objects of later steps are hidden as if `hidden` (still computed when another object reads them). Arriving objects pop in (src/motion.ts); going back hides them.
+- Objects of later steps are hidden as if `hidden` (still computed when another object reads them). Arriving objects enter by kind (see Step entrances); Previous fades the step that leaves.
 - An explicit option `step=3` wins over the `then` count (the printer writes it when a list is not in step order).
 - Print writes `then` where a step starts; a chart without steps prints exactly as before.
 - **Notes:** a chart with steps gets a row in the strip under it: Previous, Play, Next and "Step k of n". It starts at its last step (the whole picture, as print and the PDF show it); Play starts at step 1 and goes through every step (1.6 s each). Print hides the strip (5.2.6 rule).
@@ -114,6 +114,16 @@ The frame reaches the scene as `RendererConfig.motion` -> `SceneInput2D.motion` 
 
 `playerFor(data, { draw(frame, clock), watched() })` gives a `MotionPlayer` or null. Hosts: InlineChart in main.ts (`motionView`, `drawMotion`, the row in the strip), TikzModal in src/modal.ts (`syncPlayer`, `previewView`, the bar), each passing `player.frame()` in `config.motion`. Clock frames are drawn at draft quality (labels keep their spots); a step change draws a full frame.
 
+### Step entrances (src/motion6/entrances.ts, timeline.ts)
+
+When a step comes in, each of its objects enters in its own way (the approved demo): `draw` (functions, curves, solutions, orbits, 3D curves: along their length, 0.7 s), `sweep` (regions, areas, sets on an axis, the unit square, Riemann sums, bars: a mask from left to right over the item, 0.6 s; a set on the y-axis from the bottom), `pop` (every marker of the step, one after another, 40 ms apart and all started by 320 ms, 0.35 s each, with a small overshoot), `grow` (a function's tangent out of its touching point, eigenvector lines out of their middle, 0.5 s), `arrow` (vectors, basis vectors, segment arrows: tail to tip, the head moving along, 0.5 s), `rise` (texts of an item 0.6 of its own entrance in, free labels 0.6 of the step's longest entrance in: 8 px up and a fade, 0.35 s), `ripple` (vector fields, slope fields, grids, coloured planes, spans: a radial mask from the middle of the plot, 0.6 s), `surface` (heights scaled from z = 0, or the floor when 0 is outside the box, 0.7 s), `fade` (planes, braces, guides, traced curves). Transforms keep `stepProgress` over PROGRESS_MS. Easing: ease out (cubic); pop: back with c1 = 2.2.
+
+- **Frames.** `MotionFrame.index` is the step shown (also the last one, where `step` is Infinity; this also lets a transform in the last step move), `enter` the ms since it came in, `leave` 0..1 while Previous fades it out (LEAVE_MS = 200). The still frame has none of them, so the export, print, SVG files and the AI tools are unchanged.
+- **Player.** `StepTimeline` (pure) holds the step chosen and the step drawn: Next starts an entrance of `entranceMs(chart, step)` (a conservative total from the kinds, at most about 0.9 s), Previous keeps the old step drawn while it fades, Play from the last step starts again with step 1 coming in, and Play goes on only when a step is in and has stood `max(STEP_MS, entrance + HOLD_MS)`. When a step has come in (or faded), the player draws the settled picture once more as a full frame. `PlayerHost.chart()` gives the chart as it is now.
+- **Renderers.** `StepEntrance.of(frame, config)` (null when nothing moves) says which objects move (`moves(obj)`: the object's step is `frame.index`) and how far each kind is (`at(kind, delay)`). The 2D renderer applies it after the scene (the memo and the label places stay those of the settled picture): curves and lines are cut (`partialLines`, in screen length), grown (`grownLine`) or drawn tail to tip before their path is made; markers get a scale about their centre; fills and lines of sweeps and ripples get an SVG `mask`; texts a translate and an opacity. The 3D renderer scales a surface's heights in `projectQuads`, cuts legs by their place along their tool's lines (`Scene3D` shapes carry `source`, the tool's name), scales markers and fades labels, planes and legs (`alpha` on the marks, canvas and SVG alike).
+- **Hosts.** Frames of a step coming in are drawn at full quality in 2D (the scene is in the memo) and on the canvas in 3D; the generic pop-in of src/motion.ts is off for every drawing the player asks for. Help charts keep the view of the settled step while it comes in.
+- **Off.** The chart line `set entrances = off` (chart field `entrances: false`, `set entrances = on` writes true; Full LaTeX `\axis[entrances=false]`), the plugin setting **Step entrances** (`stepEntrances`, default on, `setStepEntrances`), and reduced motion (the player): the objects of a step then appear at once.
+
 ## Where the code is
 
 - `src/motion6/steps.ts`, `clock.ts`: the step and clock model (pure).
@@ -121,5 +131,6 @@ The frame reaches the scene as `RendererConfig.motion` -> `SceneInput2D.motion` 
 - `src/motion6/scene.ts`: scene primitives, 2D and 3D; `motionStrokes` (particles after the memo).
 - `src/motion6/text.ts`: the lines in words both ways; `src/text/full.ts` holds the three Full LaTeX commands (6.0 C block).
 - `src/motion6/frames.ts`: the `frames` export.
+- `src/motion6/entrances.ts` (kinds, times, frames, shapes; pure), `timeline.ts` (the player's steps; pure); tests in `tests/entrances.test.ts`.
 - `src/motion6/fit.ts`, `tools.ts` (defaults, migration, rename), `cards.ts`, `steprow.ts`, `player.ts`, `host.ts`; texts in `src/i18n/{en,ja}/motion6.ts`; styles in `src/ui/motion6.css`.
 - Shared fields: `step` on FunctionParameters, Function3DParameters, Annotation, ToolBase; `StrokePrim.opacity`, `MarkerPrim.open`, `Scene3D.segments[].run`, `SceneInput2D.motion`, `RendererConfig.motion`; chart fields `frames`, `stillTime`.

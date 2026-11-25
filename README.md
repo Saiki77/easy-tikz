@@ -1,8 +1,10 @@
-<video src="https://github.com/user-attachments/assets/b44ad2a6-ff7e-42fe-89c7-6e0a994c8397" controls muted width="100%"></video>
+<video src="https://github.com/user-attachments/assets/5451e9d3-ed46-4a01-ae7f-18da5dd030a5" controls width="100%"></video>
 
-<h3 align="center">Every idea is a picture.</h3>
+<p align="center"><a href="https://www.youtube.com/watch?v=X--vCnK-u7Q">Watch the 6.0 film on YouTube</a></p>
 
-<p align="center">Easy Graphs Charts and TikZ is an Obsidian plugin for math charts. Rest the pointer on a formula, or write a chart in LaTeX: functions, fractals, matrices that move the plane, vector fields, and charts that answer your questions. It draws on phones too, and exports pgfplots code that compiles with pdflatex.</p>
+<h3 align="center">Every idea deserves a picture.</h3>
+
+<p align="center">Easy Graphs Charts and TikZ is an Obsidian plugin for math charts. Rest the pointer on a formula, or write a chart in LaTeX, Python or GeoGebra: functions, fractals, matrices that move the plane, vector fields, machine learning, and charts that answer your questions. It draws on phones too, and exports pgfplots code that compiles with pdflatex.</p>
 
 ### A complete editor
 
@@ -14,11 +16,17 @@ Click any chart to open it. Everything is connected: drag a line, a point or a l
 
 **+ Add** holds a wide range of ready-made parts, sorted into groups and found by search: regions, curves and lines, crossings, corners and the optimum of a region, arrows and braces, data with a regression line, probability, Riemann sums, slope fields, values and vectors, linear algebra, motion, iterations, coloured planes, labels, sliders and templates.
 
-### Every idea is a picture
+### Charts that move
 
-<img src="docs/media/v6-fractal.png" alt="The Mandelbrot set, coloured by how fast each point escapes, with a point P dragged to its edge and the orbit of 0 for c = P spiralling inward as a red path. Beside it a Julia set with its sliders a and b." width="100%">
+<img src="docs/media/v6-motion.png" alt="Two charts. The damped pendulum: arrows coloured by length, particles flowing along them, and the rest points labelled stable spiral and saddle. The Lorenz attractor in 3D, its two wings coloured by time from dark purple to yellow." width="100%">
 
-A formula colours the plane: the Mandelbrot set, Julia sets on sliders, Newton basins and complex functions. The GPU paints it while you drag.
+Vector fields with moving particles and their rest points, solutions of systems in 2D and 3D, and charts that play in steps.
+
+### Write it in Python or GeoGebra
+
+<img src="docs/media/v6-code.png" alt="CODE_ALT" width="100%">
+
+A Python block with NumPy and matplotlib draws in the chart and can play over time, so a network learns while you watch. GeoGebra lines paste as they are. Or [ask any chatbot](docs/ai.md) to write the chart.
 
 ### A matrix moves the plane
 
@@ -26,11 +34,11 @@ A formula colours the plane: the Mandelbrot set, Julia sets on sliders, Newton b
 
 Draw the grid and î, ĵ, then transform the plane by a matrix or by z ↦ z². Press Play and the plane moves, with det A and the eigenvectors.
 
-### Charts that move
+### Fractals, live
 
-<img src="docs/media/v6-motion.png" alt="Two charts. The damped pendulum: arrows coloured by length, particles flowing along them, and the rest points labelled stable spiral and saddle. The Lorenz attractor in 3D, its two wings coloured by time from dark purple to yellow." width="100%">
+<img src="docs/media/v6-fractal.png" alt="The Mandelbrot set, coloured by how fast each point escapes, with a point P dragged to its edge and the orbit of 0 for c = P spiralling inward as a red path. Beside it a Julia set with its sliders a and b." width="100%">
 
-Vector fields with moving particles and their rest points, solutions of systems in 2D and 3D, and charts that play in steps.
+A formula colours the plane: the Mandelbrot set, Julia sets on sliders, Newton basins and complex functions. The GPU paints it while you drag.
 
 ### Ask the curve
 
@@ -90,6 +98,6 @@ The Help tab is a gallery of 39 short guides. Each step shows its chart live wit
 
 **39 step-by-step guides** in the Help tab and [on GitHub](docs/guides/README.md) · [What's new in 6.0](docs/whats-new.md) · [Make charts with AI](docs/ai.md) · [Reference](docs/reference.md) · [Changelog](CHANGELOG.md)
 
-**Privacy:** nothing goes to the internet, and there is no telemetry. AI access (off by default) answers on `127.0.0.1` only, with your token. [All details](docs/reference.md#privacy-and-permissions)
+**Privacy:** nothing goes to the internet, and there is no telemetry. The one exception: the 6.0 film in What's new loads from YouTube (`youtube-nocookie.com`) when you press Play, and not before. AI access (off by default) answers on `127.0.0.1` only, with your token. [All details](docs/reference.md#privacy-and-permissions)
 
 [MIT](LICENSE.md) · [Developing Easy Graphs Charts and TikZ](docs/development.md)

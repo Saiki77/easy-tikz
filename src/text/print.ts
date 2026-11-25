@@ -550,6 +550,8 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
     { keys: ['documentSetup'], print: (m) => (m.documentSetup === false ? ['snippet'] : 'documentSetup' in m ? [`set documentSetup = ${JSON.stringify(m.documentSetup)}`] : []) },
     // 6.0 C: the export shows every step side by side.
     { keys: ['frames'], print: (m) => (m.frames === true ? ['frames'] : 'frames' in m ? [`set frames = ${JSON.stringify(m.frames)}`] : []) },
+    // 6.0 entrances: the objects of a step appear at once in this chart.
+    { keys: ['entrances'], print: (m) => (typeof m.entrances === 'boolean' ? [`set entrances = ${m.entrances ? 'on' : 'off'}`] : 'entrances' in m ? [`set entrances = ${JSON.stringify(m.entrances)}`] : []) },
     // 6.0 F4: a 3D chart that turns by itself.
     {
         keys: ['turning', 'turnSpeed'],

@@ -12,5 +12,5 @@ export function playerFor(data: Data, host: PlayerHost): MotionPlayer | null {
     const last = lastStep(data);
     const clock = needsClock(data);
     if (!last && !clock) return null;
-    return new MotionPlayer(host, { last, clock, moversInSteps: movesWithSteps(data) });
+    return new MotionPlayer(host, { last, clock, moversInSteps: movesWithSteps(data), chart: data });
 }

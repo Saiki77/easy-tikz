@@ -145,6 +145,8 @@ export class LiveChart {
     /** A turning 3D chart: its turn, and the view that holds it all the way round. */
     private readonly turn = new Turn();
     private turnBox: string | null = null;
+    /** 6.0 entrances: the view of the step that comes in, fitted to it settled. */
+    private stepBox: string | null = null;
 
     constructor(
         parent: HTMLElement,
@@ -165,11 +167,14 @@ export class LiveChart {
         // 6.0 D: steps and the clock, drawn as in notes.
         this.player = playerFor(this.manager.serialize(), {
             draw: (frame, clock) => {
+                // 6.0 entrances: frames of a step coming in (or leaving) draw the chart; 2D at full quality (the scene is in the memo).
+                const entering = frame.enter !== undefined || frame.leave !== undefined;
                 // 6.0 F4: a frame of the clock alone moves the live canvas of a 2D chart; the SVG stays.
-                if (clock && frame.progress >= 1 && !this.is3D && this.liveLayer?.active()) this.liveLayer.paint(frame.time);
-                else this.safeRender(clock && !this.is3D ? 'draft' : 'full', clock);
+                if (clock && frame.progress >= 1 && !entering && !this.is3D && this.liveLayer?.active()) this.liveLayer.paint(frame.time);
+                else this.safeRender(clock && !this.is3D && !entering ? 'draft' : 'full', clock);
             },
             watched: () => this.box,
+            chart: () => this.manager.serialize(), // 6.0 entrances
         });
         if (this.player) this.liveLayer = new LiveLayer(); // 6.0 F4
         this.render('full');
@@ -258,6 +263,18 @@ export class LiveChart {
             this.svg3d = svg;
             this.place(fluid(svg));
             if (!turning) {
+                // 6.0 entrances: while a step comes in, the view stays that of the step settled (fitted on its first frame).
+                const m = config.motion;
+                if (m && (m.enter !== undefined || m.leave !== undefined)) {
+                    if (!clock || !this.stepBox) {
+                        renderer.renderSvg({ ...config, motion: { time: m.time, step: m.step, progress: m.progress, index: m.index } }, { math: view.math });
+                        this.stepBox = fitToContent(svg, 8);
+                        renderer.renderSvg(config, { math: view.math });
+                    }
+                    if (this.stepBox) svg.setAttribute('viewBox', this.stepBox);
+                    return;
+                }
+                this.stepBox = null;
                 fitToContent(svg, 8);
                 return;
             }

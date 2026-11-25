@@ -146,6 +146,7 @@ function knownKeys(part: string, defaults: Record<string, Data>): Set<string> {
         keys.add('stillTime');
         keys.add('turning'); // 6.0 F4
         keys.add('turnSpeed'); // 6.0 AI: `turning, speed 2`
+        keys.add('entrances'); // 6.0 entrances: `set entrances = off`
     }
     if (part === 'vectorField' || part === 'trajectory') keys.add('colormap');
     // 6.0 F4: a solution coloured by time in the default ramp; solutions and orbits that draw themselves.

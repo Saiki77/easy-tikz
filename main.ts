@@ -39,6 +39,7 @@ import type { Extension } from '@codemirror/state';
 // 6.0 C
 import { MotionPlayer } from './src/motion6/player';
 import { playerFor } from './src/motion6/host';
+import { setStepEntrances } from './src/motion6/entrances'; // 6.0 entrances
 import { atStep } from './src/motion6/steps';
 // 6.0 F4: the live canvas of a moving 2D chart, the turn of a turning 3D chart.
 import { LiveLayer } from './src/motion6/live';
@@ -368,6 +369,9 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         // The form new charts are written in (src/text/full.ts): words with LaTeX math, or Full LaTeX. Both are always read.
         setChartLanguage(this.data.chartLanguage);
         this.register(() => setChartLanguage('words'));
+        // 6.0 entrances: the objects of a step enter by kind, unless the setting turns it off for every chart.
+        setStepEntrances(this.data.stepEntrances !== false);
+        this.register(() => setStepEntrances(true));
 
         this.addRibbonIcon('square-function', 'Easy Graphs Charts and TikZ', () => {
             new TikzModal(this.app, this).open();
@@ -1159,6 +1163,8 @@ class InlineChart {
     private player: MotionPlayer | null = null;
     /** The chart at a step before its last: its own settings and context, made from the chart's. */
     private stepView: { step: number; from: MathContext; manager: SettingsManager; math: MathContext } | null = null;
+    /** 6.0 entrances: the player is drawing (a step, or a frame of one coming in): nothing pops in. */
+    private stepping = false;
     // 6.0 F4
     /** What moves on the clock in a 2D chart, on a canvas inside it (src/motion6/live.ts). */
     private liveLayer: LiveLayer | null = null;
@@ -1258,7 +1264,7 @@ class InlineChart {
         this.issuesEl = this.wrapper.createDiv({ cls: 'etz-inline-issues tikz-hidden' });
 
         // 6.0 C: a chart with steps or objects that move by themselves gets a player.
-        this.player = playerFor(this.manager.serialize(), { draw: (_frame, clock) => this.drawMotion(clock), watched: () => this.box });
+        this.player = playerFor(this.manager.serialize(), { draw: (_frame, clock) => this.drawMotion(clock), watched: () => this.box, chart: () => this.manager.serialize() }); // chart: 6.0 entrances
         if (this.player) this.liveLayer = new LiveLayer(); // 6.0 F4
         try {
             this.render('full');
@@ -1404,7 +1410,8 @@ class InlineChart {
             if (!this.chartEl) throw e;
             issues = [{ source: 'chart', message: t('plugin.chart.previewFailed', { error: errorText(e) }), severity: 'error' }];
         }
-        this.popIn?.apply(this.chartEl, this.animated());
+        // 6.0 entrances: a drawing for the steps never pops in (the objects of a step enter by kind).
+        this.popIn?.apply(this.chartEl, this.animated() && !this.stepping);
         if (quality === 'full') {
             this.chartIssues = issues;
             this.shown = null;
@@ -1821,6 +1828,15 @@ class InlineChart {
     /** The player moved: another step (the chart drawn whole), or a frame of the clock (drawn quickly). */
     private drawMotion(clock: boolean) {
         if (!this.onPage()) return;
+        this.stepping = true;
+        try {
+            this.drawPlayerFrame(clock);
+        } finally {
+            this.stepping = false;
+        }
+    }
+
+    private drawPlayerFrame(clock: boolean) {
         if (!clock) {
             this.stopGlide();
             this.render('full');
@@ -1828,7 +1844,8 @@ class InlineChart {
         }
         // 6.0 F4: a frame of the clock alone moves the live canvas of a 2D chart; the SVG stays.
         const frame = this.player?.frame();
-        if (frame && frame.progress >= 1 && this.liveLayer?.active() && !this.manager.getValue('dimension')) {
+        const entering = !!frame && (frame.enter !== undefined || frame.leave !== undefined); // 6.0 entrances
+        if (frame && frame.progress >= 1 && !entering && this.liveLayer?.active() && !this.manager.getValue('dimension')) {
             this.liveLayer.paint(frame.time);
             return;
         }
@@ -1840,11 +1857,12 @@ class InlineChart {
             this.motionConfig(config); // 6.0 C, F4
             this.applySize(config);
             if (config.is3D) this.render3D(config, view.math, 'draft');
-            else this.render2D(config, view.math, 'draft');
+            // 6.0 entrances: frames of a step coming in are the settled picture's (its scene is in the memo), partly drawn.
+            else this.render2D(config, view.math, entering ? 'full' : 'draft');
         } catch {
             // A frame that cannot be drawn is skipped; the last one stays.
         }
-        this.popIn?.apply(this.chartEl, this.animated());
+        this.popIn?.apply(this.chartEl, this.animated() && !entering);
     }
 
     // ---------------------------------------------- 6.0 F4: live canvas, turning
@@ -2188,6 +2206,13 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 aliases: ['アニメーション', '動き', 'モーション'],
                 control: { type: 'toggle', key: 'animateCharts', defaultValue: true },
             },
+            // 6.0 entrances
+            {
+                name: t('plugin.settings.entrances.name'),
+                desc: t('plugin.settings.entrances.desc'),
+                aliases: ['steps', 'then', 'entrance', 'animation', 'motion', 'ステップ', '登場', 'アニメーション', '動き'],
+                control: { type: 'toggle', key: 'stepEntrances', defaultValue: true },
+            },
             {
                 name: t('plugin.settings.formulaHover.name'),
                 desc: t('plugin.settings.formulaHover.desc'),
@@ -2406,6 +2431,10 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 break;
             case 'animateCharts':
                 this.plugin.data.animateCharts = Boolean(value);
+                break;
+            case 'stepEntrances': // 6.0 entrances
+                this.plugin.data.stepEntrances = Boolean(value);
+                setStepEntrances(this.plugin.data.stepEntrances);
                 break;
             case 'formulaHover':
                 this.plugin.data.formulaHover = Boolean(value);

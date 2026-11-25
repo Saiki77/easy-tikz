@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [6.0.0] - 2026-11-24
 
-Every idea is a picture. Formulas take complex numbers, vectors, matrices and sums; a matrix moves the plane; vector fields flow; orbits, cobwebs and fractals colour the plane; charts play in steps; and a click on a curve asks it questions.
+Every idea deserves a picture. Formulas take complex numbers, vectors, matrices and sums; a matrix moves the plane; vector fields flow; orbits, cobwebs and fractals colour the plane; charts play in steps; a click on a curve asks it questions; and charts can be written in Python or GeoGebra. The 6.0 film: https://www.youtube.com/watch?v=X--vCnK-u7Q
 
 ### Added
 
@@ -18,6 +18,7 @@ Every idea is a picture. Formulas take complex numbers, vectors, matrices and su
 - **Ask the curve.** A click on a function, a region, a curve, a point, an arrow or a transformed grid, in the editor's preview or in the chart under a block in Live Preview, opens a menu of questions built from what the chart holds: where f ≤ 0, where f and g cross, the extrema, the inflection points, the tangent and the value here, a chord, the area to the x-axis or between two functions, a Riemann sum, Newton's method and the cobweb from here, the corners of a region, the eigenvectors of a transform, and more. Pointing at a question shows its answer faintly; choosing it adds it as a line of the chart (with Undo). Keyboard: `?`, the menu key or Shift+F10 in the editor, Enter on a chart under a block.
 - **Hover cards for sets and maps:** sets (`\{x \in \mathbb{R}^n \mid g(x) \le 0\}`), maps (`g: \mathbb{R}^n \to \mathbb{R}`), conditions, intervals, Jensen's inequality, epigraphs, matrices, `A v`, `\det A`, `A v = \lambda v`, recurrences, the logistic map, sums and functions of z. A name a formula uses without defining it comes from the other formulas of the note; without one, the card uses an example and says so.
 - **Steps** (`src/motion6/`). `then` before a line starts the next step. Charts with steps get Previous, Play, Next and "Step k of n" under them in notes and over the preview in the editor; the card menu's **Show in step n** puts an object in a new step. The line `frames` (`\axis[frames]`) exports every step side by side; without it the export draws the last step.
+- **Step entrances:** when a step comes in, each of its objects enters in its own way: a curve draws itself along its length, an area sweeps in from left to right, points pop in one after another, tangents and eigenvector lines grow out of their point, arrows grow from tail to tip, labels rise in just after their object, vector fields, grids and coloured planes ripple in from the centre, and a 3D surface rises from the floor (0.35 to 0.7 s). Previous fades the step that leaves; Play waits until a step is in. `set entrances = off` turns it off for one chart, the setting **Step entrances** for every chart; under reduced motion objects appear at once. The export, print, SVG files and the AI tools draw the still picture.
 - **The animation clock:** objects that move by themselves run only while the chart is on screen, with a Pause button, and start paused under reduced motion. The export, print and SVG files draw a still frame (`set stillTime = 1.5`).
 - **Vector fields and rest points:** `draw the vector field $F(x, y) = (y, -\sin x - 0.25y)$, coloured by length, with moving particles and streamlines` and `mark the rest points of F, labelled` (filled when stable, open when not, with their kind).
 - **Solutions of systems:** `draw the solution of $\dot{p} = (y, -x)$ through P for t from 0 to 10` in 2D, and in 3D the Lorenz attractor, `coloured by time`. The option `traced` draws a solution or an orbit over time.
@@ -26,20 +27,29 @@ Every idea is a picture. Formulas take complex numbers, vectors, matrices and su
 - **Colour the plane:** escape time (the Mandelbrot set, Julia sets, Newton basins), domain colouring of f(z) and heat maps of f(x, y), in seven colour maps. The GPU (WebGL) paints it live; the CPU paints it with 64-bit numbers in tiles without WebGL and deep in a zoom. The export writes the picture as a PNG beside the `.tex` file (`\addplot graphics`), and Copy LaTeX saves the PNG in the note's attachment folder.
 - Every new line has its Full LaTeX command (`\let`, `\draw[vector]`, `\mark[list]`, `\mark[x-axis]`, `\draw[chord]`, `\then`, `\vectorfield`, `\restpoints`, `\solution`, `\draw[grid]`, `\draw[basis vectors]`, `\transform`, `\draw[eigenvectors]`, `\shade[unit square]`, `\draw[span]`, `\orbit`, `\cobweb`, `\bifurcation`, `\newton`, `\colourplane`, `\circles`), a Build tab card, recipes in **+ Add** (sections Values, Linear algebra, Motion, Iterate, Colour the plane), the auto-fit, rename, Japanese texts and a pgfplots export that compiles.
 - **Limits** so that no chart freezes a phone: 2000 steps of an orbit, 1000 of a cobweb, 100 of Newton's method, 1000 per pixel of a coloured plane, 60 Fourier terms, 20000 steps of a solution, 100000 terms of a sum. A larger count is drawn at the limit with a note.
-- **What's new** shows 6.0 as a slideshow of live charts: a Julia set on two sliders, a matrix that moves the plane in steps, a pendulum's vector field, a chart you can ask, the card of a set, a Taylor sum, then the rest of 6.0 and versions 5 and 4 in lists.
+- **Python scripts** (`src/python/`): a `python:` line and the lines indented under it are a script that runs inside the plugin, with no Python install and on phones too. A subset of Python with NumPy (arrays, `linalg`, `fft`, `random`) and matplotlib-style drawing (`plot`, `scatter`, `fill_between`, `bar`, `hist`, `quiver`, `contour`, `contourf`, `imshow`, `text`, `legend` and more), drawn in the chart's own look. The names a script sets are names of the chart, sliders are its variables, and `def frame(t):` plays a drawing over time.
+- **GeoGebra** (`src/geogebra/`): GeoGebra input lines are chart lines. Paste a construction as it is (`A = (1, 2)`, `c = Circle(A, 3)`, `Polygon(A, B, C)`, `f(x) = x^2`, lists, `Sequence`, `Zip` and more), drawn in GeoGebra's look, and GeoGebra commands work in formulas.
+- **Machine learning:** activation functions in formulas as ML notes write them (`\sigma(x)`, `\mathrm{ReLU}(x)`, softplus, GELU, SiLU, softmax, logsumexp), NumPy for models (`svd`, `pinv`, `lstsq`, `cov`, `multivariate_normal` and more), and `frame(t)` pictures, titles and legends, so a network can learn while you watch.
+- **Help:** a new home with Start here, New in 6 and topic sections, and new guides for every part of 6.0: linear algebra, dynamics, fractals, Python, GeoGebra and a Machine learning section (activation functions, optimizers on a loss surface, logistic regression, a network that learns, k-means, principal components, overfitting and ridge, a loss landscape in 3D). New Showcase pages: the Lorenz system, the optimizer race, a network that learns, complex functions two ways, Julia and Newton, the logistic map, Fourier circles.
+- **3D that turns:** `turning` turns a 3D chart slowly by itself, and `traced` lets a 3D solution such as the Lorenz attractor draw itself.
+- **What's new** shows 6.0 in seven live slides: a vector field that flows, the Lorenz attractor in 3D, a network that learns, a matrix that moves the plane in steps, a Julia set on two sliders, a chart you can ask, and the 6.0 film. The film plays from YouTube (`youtube-nocookie.com`) only after a click on Play; nothing loads before that.
 
 ### Changed
 
 - **y follows what is drawn:** a chart whose text gives x and no y fits y to what it draws, live. Charts with a y range, charts with no range and JSON blocks are as before.
 - **Charts from formulas** keep the note's name of a function (`g(x) = ...` stays g) and write the x range only.
-- The AI guide (`docs/ai.md`) and the AI server's instructions list every new line, its Full LaTeX command, its JSON fields and limits, and new rules (names `let` may not take, real and complex square roots, braces in labels, `then`).
-- The README shows the 6.0 features one at a time, each with a picture.
+- The AI guide (`docs/ai.md`) and the AI server's instructions list every new line, its Full LaTeX command, its JSON fields and limits, and new rules (names `let` may not take, real and complex square roots, braces in labels, `then`), with checked recipes for Python, GeoGebra and machine learning. `check_chart` reports what every 6.0 object computes.
+- The README shows the 6.0 features one at a time, each with a picture, and opens with the 6.0 film.
+- **Privacy:** the only thing that can reach the internet is the 6.0 film in What's new, and only after a click on Play.
 
 ### Fixed
 
 - `check_chart` and the other AI tools accept sets on an axis and chords (`axisSet`, `chord`).
 - Set labels without MathJax read `\mid` as ∣ and `\mathbb{R}` as ℝ.
 - Rest points on the border of the view keep their marker but no label.
+- Particles of a field with a pole (the flow around a cylinder, 1/r²) no longer draw long straight streaks across the chart.
+- 6.0 objects in 3D charts get their cards in the Build tab.
+- A line the AI tools rewrite keeps its comments.
 
 ## [5.2.6] - 2026-11-23
 

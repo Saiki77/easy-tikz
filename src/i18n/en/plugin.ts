@@ -80,6 +80,9 @@ export const plugin = {
     'plugin.settings.animate.name': 'Animate chart changes',
     'plugin.settings.animate.desc':
         'On by default. When a block in a note changes, numbers glide to their new values and new objects pop in. Charts never move when your system asks for reduced motion.',
+    'plugin.settings.entrances.name': 'Step entrances',
+    'plugin.settings.entrances.desc':
+        'On by default. When a step of a chart comes in (Next step, Play the steps), each new object enters in its own way: a curve draws itself, an area sweeps in, points pop, arrows and tangents grow, a surface rises. Off: the objects of a step appear at once. One chart can turn it off with the line set entrances = off. Charts never move when your system asks for reduced motion.',
     'plugin.settings.invertDrag.name': 'Invert vertical drag in 3D',
     'plugin.settings.invertDrag.desc':
         'Off (default): drag down tilts the scene up (camera elevation rises), drag up tilts the scene down - the trackball convention. On: drag down lowers the camera, drag up raises it - direct manipulation.',
