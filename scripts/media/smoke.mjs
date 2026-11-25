@@ -148,27 +148,71 @@ await check('the "What\'s new" popup is defined in src/whatsnew.ts', async () =>
 const dataFile = () => path.join(obs.vault, '.obsidian', 'plugins', PLUGIN_ID, 'data.json');
 const readData = () => (fs.existsSync(dataFile()) ? JSON.parse(fs.readFileSync(dataFile(), 'utf8')) : null);
 
-/** What the open "What's new" popups show (normally one), with the state of the live example. */
+/** What the open "What's new" popups show (normally one), with the state of the slide on screen. */
 const whatsNewState = () =>
     obs.call(() => {
         const modals = Array.from(document.querySelectorAll('.modal.etz-whatsnew'));
         const m = modals[0];
-        if (!m) return { count: 0 };
-        const svg = m.querySelector('.etz-whatsnew-chart svg');
-        const input = m.querySelector('.etz-whatsnew-strip input[type=range]');
-        const play = m.querySelector('.etz-live-play');
+        if (!m) return { count: 0, players: Array.from(document.querySelectorAll('iframe')).map((f) => f.getAttribute('src')) };
+        const slide = Array.from(m.querySelectorAll('.etz-whatsnew-slide')).find((x) => !x.classList.contains('tikz-hidden')) || null;
+        const svg = slide ? slide.querySelector('.etz-whatsnew-chart svg') : null;
+        const input = slide ? slide.querySelector('.etz-whatsnew-strip input[type=range]') : null;
+        const play = slide ? slide.querySelector('.etz-live-play') : null;
+        const canvas = svg ? svg.querySelector('foreignObject.etz-motion-layer canvas') : null;
+        let frame = null;
+        try {
+            const url = canvas ? canvas.toDataURL() : '';
+            let h = 0;
+            for (let i = 0; i < url.length; i++) h = (h * 31 + url.charCodeAt(i)) | 0;
+            frame = url ? `${url.length}:${h}` : null;
+        } catch {
+            frame = null;
+        }
         return {
             count: modals.length,
             title: (m.querySelector('.etz-whatsnew-title') || { textContent: '' }).textContent.trim(),
+            film: (m.querySelector('.etz-whatsnew-film') || { textContent: '' }).textContent.trim(),
             slides: m.querySelectorAll('.etz-whatsnew-dot').length,
             current: Array.from(m.querySelectorAll('.etz-whatsnew-dot')).findIndex((d) => d.getAttribute('aria-current') === 'step'),
-            blankIcons: Array.from(m.querySelectorAll('.etz-whatsnew-icon, .etz-btn-icon, .etz-live-play')).filter((el) => !el.querySelector('svg')).length,
-            // The first slide's live chart paints the plane (a Julia set) on a canvas over the plot.
+            counter: (m.querySelector('.etz-whatsnew-counter') || { textContent: '' }).textContent.trim(),
+            slideTitle: slide ? (slide.querySelector('.etz-whatsnew-slide-title') || { textContent: '' }).textContent.trim() : '',
+            blankIcons: Array.from(m.querySelectorAll('.etz-whatsnew-film-dot, .etz-btn-icon, .etz-live-play, .etz-whatsnew-poster-play, .etz-whatsnew-youtube-icon')).filter((el) => !el.querySelector('svg')).length,
+            // The fractal slide's chart paints the plane (a Julia set) on a canvas over the plot.
             painted: !!(svg && svg.querySelector('foreignObject.etz-pixels canvas')),
+            // What moves by itself (particles, a frame of a script) is drawn on the live canvas: a picture of it, to compare.
+            frame,
             value: input ? Number(input.value) : null,
             playing: play ? play.getAttribute('aria-pressed') === 'true' : null,
+            // The film: its poster (a data: URL, nothing loaded) and, after Play, YouTube's player.
+            poster: slide && slide.querySelector('img.etz-whatsnew-poster-img') ? slide.querySelector('img.etz-whatsnew-poster-img').getAttribute('src').slice(0, 23) : null,
+            players: Array.from(document.querySelectorAll('iframe')).map((f) => f.getAttribute('src')),
         };
     });
+
+/** Show slide `i` of the open popup with its dot. */
+async function whatsNewSlide(i) {
+    await obs.call((k) => document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-dot')[k].click(), i);
+    await obs.sleep(400);
+    const state = await whatsNewState();
+    assert(state.current === i, `slide ${state.current} is shown, expected ${i}`);
+    return state;
+}
+
+/** Requests to YouTube (the player and what it loads) the window makes while `watch` runs, as the protocol reports them. */
+async function youTubeRequests(watch) {
+    const seen = [];
+    await obs.cdp.send('Network.enable').catch(() => {});
+    const stop = obs.cdp.on((method, params) => {
+        const url = method === 'Network.requestWillBeSent' && params.request ? params.request.url : '';
+        if (/youtube|ytimg|googlevideo/.test(url)) seen.push(url);
+    });
+    try {
+        await watch(seen);
+    } finally {
+        stop();
+    }
+    return seen;
+}
 
 /** Unload and load the plugin, as Obsidian does after an update, and give a popup time to open. */
 async function reloadPlugin() {
@@ -182,11 +226,10 @@ async function reloadPlugin() {
 
 async function clickWhatsNewButton(text) {
     const ok = await obs.call((t) => {
-        // Close is the window's own X; the other buttons are in the footer.
-        const button =
-            t === 'Close'
-                ? document.querySelector('.modal.etz-whatsnew .modal-header-button, .modal.etz-whatsnew .modal-close-button')
-                : Array.from(document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-actions button')).find((b) => (b.textContent || '').trim() === t);
+        // Close is the window's own X; the other buttons are in the footer or under the slide on screen (Try it).
+        const slide = Array.from(document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-slide')).find((x) => !x.classList.contains('tikz-hidden'));
+        const buttons = [...document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-actions button'), ...(slide ? slide.querySelectorAll('.etz-whatsnew-buttons button') : [])];
+        const button = t === 'Close' ? document.querySelector('.modal.etz-whatsnew .modal-header-button, .modal.etz-whatsnew .modal-close-button') : buttons.find((b) => (b.textContent || '').trim() === t);
         if (button) button.click();
         return !!button;
     }, text);
@@ -987,39 +1030,50 @@ if (started) {
             const state = await whatsNewState();
             assert(state.count === 1, `${state.count} popups are open`);
             assert(state.title === WHATS_NEW.WHATS_NEW_TITLE, `the title is "${state.title}"`);
-            // A slideshow: one dot per slide, the first one shown.
-            assert(state.slides === WHATS_NEW.WHATS_NEW_SLIDES.length && state.current === 0, `${state.slides} slides, slide ${state.current} shown`);
+            // A slideshow: one dot per slide, the first one shown, and the film in the header.
+            assert(state.slides === 7 && state.slides === WHATS_NEW.WHATS_NEW_SLIDES.length && state.current === 0 && state.counter === '1 / 7', `${state.slides} slides, slide ${state.current} shown, "${state.counter}"`);
+            assert(state.slideTitle === 'Fields that flow', `the first slide is "${state.slideTitle}"`);
+            assert(/^Watch the film\s*2:21$/.test(state.film), `the header's film button says "${state.film}"`);
             assert(state.blankIcons === 0, `${state.blankIcons} icons are blank (an icon id Obsidian does not know)`);
-            // The Julia set of z^2 + c, c = a + bi: a picture on the plot.
-            assert(state.painted, 'the live example paints no plane');
+            // The pendulum's field: its particles move on the live canvas.
+            await obs.waitFor(async () => (await whatsNewState()).frame !== null, { timeout: 5000, message: 'the particles to be drawn' });
+            const before = (await whatsNewState()).frame;
+            await obs.sleep(400);
+            const after = (await whatsNewState()).frame;
+            assert(after !== before, 'the particles do not move');
+            assert(state.players.length === 0, `a player is open: ${state.players.join(', ')}`);
             // Seen as soon as it opened, and nothing else of the user's data changed.
             await obs.waitFor(() => (readData() || {}).whatsNewSeen === version, { timeout: 3000, message: 'data.json to record the popup' });
             const data = readData();
             assert(data.maxSamples3D === 100 && data.userTemplates.length === 1 && data.userTemplates[0].name === template.name, `the user's data changed: ${JSON.stringify(data)}`);
             return `whatsNewSeen ${data.whatsNewSeen}`;
         });
-        await check('what\'s new: the live example responds to its slider and to play', async () => {
+        await check('what\'s new: the fractal slide responds to its slider and to play', async () => {
+            const fractal = WHATS_NEW.WHATS_NEW_SLIDES.findIndex((x) => x.id === 'fractal');
+            let state = await whatsNewSlide(fractal);
+            assert(state.painted && state.value === -0.8, `the Julia set: painted ${state.painted}, a = ${state.value}`);
+            const visible = '.modal.etz-whatsnew .etz-whatsnew-slide:not(.tikz-hidden)';
             const slide = (v) =>
                 obs.call((value) => {
-                    const input = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip input[type=range]');
+                    const input = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-slide:not(.tikz-hidden) .etz-whatsnew-strip input[type=range]');
                     input.value = value;
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                 }, String(v));
             await slide(-0.5);
             await obs.sleep(250);
-            let state = await whatsNewState();
+            state = await whatsNewState();
             assert(state.value === -0.5 && state.painted, `at a = -0.5: value ${state.value}, painted ${state.painted}`);
             await slide(0.25);
             await obs.sleep(250);
             state = await whatsNewState();
             assert(state.value === 0.25 && state.painted, `at a = 0.25: value ${state.value}, painted ${state.painted}`);
-            await obs.mouse.click('.modal.etz-whatsnew .etz-live-play');
+            await obs.mouse.click(`${visible} .etz-live-play`);
             await obs.sleep(600);
             state = await whatsNewState();
             assert(state.playing === true, 'play is not pressed');
             assert(state.value !== 0.25, 'playing did not move the slider');
-            await obs.mouse.click('.modal.etz-whatsnew .etz-live-play');
+            await obs.mouse.click(`${visible} .etz-live-play`);
             await obs.sleep(250);
             state = await whatsNewState();
             const a = state.value;
@@ -1027,8 +1081,8 @@ if (started) {
             assert(Number.isFinite(a) && Math.abs(a * 100 - Math.round(a * 100)) < 1e-9, `after play a = ${a} is not on the slider's step 0.01`);
             // A typed value outside -1..1 stops at the end.
             const typed = await obs.call(() => {
-                const box = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip .etz-slider-number');
-                const range = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-strip input[type=range]');
+                const box = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-slide:not(.tikz-hidden) .etz-whatsnew-strip .etz-slider-number');
+                const range = document.querySelector('.modal.etz-whatsnew .etz-whatsnew-slide:not(.tikz-hidden) .etz-whatsnew-strip input[type=range]');
                 box.focus();
                 box.value = '5';
                 box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -1096,11 +1150,12 @@ if (started) {
             assert((await whatsNewState()).count === 0, 'the popup opened with the setting off');
             assert(fs.readFileSync(dataFile(), 'utf8') === off, 'data.json was written while the plugin loaded');
         });
-        await check('what\'s new: the command opens it, and Try an example opens the editor on its chart', async () => {
+        await check('what\'s new: the command opens it, and Try it opens the editor on the slide\'s chart', async () => {
             const ok = await obs.call((id) => app.commands.executeCommandById(`${id}:show-whats-new`), PLUGIN_ID);
             assert(ok !== false, 'the command easy-tikz:show-whats-new does not exist');
             await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the command' });
-            await clickWhatsNewButton('Try an example');
+            await whatsNewSlide(WHATS_NEW.WHATS_NEW_SLIDES.findIndex((x) => x.id === 'fractal'));
+            await clickWhatsNewButton('Try it');
             await obs.waitFor(() => obs.call(() => {
                 const m = window.__etzMedia.editor();
                 return !!m && m.ready === true;
@@ -1126,9 +1181,6 @@ if (started) {
             await obs.call((id) => app.commands.executeCommandById(`${id}:show-whats-new`), PLUGIN_ID);
             await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the command' });
             for (const icon of await drawnIcons('.modal.etz-whatsnew')) seen.add(icon);
-            await obs.mouse.click('.modal.etz-whatsnew .etz-live-play');
-            await obs.sleep(150);
-            for (const icon of await drawnIcons('.modal.etz-whatsnew')) seen.add(icon);
             // Every slide, with Next: a slide is built when it is first shown.
             for (let i = 1; i < WHATS_NEW.WHATS_NEW_SLIDES.length; i++) {
                 await obs.call(() => {
@@ -1149,7 +1201,7 @@ if (started) {
             assert(!missing.length, `icons that did not draw (unknown ids?): ${missing.join(', ')}`);
             return `${WHATS_NEW.WHATS_NEW_ICONS.length} icons`;
         });
-        await check('what\'s new: the Ask slide opens the questions of g, and an answer goes into its chart and block', async () => {
+        await check('what\'s new: the Ask slide opens the questions of g, an answer goes into its chart, and Try it takes it to the editor', async () => {
             await obs.call((id) => app.commands.executeCommandById(`${id}:show-whats-new`), PLUGIN_ID);
             await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the command' });
             const at = WHATS_NEW.WHATS_NEW_SLIDES.findIndex((x) => x.id === 'ask');
@@ -1170,7 +1222,7 @@ if (started) {
             await obs.sleep(250);
             let state = await obs.call(() => ({ menu: !!document.querySelector('.etz-ask-menu'), popup: !!document.querySelector('.modal.etz-whatsnew') }));
             assert(!state.menu && state.popup, `after Escape: ${JSON.stringify(state)}`);
-            // Choose "Where is g ≤ 0?": the set on the x-axis is drawn and its line is in the block.
+            // Choose "Where is g ≤ 0?": the set on the x-axis is drawn.
             const chosen = await obs.call(() => {
                 const box = Array.from(document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-chart.etz-askable')).find((b) => b.offsetParent !== null);
                 box.focus();
@@ -1182,25 +1234,72 @@ if (started) {
             });
             assert(chosen === 'ok', chosen);
             await obs.sleep(300);
-            state = await obs.call(() => {
+            const labels = await obs.call(() => {
                 const slide = Array.from(document.querySelectorAll('.modal.etz-whatsnew .etz-whatsnew-slide')).find((x) => !x.classList.contains('tikz-hidden'));
-                const pre = slide ? slide.querySelector('pre.etz-whatsnew-text') : null;
                 const svg = slide ? slide.querySelector('.etz-whatsnew-chart svg') : null;
-                return { text: pre ? pre.textContent : '', labels: svg ? Array.from(svg.querySelectorAll('text, foreignObject')).map((t) => (t.textContent || '').trim()).join(' | ') : '' };
+                return svg ? Array.from(svg.querySelectorAll('text, foreignObject')).map((t) => (t.textContent || '').trim()).join(' | ') : '';
             });
-            assert(/mark where \$g\(x\) \\le 0\$ on the x-axis, labelled/.test(state.text), `the block: ${state.text}`);
-            await clickWhatsNewButton('Close');
-            return state.labels.slice(0, 120);
+            // Try it: the chart with the answer, in the editor.
+            await clickWhatsNewButton('Try it');
+            await obs.waitFor(() => obs.call(() => {
+                const m = window.__etzMedia.editor();
+                return !!m && m.ready === true;
+            }), { timeout: 8000, message: 'the editor to open' });
+            await obs.waitForRender();
+            const chart = await obs.chart();
+            const names = chart.functions.map((f) => f.name).join(', ');
+            assert(names === 'g, h' && chart.tools.length === 1, `the editor got functions ${names} and ${chart.tools.length} tools: ${JSON.stringify(chart.tools).slice(0, 200)}`);
+            await obs.closeEditor();
+            return `${chart.tools[0].type}; ${labels.slice(0, 100)}`;
+        });
+        await check('what\'s new: the film loads nothing before Play, Play puts YouTube\'s player there, leaving the slide or closing removes it', async () => {
+            const errorsAt = obs.errors.length;
+            // The run stays off the network: YouTube is blocked for this window (the player shows an error page instead of the film).
+            await obs.cdp.send('Network.enable').catch(() => {});
+            await obs.cdp.send('Network.setBlockedURLs', { urls: ['*youtube*', '*ytimg*', '*googlevideo*', '*doubleclick*', '*google.com*', '*gstatic*'] }).catch(() => {});
+            const film = WHATS_NEW.WHATS_NEW_SLIDES.findIndex((x) => x.id === 'film');
+            let before = [];
+            const requests = await youTubeRequests(async (seen) => {
+                await obs.call((id) => app.commands.executeCommandById(`${id}:show-whats-new`), PLUGIN_ID);
+                await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the command' });
+                let state = await whatsNewSlide(film);
+                assert(state.slideTitle === 'Every idea deserves a picture', `the film slide is "${state.slideTitle}"`);
+                assert(state.poster === 'data:image/jpeg;base64,', `the poster comes from ${state.poster}`);
+                assert(state.players.length === 0, `a player before Play: ${state.players.join(', ')}`);
+                before = seen.slice();
+                // Play: the player in place of the poster.
+                await obs.mouse.click('.modal.etz-whatsnew .etz-whatsnew-poster');
+                await obs.waitFor(async () => (await whatsNewState()).players.length === 1, { timeout: 3000, message: 'the player after Play' });
+                state = await whatsNewState();
+                assert(state.players[0] === WHATS_NEW.WHATS_NEW_FILM.embed, `the player plays ${state.players[0]}`);
+                // Leaving the slide removes it; the header's button comes back to the film and plays it.
+                state = await whatsNewSlide(film - 1);
+                assert(state.players.length === 0, 'the player stayed after the slide was left');
+                await obs.mouse.click('.modal.etz-whatsnew .etz-whatsnew-film');
+                await obs.waitFor(async () => (await whatsNewState()).players.length === 1, { timeout: 3000, message: 'the player after Watch the film' });
+                state = await whatsNewState();
+                assert(state.current === film, `Watch the film showed slide ${state.current}`);
+                // Closing the popup removes it (and its sound).
+                await clickWhatsNewButton('Close');
+                state = await whatsNewState();
+                assert(state.count === 0 && state.players.length === 0, `after Close: ${state.count} popups, players ${state.players.join(', ')}`);
+            });
+            await obs.cdp.send('Network.setBlockedURLs', { urls: [] }).catch(() => {});
+            assert(before.length === 0, `loaded from YouTube before Play: ${before.join(', ')}`);
+            assert(requests.length > 0, 'Play asked YouTube for nothing');
+            // The blocked player logs its blocked loads: expected here, so they do not fail the run.
+            for (let i = obs.errors.length - 1; i >= errorsAt; i--) if (/youtube|ytimg|googlevideo|gstatic|google\.com|ERR_BLOCKED/i.test(obs.errors[i].text)) obs.errors.splice(i, 1);
+            return `${requests.length} requests to YouTube, all after Play (blocked)`;
         });
         await check('what\'s new: the link in the Help tab opens it, and its buttons stay in that editor', async () => {
-            // An editor with a chart in it: Try an example asks before replacing it.
+            // An editor with a chart in it: Try it asks before replacing it.
             await obs.openEditor({ chart: lp.data });
             await obs.showTab('help');
             assert(await obs.call(() => !!document.querySelector('.modal.tikz-modal .etz-help-news-link .etz-btn-icon svg')), 'the link in the Help tab has no icon');
             const tryFromHelp = async (answer) => {
                 await obs.mouse.click('.modal.tikz-modal .etz-help-news-link');
                 await obs.waitFor(async () => (await whatsNewState()).count === 1, { timeout: 5000, message: 'the popup to open from the Help tab' });
-                await clickWhatsNewButton('Try an example');
+                await clickWhatsNewButton('Try it');
                 await answerReplace(answer);
                 await obs.waitForRender();
                 return [await obs.editorState(), await obs.chart()];
@@ -1212,7 +1311,9 @@ if (started) {
             // Replace: the example is in, on the Build tab.
             [state, chart] = await tryFromHelp('Replace');
             assert(state.tab === 'build', `after Replace the editor shows the ${state.tab} tab`);
-            assert(chart.functions.length === 0 && chart.tools.length === 1 && chart.tools[0].type === 'colourPlane', 'the example did not load into this editor');
+            // The first slide's chart: the pendulum's field with its particles, and its rest points.
+            const types = chart.tools.map((t) => t.type).join(', ');
+            assert(chart.functions.length === 0 && types === 'vectorField, restPoints' && chart.tools[0].particles === true, `the example did not load into this editor: ${types}`);
             const editors = await obs.call(() => document.querySelectorAll('.modal.tikz-modal').length);
             assert(editors === 1, `${editors} editors are open`);
             await obs.closeEditor();

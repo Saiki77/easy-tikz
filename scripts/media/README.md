@@ -174,14 +174,18 @@ node scripts/media/build-video.mjs --out /tmp/video --work /tmp/etz-video --retr
 - the dark theme draws;
 - the "What's new" popup: no popup at the start (the toolkit's `data.json` marks it seen); with data like a 3.x
   user's (no record of the popup) a reload of the plugin, as after an update, shows it once with its title, its
-  icons and the live example, and records it in `data.json` without touching the rest; the example follows its
-  slider and play, and a typed value outside the slider's range stops at its end; after Close a reload shows
-  nothing; no `data.json` but a note with an easy-tikz block (a 3.x user who never changed a setting) shows it
-  once; no `data.json` and no block in the vault (a fresh install) shows nothing and records it as seen; an
-  unreadable `data.json` stays on disk as it is; the setting switches it off, and loading the plugin writes
-  nothing; the command opens it, and Try an example opens the editor on its chart; every icon id it uses draws
-  (an id Obsidian does not know leaves the icon blank); closing it while it plays logs nothing; the link in the
-  Help tab opens it, its buttons act on that editor, and cancelling the Replace dialog keeps the Help tab;
+  7 slides, the film button and its icons, the first slide's particles move, and it records it in `data.json`
+  without touching the rest; the fractal slide follows its slider and play, and a typed value outside the
+  slider's range stops at its end; after Close a reload shows nothing; no `data.json` but a note with an
+  easy-tikz block (a 3.x user who never changed a setting) shows it once; no `data.json` and no block in the
+  vault (a fresh install) shows nothing and records it as seen; an unreadable `data.json` stays on disk as it
+  is; the setting switches it off, and loading the plugin writes nothing; the command opens it, and Try it
+  opens the editor on the slide's chart; every icon id it uses draws (an id Obsidian does not know leaves the
+  icon blank); the Ask slide opens the questions of g and Try it takes the answer to the editor; the film slide
+  loads nothing from YouTube before Play (its poster is a data: URL), Play puts the player there, and leaving
+  the slide or closing the popup removes it (YouTube is blocked for the run, so it stays off the network); the
+  link in the Help tab opens it, its buttons act on that editor, and cancelling the Replace dialog keeps the
+  Help tab;
 - nothing was logged to the console as an error during the whole run.
 
 A failed check saves a screenshot to `<work dir>/smoke/fail-<n>.png` and names it.
