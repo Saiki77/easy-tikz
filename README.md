@@ -18,31 +18,31 @@ Click any chart to open it. Everything is connected: drag a line, a point or a l
 
 ### Charts that move
 
-<img src="docs/media/v6-motion.png" alt="Two charts. The damped pendulum: arrows coloured by length, particles flowing along them, and the rest points labelled stable spiral and saddle. The Lorenz attractor in 3D, its two wings coloured by time from dark purple to yellow." width="100%">
+<img src="docs/media/v6-motion.png" alt="Two charts. The damped pendulum: arrows coloured by length, particles flowing along them, and the rest points labelled stable spiral and saddle. The Lorenz attractor in 3D, its two wings coloured by time from blue through purple to orange." width="100%">
 
 Vector fields with moving particles and their rest points, solutions of systems in 2D and 3D, and charts that play in steps.
 
 ### Write it in Python or GeoGebra
 
-<img src="docs/media/v6-code.png" alt="CODE_ALT" width="100%">
+<img src="docs/media/v6-code.png" alt="Two charts. Left: a small neural network learning two rings of points in a Python block, at training step 530: the blue region inside a closed black boundary around the blue points, red around it. Right: a chart from GeoGebra lines, a triangle ABC with its circumcircle, a segment to a midpoint and a Sequence of points, with its ten input lines printed under it." width="100%">
 
 A Python block with NumPy and matplotlib draws in the chart and can play over time, so a network learns while you watch. GeoGebra lines paste as they are. Or [ask any chatbot](docs/ai.md) to write the chart.
 
 ### A matrix moves the plane
 
-<img src="docs/media/v6-matrix.png" alt="The grid, the basis vectors î and ĵ and the unit square, half way through the move to the matrix A = [[1.5, 1], [0.5, 2]]: the grid lines lean, the old grid stays faint behind them, and the strip under the chart shows Play and Step 2 of 3. Beside it the finished picture with the eigenvectors labelled λ₁ = 2.5 and λ₂ = 1 and the square labelled det A = 2.5." width="100%">
+<img src="docs/media/v6-matrix.png" alt="The grid, the basis vectors î and ĵ and the unit square, half way through the move to the matrix A = [[1.5, 1], [0.5, 2]]: the grid lines lean, the old grid stays faint behind them, the square reads area = 1.786 on its way, and the strip under the chart shows Pause and Step 2 of 3. Beside it the finished picture with the eigenvectors labelled λ₁ = 2.5 and λ₂ = 1 and the square labelled det A = 2.5." width="100%">
 
 Draw the grid and î, ĵ, then transform the plane by a matrix or by z ↦ z². Press Play and the plane moves, with det A and the eigenvectors.
 
 ### Fractals, live
 
-<img src="docs/media/v6-fractal.png" alt="The Mandelbrot set, coloured by how fast each point escapes, with a point P dragged to its edge and the orbit of 0 for c = P spiralling inward as a red path. Beside it a Julia set with its sliders a and b." width="100%">
+<img src="docs/media/v6-fractal.png" alt="The Mandelbrot set, coloured by how fast each point escapes, with a point P near its edge and the orbit of 0 for c = P as a red path that closes into a triangle. Beside it a Julia set with its sliders a and b." width="100%">
 
 A formula colours the plane: the Mandelbrot set, Julia sets on sliders, Newton basins and complex functions. The GPU paints it while you drag.
 
 ### Ask the curve
 
-<img src="docs/media/v6-ask.png" alt="The editor with the parabola g(x) = x² − 4 and the line h(x) = 2 − x. A click on g opened a menu of questions: where is g ≤ 0, where does g cross the x-axis, its maxima and minima, the tangent here, where do g and h cross, the area between g and h. The pointer rests on the first question, and its answer shows faintly in the chart: the bar from −2 to 2 on the x-axis labelled {x ∣ g(x) ≤ 0} = [−2, 2]." width="100%">
+<img src="docs/media/v6-ask.png" alt="The editor with the parabola g(x) = x² − 4 and the line h(x) = 2 − x. A click on g opened a menu of questions: where is g ≤ 0, where does g cross the x-axis, its maxima and minima, the tangent here, a chord, the area to the x-axis, a Riemann sum. The pointer rests on the first question, and its answer shows faintly in the chart: the bar from −2 to 2 on the x-axis labelled {x ∣ g(x) ≤ 0} = [−2, 2]." width="100%">
 
 Click a curve and ask: where is f ≤ 0, where do f and g cross, the tangent here, the area between them. The answer becomes a line of the chart.
 
@@ -90,13 +90,13 @@ Every chart can also be an SVG file in your vault, so Obsidian Publish and GitHu
 
 ### Learn it step by step
 
-<img src="docs/media/readme/help.png" alt="The Help tab: the card Write a chart in words, with a chart's lines in English and LaTeX beside the linear program they draw, and below it a gallery of guides with category chips and tiles of their finished charts: a damped wave, a parabola with a slider, a polar rose, the unit circle unrolling into the sine, a tangent, a secant, an accumulated area and a Riemann sum." width="100%">
+<img src="docs/media/readme/help.png" alt="The Help tab of the editor: a search field, Start here with four first guides (your first chart, every formula is a chart, drag shapes to edit them, ask the curve), the card Write a chart in words with its lines beside the linear program they draw, and the row New in 6 with the Lorenz system, complex functions seen two ways, circles that draw square and sawtooth waves, and the orbit of a point in the Mandelbrot set." width="100%">
 
-The Help tab is a gallery of 39 short guides. Each step shows its chart live with its sliders, and the lines it adds to the chart, so you learn the chart language while you build.
+The Help tab starts with Start here and New in 6, then 79 short guides by topic. Each step shows its chart live with its sliders, and the lines it adds to the chart, so you learn the chart language while you build.
 
 ---
 
-**39 step-by-step guides** in the Help tab and [on GitHub](docs/guides/README.md) · [What's new in 6.0](docs/whats-new.md) · [Make charts with AI](docs/ai.md) · [Reference](docs/reference.md) · [Changelog](CHANGELOG.md)
+**79 step-by-step guides** in the Help tab and [on GitHub](docs/guides/README.md) · [What's new in 6.0](docs/whats-new.md) · [Make charts with AI](docs/ai.md) · [Reference](docs/reference.md) · [Changelog](CHANGELOG.md)
 
 **Privacy:** nothing goes to the internet, and there is no telemetry. The one exception: the 6.0 film in What's new loads from YouTube (`youtube-nocookie.com`) when you press Play, and not before. AI access (off by default) answers on `127.0.0.1` only, with your token. [All details](docs/reference.md#privacy-and-permissions)
 
