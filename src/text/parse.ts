@@ -1245,6 +1245,12 @@ function withLine(b: Builder, rest: Piece) {
 function setLine(b: Builder, rest: Piece) {
     const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/.exec(rest.text.trim());
     if (!m) return b.problem(rest.at, msg('problems.text.setTakes'));
+    // 6.0 entrances: `set entrances = off` (or `on`) is the chart field `entrances`, false (or true).
+    const word = /^(off|on)$/i.exec(m[2].trim());
+    if (m[1] === 'entrances' && word) {
+        b.chart.entrances = word[1].toLowerCase() === 'on';
+        return;
+    }
     b.chart[m[1]] = rawValue(m[2]);
 }
 

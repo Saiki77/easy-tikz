@@ -966,4 +966,11 @@ export interface MotionFrame {
     step: number;
     /** How far the shown step has come in, 0..1 (1: settled). */
     progress: number;
+    // 6.0 entrances (src/motion6/entrances.ts, timeline.ts)
+    /** The number of the step shown, also when it is the last one (`step` is Infinity there); absent: the still frame. */
+    index?: number;
+    /** ms since the step shown started to come in, while its objects enter; absent: they stand. */
+    enter?: number;
+    /** Previous: how far the objects of the step shown have faded out, 0..1; absent: not leaving. */
+    leave?: number;
 }
