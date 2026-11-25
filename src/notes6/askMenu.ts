@@ -9,6 +9,7 @@
  */
 import type { Question } from './ask';
 import { t } from '../i18n';
+import { uniqueId, visuallyHidden } from '../ui/kit';
 
 export interface AskMenuOptions {
     /** Where the menu opens, in client px (it stays inside the window). */
@@ -50,7 +51,12 @@ export function showAskMenu(o: AskMenuOptions): AskMenuHandle {
     const win = doc.defaultView ?? window;
     // In a modal (the editor) the menu mounts in its container: inside its focus trap and above it.
     const mount = o.returnFocus?.closest<HTMLElement>('.modal-container') ?? doc.body;
-    const el = mount.createDiv({ cls: 'etz-ask-menu etz-tokens', attr: { role: 'menu', 'aria-label': t('notes6.ask.menu', { name: o.title }) } });
+    // The menu's name is a hidden label, not aria-label: Obsidian shows a tooltip for every [aria-label],
+    // and here it covered the hint line while the pointer rested on a question.
+    const el = mount.createDiv({ cls: 'etz-ask-menu etz-tokens', attr: { role: 'menu' } });
+    const name = visuallyHidden(el, t('notes6.ask.menu', { name: o.title }));
+    name.id = uniqueId('ask-menu');
+    el.setAttr('aria-labelledby', name.id);
     el.createDiv({ cls: 'etz-ask-title', text: o.title, attr: { 'aria-hidden': 'true' } });
     const items: HTMLButtonElement[] = [];
     let previewing: Question | null = null;
