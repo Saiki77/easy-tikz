@@ -18,6 +18,7 @@ import {
     RISE_PX,
     StepEntrance,
     chartEntrances,
+    clipSegment,
     easeOut,
     entranceMs,
     entrancesOn,
@@ -240,6 +241,12 @@ test('shapes: a line draws itself along its length, grows from a point, or from 
     near(touch.x, 1.1);
     assert.deepEqual(grownLine(tangent, { x: 1, y: 1 }, 0.5), [{ x: -0.5, y: -0.5 }, { x: 2.5, y: 2.5 }]);
     assert.deepEqual(middleOf([{ x: -3, y: 1 }, { x: 3, y: -1 }]), { x: 0, y: 0 });
+    // An eigenvector line reaches far beyond the view: it grows to the view's edges, cut first.
+    const box = { xmin: -4, xmax: 4, ymin: -2, ymax: 2 };
+    assert.deepEqual(clipSegment({ x: -40, y: -40 }, { x: 40, y: 40 }, box), [{ x: -2, y: -2 }, { x: 2, y: 2 }]);
+    assert.deepEqual(clipSegment({ x: -40, y: 0 }, { x: 40, y: 0 }, box), [{ x: -4, y: 0 }, { x: 4, y: 0 }]);
+    assert.equal(clipSegment({ x: -40, y: 5 }, { x: 40, y: 5 }, box), null);
+    assert.deepEqual(clipSegment({ x: 0, y: 0 }, { x: 1, y: 1 }, box), [{ x: 0, y: 0 }, { x: 1, y: 1 }]);
 });
 
 test('shapes: a ripple spreads from the middle and holds everything at the end', () => {

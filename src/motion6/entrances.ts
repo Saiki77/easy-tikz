@@ -385,6 +385,37 @@ export function grownLine(line: Pt[], anchor: Pt, e: number): Pt[] {
     return line.map((p) => ({ x: anchor.x + (p.x - anchor.x) * e, y: anchor.y + (p.y - anchor.y) * e }));
 }
 
+/**
+ * The part of the segment a..b inside `box` (Liang and Barsky), or null.
+ * A line that grows out of a point grows to the edge of the view, not to
+ * its far ends: eigenvector lines reach far beyond the view.
+ */
+export function clipSegment(a: Pt, b: Pt, box: { xmin: number; xmax: number; ymin: number; ymax: number }): [Pt, Pt] | null {
+    let t0 = 0;
+    let t1 = 1;
+    const d = { x: b.x - a.x, y: b.y - a.y };
+    const edges: Array<[number, number]> = [
+        [-d.x, a.x - box.xmin],
+        [d.x, box.xmax - a.x],
+        [-d.y, a.y - box.ymin],
+        [d.y, box.ymax - a.y],
+    ];
+    for (const [p, q] of edges) {
+        if (p === 0) {
+            if (q < 0) return null;
+            continue;
+        }
+        const r = q / p;
+        if (p < 0) t0 = Math.max(t0, r);
+        else t1 = Math.min(t1, r);
+        if (t0 > t1) return null;
+    }
+    return [
+        { x: a.x + d.x * t0, y: a.y + d.y * t0 },
+        { x: a.x + d.x * t1, y: a.y + d.y * t1 },
+    ];
+}
+
 /** The middle of a polyline's ends (where a line through the origin starts growing). */
 export function middleOf(line: Pt[]): Pt {
     const a = line[0];

@@ -39,6 +39,19 @@ import { GRID_OPACITY, opacityValue } from './opacity';
 import { pixelLayer } from './iterate/paint'; // 6.0 E
 import type { LiveLayer } from './motion6/live'; // 6.0 F4
 import { themedColor } from './motion6/liveprims'; // 6.0 F4
+// 6.0 entrances
+import { EntranceKind, StepEntrance, clipSegment, grownLine, labelStart, middleOf, nearestOn, partialLines, popDelay, riseAt, rippleStops, toolKind } from './motion6/entrances';
+
+/** 6.0 entrances: how a scene item whose step comes in enters (its object's kind, its start, where its points start popping). */
+interface ItemEntrance {
+    kind: EntranceKind;
+    /** ms after the step the object starts (its first point, for points). */
+    start: number;
+    /** Index of its first marker among the markers of the step (they pop one after another). */
+    first: number;
+    /** Its tool (null: a function's tangent, fill and extrema). */
+    tool: Tool | null;
+}
 
 /** CONTRACT (v4): options for one render. */
 export interface SVGRendererOptions {
@@ -287,6 +300,17 @@ function finitePt(p: Pt | null | undefined): p is Pt {
 }
 
 /** Split a polyline at non-finite points; runs shorter than two points are dropped. */
+/** 6.0 entrances: the children of `g` from index `from` on (what one item drew into it). */
+function kidsFrom(g: SVGElement, from: number): Element[] {
+    return Array.from(g.children).slice(from);
+}
+
+/** 6.0 entrances: multiply an element's opacity by `k`. */
+function fadeEl(el: Element, k: number): void {
+    const before = Number(el.getAttribute('opacity') ?? '1');
+    el.setAttribute('opacity', num((Number.isFinite(before) ? before : 1) * Math.max(0, Math.min(1, k))));
+}
+
 function finiteRuns(line: Pt[] | null | undefined): Pt[][] {
     const runs: Pt[][] = [];
     let run: Pt[] = [];
@@ -360,6 +384,15 @@ export class SVGRenderer {
     private readonly live: LiveLayer | null;
     private liveOn = false;
     private dark = false;
+    // 6.0 entrances
+    /** The entrances of this frame (null: nothing moves, the still picture). */
+    private ent: StepEntrance | null = null;
+    /** Scene items whose object moves in this frame, with their entrance. */
+    private readonly entering = new Map<SceneItem2D, ItemEntrance>();
+    /** Markers of the step that pop in, all together (their stagger). */
+    private popCount = 0;
+    /** Masks made this render (sweeps and ripples), by item and kind. */
+    private readonly masks = new Map<string, string>();
     /**
      * Set by render() when the drawing has `$...$` labels typeset by MathJax
      * (null otherwise). MathJax styles the glyphs of a new label only after
@@ -452,6 +485,7 @@ export class SVGRenderer {
         const fns = this.chartFunctions();
         this.reportFunctionIssues(fns);
         const items = this.sceneItems(fns);
+        this.planEntrances(items); // 6.0 entrances
 
         this.drawPixels(svg, items); // 6.0 E
         this.liveOn = !!this.live && items.some((i) => !!i.live && i.live.length > 0); // 6.0 F4
@@ -982,6 +1016,186 @@ export class SVGRenderer {
         });
     }
 
+    // ---------------------------------------------------- 6.0 entrances
+
+    /** Screen distance of two math points: lines draw themselves at an even pace on screen. */
+    private readonly screenMetric = (a: Pt, b: Pt): number => Math.hypot(this.sx(b.x) - this.sx(a.x), this.sy(b.y) - this.sy(a.y));
+
+    /** Which items move in this frame and how (src/motion6/entrances.ts); nothing for the still picture. */
+    private planEntrances(items: SceneItem2D[]): void {
+        this.entering.clear();
+        this.masks.clear();
+        this.popCount = 0;
+        const cfg = this.config;
+        this.ent = StepEntrance.of(cfg.motion, cfg as unknown as Record<string, unknown>);
+        if (!this.ent) return;
+        const tools = new Map<string, Tool>();
+        for (const t of cfg.tools || []) if (t && typeof t === 'object') tools.set(String(t.id), t);
+        const plans: ItemEntrance[] = [];
+        for (const item of items) {
+            const tool = item.kind === 'tool' ? tools.get(item.key) ?? null : null;
+            const obj = item.kind === 'function' ? (cfg.functions || [])[Number(item.key)] : tool;
+            if (!this.ent.moves(obj)) continue;
+            const plan: ItemEntrance = { kind: tool ? toolKind(tool as unknown as Record<string, unknown>) : 'draw', start: 0, first: this.popCount, tool };
+            // A transform moves the plane instead (stepProgress); it only fades out with its step.
+            if (plan.kind === 'none' && !this.ent.leaving) continue;
+            this.popCount += (item.markers || []).length;
+            this.entering.set(item, plan);
+            plans.push(plan);
+        }
+        // Points start when their first point pops; everything else at once.
+        for (const plan of plans) if (plan.kind === 'pop') plan.start = popDelay(plan.first, this.popCount);
+    }
+
+    /** How far marker `i` of the step has popped in. */
+    private popOf(i: number): number {
+        const ent = this.ent;
+        if (!ent || ent.leaving) return 1;
+        return ent.at('pop', popDelay(i, this.popCount));
+    }
+
+    /** The lines of a stroke of a moving item as far as they have come in: drawn along, grown from a point, or tail to tip. */
+    private strokeShape(item: SceneItem2D, plan: ItemEntrance, s: StrokePrim): ((runs: Pt[][]) => Pt[][]) | undefined {
+        const ent = this.ent;
+        if (!ent || ent.leaving) return undefined;
+        if (plan.kind === 'sweep' || plan.kind === 'ripple' || plan.kind === 'fade' || plan.kind === 'none') return undefined;
+        if (!plan.tool) {
+            // A function's tangent grows out of the point where it touches.
+            const touch = (item.handles || []).find((h) => h.ref.part === 'tangent')?.point;
+            const e = ent.at('grow', plan.start);
+            return (runs) => runs.map((r) => this.grown(r, touch && finitePt(touch) ? nearestOn(r, touch) : middleOf(r), e));
+        }
+        if (plan.kind === 'grow') {
+            // Eigenvector lines run through the origin from both sides: they grow out of their middle.
+            const e = ent.at('grow', plan.start);
+            return (runs) => runs.map((r) => this.grown(r, middleOf(r), e));
+        }
+        if (s.arrow || plan.kind === 'arrow') {
+            const e = ent.at('arrow', plan.start);
+            if (s.arrow === 'both') return (runs) => runs.map((r) => grownLine(r, middleOf(r), e));
+            if (s.arrow === 'backward') return (runs) => runs.map((r) => partialLines([r.slice().reverse()], e, false, this.screenMetric)[0].reverse());
+            return (runs) => partialLines(runs, e, false, this.screenMetric);
+        }
+        const e = ent.at('draw', plan.start);
+        return (runs) => partialLines(runs, e, false, this.screenMetric);
+    }
+
+    /** A line grown `e` of the way out of `anchor`, to the edges of the view (a straight line through it is first cut to the view). */
+    private grown(run: Pt[], anchor: Pt, e: number): Pt[] {
+        if (run.length !== 2) return grownLine(run, anchor, e);
+        const v = this.view;
+        const mx = (v.xmax - v.xmin) * 0.02;
+        const my = (v.ymax - v.ymin) * 0.02;
+        const seen = clipSegment(run[0], run[1], { xmin: v.xmin - mx, xmax: v.xmax + mx, ymin: v.ymin - my, ymax: v.ymax + my });
+        return grownLine(seen ?? run, anchor, e);
+    }
+
+    /**
+     * The elements of a moving item (or a label) as far as they have come in:
+     * `sweep` and `ripple` through a mask, `fade` and `rise` by their opacity
+     * (a rise also from a little below). While the step leaves, every element
+     * of it fades out instead.
+     */
+    private enterEls(els: Element[], item: SceneItem2D, kind: EntranceKind): void {
+        const ent = this.ent;
+        const plan = this.entering.get(item);
+        if (!ent || !plan || !els.length) return;
+        if (ent.leaving) {
+            for (const el of els) fadeEl(el, ent.fade);
+            return;
+        }
+        if (kind === 'sweep' || kind === 'ripple') {
+            const url = this.maskOf(item, plan, kind);
+            if (url) for (const el of els) el.setAttribute('mask', url);
+        } else if (kind === 'fade') {
+            const k = ent.at('fade', plan.start);
+            for (const el of els) fadeEl(el, k);
+        } else if (kind === 'rise') {
+            this.riseEls(els, labelStart(plan.kind, plan.start));
+        }
+    }
+
+    /** Labels that rise in, starting `delay` ms after their step (or fade out with it). */
+    private riseEls(els: Element[], delay: number): void {
+        const ent = this.ent;
+        if (!ent) return;
+        if (ent.leaving) {
+            for (const el of els) fadeEl(el, ent.fade);
+            return;
+        }
+        const { dy, opacity } = riseAt(ent.linear('rise', delay));
+        for (const el of els) {
+            fadeEl(el, opacity);
+            if (dy > 0.01) {
+                const before = el.getAttribute('transform');
+                el.setAttribute('transform', `translate(0 ${num(dy)})${before ? ` ${before}` : ''}`);
+            }
+        }
+    }
+
+    /**
+     * The mask of a sweep (a rectangle that grows over the item from left to
+     * right; a set on the y-axis from the bottom up) or a ripple (a soft disc
+     * that grows from the middle of the plot), one per item and kind.
+     */
+    private maskOf(item: SceneItem2D, plan: ItemEntrance, kind: 'sweep' | 'ripple'): string | null {
+        const ent = this.ent;
+        if (!ent || !this.defs) return null;
+        const key = `${kind}|${plan.first}|${item.source}|${item.key}`;
+        const known = this.masks.get(key);
+        if (known) return known;
+        const id = `${this.ids}enter-${this.masks.size + 1}`;
+        const W = this.width;
+        const H = this.height;
+        const mask = this.el('mask', { id, maskUnits: 'userSpaceOnUse', x: '0', y: '0', width: num(W), height: num(H) });
+        if (kind === 'ripple') {
+            const { x, y, w, h } = this.plot;
+            const gradient = this.el('radialGradient', { id: `${id}-g`, gradientUnits: 'userSpaceOnUse', cx: num(x + w / 2), cy: num(y + h / 2), r: num(Math.hypot(w, h) / 2) });
+            for (const stop of rippleStops(ent.at('ripple', plan.start))) {
+                gradient.appendChild(this.el('stop', { offset: num(stop.offset), 'stop-color': '#fff', 'stop-opacity': num(stop.opacity) }));
+            }
+            this.defs.appendChild(gradient);
+            mask.appendChild(this.el('rect', { x: '0', y: '0', width: num(W), height: num(H), fill: `url(#${id}-g)` }));
+        } else {
+            const box = this.screenBox(item);
+            const e = ent.at('sweep', plan.start);
+            const up = !!plan.tool && plan.tool.type === 'axisSet' && plan.tool.axis === 'y';
+            const rect = !box
+                ? { x: 0, y: 0, width: W * e, height: H }
+                : up
+                  ? { x: 0, y: box.y1 - (box.y1 - box.y0) * e - 1, width: W, height: (box.y1 - box.y0) * e + 2 }
+                  : { x: box.x0 - 1, y: 0, width: (box.x1 - box.x0) * e + 2, height: H };
+            if (e > 0) mask.appendChild(this.el('rect', { x: num(rect.x), y: num(rect.y), width: num(Math.max(0, rect.width)), height: num(Math.max(0, rect.height)), fill: '#fff' }));
+        }
+        this.defs.appendChild(mask);
+        const url = `url(#${id})`;
+        this.masks.set(key, url);
+        return url;
+    }
+
+    /** The screen box of an item's fills and lines (what a sweep goes over), within the plot. */
+    private screenBox(item: SceneItem2D): { x0: number; x1: number; y0: number; y1: number } | null {
+        let x0 = Infinity;
+        let x1 = -Infinity;
+        let y0 = Infinity;
+        let y1 = -Infinity;
+        const add = (p: Pt) => {
+            if (!finitePt(p)) return;
+            const x = this.sx(p.x);
+            const y = this.sy(p.y);
+            x0 = Math.min(x0, x);
+            x1 = Math.max(x1, x);
+            y0 = Math.min(y0, y);
+            y1 = Math.max(y1, y);
+        };
+        for (const f of item.fills || []) for (const ring of f.rings || []) for (const p of ring || []) add(p);
+        for (const s of item.strokes || []) for (const line of s.lines || []) for (const p of line || []) add(p);
+        for (const m of item.markers || []) add(m);
+        if (!(x1 >= x0)) return null;
+        const { x, y, w, h } = this.plot;
+        return { x0: Math.max(x0, x), x1: Math.min(x1, x + w), y0: Math.max(y0, y), y1: Math.min(y1, y + h) };
+    }
+
     // ------------------------------------------------------------ layers
 
     /**
@@ -1026,6 +1240,7 @@ export class SVGRenderer {
                 const fo = pixelLayer(prim, { ...this.view }, rect, this.quality === 'draft');
                 fo.setAttribute('data-etz-item', item.source);
                 svg.appendChild(fo);
+                this.enterEls([fo], item, 'ripple'); // 6.0 entrances
             }
         }
     }
@@ -1074,6 +1289,9 @@ export class SVGRenderer {
             const from = g.children.length;
             for (const fill of item.fills || []) this.drawFill(g, fill);
             this.tag(g, from, item.source);
+            // 6.0 entrances: a fill sweeps in (a span or a coloured plane ripples).
+            const plan = this.entering.get(item);
+            if (plan) this.enterEls(kidsFrom(g, from), item, plan.kind === 'ripple' ? 'ripple' : 'sweep');
         }
         this.attach(svg, g);
     }
@@ -1233,8 +1451,11 @@ export class SVGRenderer {
             const lines = this.sampleFunction(info);
             if (lines.length) {
                 drawn.push({ name: info.name, index: info.index, kind: info.kind, lines });
+                // 6.0 entrances: a function that comes in draws itself, its pieces left to right.
+                const ent = this.ent && this.ent.moves(f) ? this.ent : null;
+                const shown = ent && !ent.leaving ? partialLines(lines, ent.at('draw'), true, this.screenMetric) : lines;
                 const attrs: Record<string, string> = {
-                    d: lines.map((l) => this.pointsPath(l)).join(''),
+                    d: shown.map((l) => this.pointsPath(l)).join(''),
                     fill: 'none',
                     stroke: color,
                     'stroke-width': String(width),
@@ -1243,6 +1464,7 @@ export class SVGRenderer {
                 };
                 if (f.dashed) attrs['stroke-dasharray'] = '6 4';
                 attrs['data-etz-item'] = info.name;
+                if (ent && ent.leaving) attrs.opacity = num(ent.fade);
                 g.appendChild(this.el('path', attrs));
             }
             if (f.showLegend) legend.push({ color, width, dashed: !!f.dashed, label: this.legendLabel(info, f) });
@@ -1298,14 +1520,17 @@ export class SVGRenderer {
         const g = this.layer('etz-strokes', true);
         for (const item of items) {
             const from = g.children.length;
-            for (const s of item.strokes || []) this.drawStroke(g, s, false);
+            const plan = this.entering.get(item);
+            for (const s of item.strokes || []) this.drawStroke(g, s, false, plan ? this.strokeShape(item, plan, s) : undefined);
             this.tag(g, from, item.source);
+            // 6.0 entrances: lines of a region or a set sweep with their fill, a field's or a grid's ripple, a brace fades.
+            if (plan) this.enterEls(kidsFrom(g, from), item, plan.kind === 'sweep' || plan.kind === 'ripple' || plan.kind === 'fade' ? plan.kind : 'none');
         }
         this.attach(svg, g);
     }
 
-    /** One stroke primitive; guides are always dashed 1 px at 60 % opacity. */
-    private drawStroke(g: SVGElement, s: StrokePrim, guide: boolean): void {
+    /** One stroke primitive; guides are always dashed 1 px at 60 % opacity. `shape`: 6.0 entrances, the lines as far as they have come in. */
+    private drawStroke(g: SVGElement, s: StrokePrim, guide: boolean, shape?: (runs: Pt[][]) => Pt[][]): void {
         const color = this.css(s.color);
         const arrow = guide ? undefined : s.arrow;
         const attrs: Record<string, string> = guide
@@ -1321,8 +1546,11 @@ export class SVGRenderer {
         // 6.0 C: faded lines (the trails of moving particles).
         if (!guide && typeof s.opacity === 'number' && s.opacity >= 0 && s.opacity < 1) attrs['stroke-opacity'] = String(s.opacity);
         if (!guide) this.stillAttrs(s, attrs); // 6.0 F4
-        const runs: Pt[][] = [];
+        let runs: Pt[][] = [];
         for (const line of s.lines || []) runs.push(...finiteRuns(line));
+        if (!runs.length) return;
+        // 6.0 entrances: nothing yet of a line that has not started to come in.
+        if (shape) runs = shape(runs).filter((r) => r.length >= 2);
         if (!runs.length) return;
         const close = s.closed ? 'Z' : '';
         if (!arrow) {
@@ -1353,18 +1581,23 @@ export class SVGRenderer {
             const from = guides.children.length;
             for (const s of item.guides || []) this.drawStroke(guides, s, true);
             this.tag(guides, from, item.source);
+            if (this.entering.has(item)) this.enterEls(kidsFrom(guides, from), item, 'fade'); // 6.0 entrances
         }
         this.attach(svg, guides);
         const markers = this.layer('etz-markers', false);
         for (const item of items) {
             const from = markers.children.length;
-            for (const m of item.markers || []) this.drawMarker(markers, m);
+            // 6.0 entrances: the points of a step pop in one after another.
+            const plan = this.entering.get(item);
+            (item.markers || []).forEach((m, i) => this.drawMarker(markers, m, plan ? this.popOf(plan.first + i) : 1));
             this.tag(markers, from, item.source);
+            if (plan && this.ent?.leaving) this.enterEls(kidsFrom(markers, from), item, 'none');
         }
         this.attach(svg, markers);
     }
 
-    private drawMarker(g: SVGElement, m: MarkerPrim): void {
+    /** `scale`: 6.0 entrances, how far the marker has popped in (1: whole). */
+    private drawMarker(g: SVGElement, m: MarkerPrim, scale = 1): void {
         if (!finitePt(m) || !this.inView(m.x, m.y, 0)) return;
         const r = (MARKER_RADIUS[m.size] || MARKER_RADIUS.normal) * (this.compact ? 0.6 : 1);
         const attrs: Record<string, string> = {
@@ -1383,6 +1616,12 @@ export class SVGRenderer {
             attrs['stroke-width'] = this.compact ? '1.2' : '2';
         }
         this.stillAttrs(m, attrs); // 6.0 F4
+        if (scale !== 1) {
+            // 6.0 entrances: popping in, about its own centre.
+            const cx = this.sx(m.x);
+            const cy = this.sy(m.y);
+            attrs.transform = `translate(${num(cx)} ${num(cy)}) scale(${num(Math.max(0, scale))}) translate(${num(-cx)} ${num(-cy)})`;
+        }
         g.appendChild(this.el('circle', attrs));
     }
 
@@ -1393,6 +1632,7 @@ export class SVGRenderer {
             const from = g.children.length;
             for (const b of item.braces || []) this.drawBrace(g, b);
             this.tag(g, from, item.source);
+            if (this.entering.has(item)) this.enterEls(kidsFrom(g, from), item, 'fade'); // 6.0 entrances
         }
         this.attach(svg, g);
     }
@@ -1478,6 +1718,7 @@ export class SVGRenderer {
                 });
             }
             this.tag(g, from, item.source);
+            if (this.entering.has(item)) this.enterEls(kidsFrom(g, from), item, 'rise'); // 6.0 entrances: just after its object
         }
         this.attach(svg, g);
     }
@@ -1516,12 +1757,15 @@ export class SVGRenderer {
             const y = this.labelCoordinate(a.y, source, 'y');
             if (this.compact || !Number.isFinite(x) || !Number.isFinite(y) || !this.inView(x, y, TEXT_SLACK)) return;
             const attrs: Record<string, string> = { 'data-annotation-idx': String(idx), 'data-etz-item': source, 'pointer-events': 'bounding-box' };
+            const from = g.children.length;
             this.drawPlaced(g, this.math.formatTemplate(text), x, y, a.anchor, a.size, {
                 color: this.css(a.color),
                 halo: fillRings.some((rings) => pointInRings({ x, y }, rings)),
                 weight: '500',
                 attrs,
             });
+            // 6.0 entrances: a label of the step rises in just after the step's other objects.
+            if (this.ent && this.ent.moves(a)) this.riseEls(kidsFrom(g, from), this.ent.labels);
         });
         this.attach(svg, g);
     }
