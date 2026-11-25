@@ -1349,8 +1349,9 @@ test('3D scene: points with labels and derived values, spliced segments, planes'
     assert.deepEqual(s.segments[0].b, [1, 2, 3]);
     assert.deepEqual(s.segments[2].b, [0, 0, 0]);
     assert.ok(s.segments.every((x) => x.arrow === 'forward'));
-    // PL1 reads P1_z (computed first); hidden PL2 draws nothing.
-    assert.deepEqual(s.planes, [{ axis: 'z', value: 3, color: 'orange', opacity: 0.3 }]);
+    // PL1 reads P1_z (computed first); hidden PL2 draws nothing. 6.0 entrances: each shape names its tool.
+    assert.deepEqual(s.planes, [{ axis: 'z', value: 3, color: 'orange', opacity: 0.3, source: 'PL1' }]);
+    assert.ok(s.segments.every((x) => x.source === 'S1') && s.points.every((p) => p.source === 'P1'));
     const info = s.issues.filter((i) => i.source === 'P2');
     assert.equal(info.length, 1);
     assert.equal(info[0].severity, 'info');

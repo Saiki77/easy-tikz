@@ -13,6 +13,9 @@ import { t as msg } from './i18n';
 // 6.0 F4: the clock in 3D (a turning view, curves that draw themselves) and the look of long curves.
 import { clockTime } from './motion6/clock';
 import { themedColor, traceFraction } from './motion6/liveprims';
+// 6.0 entrances: the objects of a step that comes in enter by kind (a surface rises from the floor).
+import { EntranceKind, StepEntrance, labelStart, popDelay, riseAt, rippleOpacity, toolKind } from './motion6/entrances';
+import type { Tool } from './types';
 
 
 const PADDING_TOP = 40;
@@ -159,6 +162,8 @@ interface SegmentMark {
     dashed: boolean;
     /** Arrow head triangles as [tipX, tipY, leftX, leftY, rightX, rightY]. */
     heads: number[][];
+    /** 6.0 entrances: the opacity of a leg that fades or ripples in (absent: 1). */
+    alpha?: number;
 }
 
 /** 6.0 F4: one projected leg of a long curve (a solution); legs are drawn in batches by depth. */
@@ -171,6 +176,8 @@ interface CurveLeg {
     width: number;
     dashed: boolean;
     depth: number;
+    /** 6.0 entrances: the opacity of a leg that fades in or out (absent: 1). */
+    alpha?: number;
 }
 
 /** 6.0 F4: legs of a curve of one depth band and colour as one path; far bands fainter. */
@@ -179,6 +186,8 @@ interface CurveBatch {
     width: number;
     dashed: boolean;
     alpha: number;
+    /** 6.0 entrances: the legs' own opacity (part of the batch's alpha). */
+    own: number;
     /** Points as x1, y1, x2, y2 per leg, joined where a leg starts at the last one's end. */
     legs: number[];
 }
@@ -214,6 +223,12 @@ interface MarkerMark {
     color: string;
     /** Plain text (LaTeX stripped); '' for none. */
     label: string;
+    /** 6.0 entrances: the opacity of the marker and of its label, and how far below its spot the label is (px); absent: 1, 1, 0. */
+    alpha?: number;
+    labelAlpha?: number;
+    labelDy?: number;
+    /** 6.0 entrances: the radius the label sits beside while the point pops (absent: r). */
+    labelR?: number;
 }
 
 interface TextMark {
@@ -223,6 +238,8 @@ interface TextMark {
     color: string;
     fontSize: number;
     align: 'start' | 'middle' | 'end';
+    /** 6.0 entrances: the opacity of a label that rises in (absent: 1). */
+    alpha?: number;
 }
 
 /** Mix `rgb` toward white by height: t = 0 (lowest) keeps 30 % of the colour, t = 1 all of it. */
@@ -371,6 +388,11 @@ export class SVG3DRenderer {
     private dark = false;
     private markerMarks: MarkerMark[] = [];
     private annotationMarks: TextMark[] = [];
+    // 6.0 entrances
+    /** The entrances of this frame (null: nothing moves). */
+    private ent: StepEntrance | null = null;
+    /** The tools that come in or leave in this frame, by name. */
+    private moving = new Map<string, Tool>();
     private titleText = '';
 
     /** Box geometry. Refreshed per render via `prepareBox`. */
@@ -653,6 +675,7 @@ export class SVG3DRenderer {
         // Tools first: points tools publish derived names (P1_x, ...) that
         // surfaces and labels may read.
         const scene = this.computeTools(config, math);
+        this.planEntrances(config); // 6.0 entrances
 
         const allQuads: Quad[] = [];
         this.prepareSurfaces(math, allQuads);
@@ -687,7 +710,7 @@ export class SVG3DRenderer {
         let scene: Scene3D;
         // 6.0 F4: a frame of the clock (the view turns, a curve draws itself) reuses the scene of the frame before.
         const m = config.motion;
-        const key = JSON.stringify([config.tools, config.parameters, config.functions, config.xmin, config.xmax, config.ymin, config.ymax, config.zmin, config.zmax, m ? [m.step, m.progress] : null]);
+        const key = JSON.stringify([config.tools, config.parameters, config.functions, config.xmin, config.xmax, config.ymin, config.ymax, config.zmin, config.zmax, m ? [m.step, m.progress, m.index ?? null] : null]);
         if (this.sceneMemo && this.sceneMemo.key === key) {
             if (this.sceneMemo.scene.derived) math.setDerived(this.sceneMemo.scene.derived);
             return this.sceneMemo.scene;
@@ -751,7 +774,7 @@ export class SVG3DRenderer {
             const xDomain = this.surfaceDomain(math, func.xDomain, [cfg.xmin, cfg.xmax], source, 'xDomain');
             const yDomain = this.surfaceDomain(math, func.yDomain, [cfg.ymin, cfg.ymax], source, 'yDomain');
             const data = this.getSurfaceData(i, func, fn, xDomain, yDomain, math);
-            this.projectQuads(data, func, out);
+            this.projectQuads(data, func, out, this.surfaceRise(func));
         }
     }
 
@@ -973,10 +996,13 @@ export class SVG3DRenderer {
         return data;
     }
 
-    /** Project cached samples and emit one Quad per grid cell. */
-    private projectQuads(data: SurfaceData, func: Function3DParameters, out: Quad[]) {
+    /** Project cached samples and emit one Quad per grid cell. `rise`: 6.0 entrances, heights scaled toward `base` and the opacity of a surface that comes in. */
+    private projectQuads(data: SurfaceData, func: Function3DParameters, out: Quad[], rise: { e: number; base: number; alpha: number } | null = null) {
         const cfg = this.requireConfig();
         const { zmin, zmax } = cfg;
+        const riseE = rise ? rise.e : 1;
+        const riseBase = rise ? rise.base : 0;
+        const riseAlpha = rise ? rise.alpha : 1;
         const zRange = zmax - zmin || 1;
         const zRangeInv = 1 / zRange;
 
@@ -1020,7 +1046,8 @@ export class SVG3DRenderer {
             const y = data.ys[k];
             const nx = (x - xCenter) * xNF;
             const ny = (y - yCenter) * yNF;
-            const nz = (z - zCenter) * zNF;
+            // 6.0 entrances: a surface that comes in rises from `riseBase` (its colours keep the real heights).
+            const nz = ((riseE === 1 ? z : riseBase + (z - riseBase) * riseE) - zCenter) * zNF;
 
             const rx = nx * cosA - ny * sinA;
             const ry = nx * sinA + ny * cosA;
@@ -1052,10 +1079,10 @@ export class SVG3DRenderer {
             color.shades = shades;
         }
         const wireframe = func.wireframe;
-        const opacity = Number.isFinite(func.opacity) ? Math.max(0, Math.min(1, func.opacity)) : 0.7;
+        const opacity = (Number.isFinite(func.opacity) ? Math.max(0, Math.min(1, func.opacity)) : 0.7) * riseAlpha;
         const edge = color.css;
         const edgeShades = map && !wireframe ? mapEdgeShades(map) : null;
-        const mesh = wireframe ? 0 : opacityValue(func.meshOpacity, MESH_OPACITY);
+        const mesh = (wireframe ? 0 : opacityValue(func.meshOpacity, MESH_OPACITY)) * riseAlpha;
         const zs = data.zs;
         for (let i = 0; i < samples; i++) {
             const rowA = i * stride;
@@ -1129,7 +1156,7 @@ export class SVG3DRenderer {
         }
 
         const css = this.colorInfo(plane.color).css;
-        const opacity = Number.isFinite(plane.opacity) ? Math.max(0, Math.min(1, plane.opacity)) : 0.2;
+        const opacity = (Number.isFinite(plane.opacity) ? Math.max(0, Math.min(1, plane.opacity)) : 0.2) * this.fadeOf(plane.source); // 6.0 entrances
         for (let i = 0; i < n; i++) {
             for (let j = 0; j < n; j++) {
                 const a = grid[i * stride + j];
@@ -1154,7 +1181,7 @@ export class SVG3DRenderer {
         this.planeOutlines.push({
             pts: [at(uMin, vMin), at(uMax, vMin), at(uMax, vMax), at(uMin, vMax)],
             color: css,
-            opacity: Math.min(1, opacity + 0.3),
+            opacity: Math.min(1, opacity + 0.3) * this.fadeOf(plane.source),
         });
     }
 
@@ -1168,7 +1195,10 @@ export class SVG3DRenderer {
         const legs: CurveLeg[] = [];
         this.curveHeads = [];
         const time = clockTime(cfg.motion);
-        for (const seg of scene.segments) {
+        const drawn = this.drawnParts(scene); // 6.0 entrances: how far the lines of a step have drawn themselves
+        for (const seg0 of scene.segments) {
+            const seg = this.enteringSegment(seg0, drawn);
+            if (!seg) continue;
             const { a, b } = seg;
             if (![...a, ...b].every(Number.isFinite)) continue;
             let cut = 1;
@@ -1195,7 +1225,9 @@ export class SVG3DRenderer {
             const p2 = this.project(lerp(t1, 0), lerp(t1, 1), lerp(t1, 2));
             const width = THICKNESS_MAP[seg.width] || 1.5;
             if (seg.curve && !seg.arrow) {
-                legs.push({ x1: p1.sx, y1: p1.sy, x2: p2.sx, y2: p2.sy, color: this.colorInfo(seg.color).css, width, dashed: !!seg.dashed, depth: (p1.depth + p2.depth) / 2 });
+                const leg: CurveLeg = { x1: p1.sx, y1: p1.sy, x2: p2.sx, y2: p2.sy, color: this.colorInfo(seg.color).css, width, dashed: !!seg.dashed, depth: (p1.depth + p2.depth) / 2 };
+                if (seg.alpha !== undefined) leg.alpha = seg.alpha;
+                legs.push(leg);
                 continue;
             }
             const mark: SegmentMark = {
@@ -1206,6 +1238,7 @@ export class SVG3DRenderer {
                 dashed: !!seg.dashed,
                 heads: [],
             };
+            if (seg.alpha !== undefined) mark.alpha = seg.alpha;
             // A head on a clipped end would point at the box wall, not at the real endpoint.
             const arrow: ArrowHeads | undefined = seg.arrow;
             const len = Math.hypot(p2.sx - p1.sx, p2.sy - p1.sy);
@@ -1235,17 +1268,35 @@ export class SVG3DRenderer {
     private prepareMarkers(scene: Scene3D) {
         const cfg = this.requireConfig();
         this.markerMarks = [];
+        // 6.0 entrances: the points of a step pop in one after another, each label just after its point.
+        const ent = this.ent;
+        const popping = new Map<Scene3D['points'][number], number>();
+        if (ent && !ent.leaving) for (const p of scene.points) if (p.source && this.moving.has(p.source)) popping.set(p, popping.size);
         for (const p of scene.points) {
             if (!insideRange(p.x, cfg.xmin, cfg.xmax) || !insideRange(p.y, cfg.ymin, cfg.ymax) || !insideRange(p.z, cfg.zmin, cfg.zmax)) continue;
             const q = this.project(p.x, p.y, p.z);
-            this.markerMarks.push({
+            const mark: MarkerMark = {
                 sx: q.sx,
                 sy: q.sy,
                 // 6.0 A: a bare point is its label alone.
                 r: p.bare ? 0 : MARKER_RADIUS[p.size] || MARKER_RADIUS.normal,
                 color: this.colorInfo(p.color).css,
                 label: p.label ? labelDisplayText(p.label, stripLatex) : '',
-            });
+            };
+            if (ent && p.source && this.moving.has(p.source)) {
+                if (ent.leaving) {
+                    mark.alpha = ent.fade;
+                    mark.labelAlpha = ent.fade;
+                } else {
+                    const delay = popDelay(popping.get(p) ?? 0, popping.size);
+                    mark.labelR = mark.r;
+                    mark.r *= Math.max(0, ent.at('pop', delay));
+                    const rise = riseAt(ent.linear('rise', labelStart('pop', delay)));
+                    mark.labelAlpha = rise.opacity;
+                    mark.labelDy = rise.dy;
+                }
+            }
+            this.markerMarks.push(mark);
         }
     }
 
@@ -1297,15 +1348,146 @@ export class SVG3DRenderer {
                 case 'right': align = 'start'; dx = 6; break;
                 case 'center': default: break;
             }
-            this.annotationMarks.push({
+            const mark: TextMark = {
                 x: p.sx + dx,
                 y: p.sy + dy,
                 text,
                 color: this.colorInfo(a.color).css,
                 fontSize: ANNOTATION_FONT_SIZE[a.size] || ANNOTATION_FONT_SIZE.normal,
                 align,
-            });
+            };
+            // 6.0 entrances: a label of the step rises in just after the step's other objects.
+            const ent = this.ent;
+            if (ent && ent.moves(a)) {
+                if (ent.leaving) mark.alpha = ent.fade;
+                else {
+                    const rise = riseAt(ent.linear('rise', ent.labels));
+                    mark.alpha = rise.opacity;
+                    mark.y += rise.dy;
+                }
+            }
+            this.annotationMarks.push(mark);
         });
+    }
+
+    // ---- 6.0 entrances ----
+
+    /** Which tools come in (or leave) in this frame. */
+    private planEntrances(config: RendererConfig) {
+        this.moving = new Map();
+        this.ent = StepEntrance.of(config.motion, config as unknown as Record<string, unknown>);
+        const ent = this.ent;
+        if (!ent) return;
+        for (const t of config.tools || []) {
+            if (!t || typeof t !== 'object' || !ent.moves(t) || typeof t.name !== 'string') continue;
+            // A transform moves space instead; it only fades out with its step.
+            if (toolKind(t as unknown as Record<string, unknown>) === 'none' && !ent.leaving) continue;
+            this.moving.set(t.name, t);
+        }
+    }
+
+    /** The opacity of a shape of tool `source` that fades in or out (1 when it stands). */
+    private fadeOf(source: string | undefined): number {
+        const ent = this.ent;
+        if (!ent || !source || !this.moving.has(source)) return 1;
+        return ent.leaving ? ent.fade : ent.at('fade');
+    }
+
+    /** A surface that comes in rises from the floor (z = 0 when the box holds it), fading up quickly; one that leaves fades out. */
+    private surfaceRise(func: Function3DParameters): { e: number; base: number; alpha: number } | null {
+        const ent = this.ent;
+        if (!ent || !ent.moves(func)) return null;
+        if (ent.leaving) return { e: 1, base: 0, alpha: ent.fade };
+        const cfg = this.requireConfig();
+        const base = cfg.zmin > 0 ? cfg.zmin : cfg.zmax < 0 ? cfg.zmax : 0;
+        return { e: ent.at('surface'), base, alpha: Math.min(1, ent.linear('surface') * 3) };
+    }
+
+    /** The kind of entrance of a segment of a moving tool. */
+    private segmentKind(seg: Scene3D['segments'][number]): EntranceKind | null {
+        const tool = seg.source ? this.moving.get(seg.source) : undefined;
+        if (!tool) return null;
+        const kind = toolKind(tool as unknown as Record<string, unknown>);
+        if (kind === 'grow' || kind === 'ripple' || kind === 'fade' || kind === 'none') return kind;
+        if (seg.arrow || kind === 'arrow') return 'arrow';
+        return 'draw';
+    }
+
+    /**
+     * For the lines that draw themselves: where each leg starts and ends along
+     * its tool's lines (0..1, by length in the box), so a curve draws itself
+     * from its start, leg after leg.
+     */
+    private drawnParts(scene: Scene3D): Map<Scene3D['segments'][number], [number, number]> {
+        const out = new Map<Scene3D['segments'][number], [number, number]>();
+        const ent = this.ent;
+        if (!ent || ent.leaving || !this.moving.size) return out;
+        const byTool = new Map<string, Array<{ seg: Scene3D['segments'][number]; len: number }>>();
+        for (const seg of scene.segments) {
+            if (this.segmentKind(seg) !== 'draw' || !seg.source) continue;
+            const n = (p: number[]) => [(p[0] - this.xCenter) * this.xNormFactor, (p[1] - this.yCenter) * this.yNormFactor, (p[2] - this.zCenter) * this.zNormFactor];
+            const a = n(seg.a);
+            const b = n(seg.b);
+            const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+            let list = byTool.get(seg.source);
+            if (!list) byTool.set(seg.source, (list = []));
+            list.push({ seg, len: Number.isFinite(len) ? len : 0 });
+        }
+        for (const list of byTool.values()) {
+            const total = list.reduce((sum, l) => sum + l.len, 0) || 1;
+            let at = 0;
+            for (const l of list) {
+                out.set(l.seg, [at / total, (at + l.len) / total]);
+                at += l.len;
+            }
+        }
+        return out;
+    }
+
+    /** A segment as far as it has come in this frame (null: not yet), with its opacity when it fades, ripples or leaves. */
+    private enteringSegment(seg: Scene3D['segments'][number], drawn: Map<Scene3D['segments'][number], [number, number]>): (Scene3D['segments'][number] & { alpha?: number }) | null {
+        const ent = this.ent;
+        const kind = ent ? this.segmentKind(seg) : null;
+        if (!ent || !kind) return seg;
+        if (ent.leaving) return { ...seg, alpha: ent.fade };
+        const lerp = (p: number[], q: number[], t: number): [number, number, number] => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t];
+        switch (kind) {
+            case 'none':
+                return seg;
+            case 'fade':
+                return { ...seg, alpha: ent.at('fade') };
+            case 'ripple': {
+                // The grid of space ripples out of the middle of the box.
+                const m = lerp(seg.a, seg.b, 0.5);
+                const d = Math.hypot((m[0] - this.xCenter) * this.xNormFactor, (m[1] - this.yCenter) * this.yNormFactor, (m[2] - this.zCenter) * this.zNormFactor) / Math.sqrt(3);
+                const alpha = rippleOpacity(ent.at('ripple'), Math.min(1, d));
+                return alpha > 0 ? { ...seg, alpha } : null;
+            }
+            case 'grow': {
+                // Lines through the origin grow out of their middle, both ways, to the walls of the box.
+                const e = ent.at('grow');
+                if (!(e > 0)) return null;
+                const cfg = this.requireConfig();
+                const m = lerp(seg.a, seg.b, 0.5);
+                const span = clipToBox(seg.a, seg.b, [cfg.xmin, cfg.ymin, cfg.zmin], [cfg.xmax, cfg.ymax, cfg.zmax]);
+                const a = span ? lerp(seg.a, seg.b, span[0]) : seg.a;
+                const b = span ? lerp(seg.a, seg.b, span[1]) : seg.b;
+                return { ...seg, a: lerp(m, a, e), b: lerp(m, b, e) };
+            }
+            case 'arrow': {
+                const e = ent.at('arrow');
+                return e > 0 ? { ...seg, b: lerp(seg.a, seg.b, e) } : null;
+            }
+            default: {
+                const span = drawn.get(seg);
+                if (!span) return seg;
+                const f = ent.at('draw');
+                const [u0, u1] = span;
+                if (u0 >= f) return null;
+                if (u1 <= f) return seg;
+                return { ...seg, b: lerp(seg.a, seg.b, u1 > u0 ? (f - u0) / (u1 - u0) : 0) };
+            }
+        }
     }
 
     /** The side a centred label takes at a point on an edge or corner of the box (edgeLabelSide3D), else null. */
@@ -1459,12 +1641,14 @@ export class SVG3DRenderer {
             line.setAttribute('stroke-width', String(s.width));
             line.setAttribute('stroke-linecap', 'round');
             if (s.dashed) line.setAttribute('stroke-dasharray', '6 4');
+            if (s.alpha !== undefined) line.setAttribute('opacity', s.alpha.toFixed(3)); // 6.0 entrances
             group.appendChild(line);
             // Heads are plain triangles: no <marker> ids that could collide between charts.
             for (const h of s.heads) {
                 const head = createSvg('polygon');
                 head.setAttribute('points', `${h[0].toFixed(2)},${h[1].toFixed(2)} ${h[2].toFixed(2)},${h[3].toFixed(2)} ${h[4].toFixed(2)},${h[5].toFixed(2)}`);
                 head.setAttribute('fill', s.color);
+                if (s.alpha !== undefined) head.setAttribute('opacity', s.alpha.toFixed(3));
                 group.appendChild(head);
             }
         }
@@ -1477,13 +1661,17 @@ export class SVG3DRenderer {
             circle.setAttribute('fill', m.color);
             circle.setAttribute('stroke', this.themeColors.bgPrimary);
             circle.setAttribute('stroke-width', '1.5');
+            if (m.alpha !== undefined) circle.setAttribute('opacity', m.alpha.toFixed(3)); // 6.0 entrances
             group.appendChild(circle);
         }
         for (const m of this.markerMarks) {
             if (!m.label) continue;
             const text = createSvg('text');
-            text.setAttribute('x', (m.sx + m.r + 2).toFixed(2));
-            text.setAttribute('y', (m.sy - m.r - 2).toFixed(2));
+            // 6.0 entrances: the label of a point that pops in rises after it (beside the point's full size).
+            const r = m.labelR ?? m.r;
+            text.setAttribute('x', (m.sx + r + 2).toFixed(2));
+            text.setAttribute('y', (m.sy - r - 2 + (m.labelDy ?? 0)).toFixed(2));
+            if (m.labelAlpha !== undefined) text.setAttribute('opacity', m.labelAlpha.toFixed(3));
             text.setAttribute('fill', m.color);
             text.setAttribute('font-size', '11');
             text.setAttribute('font-family', 'var(--font-text)');
@@ -1508,6 +1696,7 @@ export class SVG3DRenderer {
             t.setAttribute('font-size', String(a.fontSize));
             t.setAttribute('font-weight', '500');
             t.setAttribute('font-family', 'var(--font-text)');
+            if (a.alpha !== undefined) t.setAttribute('opacity', a.alpha.toFixed(3)); // 6.0 entrances
             t.textContent = a.text;
             group.appendChild(t);
         }
@@ -1797,6 +1986,7 @@ export class SVG3DRenderer {
             ctx.stroke();
         }
         for (const s of this.segmentMarks) {
+            ctx.globalAlpha = s.alpha ?? 1; // 6.0 entrances
             ctx.beginPath();
             ctx.moveTo(s.x1, s.y1);
             ctx.lineTo(s.x2, s.y2);
@@ -1815,10 +2005,12 @@ export class SVG3DRenderer {
                 ctx.fill();
             }
         }
+        ctx.globalAlpha = 1;
         ctx.lineCap = 'butt';
 
         for (const m of this.markerMarks) {
             if (!m.r) continue;
+            ctx.globalAlpha = m.alpha ?? 1; // 6.0 entrances
             ctx.beginPath();
             ctx.arc(m.sx, m.sy, m.r, 0, Math.PI * 2);
             ctx.fillStyle = m.color;
@@ -1827,14 +2019,17 @@ export class SVG3DRenderer {
             ctx.strokeStyle = this.themeColors.bgPrimary;
             ctx.stroke();
         }
+        ctx.globalAlpha = 1;
         ctx.font = this.canvasFont(11);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
         ctx.lineJoin = 'round';
         for (const m of this.markerMarks) {
             if (!m.label) continue;
-            const x = m.sx + m.r + 2;
-            const y = m.sy - m.r - 2;
+            const r = m.labelR ?? m.r;
+            const x = m.sx + r + 2;
+            const y = m.sy - r - 2 + (m.labelDy ?? 0);
+            ctx.globalAlpha = m.labelAlpha ?? 1; // 6.0 entrances
             // Background halo keeps the label readable on top of a surface.
             ctx.lineWidth = 3;
             ctx.strokeStyle = this.themeColors.bgPrimary;
@@ -1842,6 +2037,7 @@ export class SVG3DRenderer {
             ctx.fillStyle = m.color;
             ctx.fillText(m.label, x, y);
         }
+        ctx.globalAlpha = 1;
         ctx.lineJoin = 'miter';
     }
 
@@ -1933,11 +2129,13 @@ export class SVG3DRenderer {
         const ctx = this.ctx;
         ctx.textBaseline = 'alphabetic';
         for (const a of this.annotationMarks) {
+            ctx.globalAlpha = a.alpha ?? 1; // 6.0 entrances
             ctx.fillStyle = a.color;
             ctx.font = this.canvasFont(a.fontSize, '500');
             ctx.textAlign = a.align === 'start' ? 'left' : a.align === 'end' ? 'right' : 'center';
             ctx.fillText(a.text, a.x, a.y);
         }
+        ctx.globalAlpha = 1;
     }
 
     private drawTitleToCanvas() {
@@ -1973,10 +2171,11 @@ function curveBatches(legs: CurveLeg[]): CurveBatch[] {
         const band = span > 1e-12 ? Math.min(CURVE_BANDS - 1, Math.floor(((hi - l.depth) / span) * CURVE_BANDS)) : CURVE_BANDS - 1;
         let list = bands[band].get(l.color);
         if (!list) bands[band].set(l.color, (list = []));
-        let batch = list.find((b) => b.width === l.width && b.dashed === l.dashed);
+        const own = l.alpha ?? 1;
+        let batch = list.find((b) => b.width === l.width && b.dashed === l.dashed && b.own === own);
         if (!batch) {
             const near = CURVE_BANDS > 1 ? band / (CURVE_BANDS - 1) : 1;
-            batch = { color: l.color, width: l.width, dashed: l.dashed, alpha: CURVE_FAR_ALPHA + (1 - CURVE_FAR_ALPHA) * near, legs: [] };
+            batch = { color: l.color, width: l.width, dashed: l.dashed, alpha: (CURVE_FAR_ALPHA + (1 - CURVE_FAR_ALPHA) * near) * own, own, legs: [] };
             list.push(batch);
             out[band].push(batch);
         }
