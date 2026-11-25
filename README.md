@@ -1,4 +1,6 @@
-<video src="https://github.com/user-attachments/assets/b44ad2a6-ff7e-42fe-89c7-6e0a994c8397" controls muted width="100%"></video>
+<video src="https://github.com/user-attachments/assets/5451e9d3-ed46-4a01-ae7f-18da5dd030a5" controls width="100%"></video>
+
+<p align="center"><a href="https://www.youtube.com/watch?v=X--vCnK-u7Q">Watch the 6.0 film on YouTube</a></p>
 
 <h3 align="center">Every idea deserves a picture.</h3>
 
