@@ -1375,13 +1375,13 @@ export class SVG3DRenderer {
     /** Which tools come in (or leave) in this frame. */
     private planEntrances(config: RendererConfig) {
         this.moving = new Map();
-        this.ent = StepEntrance.of(config.motion, config as unknown as Record<string, unknown>);
+        this.ent = StepEntrance.of(config.motion, config);
         const ent = this.ent;
         if (!ent) return;
         for (const t of config.tools || []) {
             if (!t || typeof t !== 'object' || !ent.moves(t) || typeof t.name !== 'string') continue;
             // A transform moves space instead; it only fades out with its step.
-            if (toolKind(t as unknown as Record<string, unknown>) === 'none' && !ent.leaving) continue;
+            if (toolKind(t) === 'none' && !ent.leaving) continue;
             this.moving.set(t.name, t);
         }
     }
@@ -1407,7 +1407,7 @@ export class SVG3DRenderer {
     private segmentKind(seg: Scene3D['segments'][number]): EntranceKind | null {
         const tool = seg.source ? this.moving.get(seg.source) : undefined;
         if (!tool) return null;
-        const kind = toolKind(tool as unknown as Record<string, unknown>);
+        const kind = toolKind(tool);
         if (kind === 'grow' || kind === 'ripple' || kind === 'fade' || kind === 'none') return kind;
         if (seg.arrow || kind === 'arrow') return 'arrow';
         return 'draw';

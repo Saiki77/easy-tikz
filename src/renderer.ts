@@ -1027,7 +1027,7 @@ export class SVGRenderer {
         this.masks.clear();
         this.popCount = 0;
         const cfg = this.config;
-        this.ent = StepEntrance.of(cfg.motion, cfg as unknown as Record<string, unknown>);
+        this.ent = StepEntrance.of(cfg.motion, cfg);
         if (!this.ent) return;
         const tools = new Map<string, Tool>();
         for (const t of cfg.tools || []) if (t && typeof t === 'object') tools.set(String(t.id), t);
@@ -1036,7 +1036,7 @@ export class SVGRenderer {
             const tool = item.kind === 'tool' ? tools.get(item.key) ?? null : null;
             const obj = item.kind === 'function' ? (cfg.functions || [])[Number(item.key)] : tool;
             if (!this.ent.moves(obj)) continue;
-            const plan: ItemEntrance = { kind: tool ? toolKind(tool as unknown as Record<string, unknown>) : 'draw', start: 0, first: this.popCount, tool };
+            const plan: ItemEntrance = { kind: tool ? toolKind(tool) : 'draw', start: 0, first: this.popCount, tool };
             // A transform moves the plane instead (stepProgress); it only fades out with its step.
             if (plan.kind === 'none' && !this.ent.leaving) continue;
             this.popCount += (item.markers || []).length;

@@ -29,6 +29,10 @@ import type { MotionFrame } from '../types';
 import { STEP_LISTS, StepList, stepOf } from './steps';
 
 type Data = Record<string, unknown>;
+/** What the entrance of a tool depends on (a Tool, or its JSON). */
+type ToolLike = { type?: unknown; style?: unknown; kind?: unknown; traced?: unknown };
+/** The lists of a chart whose objects have steps (a chart's JSON, or a RendererConfig). */
+type ChartLists = { functions?: unknown; functions3D?: unknown; tools?: unknown; annotations?: unknown };
 
 export type EntranceKind = 'draw' | 'sweep' | 'pop' | 'grow' | 'arrow' | 'rise' | 'ripple' | 'surface' | 'fade' | 'none';
 
@@ -132,7 +136,7 @@ export function rippleStops(k: number): Array<{ offset: number; opacity: number 
 // ------------------------------------------------------------------ kinds
 
 /** The entrance of a tool by its type (and the options that change it). */
-export function toolKind(tool: Data): EntranceKind {
+export function toolKind(tool: ToolLike): EntranceKind {
     const type = String(tool.type);
     switch (type) {
         case 'region':
@@ -190,14 +194,14 @@ export function toolKind(tool: Data): EntranceKind {
 }
 
 /** The entrance of an object of a chart list (its main kind: its labels rise after it, its points pop). */
-export function objectKind(list: StepList, obj: Data): EntranceKind {
+export function objectKind(list: StepList, obj: ToolLike): EntranceKind {
     if (list === 'functions') return 'draw';
     if (list === 'functions3D') return 'surface';
     if (list === 'annotations') return 'rise';
     return toolKind(obj);
 }
 
-function itemsOf(data: Data, list: StepList): Data[] {
+function itemsOf(data: ChartLists, list: StepList): Data[] {
     const v = data[list];
     return Array.isArray(v) ? v.filter((x): x is Data => !!x && typeof x === 'object' && !Array.isArray(x)) : [];
 }
@@ -213,7 +217,7 @@ export function labelStart(kind: EntranceKind, start = 0): number {
  * to come in (0 when nothing in it enters). Points are counted as if many
  * popped, so the time is never too short.
  */
-export function stepTiming(data: Data, step: number): { labels: number; total: number } {
+export function stepTiming(data: ChartLists, step: number): { labels: number; total: number } {
     let main = 0;
     let end = 0;
     let freeLabels = false;
@@ -238,7 +242,7 @@ export function stepTiming(data: Data, step: number): { labels: number; total: n
 }
 
 /** How long step `step` of a chart takes to come in (ms); 0 when nothing in it enters. */
-export function entranceMs(data: Data, step: number): number {
+export function entranceMs(data: ChartLists, step: number): number {
     return stepTiming(data, step).total;
 }
 
@@ -275,7 +279,7 @@ export class StepEntrance {
     }
 
     /** The entrances of `frame` for a chart (its lists: functions, functions3D, tools, annotations), or null when nothing moves. */
-    static of(frame: MotionFrame | undefined, chart: Data): StepEntrance | null {
+    static of(frame: MotionFrame | undefined, chart: ChartLists): StepEntrance | null {
         if (!frame || typeof frame.index !== 'number') return null;
         const leaving = typeof frame.leave === 'number' && Number.isFinite(frame.leave);
         const entering = typeof frame.enter === 'number' && Number.isFinite(frame.enter);
