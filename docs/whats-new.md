@@ -2,7 +2,9 @@
 
 [Overview](../README.md) · [Guides](guides/README.md) · [Reference](reference.md) · [Changelog](../CHANGELOG.md)
 
-## 6.0: every idea is a picture
+## 6.0: every idea deserves a picture
+
+Watch the 6.0 film on [YouTube](https://www.youtube.com/watch?v=X--vCnK-u7Q) (2:21).
 
 <p align="center">
   <img src="media/v6-fractal.png" alt="A Julia set of z² + c coloured by the plugin, with the sliders a and b that set c = a + bi under it." width="100%">
@@ -14,8 +16,11 @@
 - **Ask the curve.** Click a curve in the editor, or in the chart under a block: a menu of questions opens (where is f ≤ 0, where do f and g cross, the tangent here, the area between them, Newton's method from here, ...). Point at one to see its answer; choose it and it becomes a line of the chart. [Ask the curve](reference.md#ask-the-curve-60)
 - **Hover reads sets and maps.** Sets, maps, conditions, intervals, Jensen's inequality, matrices, recurrences and sums in your notes open a chart too, with the functions and matrices taken from the note. [Every formula is a chart](reference.md#every-formula-is-a-chart)
 - **Values and sums.** Complex numbers, vectors, matrices and lists in every formula; names with `let`; `\sum`, `\prod`, `n!` and `\binom{n}{k}` with sliders in their bounds; vectors as arrows and lists as points. [Values](reference.md#values-complex-numbers-vectors-matrices-and-sums-60)
+- **Python.** A `python:` line and the lines indented under it are a script that runs inside the plugin, with no Python install and on phones too: NumPy, matplotlib-style drawing in the chart's look, and `def frame(t):` to play a drawing over time. [Python scripts](ai.md#python-scripts)
+- **GeoGebra.** Paste the input lines of a GeoGebra construction as they are (`A = (1, 2)`, `c = Circle(A, 3)`, `Polygon(A, B, C)`); they draw in GeoGebra's look, and GeoGebra commands work in formulas. [GeoGebra lines](ai.md#geogebra-input-lines-and-commands)
+- **Machine learning.** Activation functions in formulas as ML notes write them (`\sigma(x)`, `\mathrm{ReLU}(x)`), and a Help section with a network that learns, optimizers on a loss surface, logistic regression, k-means and principal components.
 - **Also new.** Orbits (gradient descent too), cobwebs, bifurcation diagrams, Newton's method and Fourier circles; sets on an axis in set notation and the chord of Jensen's inequality; a chart with an x range only fits y to what it draws; charts from formulas keep the function's name.
-- **What's new** shows 6.0 as a slideshow with live charts: a Julia set on two sliders, a matrix that plays, a vector field, and a chart you can ask.
+- **What's new** shows 6.0 in seven live slides: a vector field that flows, the Lorenz attractor in 3D, a network that learns, a matrix in steps, a Julia set on sliders, a chart you can ask, and the 6.0 film, which plays from YouTube only after you press Play.
 
 ```easy-tikz
 show x from -4.5 to 4.5 and y from -3 to 3

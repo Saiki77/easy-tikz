@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [6.0.0] - 2026-11-24
 
-Every idea is a picture. Formulas take complex numbers, vectors, matrices and sums; a matrix moves the plane; vector fields flow; orbits, cobwebs and fractals colour the plane; charts play in steps; and a click on a curve asks it questions.
+Every idea deserves a picture. Formulas take complex numbers, vectors, matrices and sums; a matrix moves the plane; vector fields flow; orbits, cobwebs and fractals colour the plane; charts play in steps; a click on a curve asks it questions; and charts can be written in Python or GeoGebra. The 6.0 film: https://www.youtube.com/watch?v=X--vCnK-u7Q
 
 ### Added
 
@@ -26,20 +26,29 @@ Every idea is a picture. Formulas take complex numbers, vectors, matrices and su
 - **Colour the plane:** escape time (the Mandelbrot set, Julia sets, Newton basins), domain colouring of f(z) and heat maps of f(x, y), in seven colour maps. The GPU (WebGL) paints it live; the CPU paints it with 64-bit numbers in tiles without WebGL and deep in a zoom. The export writes the picture as a PNG beside the `.tex` file (`\addplot graphics`), and Copy LaTeX saves the PNG in the note's attachment folder.
 - Every new line has its Full LaTeX command (`\let`, `\draw[vector]`, `\mark[list]`, `\mark[x-axis]`, `\draw[chord]`, `\then`, `\vectorfield`, `\restpoints`, `\solution`, `\draw[grid]`, `\draw[basis vectors]`, `\transform`, `\draw[eigenvectors]`, `\shade[unit square]`, `\draw[span]`, `\orbit`, `\cobweb`, `\bifurcation`, `\newton`, `\colourplane`, `\circles`), a Build tab card, recipes in **+ Add** (sections Values, Linear algebra, Motion, Iterate, Colour the plane), the auto-fit, rename, Japanese texts and a pgfplots export that compiles.
 - **Limits** so that no chart freezes a phone: 2000 steps of an orbit, 1000 of a cobweb, 100 of Newton's method, 1000 per pixel of a coloured plane, 60 Fourier terms, 20000 steps of a solution, 100000 terms of a sum. A larger count is drawn at the limit with a note.
-- **What's new** shows 6.0 as a slideshow of live charts: a Julia set on two sliders, a matrix that moves the plane in steps, a pendulum's vector field, a chart you can ask, the card of a set, a Taylor sum, then the rest of 6.0 and versions 5 and 4 in lists.
+- **Python scripts** (`src/python/`): a `python:` line and the lines indented under it are a script that runs inside the plugin, with no Python install and on phones too. A subset of Python with NumPy (arrays, `linalg`, `fft`, `random`) and matplotlib-style drawing (`plot`, `scatter`, `fill_between`, `bar`, `hist`, `quiver`, `contour`, `contourf`, `imshow`, `text`, `legend` and more), drawn in the chart's own look. The names a script sets are names of the chart, sliders are its variables, and `def frame(t):` plays a drawing over time.
+- **GeoGebra** (`src/geogebra/`): GeoGebra input lines are chart lines. Paste a construction as it is (`A = (1, 2)`, `c = Circle(A, 3)`, `Polygon(A, B, C)`, `f(x) = x^2`, lists, `Sequence`, `Zip` and more), drawn in GeoGebra's look, and GeoGebra commands work in formulas.
+- **Machine learning:** activation functions in formulas as ML notes write them (`\sigma(x)`, `\mathrm{ReLU}(x)`, softplus, GELU, SiLU, softmax, logsumexp), NumPy for models (`svd`, `pinv`, `lstsq`, `cov`, `multivariate_normal` and more), and `frame(t)` pictures, titles and legends, so a network can learn while you watch.
+- **Help:** a new home with Start here, New in 6 and topic sections, and new guides for every part of 6.0: linear algebra, dynamics, fractals, Python, GeoGebra and a Machine learning section (activation functions, optimizers on a loss surface, logistic regression, a network that learns, k-means, principal components, overfitting and ridge, a loss landscape in 3D). New Showcase pages: the Lorenz system, the optimizer race, a network that learns, complex functions two ways, Julia and Newton, the logistic map, Fourier circles.
+- **3D that turns:** `turning` turns a 3D chart slowly by itself, and `traced` lets a 3D solution such as the Lorenz attractor draw itself.
+- **What's new** shows 6.0 in seven live slides: a vector field that flows, the Lorenz attractor in 3D, a network that learns, a matrix that moves the plane in steps, a Julia set on two sliders, a chart you can ask, and the 6.0 film. The film plays from YouTube (`youtube-nocookie.com`) only after a click on Play; nothing loads before that.
 
 ### Changed
 
 - **y follows what is drawn:** a chart whose text gives x and no y fits y to what it draws, live. Charts with a y range, charts with no range and JSON blocks are as before.
 - **Charts from formulas** keep the note's name of a function (`g(x) = ...` stays g) and write the x range only.
-- The AI guide (`docs/ai.md`) and the AI server's instructions list every new line, its Full LaTeX command, its JSON fields and limits, and new rules (names `let` may not take, real and complex square roots, braces in labels, `then`).
-- The README shows the 6.0 features one at a time, each with a picture.
+- The AI guide (`docs/ai.md`) and the AI server's instructions list every new line, its Full LaTeX command, its JSON fields and limits, and new rules (names `let` may not take, real and complex square roots, braces in labels, `then`), with checked recipes for Python, GeoGebra and machine learning. `check_chart` reports what every 6.0 object computes.
+- The README shows the 6.0 features one at a time, each with a picture, and opens with the 6.0 film.
+- **Privacy:** the only thing that can reach the internet is the 6.0 film in What's new, and only after a click on Play.
 
 ### Fixed
 
 - `check_chart` and the other AI tools accept sets on an axis and chords (`axisSet`, `chord`).
 - Set labels without MathJax read `\mid` as ∣ and `\mathbb{R}` as ℝ.
 - Rest points on the border of the view keep their marker but no label.
+- Particles of a field with a pole (the flow around a cylinder, 1/r²) no longer draw long straight streaks across the chart.
+- 6.0 objects in 3D charts get their cards in the Build tab.
+- A line the AI tools rewrite keeps its comments.
 
 ## [5.2.6] - 2026-11-23
 
