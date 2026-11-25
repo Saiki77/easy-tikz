@@ -8,7 +8,7 @@
  * primitives; the particles are the only part that follows the clock, so
  * they are added after the scene memo (motionStrokes). Pure: no DOM.
  */
-import type { Colormap, MotionFrame, RestPointsTool, Tool, TrajectoryTool, VectorFieldTool } from '../types';
+import type { Colormap, RestPointsTool, Tool, TrajectoryTool, VectorFieldTool } from '../types';
 import type { Pt } from '../geometry';
 import type { Scene3D, SceneCtx, SceneOutput, StrokePrim } from '../scene';
 import { addIssue, fail, newOutput, publish, UP_RIGHT } from '../scene';
@@ -17,9 +17,8 @@ import { errorText } from '../util';
 import { colormapRgb, isColormap } from '../colormaps';
 import { MAX_STEPS, compileTuple, restPoints, setTupleMessages, solveSystem, streamlines } from './maths';
 import type { RestKind, VectorFn } from './maths';
-import { clockTime } from './clock';
 // 6.0 F4: what moves on the preview's live canvas.
-import type { LivePrim, TraceRun } from './liveprims';
+import type { TraceRun } from './liveprims';
 import { TIME_LEVELS, flowOf, optionValue, rampColor, speedOf, traceSeconds, tracedAt } from './liveprims';
 
 /** The tool types of this module. */
@@ -172,7 +171,6 @@ function computeField(t: VectorFieldTool, ctx: SceneCtx): SceneOutput {
     const width = str(t.thickness) || 'thin';
     const map = isColormap(t.colormap) ? t.colormap : null;
     const arrows: Array<{ shaft: Pt[]; head: Pt[]; size: number }> = [];
-    let sum = 0;
     let counted = 0;
     for (let i = 0; i < nx; i++) {
         const x = view.xmin + ((i + 0.5) * (view.xmax - view.xmin)) / nx;
@@ -181,7 +179,6 @@ function computeField(t: VectorFieldTool, ctx: SceneCtx): SceneOutput {
             const v = F(x, y);
             if (!Number.isFinite(v[0]) || !Number.isFinite(v[1])) continue;
             const size = Math.hypot(v[0], v[1]);
-            sum += size;
             counted++;
             // The direction in pt; an arrow of length `len` pt centred on its point.
             const sx = v[0] * ux;

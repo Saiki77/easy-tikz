@@ -35,7 +35,7 @@ import {
     vecShape,
 } from './types';
 import { COMPLEX_FUNCTIONS, VALUE_FUNCTIONS, abs, add, complexFunction, cross, div, mul, neg, pow, realFunction, sub, toReal, transposeOf } from './ops';
-import { MAX_TERMS, termRange } from './special';
+import { termRange } from './special';
 // 6.0 G: GeoGebra's commands in every formula (src/geogebra/commands.ts).
 import { coordinateCall, geogebraCall, geogebraNeeds } from '../geogebra/commands';
 import { isMlFunction } from '../ml/builtins'; // 6.0 ML
@@ -83,14 +83,11 @@ export class Locals {
     ) {}
 
     find(name: string): Locals | null {
-        for (let l: Locals | null = this; l; l = l.parent) if (l.name === name) return l;
-        return null;
+        return this.name === name ? this : this.parent ? this.parent.find(name) : null;
     }
 
     names(): string[] {
-        const out: string[] = [];
-        for (let l: Locals | null = this; l; l = l.parent) out.push(l.name);
-        return out;
+        return [this.name, ...(this.parent ? this.parent.names() : [])];
     }
 }
 

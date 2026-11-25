@@ -2169,7 +2169,7 @@ function curveBatches(legs: CurveLeg[]): CurveBatch[] {
         hi = Math.max(hi, l.depth);
     }
     const span = hi - lo;
-    const bands: Array<Map<string, CurveBatch[]>> = Array.from({ length: CURVE_BANDS }, () => new Map());
+    const bands: Array<Map<string, CurveBatch[]>> = Array.from({ length: CURVE_BANDS }, () => new Map<string, CurveBatch[]>());
     const out: CurveBatch[][] = Array.from({ length: CURVE_BANDS }, () => []);
     for (const l of legs) {
         // Band 0 is the farthest (largest depth).

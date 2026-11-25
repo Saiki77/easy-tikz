@@ -27,7 +27,6 @@ export interface LinearHoverCard {
 
 const MATRIX = /\\begin\s*\{\s*([pbvB]?matrix)\s*\}([\s\S]*?)\\end\s*\{\s*\1\s*\}/;
 const EXAMPLE_MATRIX = '\\begin{pmatrix} 2 & 1 \\\\ 1 & 2 \\end{pmatrix}';
-const EXAMPLE_MATRIX_3D = '\\begin{pmatrix} 1 & 0.5 & 0 \\\\ 0 & 1 & 0 \\\\ 0 & 0.5 & 1.5 \\end{pmatrix}';
 const EXAMPLE_VECTOR = '\\begin{pmatrix} 1 \\\\ 0.5 \\end{pmatrix}';
 const IDENTITY: Record<2 | 3, string> = {
     2: '\\begin{pmatrix} 1 & 0 \\\\ 0 & 1 \\end{pmatrix}',

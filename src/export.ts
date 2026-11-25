@@ -1533,7 +1533,8 @@ function clipSegment3D(a: [number, number, number], b: [number, number, number],
 function segmentCmds(scene: Scene3D, box: Box, colors: ColorSet): string[] {
     const out: string[] = [];
     // 6.0 C: legs of one run (a solution in 3D), whole in the box and end to end, are one path.
-    let open: { run: number; key: string; pts: Array<[number, number, number]> } | null = null;
+    // Typed by its initializer, so that code after a callback that sets it does not read it as null.
+    let open = null as { run: number; key: string; pts: Array<[number, number, number]> } | null;
     const close = () => {
         if (open && open.pts.length >= 2) out.push(`\\addplot3[${open.key}] coordinates {${open.pts.map(tuple3).join(' ')}};`);
         open = null;
@@ -1552,7 +1553,7 @@ function segmentCmds(scene: Scene3D, box: Box, colors: ColorSet): string[] {
         if (s.run !== undefined && !s.arrow && t0 <= 0 && t1 >= 1) {
             // 6.0 F4: a long curve (a solution) as the smooth curve through its points, as the preview draws it.
             const opts = [colors.use(s.color), lineWidth(s.width), ...(s.dashed ? ['dashed'] : []), ...(s.curve ? ['smooth'] : []), 'forget plot'].join(', ');
-            const cur = open as { run: number; key: string; pts: Array<[number, number, number]> } | null;
+            const cur = open;
             const last = cur ? cur.pts[cur.pts.length - 1] : null;
             if (cur && last && cur.run === s.run && cur.key === opts && last.every((v, k) => v === s.a[k])) cur.pts.push(s.b);
             else {

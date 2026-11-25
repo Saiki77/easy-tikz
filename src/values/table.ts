@@ -87,7 +87,8 @@ export class ValueTable implements Definitions {
         defs: readonly ValueDefinition[],
         private readonly host: TableHost
     ) {
-        for (const raw of Array.isArray(defs) ? defs : []) {
+        for (const item of (Array.isArray(defs) ? defs : []) as readonly unknown[]) {
+            const raw = (item && typeof item === 'object' ? item : null) as { name?: unknown; params?: unknown; expression?: unknown } | null;
             if (!raw || typeof raw.name !== 'string') continue;
             const def: ValueDefinition = {
                 name: raw.name,

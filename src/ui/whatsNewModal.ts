@@ -25,6 +25,7 @@ import { App, Modal, setIcon } from 'obsidian';
 import { cloneData, errorText, fitPixelScale } from '../util';
 import { SettingsManager } from '../settings';
 import { MathContext } from '../mathcontext';
+import type { Parameter } from '../types';
 import { RenderLayout, DrawnScene, SVGRenderer } from '../renderer';
 import { AskController, svgBoxOf } from '../notes6/askHost';
 import { openAskMenu } from '../notes6/askMenu';
@@ -410,8 +411,8 @@ class AskChart {
     /** The chart's math, its sliders set. */
     private mathOf(settings: SettingsManager): MathContext {
         const math = settings.createMathContext({ memo: false });
-        const params = settings.getValue('parameters');
-        math.setParams(Array.isArray(params) ? params : []);
+        const params: unknown = settings.getValue('parameters');
+        math.setParams(Array.isArray(params) ? (params as Parameter[]) : []);
         return math;
     }
 

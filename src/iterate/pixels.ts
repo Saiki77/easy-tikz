@@ -181,7 +181,7 @@ export function escapePrim(ctx: MathContext, s: EscapeSpec): PixelPrim {
             const im = out[1];
             const d = re * re + im * im;
             if (!(d <= ESCAPE2)) {
-                if (d !== d) return { c: INSIDE, stayed: n };
+                if (Number.isNaN(d)) return { c: INSIDE, stayed: n };
                 return { c: escapeRgb(s.map, smoothSpeed(i, d), n), stayed: i };
             }
             if (s.basins) {

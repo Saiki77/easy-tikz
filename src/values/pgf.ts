@@ -105,7 +105,7 @@ class ValuePgf {
 
     fn(name: string, args: R[]): R {
         const b = builtinFunction(name);
-        if (b && args.every((a) => typeof a === 'number')) return b.fn(...(args as number[]));
+        if (b && args.every((a) => typeof a === 'number')) return b.fn(...args);
         if (name === 'round') return `floor(${this.text(args[0])}+0.5)`;
         const mapped = Object.prototype.hasOwnProperty.call(PGF_REAL, name) ? PGF_REAL[name] : null;
         if (!mapped) this.none(`${name}(...)`);
@@ -113,7 +113,7 @@ class ValuePgf {
     }
 
     private hypot(parts: R[]): R {
-        if (parts.every((p) => typeof p === 'number')) return Math.hypot(...(parts as number[]));
+        if (parts.every((p) => typeof p === 'number')) return Math.hypot(...parts);
         let acc = parts[0];
         for (let i = 1; i < parts.length; i++) acc = `veclen(${this.text(acc)},${this.text(parts[i])})`;
         return parts.length === 1 ? this.fn('abs', [acc]) : acc;

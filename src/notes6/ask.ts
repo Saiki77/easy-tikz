@@ -395,8 +395,9 @@ function functionQuestions(ctx: AskContext): Question[] {
     const f = ctx.target.name;
     const info = ctx.math.functionInfo(f);
     if (!info || info.kind !== 'cartesian') return [];
-    const fn = info.fn;
-    const { view, num } = ctx;
+    const fn = (v: number): number => info.fn(v);
+    const view = ctx.view;
+    const num = (v: number): string => ctx.num(v);
     const x0 = ctx.target.x;
     const q: Question[] = [];
     const axis = t('notes6.ask.group.axis');

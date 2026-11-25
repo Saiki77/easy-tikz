@@ -511,8 +511,7 @@ function optionWords(o: Opt, kind: Kind, variable: string): Mapped {
         case 'mesh':
         case 'samples':
         case 'pattern':
-        // 6.0 F4: the options of moving things
-        case 'speed':
+        case 'speed': // 6.0 F4: the options of moving things
         case 'trails':
         case 'width':
         case 'arrows':

@@ -148,7 +148,6 @@ export class AskController {
             return v;
         };
         const next = (q: Question) => (has(q) ? removeAnswer(data, q.answer) : applyAnswer(data, q.answer));
-        const trap = this.host.trapEscape;
         showAskMenu({
             at,
             title: askTitle(target, data),
@@ -162,7 +161,7 @@ export class AskController {
             },
             focus,
             returnFocus: this.host.focusEl(),
-            trapEscape: trap ? (fn) => trap.call(this.host, fn) : undefined,
+            trapEscape: this.host.trapEscape ? (fn) => this.host.trapEscape?.(fn) ?? (() => undefined) : undefined,
         });
         return true;
     }
