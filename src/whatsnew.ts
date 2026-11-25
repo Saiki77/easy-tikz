@@ -20,12 +20,12 @@
  * keeps this content does not show it again, and one that brings new
  * content raises WHATS_NEW_VERSION.
  */
-import { GUIDES } from './guides';
+import { guideById } from './guides';
 import { parseChartText } from './text/parse';
 import { printChartText } from './text/print';
+import { NO_WORDS } from './text/words';
 import type { Parameter } from './types';
-import { MessageKey, MessageValues, t, tIn } from './i18n';
-import { HoverCard, hoverCard, noteDefinitions } from './notes6/hover';
+import { MessageKey, t } from './i18n';
 
 /** Version of the popup's content. Raise it when the popup says something new. */
 export const WHATS_NEW_VERSION = '6.0.0';
@@ -114,112 +114,76 @@ export function chartScanRank(sectionTypes: readonly string[] | null): 0 | 1 | 2
 
 // ------------------------------------------------------------------ chart
 
-/** Slider `a` of the first live chart: the real part of c in z^2 + c. */
+/** Slider `a` of the fractal slide: the real part of c in z^2 + c. */
 export const WHATS_NEW_SLIDER: Readonly<Parameter> = { name: 'a', value: -0.8, min: -1, max: 1, step: 0.01 };
 
 /**
- * The first live chart: a Julia set, every point of the plane coloured by
- * its orbit under z^2 + c, with c = a + bi on two sliders (6.0: every idea
- * is a picture). The GPU paints it, so the sliders move it live.
+ * The fractal slide: a Julia set, every point of the plane coloured by its
+ * orbit under z^2 + c, with c = a + bi on two sliders. The GPU paints it,
+ * so the sliders move it live. 16:9, as the stage of a slide.
  */
 export const WHATS_NEW_CHART_TEXT = [
-    'show x from -1.8 to 1.8 and y from -1.2 to 1.2',
-    'size 12 x 8',
+    'show x from -2.1 to 2.1 and y from -1.2 to 1.2',
+    'size 16 x 9',
     'equal scale',
     `slider ${WHATS_NEW_SLIDER.name} from ${WHATS_NEW_SLIDER.min} to ${WHATS_NEW_SLIDER.max}, starting at ${WHATS_NEW_SLIDER.value}, in steps of ${WHATS_NEW_SLIDER.step}`,
     'slider b from -1 to 1, starting at 0.156, in steps of 0.002',
     'colour the plane by $z_{n+1} = z_n^2 + c$, $z_0 = x + iy$, $c = a + bi$, 200 steps',
 ].join('\n');
 
-/** The first live chart as data. A new copy every time: the popup moves its own. */
-export function whatsNewChart(): Record<string, unknown> {
-    return parseChartText(WHATS_NEW_CHART_TEXT).data;
+/** The chart that chart text describes, read in the built-in words (whatever words the reader set up for their own charts). */
+export function whatsNewChartOf(text: string): Record<string, unknown> {
+    return parseChartText(text, { words: NO_WORDS }).data;
 }
 
-/** The first live chart as its block writes it: what you type, line by line (src/text). */
-export function whatsNewText(): string {
-    return printChartText(whatsNewChart());
+/** The fractal slide's chart as data. A new copy every time: the popup moves its own. */
+export function whatsNewChart(): Record<string, unknown> {
+    return whatsNewChartOf(WHATS_NEW_CHART_TEXT);
 }
 
 // ---------------------------------------------------------------- content
 
-export interface WhatsNewItem {
-    /** Lucide id known to Obsidian 1.13 (the smoke test checks that it draws: svg.lucide-<id>). */
-    icon: string;
-    title: string;
-    /** One line. Inline `backticks` become code. */
-    text: string;
-    /** A guide in the Help tab (src/guides) that shows it step by step. */
-    guide?: string;
-}
-
-/**
- * An item whose title and text are read in the reader's language each time
- * they are shown: the language is set after this module loads, and the tests
- * read them in English.
- */
-function item(icon: string, title: MessageKey, text: MessageKey, guide?: string, values?: MessageValues): WhatsNewItem {
-    const out: WhatsNewItem = {
-        icon,
-        get title() {
-            return t(title);
-        },
-        get text() {
-            return t(text, values);
-        },
-    };
-    if (guide) out.guide = guide;
-    return out;
-}
-
 export const WHATS_NEW_TITLE = 'Easy Graphs Charts and TikZ 6';
 
-/** The line under the title, in the reader's language. */
-export const whatsNewSubtitle = (): string => t('panels.whatsNew.subtitle');
-/** The same line in English, as the tests read it. */
-export const WHATS_NEW_SUBTITLE = tIn('en', 'panels.whatsNew.subtitle');
+/** Fields that flow: the damped pendulum's field, 600 particles on the clock, and its rest points (stable spirals and saddles). */
+export const WHATS_NEW_FLOW_CHART = [
+    'size 16 x 9',
+    'show x from -6.3 to 6.3 and y from -3.6 to 3.6',
+    'draw the vector field $F(x, y) = (y, -\\sin x - 0.25y)$, coloured by length, with moving particles, 600 particles, trails 0.92',
+    'mark the rest points of F',
+].join('\n');
 
-/** What a slide of the popup shows (src/ui/whatsNewModal.ts draws each). */
-export type WhatsNewSlideId = 'picture' | 'matrix' | 'motion' | 'ask' | 'hover' | 'values' | 'also' | 'earlier';
+/**
+ * Chaos in 3D: one path of the Lorenz system, coloured by time, that draws
+ * itself while the chart turns (the lines of the Showcase page
+ * lorenz-butterfly). It starts seen from the front, low, so the butterfly
+ * faces the reader; the box is lower than a cube (x : y : z = 1 : 1 : 0.6),
+ * so the turning chart fills more of a 16:9 stage.
+ */
+export const WHATS_NEW_CHAOS_CHART = [
+    '3d',
+    'turning',
+    'show x from -25 to 25, y from -30 to 30 and z from 0 to 50',
+    'size 16 x 9',
+    'set rotationX = 12',
+    'set rotationZ = 0',
+    'box 1 x 1 x 0.6',
+    'draw the solution of $\\dot{p} = (10(y - x), x(28 - z) - y, xy - \\frac{8}{3}z)$ through (1, 1, 1) for t from 0 to 40, coloured by time, traced',
+].join('\n');
 
-/** One slide of the popup: a feature of 6.0, shown big with its live chart. */
-export interface WhatsNewSlide {
-    id: WhatsNewSlideId;
-    /** Lucide id known to Obsidian 1.13. */
-    icon: string;
-    /** In the reader's language. */
-    readonly title: string;
-    /** One or two sentences in the reader's language; inline `backticks` become code. */
-    readonly text: string;
-    /** A guide in the Help tab that shows it step by step. */
-    guide?: string;
-    /** Its charts, as chart text: the live charts of the slide. */
-    charts: string[];
-    /** Slider rows under its live chart (default 1). */
-    sliders?: number;
+/** The Showcase page whose chart the machine learning slide shows: a network learns (src/guides/ml.ts), a Python script with frame(t). */
+export const WHATS_NEW_ML_GUIDE = 'network-learns';
+
+/** The chart of that page, as chart text (its script as it is written there). */
+function mlChart(): string {
+    const guide = guideById(WHATS_NEW_ML_GUIDE);
+    return guide ? printChartText(guide.chart) : '';
 }
 
-function slide(id: WhatsNewSlideId, icon: string, title: MessageKey, text: MessageKey, charts: string[], more: { guide?: string; sliders?: number } = {}): WhatsNewSlide {
-    const out: WhatsNewSlide = {
-        id,
-        icon,
-        get title() {
-            return t(title);
-        },
-        get text() {
-            return t(text);
-        },
-        charts,
-    };
-    if (more.guide) out.guide = more.guide;
-    if (more.sliders) out.sliders = more.sliders;
-    return out;
-}
-
-/** A matrix moves the plane: the grid, î, ĵ and the unit square, then A in the next step, then its eigenvectors. Play moves it. */
-const MATRIX_CHART = [
-    'show x from -4.5 to 4.5 and y from -3 to 3',
-    'size 12 x 8',
+/** Step by step: a matrix moves the plane. The grid, î, ĵ and the unit square; then A moves them; then its eigenvectors. */
+export const WHATS_NEW_STEPS_CHART = [
+    'show x from -5.4 to 5.4 and y from -3 to 3',
+    'size 16 x 9',
     'equal scale',
     'let $A = \\begin{pmatrix} 1.5 & 1 \\\\ 0.5 & 2 \\end{pmatrix}$',
     'draw the grid',
@@ -229,146 +193,91 @@ const MATRIX_CHART = [
     'then draw the eigenvectors of A, labelled',
 ].join('\n');
 
-/** Motion: the damped pendulum's field, particles on the clock, and its rest points (stable spirals and saddles). */
-const MOTION_CHART = [
-    'show x from -6.3 to 6.3 and y from -4.2 to 4.2',
-    'size 12 x 8',
-    'draw the vector field $F(x, y) = (y, -\\sin x - 0.25y)$, coloured by length, with moving particles',
-    'mark the rest points of F, labelled',
-].join('\n');
-
-/** Ask the curve: two functions to click. The menu's questions come from src/notes6/ask.ts. */
+/** Ask your chart: two functions to click. The menu's questions come from src/notes6/ask.ts. */
 export const WHATS_NEW_ASK_CHART = [
-    'show x from -4 to 4 and y from -5 to 7',
-    'size 12 x 8',
+    'show x from -5 to 5 and y from -5 to 7',
+    'size 16 x 9',
     'plot $g(x) = x^2 - 4$ in blue, thick',
     'plot $h(x) = 2 - x$ in red, thick',
 ].join('\n');
 
-/** The note of the hover slide: it defines g, and its formula is a set. */
-export const WHATS_NEW_NOTE_DEFINITION = 'g(x) = x^2 - 4';
-export const WHATS_NEW_FORMULA = '\\{x \\in \\mathbb{R}^n \\mid g(x) \\le 0\\}';
+/**
+ * The film of 6.0 on YouTube (2:21). The slide shows a poster that ships
+ * with the plugin; only a click on Play puts the player there, so nothing
+ * loads from the network before it. The player comes from
+ * youtube-nocookie.com, which sets no cookies until the film plays.
+ */
+export const WHATS_NEW_FILM = {
+    /** The player a click on Play puts in place of the poster. */
+    embed: 'https://www.youtube-nocookie.com/embed/X--vCnK-u7Q?autoplay=1&rel=0&playsinline=1',
+    /** The film's page, for the link "Open on YouTube" (opens the browser). */
+    watch: 'https://www.youtube.com/watch?v=X--vCnK-u7Q',
+    /** How long it is, as the poster and the header button say it. */
+    length: '2:21',
+} as const;
 
-/** The card of the formula, as a note shows it (src/notes6/hover.ts): g from the note, the set on the x-axis. */
-export function whatsNewCard(): HoverCard | null {
-    return hoverCard(WHATS_NEW_FORMULA, noteDefinitions([WHATS_NEW_NOTE_DEFINITION]));
+/** The changelog on GitHub (the film slide's button "Changelog" opens it in the browser). */
+export const WHATS_NEW_CHANGELOG = 'https://github.com/Saiki77/easy-tikz/blob/main/CHANGELOG.md';
+
+/** What a slide of the popup shows (src/ui/whatsNewModal.ts draws each). */
+export type WhatsNewSlideId = 'flow' | 'chaos' | 'ml' | 'steps' | 'fractal' | 'ask' | 'film';
+
+/** One slide of the popup: a feature of 6.0, its live chart filling a 16:9 stage, then a label, a title and one line. */
+export interface WhatsNewSlide {
+    id: WhatsNewSlideId;
+    /** The small accent line over the title: what moves, or what to do. Empty on the film slide. In the reader's language. */
+    readonly label: string;
+    /** In the reader's language. */
+    readonly title: string;
+    /** One line in the reader's language. */
+    readonly text: string;
+    /** Its live chart, as chart text in the built-in words; none on the film slide. */
+    chart?: string;
+    /** Slider rows under its live chart (default 1). */
+    sliders?: number;
 }
 
-/** The chart of that card, in chart lines. */
-const HOVER_CHART = ['size 12 x 8', ...(whatsNewCard()?.lines ?? [])].join('\n');
-
-/** Values and sums: the Taylor polynomial of sin x, its degree on a slider. */
-const VALUES_CHART = [
-    'show x from -7.5 to 7.5 and y from -3 to 3',
-    'size 12 x 8',
-    'slider n from 0 to 12, starting at 4, in steps of 1',
-    'plot $\\sin x$ in gray, thick',
-    'plot $T(x) = \\sum_{k=0}^{n} \\frac{(-1)^k x^{2k+1}}{(2k+1)!}$ in red, thick',
-].join('\n');
-
 /**
- * The slides, in order: what 6.0 brings, one feature each, then the rest
- * of 6.0 in one list, then versions 5 and 4. Back, Next, the dots and the
- * arrow keys move between them.
+ * A slide whose words are read in the reader's language each time they are
+ * shown: the language is set after this module loads, and the tests read
+ * them in English.
  */
-export const WHATS_NEW_SLIDES: WhatsNewSlide[] = [
-    slide('picture', 'snowflake', 'panels.whatsNew.picture.title', 'panels.whatsNew.picture.text', [WHATS_NEW_CHART_TEXT], { sliders: 2 }),
-    slide('matrix', 'axis-3d', 'panels.whatsNew.matrix.title', 'panels.whatsNew.matrix.text', [MATRIX_CHART]),
-    slide('motion', 'waves', 'panels.whatsNew.motion.title', 'panels.whatsNew.motion.text', [MOTION_CHART]),
-    slide('ask', 'mouse-pointer-click', 'panels.whatsNew.ask.title', 'panels.whatsNew.ask.text', [WHATS_NEW_ASK_CHART]),
-    slide('hover', 'scan-search', 'panels.whatsNew.hover.title', 'panels.whatsNew.hover.text', [HOVER_CHART]),
-    slide('values', 'braces', 'panels.whatsNew.values.title', 'panels.whatsNew.values.text', [VALUES_CHART]),
-    slide('also', 'list-plus', 'panels.whatsNew.alsoTitle', 'panels.whatsNew.alsoText', []),
-    slide('earlier', 'list', 'panels.whatsNew.moreTitle', 'panels.whatsNew.earlierText', []),
-];
-
-/** The features of 6.0 that have a slide of their own, in the order of the slides. */
-export const WHATS_NEW_RECENT: WhatsNewItem[] = WHATS_NEW_SLIDES.filter((x) => x.charts.length > 0).map((x) => {
-    const out: WhatsNewItem = {
-        icon: x.icon,
+function slide(id: WhatsNewSlideId, label: MessageKey | null, title: MessageKey, text: MessageKey, chart?: string, sliders?: number): WhatsNewSlide {
+    const out: WhatsNewSlide = {
+        id,
+        get label() {
+            return label ? t(label) : '';
+        },
         get title() {
-            return x.title;
+            return t(title);
         },
         get text() {
-            return x.text;
+            return t(text);
         },
     };
-    if (x.guide) out.guide = x.guide;
+    if (chart) out.chart = chart;
+    if (sliders) out.sliders = sliders;
     return out;
-});
+}
 
-/** The rest of 6.0, one line each (the slide "Also new"). */
-export const WHATS_NEW_ALSO: WhatsNewItem[] = [
-    item('repeat', 'panels.whatsNew.orbits.title', 'panels.whatsNew.orbits.text'),
-    item('git-fork', 'panels.whatsNew.bifurcation.title', 'panels.whatsNew.bifurcation.text'),
-    item('crosshair', 'panels.whatsNew.newton.title', 'panels.whatsNew.newton.text'),
-    item('circle-dot', 'panels.whatsNew.fourier.title', 'panels.whatsNew.fourier.text'),
-    item('infinity', 'panels.whatsNew.systems.title', 'panels.whatsNew.systems.text'),
-    item('film', 'panels.whatsNew.steps.title', 'panels.whatsNew.steps.text'),
-    item('spline', 'panels.whatsNew.sets.title', 'panels.whatsNew.sets.text'),
-    item('move-vertical', 'panels.whatsNew.fitY.title', 'panels.whatsNew.fitY.text'),
-    item('hand', 'panels.whatsNew.dragTips.title', 'panels.whatsNew.dragTips.text'),
-    item('file-down', 'panels.whatsNew.pictures.title', 'panels.whatsNew.pictures.text'),
+/**
+ * The slides, in order: fields that flow, chaos in 3D, machine learning,
+ * steps, fractals, asking a chart, and the film. Back, Next, the dots and
+ * the arrow keys move between them; the header's "Watch the film" jumps to
+ * the last.
+ */
+export const WHATS_NEW_SLIDES: WhatsNewSlide[] = [
+    slide('flow', 'panels.whatsNew.flow.label', 'panels.whatsNew.flow.title', 'panels.whatsNew.flow.text', WHATS_NEW_FLOW_CHART),
+    slide('chaos', 'panels.whatsNew.chaos.label', 'panels.whatsNew.chaos.title', 'panels.whatsNew.chaos.text', WHATS_NEW_CHAOS_CHART),
+    slide('ml', 'panels.whatsNew.ml.label', 'panels.whatsNew.ml.title', 'panels.whatsNew.ml.text', mlChart()),
+    slide('steps', 'panels.whatsNew.steps.label', 'panels.whatsNew.steps.title', 'panels.whatsNew.steps.text', WHATS_NEW_STEPS_CHART),
+    slide('fractal', 'panels.whatsNew.fractal.label', 'panels.whatsNew.fractal.title', 'panels.whatsNew.fractal.text', WHATS_NEW_CHART_TEXT, 2),
+    slide('ask', 'panels.whatsNew.ask.label', 'panels.whatsNew.ask.title', 'panels.whatsNew.ask.text', WHATS_NEW_ASK_CHART),
+    slide('film', null, 'panels.whatsNew.film.title', 'panels.whatsNew.film.text'),
 ];
 
-/** Version 5, one line each (the first group of "Earlier versions"). */
-export const WHATS_NEW_V5: WhatsNewItem[] = [
-    item('square-function', 'panels.whatsNew.formulaCharts.title', 'panels.whatsNew.formulaCharts.text', 'notes-formulas'),
-    item('sigma', 'panels.whatsNew.latexLanguage.title', 'panels.whatsNew.latexLanguage.text', 'formulas'),
-    item('link-2', 'panels.whatsNew.connected.title', 'panels.whatsNew.connected.text'),
-    item('table', 'panels.whatsNew.data.title', 'panels.whatsNew.data.text'),
-    item('percent', 'panels.whatsNew.probability.title', 'panels.whatsNew.probability.text'),
-    item('chart-column', 'panels.whatsNew.riemann.title', 'panels.whatsNew.riemann.text'),
-    item('wind', 'panels.whatsNew.slopeField.title', 'panels.whatsNew.slopeField.text'),
-    item('file-image', 'panels.whatsNew.svgFiles.title', 'panels.whatsNew.svgFiles.text'),
-];
+/** The index of the film slide (the header's button jumps there). */
+export const WHATS_NEW_FILM_SLIDE = WHATS_NEW_SLIDES.findIndex((x) => x.id === 'film');
 
-/** What makes a chart move: sliders and the values computed from them. */
-export const WHATS_NEW_LIVE: WhatsNewItem[] = [
-    item('sliders-horizontal', 'panels.whatsNew.sliders.title', 'panels.whatsNew.sliders.text', 'sliders'),
-    item('calculator', 'panels.whatsNew.calculations.title', 'panels.whatsNew.calculations.text', 'computed-values'),
-    item('file-text', 'panels.whatsNew.notes.title', 'panels.whatsNew.notes.text', 'charts-in-notes'),
-];
-
-/** New in 4.3: AI makes charts. Its link opens the editor's AI tab. */
-export const WHATS_NEW_AI: WhatsNewItem = item('bot', 'panels.whatsNew.ai.title', 'panels.whatsNew.ai.text');
-
-/** Version 4, newest first, one line each (the second group of "Earlier versions"). */
-export const WHATS_NEW_MORE: WhatsNewItem[] = [
-    item('ruler', 'panels.whatsNew.numbers.title', 'panels.whatsNew.numbers.text'),
-    item('image', 'panels.whatsNew.white.title', 'panels.whatsNew.white.text'),
-    item('layers', 'panels.whatsNew.solid.title', 'panels.whatsNew.solid.text'),
-    item('grid', 'panels.whatsNew.gridOpacity.title', 'panels.whatsNew.gridOpacity.text'),
-    item('blend', 'panels.whatsNew.mesh.title', 'panels.whatsNew.mesh.text'),
-    item('palette', 'panels.whatsNew.colormaps.title', 'panels.whatsNew.colormaps.text'),
-    item('maximize-2', 'panels.whatsNew.fit.title', 'panels.whatsNew.fit.text'),
-    item('box', 'panels.whatsNew.cube.title', 'panels.whatsNew.cube.text'),
-    item('globe', 'panels.whatsNew.language.title', 'panels.whatsNew.language.text'),
-    ...WHATS_NEW_LIVE,
-    WHATS_NEW_AI,
-    item('languages', 'panels.whatsNew.words.title', 'panels.whatsNew.words.text'),
-    item('type', 'panels.whatsNew.plain.title', 'panels.whatsNew.plain.text'),
-    item('eye', 'panels.whatsNew.under.title', 'panels.whatsNew.under.text'),
-    item('layout-panel-left', 'panels.whatsNew.editor.title', 'panels.whatsNew.editor.text'),
-    item('move', 'panels.whatsNew.drag.title', 'panels.whatsNew.drag.text'),
-    item('shapes', 'panels.whatsNew.tools.title', 'panels.whatsNew.tools.text'),
-    item('file-code', 'panels.whatsNew.latex.title', 'panels.whatsNew.latex.text'),
-    // The count comes from the guide list, so a new guide never leaves this line behind.
-    item('book-open', 'panels.whatsNew.guides.title', 'panels.whatsNew.guides.text', undefined, { count: GUIDES.length }),
-    item('history', 'panels.whatsNew.carryOver.title', 'panels.whatsNew.carryOver.text'),
-    item('smartphone', 'panels.whatsNew.phones.title', 'panels.whatsNew.phones.text'),
-];
-
-/** Every icon the popup uses (its items, buttons and the Help tab link). */
-export const WHATS_NEW_ICONS: readonly string[] = [
-    ...WHATS_NEW_RECENT.map((i) => i.icon),
-    ...WHATS_NEW_ALSO.map((i) => i.icon),
-    ...WHATS_NEW_V5.map((i) => i.icon),
-    ...WHATS_NEW_MORE.map((i) => i.icon),
-    ...WHATS_NEW_SLIDES.map((x) => x.icon),
-    'play',
-    'pause',
-    'sparkles',
-    'mouse-pointer-2',
-    'arrow-left',
-];
+/** Every icon the popup uses (its buttons, the player, and the Help tab link that opens it). */
+export const WHATS_NEW_ICONS: readonly string[] = ['play', 'pause', 'arrow-left', 'book-open', 'external-link', 'sparkles'];
