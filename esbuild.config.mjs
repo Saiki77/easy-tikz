@@ -73,7 +73,8 @@ esbuild.build({
 	// Smaller and quicker to load, phones most of all; the review rebuilds it from these sources.
 	minify: prod,
 	treeShaking: true,
-	loader: { '.md': 'text' },
+	// docs/ai.md as text; the film's poster of What's new (src/ui/assets) as a data: URL, so it ships inside main.js.
+	loader: { '.md': 'text', '.jpg': 'dataurl' },
 	// Japanese texts as UTF-8, not as \u escapes (half the size).
 	charset: 'utf8',
 	plugins: [lazyNodeModules],

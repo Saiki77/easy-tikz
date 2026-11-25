@@ -1,17 +1,24 @@
-/* "What's new" popup (src/ui/whatsNewModal.ts): title, then a slideshow of
-   what 6.0 brings (one feature per slide, shown big with live charts), a
-   slide with the rest of 6.0 and a last slide with versions 5 and 4, and the
-   footer with the dots, Back and Next. Theme colours only, so light and dark
-   both work; one column when the window is narrow. */
+/* "What's new" popup (src/ui/whatsNewModal.ts): the name and the button
+   "Watch the film" on top, a slideshow of 6.0 (each slide a live chart in a
+   16:9 stage, then a label, a title, one line and Try it; the last slide the
+   film), and the footer with the dots, Back and Next. Theme colours only, so
+   light and dark both work. The modal is as wide as the window lets the
+   stage be 16:9 with the rest in view. */
 
-/* Title, scrolling content, and the buttons as a footer that stays in view. */
 .modal.etz-whatsnew {
     display: flex;
     flex-direction: column;
-    width: min(940px, calc(100vw - 48px));
+    width: min(960px, calc(100vw - 48px), calc((100vh - 316px) * 16 / 9 + 64px));
+    min-width: min(420px, calc(100vw - 24px));
     max-width: none;
     max-height: calc(100vh - 48px);
     overflow: hidden;
+}
+
+.is-phone .modal.etz-whatsnew {
+    width: 100%;
+    min-width: 0;
+    max-height: 100%;
 }
 
 .modal.etz-whatsnew .modal-content {
@@ -20,8 +27,22 @@
     overflow-y: auto;
 }
 
+/* ---------------------------------------------------------------- header */
+
+/* The name with its version, and the film beside it (clear of the close button). */
+.modal.etz-whatsnew .modal-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    padding-right: 36px;
+}
+
 .modal.etz-whatsnew .etz-whatsnew-title {
-    font-size: 26px;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-size: 24px;
     font-weight: 750;
     letter-spacing: -0.015em;
     line-height: 1.2;
@@ -31,422 +52,329 @@
     color: var(--interactive-accent);
 }
 
-p.etz-whatsnew-subtitle {
-    margin: 2px 0 18px;
-    color: var(--text-muted);
-    font-size: 14px;
-    line-height: 1.45;
-}
-
-/* ---------------------------------------------------------------- hero */
-
-/* A note: the sentence with the formula, then the card that opens on it and the block beside it. */
-.etz-whatsnew-hero {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 18px 20px 20px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--etz-radius-l);
-    background-color: var(--background-primary);
-}
-
-.etz-whatsnew-stage {
-    display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-    gap: 24px;
-    align-items: start;
-    margin-top: 6px;
-}
-
-.etz-whatsnew-side {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    min-width: 0;
-}
-
-/* The card as it opens on a formula (formula.css draws the real one), with a tip pointing at the formula. */
-.etz-whatsnew-card {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-width: 0;
-    padding: 12px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--etz-radius-l);
-    background-color: var(--background-primary);
-    box-shadow: var(--shadow-l);
-}
-
-.etz-whatsnew-card::before {
-    content: '';
-    position: absolute;
-    top: -7px;
-    left: calc(var(--etz-tip-x, 48px) - 7px);
-    width: 12px;
-    height: 12px;
-    border-top: 1px solid var(--background-modifier-border);
-    border-left: 1px solid var(--background-modifier-border);
-    background-color: var(--background-primary);
-    transform: rotate(45deg);
-}
-
-/* The live chart of a slide: src/ui/live.css (.etz-live-chart). */
-
-.etz-whatsnew-caption {
-    padding: 0 2px;
-    color: var(--text-muted);
-    font-size: var(--etz-font-small);
-    line-height: 1.45;
-}
-
-.etz-whatsnew-fallback {
-    padding: 24px 8px;
-    color: var(--text-muted);
-    font-size: var(--etz-font-small);
-    text-align: center;
-}
-
-/* --------------------------------------------------------------- items */
-
-.etz-whatsnew-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    min-width: 0;
-}
-
-/* One list per group. */
-.etz-whatsnew-list.mod-new {
-    gap: 14px;
-}
-
-/* The sentence of the note, with the formula marked as the highlight in notes marks it. */
-p.etz-whatsnew-note-text {
-    margin: 0;
-    color: var(--text-normal);
-    font-size: 15px;
-    line-height: 1.7;
-}
-
-.etz-whatsnew-formula {
-    position: relative;
-    padding: 1px 4px;
-    border-bottom: 1.5px dotted var(--interactive-accent);
-    border-radius: var(--etz-radius-s);
+.modal.etz-whatsnew button.etz-whatsnew-film {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    height: auto;
+    padding: 5px 12px 5px 6px;
+    border: none;
+    border-radius: 999px;
     background-color: var(--etz-accent-tint);
-}
-
-/* The pointer resting on the formula. */
-.etz-whatsnew-pointer {
-    position: absolute;
-    right: -10px;
-    bottom: -14px;
-    display: flex;
-    color: var(--text-normal);
-    pointer-events: none;
-}
-
-.etz-whatsnew-pointer svg {
-    width: 16px;
-    height: 16px;
-    fill: var(--background-primary);
-}
-
-.etz-whatsnew-list.mod-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px 24px;
-}
-
-/* The lines the live chart is made of, beside the chart. */
-.etz-whatsnew-recipe {
-    padding: 12px 14px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--etz-radius-l);
-    background-color: var(--background-primary-alt);
-}
-
-.etz-whatsnew-recipe-title {
-    margin-bottom: 6px;
-    color: var(--text-muted);
-    font-size: var(--etz-font-meta);
-    font-variant-caps: all-small-caps;
+    box-shadow: none;
+    color: var(--interactive-accent);
+    font-size: 13px;
     font-weight: 600;
-    letter-spacing: 0.05em;
+    line-height: 1.3;
+    white-space: nowrap;
+    cursor: pointer;
 }
 
-/* The chart's block, one line per object; a long line wraps under itself instead of being cut off. */
-pre.etz-whatsnew-text {
-    margin: 0;
-    color: var(--text-normal);
-    font-family: var(--font-monospace);
-    font-size: 11.5px;
-    line-height: 1.55;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
+.modal.etz-whatsnew button.etz-whatsnew-film:hover {
+    box-shadow: inset 0 0 0 1px var(--interactive-accent);
 }
 
-.etz-whatsnew-item {
-    display: grid;
-    grid-template-columns: 32px minmax(0, 1fr);
-    gap: 12px;
-    align-items: start;
+.modal.etz-whatsnew button.etz-whatsnew-film:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
 }
 
-.etz-whatsnew-icon {
+.etz-whatsnew-film-dot {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: var(--etz-radius-l);
-    background-color: var(--etz-accent-tint);
-    color: var(--interactive-accent);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
 }
 
-.etz-whatsnew-icon svg {
-    width: 17px;
-    height: 17px;
-    stroke-width: 1.9;
+.etz-whatsnew-film-dot svg {
+    width: 11px;
+    height: 11px;
+    margin-left: 1px;
+    fill: currentColor;
 }
 
-.etz-whatsnew-list.mod-grid .etz-whatsnew-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: var(--etz-radius-m);
-    background-color: var(--background-secondary);
+.etz-whatsnew-film-length {
     color: var(--text-muted);
-}
-
-.etz-whatsnew-list.mod-grid .etz-whatsnew-item {
-    grid-template-columns: 28px minmax(0, 1fr);
-    gap: 10px;
-}
-
-.etz-whatsnew-list.mod-grid .etz-whatsnew-icon svg {
-    width: 15px;
-    height: 15px;
-}
-
-.etz-whatsnew-item-head {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-width: 0;
-}
-
-.etz-whatsnew-item-title {
-    min-width: 0;
-    color: var(--text-normal);
-    font-size: 14px;
-    font-weight: 650;
-    line-height: 1.35;
-}
-
-button.etz-btn.mod-link.etz-whatsnew-item-guide {
-    flex: 0 0 auto;
-    height: auto;
-    margin-left: auto;
-    padding: 0;
-    font-size: var(--etz-font-small);
-    line-height: 1.35;
-}
-
-.etz-whatsnew-list.mod-grid .etz-whatsnew-item-title {
-    font-size: var(--etz-font);
-}
-
-.etz-whatsnew-item-text {
-    margin-top: 2px;
-    color: var(--text-muted);
-    font-size: var(--etz-font);
-    line-height: 1.45;
-}
-
-.etz-whatsnew-list.mod-grid .etz-whatsnew-item-text {
-    font-size: var(--etz-font-small);
-}
-
-.etz-whatsnew-item-text code,
-.etz-whatsnew-slide-text code,
-.etz-whatsnew-caption code {
-    padding: 0 3px;
-    border-radius: var(--etz-radius-s);
-    background-color: var(--background-secondary);
-    color: var(--text-normal);
-    font-family: var(--font-monospace);
-    font-size: 0.92em;
-    white-space: nowrap;
-}
-
-/* Links to guides read as part of the sentence. */
-button.etz-btn.mod-link.etz-whatsnew-guide {
-    display: inline;
-    height: auto;
-    padding: 0;
-    font-size: inherit;
-    line-height: inherit;
-    vertical-align: baseline;
-}
-
-.etz-whatsnew-h {
-    margin: 0 0 12px;
-    color: var(--text-muted);
-    font-size: 13px;
-    font-variant-caps: all-small-caps;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    line-height: 1.3;
-}
-
-/* ------------------------------------------------------------- actions */
-
-.etz-whatsnew-actions {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 8px;
-    margin-top: 4px;
-    padding-top: 16px;
-    border-top: 1px solid var(--background-modifier-border);
-}
-
-.etz-whatsnew-hint {
-    margin-top: 16px;
-    color: var(--text-faint);
-    font-size: var(--etz-font-meta);
-    line-height: 1.4;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
 }
 
 /* ---------------------------------------------------------------- slides */
 
-/* One feature per slide: its icon, title and sentence, then the feature shown big. */
 .etz-whatsnew-slide {
     display: flex;
     flex-direction: column;
-    gap: 18px;
-}
-
-.etz-whatsnew-slide-head {
-    display: grid;
-    grid-template-columns: 40px minmax(0, 1fr);
     gap: 14px;
-    align-items: start;
+    padding-bottom: 12px;
 }
 
-.etz-whatsnew-slide-head .etz-whatsnew-icon {
-    width: 40px;
-    height: 40px;
-}
-
-.etz-whatsnew-slide-head .etz-whatsnew-icon svg {
-    width: 20px;
-    height: 20px;
-}
-
-.etz-whatsnew-slide-title-row {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    min-width: 0;
-}
-
-h3.etz-whatsnew-slide-title {
-    margin: 0;
-    color: var(--text-normal);
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    line-height: 1.25;
-}
-
-p.etz-whatsnew-slide-text {
-    max-width: 72ch;
-    margin: 4px 0 0;
-    color: var(--text-muted);
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-/* The same height on every slide, so Back and Next stay where they are. */
-.etz-whatsnew-demo {
-    min-height: 430px;
-}
-
-/* A chart on its own, as in a note: the chart, its slider and its lines. */
-.etz-whatsnew-frame {
+/* The stage: 16:9 on every slide, so the footer never moves. The chart fills it, its player or sliders under it. */
+.etz-whatsnew-stage {
+    position: relative;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    min-width: 0;
-    padding: 12px;
+    gap: 6px;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    padding: 10px;
+    overflow: hidden;
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--etz-radius-l);
     background-color: var(--background-primary);
 }
 
-.etz-whatsnew-demo.mod-chart {
-    display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-    gap: 24px;
-    align-items: start;
+.etz-whatsnew-stage > .etz-live-chart {
+    flex: 1 1 0;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    aspect-ratio: auto;
 }
 
-/* Ask the curve: the chart asks when a curve is clicked. */
+.etz-whatsnew-stage > .etz-live-strip {
+    flex: 0 0 auto;
+}
+
+/* Ask your chart: the chart asks when a curve is clicked. */
 .etz-whatsnew-chart.etz-askable {
     cursor: pointer;
 }
 
 .etz-whatsnew-chart.etz-askable:focus-visible {
     outline: 2px solid var(--interactive-accent);
-    outline-offset: 2px;
+    outline-offset: -2px;
 }
 
-.etz-whatsnew-caption.mod-ask {
+.etz-whatsnew-fallback {
+    margin: auto;
+    padding: 24px 8px;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    text-align: center;
+}
+
+/* Under the stage: the label, the title and one line, and the slide's buttons. */
+.etz-whatsnew-copy {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px 16px;
+}
+
+.etz-whatsnew-words {
+    flex: 1 1 360px;
+    min-width: 0;
+    min-height: 88px;
+}
+
+.etz-whatsnew-label {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--interactive-accent);
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.05em;
+    line-height: 1.4;
+    text-transform: uppercase;
+}
+
+h3.etz-whatsnew-slide-title {
+    margin: 0 0 2px;
+    color: var(--text-normal);
+    font-size: 20px;
+    font-weight: 720;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+}
+
+p.etz-whatsnew-slide-text {
+    max-width: 64ch;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.etz-whatsnew-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* A slide arrives calmly: the picture settles from a little larger, the words rise. */
+.etz-whatsnew-slide.is-in .etz-whatsnew-stage {
+    animation: etz-whatsnew-fade 0.45s ease-out both;
+}
+
+.etz-whatsnew-slide.is-in .etz-whatsnew-stage > * {
+    animation: etz-whatsnew-arrive 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.etz-whatsnew-slide.is-in .etz-whatsnew-copy {
+    animation: etz-whatsnew-rise 0.5s 0.08s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes etz-whatsnew-fade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes etz-whatsnew-arrive {
+    from {
+        transform: scale(1.035);
+    }
+
+    to {
+        transform: none;
+    }
+}
+
+@keyframes etz-whatsnew-rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* ------------------------------------------------------------------ film */
+
+/* The poster fills the stage; YouTube's player takes its place after Play. */
+.etz-whatsnew-stage.mod-film {
+    padding: 0;
+    background-color: #ffffff;
+}
+
+.modal.etz-whatsnew button.etz-whatsnew-poster {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.modal.etz-whatsnew button.etz-whatsnew-poster:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: -2px;
+}
+
+img.etz-whatsnew-poster-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    user-select: none;
+}
+
+.etz-whatsnew-poster-play {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    width: 84px;
+    height: 84px;
+    margin: auto;
+    border-radius: 50%;
+    background-color: rgba(34, 20, 70, 0.78);
+    box-shadow: 0 10px 30px rgba(40, 20, 90, 0.35);
+    color: #ffffff;
+    transition: transform 0.2s ease;
 }
 
-.etz-whatsnew-hint-icon {
-    display: flex;
-    color: var(--interactive-accent);
+.etz-whatsnew-poster-play svg {
+    width: 30px;
+    height: 30px;
+    margin-left: 5px;
+    fill: currentColor;
 }
 
-.etz-whatsnew-hint-icon svg {
-    width: 15px;
-    height: 15px;
+.etz-whatsnew-poster:hover .etz-whatsnew-poster-play {
+    transform: scale(1.07);
 }
 
-/* Hover: the formulas beside the card that open a chart too. */
-ul.etz-whatsnew-formulas {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin: 0;
-    padding: 0;
-    color: var(--text-normal);
-    list-style: none;
-}
-
-/* Earlier versions: a heading per version. */
-h4.etz-whatsnew-group-title {
-    margin: 0 0 12px;
-    color: var(--text-muted);
-    font-size: 13px;
-    font-variant-caps: all-small-caps;
+.etz-whatsnew-poster-length {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    background-color: rgba(20, 16, 34, 0.8);
+    color: #ffffff;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.05em;
+    font-variant-numeric: tabular-nums;
 }
 
-.etz-whatsnew-list.mod-grid + h4.etz-whatsnew-group-title {
-    margin-top: 24px;
+/* A pixel past each edge: the stage clips the dark line YouTube's player leaves where its size is rounded. */
+iframe.etz-whatsnew-player {
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    width: calc(100% + 2px);
+    height: calc(100% + 2px);
+    border: none;
+    background-color: #000000;
 }
 
-/* The footer: one dot per slide (the current one long), the slide number, then the buttons. */
+/* "Open on YouTube": a small link at the end of the line. */
+a.etz-whatsnew-youtube {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--text-accent);
+    font-size: var(--etz-font-small);
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+a.etz-whatsnew-youtube:hover {
+    text-decoration: underline;
+}
+
+.etz-whatsnew-youtube-icon {
+    display: flex;
+}
+
+.etz-whatsnew-youtube-icon svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* ---------------------------------------------------------------- footer */
+
+/* Outside the scrolling content, so it stays in view: one dot per slide (the current one long), n / 7, Back and Next. */
+.etz-whatsnew-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding-top: 14px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
 .etz-whatsnew-dots {
     display: flex;
     align-items: center;
@@ -464,8 +392,8 @@ button.etz-whatsnew-dot {
     box-shadow: none;
     cursor: pointer;
     transition:
-        width 160ms ease,
-        background-color 160ms ease;
+        width 250ms ease,
+        background-color 250ms ease;
 }
 
 button.etz-whatsnew-dot:hover {
@@ -493,30 +421,46 @@ button.etz-whatsnew-dot:focus-visible {
     flex: 1 1 auto;
 }
 
-/* -------------------------------------------------------------- narrow */
+/* ---------------------------------------------------------------- narrow */
 
-@media (max-width: 1000px) {
-    .etz-whatsnew-list.mod-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (max-width: 760px) {
-    .etz-whatsnew-stage,
-    .etz-whatsnew-demo.mod-chart,
-    .etz-whatsnew-list.mod-grid {
-        grid-template-columns: minmax(0, 1fr);
+@media (max-width: 560px) {
+    .modal.etz-whatsnew .etz-whatsnew-title {
+        font-size: 19px;
     }
 
-    .etz-whatsnew-actions {
-        flex-wrap: wrap;
-        justify-content: flex-end;
+    h3.etz-whatsnew-slide-title {
+        font-size: 17px;
     }
 
+    .etz-whatsnew-stage {
+        padding: 6px;
+    }
+
+    .etz-whatsnew-words {
+        min-height: 0;
+    }
+
+    .etz-whatsnew-poster-play {
+        width: 60px;
+        height: 60px;
+    }
+
+    .etz-whatsnew-poster-play svg {
+        width: 22px;
+        height: 22px;
+        margin-left: 3px;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    button.etz-whatsnew-dot {
+    .etz-whatsnew-slide.is-in .etz-whatsnew-stage,
+    .etz-whatsnew-slide.is-in .etz-whatsnew-stage > *,
+    .etz-whatsnew-slide.is-in .etz-whatsnew-copy {
+        animation: none;
+    }
+
+    button.etz-whatsnew-dot,
+    .etz-whatsnew-poster-play {
         transition: none;
     }
 }

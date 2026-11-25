@@ -164,8 +164,8 @@ export async function buildPlugin(outDir) {
         target: 'es2016',
         logLevel: 'silent',
         treeShaking: true,
-        // docs/ai.md is bundled as text (the AI server's guide), as esbuild.config.mjs does.
-        loader: { '.md': 'text' },
+        // docs/ai.md is bundled as text (the AI server's guide), the film's poster of What's new as a data: URL, as esbuild.config.mjs does.
+        loader: { '.md': 'text', '.jpg': 'dataurl' },
         plugins: [lazyNodeModules],
         outfile: path.join(outDir, 'main.js'),
     });

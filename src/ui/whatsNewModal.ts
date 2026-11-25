@@ -1,56 +1,45 @@
 /*
  * "What's new" popup for people who updated (when it opens: main.ts and
- * src/whatsnew.ts; what it says: src/whatsnew.ts). A slideshow: one feature
- * of 6.0 per slide, shown big with live charts, then the rest of 6.0, then
- * versions 5 and 4 in a list.
+ * src/whatsnew.ts; what it says: src/whatsnew.ts). A slideshow of 6.0: one
+ * feature per slide, its live chart filling a 16:9 stage, then the film.
  *
- *   header      "Easy Graphs Charts and TikZ 6" and one line
- *   slide       icon, title and a sentence, then the feature: a live chart
- *               beside its text (with the player of steps and of the clock
- *               when it has them); a chart that asks its questions when a
- *               curve is clicked; a note with the card open on a set
- *   footer      the dots (one per slide), Open the guides, Try an example
- *               (the slide's chart in the editor), Back and Next (Done on
- *               the last slide); the arrow keys move between the slides
+ *   header      "Easy Graphs Charts and TikZ 6" and the button "Watch the
+ *               film 2:21" (to the last slide, and the film plays)
+ *   slide       the stage (the live chart with its player or sliders; on
+ *               the Ask slide a chart that asks its questions when a curve
+ *               is clicked; on the last slide the film's poster), then a
+ *               small accent label, the title, one line and Try it (the
+ *               slide's chart in the editor)
+ *   footer      the dots (one per slide), n / 7, Back and Next (Done on the
+ *               last slide); the arrow keys move between the slides
  *
  * A slide is built when it is first shown. The charts are drawn by the
- * plugin's own renderer, offline, like charts in a note. Everything they
- * start (play, draft and full render timers) stops in onClose. Nothing is
- * loaded from the network.
+ * plugin's own renderer, offline, like charts in a note; what moves runs
+ * only while its slide is on screen. Everything a slide starts (play,
+ * draft and full render timers, the film's player) stops when the slide is
+ * left and in onClose. Nothing loads from the network until Play on the
+ * film is clicked: the poster ships with the plugin, and only that click
+ * puts YouTube's player in its place.
  */
-import { App, Modal, finishRenderMath, loadMathJax, renderMath, setIcon } from 'obsidian';
-import { localGuideById } from '../guides';
+import { App, Modal, setIcon } from 'obsidian';
 import { cloneData, errorText, fitPixelScale } from '../util';
-import { parseChartText } from '../text/parse';
-import { printChartText } from '../text/print';
 import { SettingsManager } from '../settings';
 import { MathContext } from '../mathcontext';
 import { RenderLayout, DrawnScene, SVGRenderer } from '../renderer';
 import { AskController, svgBoxOf } from '../notes6/askHost';
 import { openAskMenu } from '../notes6/askMenu';
-import {
-    WHATS_NEW_AI,
-    WHATS_NEW_ALSO,
-    WHATS_NEW_FORMULA,
-    WHATS_NEW_MORE,
-    WHATS_NEW_NOTE_DEFINITION,
-    WHATS_NEW_SLIDES,
-    WHATS_NEW_TITLE,
-    WHATS_NEW_V5,
-    WhatsNewSlide,
-    whatsNewCard,
-    whatsNewSubtitle,
-    WhatsNewItem,
-} from '../whatsnew';
+import { WHATS_NEW_CHANGELOG, WHATS_NEW_FILM, WHATS_NEW_FILM_SLIDE, WHATS_NEW_SLIDES, WHATS_NEW_TITLE, WhatsNewSlide, whatsNewChartOf } from '../whatsnew';
 import { TextButtonHandle, textButton, trapEscape, uniqueId, visuallyHidden } from './kit';
 import { LiveChart, LiveChartOptions } from './liveChart';
 import { t } from '../i18n';
+// The film's poster: a JPEG inside main.js (esbuild's dataurl loader), so showing it loads nothing.
+import FILM_POSTER from './assets/film-poster.jpg';
 
 /** What the buttons of the popup do; the caller decides (a new editor, or the editor the popup was opened from). */
 export interface WhatsNewActions {
-    /** Open the editor on this chart: the popup's live chart with the slider where the reader left it. */
+    /** Open the editor on this chart: the slide's live chart with its sliders where the reader left them. */
     tryExample(chart: Record<string, unknown>): void;
-    /** Open the editor's Help tab: the guides, or one guide by id. */
+    /** Open the editor's Help tab: its home (with the row New in 6), or one guide by id. */
     openGuides(guideId?: string): void;
     /** Open the editor's AI tab. */
     openAi?(): void;
@@ -64,23 +53,23 @@ export interface WhatsNewOptions {
     onClosed?: () => void;
 }
 
-
 export class WhatsNewModal extends Modal {
     private readonly opts: WhatsNewOptions;
-    /** The slides built so far (a slide is built when it is first shown), and their live charts. */
+    /** The slides built so far (a slide is built when it is first shown), and what moves on them. */
     private readonly slideEls = new Map<number, HTMLElement>();
-    private readonly lives = new Map<number, LiveChart[]>();
+    private readonly lives = new Map<number, LiveChart>();
     /** The chart of the Ask slide, by slide index. */
     private readonly asks = new Map<number, AskChart>();
+    /** The film's poster and, after Play, its player. */
+    private film: FilmPlayer | null = null;
     private index = 0;
+    private deck: HTMLElement | null = null;
+    private filmButton: HTMLElement | null = null;
     private actionsEl: HTMLElement | null = null;
     private dots: HTMLButtonElement[] = [];
     private counter: HTMLElement | null = null;
     private back: TextButtonHandle | null = null;
     private next: TextButtonHandle | null = null;
-    private tryIt: TextButtonHandle | null = null;
-    /** Keeps the tip of the formula card under the formula when the popup's width or the typeset formula changes. */
-    private resize: ResizeObserver | null = null;
 
     constructor(app: App, opts: WhatsNewOptions) {
         super(app);
@@ -92,16 +81,28 @@ export class WhatsNewModal extends Modal {
         modalEl.addClass('etz-whatsnew', 'etz-tokens');
         contentEl.empty();
 
+        // --- the header: the name with its version, and the film
         titleEl.empty();
         titleEl.addClass('etz-whatsnew-title');
+        titleEl.id = uniqueId('whatsnew-title');
         const words = WHATS_NEW_TITLE.split(' ');
         const version = words.pop() || '';
         titleEl.appendText(words.join(' ') + ' ');
         titleEl.createSpan({ cls: 'etz-whatsnew-version', text: version });
-        contentEl.createEl('p', { cls: 'etz-whatsnew-subtitle', text: whatsNewSubtitle() });
+        const film = (titleEl.parentElement ?? modalEl).createEl('button', { cls: 'etz-whatsnew-film', attr: { type: 'button' } });
+        setIcon(film.createSpan({ cls: 'etz-whatsnew-film-dot', attr: { 'aria-hidden': 'true' } }), 'play');
+        film.createSpan({ text: t('panels.whatsNew.watchFilm') });
+        film.createSpan({ cls: 'etz-whatsnew-film-length', text: WHATS_NEW_FILM.length });
+        // A click: the film may play at once.
+        film.addEventListener('click', () => {
+            this.show(WHATS_NEW_FILM_SLIDE);
+            this.film?.play();
+        });
+        this.filmButton = film;
 
         // --- the slides: one feature each, shown big
-        const deck = contentEl.createDiv({ cls: 'etz-whatsnew-deck', attr: { role: 'region', 'aria-roledescription': t('panels.whatsNew.slides'), 'aria-label': WHATS_NEW_TITLE } });
+        // Named by the title, not by aria-label: Obsidian shows an aria-label as a tooltip wherever the pointer rests.
+        this.deck = contentEl.createDiv({ cls: 'etz-whatsnew-deck', attr: { role: 'region', 'aria-roledescription': t('panels.whatsNew.slides'), 'aria-labelledby': titleEl.id } });
 
         // --- the footer, outside the scrolling content: where you are, and the way on
         const actions = modalEl.createDiv({ cls: 'etz-whatsnew-actions' });
@@ -113,66 +114,70 @@ export class WhatsNewModal extends Modal {
                 cls: 'etz-whatsnew-dot',
                 attr: { type: 'button', 'aria-label': t('panels.whatsNew.goTo', { n: i + 1, count, title: x.title }) },
             });
-            dot.addEventListener('click', () => this.show(deck, i));
+            dot.addEventListener('click', () => this.show(i));
             return dot;
         });
         this.counter = actions.createSpan({ cls: 'etz-whatsnew-counter', attr: { 'aria-hidden': 'true' } });
         actions.createDiv({ cls: 'etz-whatsnew-spacer' });
-        textButton(actions, { text: t('panels.whatsNew.openGuides'), icon: 'book-open', variant: 'ghost', onClick: () => this.run((a) => a.openGuides()) });
-        this.tryIt = textButton(actions, {
-            text: t('panels.whatsNew.tryExample'),
-            onClick: () => {
-                const chart = this.currentChart();
-                if (chart) this.run((a) => a.tryExample(chart));
-            },
-        });
-        this.back = textButton(actions, { text: t('panels.whatsNew.back'), icon: 'arrow-left', onClick: () => this.show(deck, this.index - 1) });
+        this.back = textButton(actions, { text: t('panels.whatsNew.back'), icon: 'arrow-left', onClick: () => this.show(this.index - 1) });
         this.next = textButton(actions, {
             text: t('panels.whatsNew.next'),
             variant: 'cta',
-            onClick: () => (this.index < count - 1 ? this.show(deck, this.index + 1) : this.close()),
+            onClick: () => (this.index < count - 1 ? this.show(this.index + 1) : this.close()),
         });
         // The arrow keys move between the slides, except in a field or on a slider (there they change its value).
         modalEl.addEventListener('keydown', (e) => {
             const el = e.target instanceof HTMLElement ? e.target : null;
             if (e.altKey || e.ctrlKey || e.metaKey || (el && (el.closest('input, textarea, select') || el.isContentEditable))) return;
-            if (e.key === 'ArrowRight' && this.index < count - 1) this.show(deck, this.index + 1);
-            else if (e.key === 'ArrowLeft' && this.index > 0) this.show(deck, this.index - 1);
+            if (e.key === 'ArrowRight' && this.index < count - 1) this.show(this.index + 1);
+            else if (e.key === 'ArrowLeft' && this.index > 0) this.show(this.index - 1);
             else return;
             e.preventDefault();
         });
 
-        this.show(deck, 0);
-        // The top of the popup stays in view (focusing a button at the bottom would scroll a low window).
-        this.next.el.focus({ preventScroll: true });
+        this.show(0, true);
+        // Next has the focus, not the film in the header (Obsidian focuses the first button of a modal after onOpen);
+        // the top of the popup stays in view (focusing a button at the bottom would scroll a low window).
+        const next = this.next.el;
+        next.focus({ preventScroll: true });
+        window.setTimeout(() => {
+            if (next.isConnected && activeDocument.activeElement === film) next.focus({ preventScroll: true });
+        }, 0);
         contentEl.scrollTop = 0;
         if (this.opts.onShown) this.opts.onShown();
     }
 
     onClose() {
         openAskMenu()?.close();
+        // The player goes first: its sound stops with it.
+        this.film?.stop();
+        this.film = null;
         for (const ask of this.asks.values()) ask.destroy();
         this.asks.clear();
-        this.resize?.disconnect();
-        this.resize = null;
-        for (const lives of this.lives.values()) for (const live of lives) live.destroy();
+        for (const live of this.lives.values()) live.destroy();
         this.lives.clear();
         this.slideEls.clear();
+        this.filmButton?.remove();
+        this.filmButton = null;
         this.actionsEl?.remove();
         this.actionsEl = null;
+        this.deck = null;
         this.contentEl.empty();
         if (this.opts.onClosed) this.opts.onClosed();
     }
 
-    /** Show slide `i` (built the first time), sliding in from the side it comes from. */
-    private show(deck: HTMLElement, i: number) {
+    /** Show slide `i` (built the first time); the slide left stops what it started. */
+    private show(i: number, first = false) {
         const count = WHATS_NEW_SLIDES.length;
-        if (i < 0 || i >= count) return;
+        const deck = this.deck;
+        if (!deck || i < 0 || i >= count) return;
         const from = this.index;
-        if (i !== from) {
+        if (i === from && !first) return;
+        if (!first) {
             openAskMenu()?.close();
             this.slideEls.get(from)?.addClass('tikz-hidden');
-            for (const live of this.lives.get(from) ?? []) live.pause();
+            this.lives.get(from)?.pause();
+            if (WHATS_NEW_SLIDES[from].id === 'film') this.film?.stop();
         }
         this.index = i;
         let el = this.slideEls.get(i);
@@ -181,166 +186,86 @@ export class WhatsNewModal extends Modal {
             this.slideEls.set(i, el);
         } else {
             el.removeClass('tikz-hidden');
-            for (const live of this.lives.get(i) ?? []) live.redraw();
+            this.lives.get(i)?.redraw();
         }
-        if (i !== from && !activeWindow.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            const dx = i > from ? 14 : -14;
-            el.animate([{ opacity: 0, transform: `translateX(${dx}px)` }, { opacity: 1, transform: 'none' }], { duration: 180, easing: 'ease-out' });
-        }
+        // A short, calm arrival (CSS; none when the system asks for less motion).
+        el.removeClass('is-in');
+        void el.offsetWidth;
+        el.addClass('is-in');
         this.dots.forEach((dot, k) => dot.setAttr('aria-current', k === i ? 'step' : 'false'));
         this.counter?.setText(`${i + 1} / ${count}`);
         this.back?.setDisabled(i === 0);
         this.next?.setText(i === count - 1 ? t('panels.whatsNew.done') : t('panels.whatsNew.next'));
-        this.tryIt?.el.toggleClass('tikz-hidden', WHATS_NEW_SLIDES[i].charts.length === 0);
         this.contentEl.scrollTop = 0;
     }
 
-    /** The chart of the slide on screen as it is now (its slider where the reader left it): what Try an example opens. */
+    /** The chart of the slide on screen as it is now (its sliders where the reader left them): what Try it opens. */
     private currentChart(): Record<string, unknown> | null {
         const ask = this.asks.get(this.index);
         if (ask) return ask.chart();
-        const live = (this.lives.get(this.index) ?? [])[0];
+        const live = this.lives.get(this.index);
         if (live) return live.chart();
-        const first = WHATS_NEW_SLIDES[this.index]?.charts[0];
-        return first ? parseChartText(first).data : null;
+        const text = WHATS_NEW_SLIDES[this.index]?.chart;
+        return text ? whatsNewChartOf(text) : null;
     }
 
-    /** A slide: its icon, title and sentence, then the feature shown big. */
+    /** A slide: the stage with its live chart (or the film), then the label, the title, the line and its buttons. */
     private buildSlide(deck: HTMLElement, i: number): HTMLElement {
         const x = WHATS_NEW_SLIDES[i];
         const count = WHATS_NEW_SLIDES.length;
-        const el = deck.createDiv({
-            cls: 'etz-whatsnew-slide',
-            attr: { role: 'group', 'aria-roledescription': t('panels.whatsNew.slide'), 'aria-label': t('panels.whatsNew.goTo', { n: i + 1, count, title: x.title }) },
-        });
-        const head = el.createDiv({ cls: 'etz-whatsnew-slide-head' });
-        setIcon(head.createSpan({ cls: 'etz-whatsnew-icon', attr: { 'aria-hidden': 'true' } }), x.icon);
-        const words = head.createDiv({ cls: 'etz-whatsnew-slide-words' });
-        const title = words.createDiv({ cls: 'etz-whatsnew-slide-title-row' });
-        title.createEl('h3', { cls: 'etz-whatsnew-slide-title', text: x.title });
-        const guide = x.guide ? localGuideById(x.guide) : undefined;
-        if (guide) {
-            const link = this.guideLink(title, t('panels.whatsNew.guide'), guide.id, 'etz-whatsnew-item-guide');
-            link.el.setAttr('aria-label', t('panels.whatsNew.guideLabel', { title: guide.title }));
-        }
-        codeText(words.createEl('p', { cls: 'etz-whatsnew-slide-text' }), x.text);
-
-        const chart = x.id !== 'hover' && x.charts.length > 0;
-        const demo = el.createDiv({ cls: ['etz-whatsnew-demo', `mod-${x.id}`, ...(chart ? ['mod-chart'] : [])] });
-        const lives: LiveChart[] = [];
-        this.lives.set(i, lives);
+        const el = deck.createDiv({ cls: ['etz-whatsnew-slide', `mod-${x.id}`], attr: { role: 'group', 'aria-roledescription': t('panels.whatsNew.slide') } });
+        // Its name in hidden text (an aria-label would show as a tooltip over the whole slide).
+        const name = visuallyHidden(el, t('panels.whatsNew.goTo', { n: i + 1, count, title: x.title }));
+        name.id = uniqueId('whatsnew-slide');
+        el.setAttr('aria-labelledby', name.id);
+        const stage = el.createDiv({ cls: ['etz-whatsnew-stage', `mod-${x.id}`] });
         try {
-            if (x.id === 'hover') this.demoHover(demo, x, lives);
-            else if (x.id === 'ask') this.demoAsk(demo, x, i);
-            else if (x.id === 'also') this.demoAlso(demo);
-            else if (x.id === 'earlier') this.demoEarlier(demo);
-            else this.demoChart(demo, x, lives);
+            if (x.id === 'film') this.film = new FilmPlayer(stage);
+            else if (x.id === 'ask') this.demoAsk(stage, x, i);
+            else if (x.chart) this.demoChart(stage, x, i);
         } catch (e) {
             // Never on a working install, but the popup must still show the slide's words.
-            demo.empty();
-            demo.createDiv({ cls: 'etz-whatsnew-fallback', text: t('panels.whatsNew.drawFailed', { message: errorText(e) }) });
+            stage.empty();
+            stage.createDiv({ cls: 'etz-whatsnew-fallback', text: t('panels.whatsNew.drawFailed', { message: errorText(e) }) });
+        }
+
+        const copy = el.createDiv({ cls: 'etz-whatsnew-copy' });
+        const words = copy.createDiv({ cls: 'etz-whatsnew-words' });
+        if (x.label) words.createSpan({ cls: 'etz-whatsnew-label', text: x.label });
+        words.createEl('h3', { cls: 'etz-whatsnew-slide-title', text: x.title });
+        const line = words.createEl('p', { cls: 'etz-whatsnew-slide-text', text: x.text });
+        const buttons = copy.createDiv({ cls: 'etz-whatsnew-buttons' });
+        if (x.id === 'film') {
+            // Next to the film: the browser, for whoever wants it there.
+            line.appendText(' ');
+            const link = line.createEl('a', { cls: 'etz-whatsnew-youtube', href: WHATS_NEW_FILM.watch, attr: { target: '_blank', rel: 'noopener' } });
+            link.createSpan({ text: t('panels.whatsNew.film.youtube') });
+            setIcon(link.createSpan({ cls: 'etz-whatsnew-youtube-icon', attr: { 'aria-hidden': 'true' } }), 'external-link');
+            textButton(buttons, { text: t('panels.whatsNew.film.help'), icon: 'book-open', onClick: () => this.run((a) => a.openGuides()) });
+            textButton(buttons, { text: t('panels.whatsNew.film.changelog'), onClick: () => window.open(WHATS_NEW_CHANGELOG, '_blank') });
+        } else {
+            const tryIt = textButton(buttons, {
+                text: t('panels.whatsNew.tryIt'),
+                cls: 'etz-whatsnew-try',
+                onClick: () => {
+                    const chart = this.currentChart();
+                    if (chart) this.run((a) => a.tryExample(chart));
+                },
+            });
+            tryIt.el.setAttr('aria-label', t('panels.whatsNew.tryItLabel'));
         }
         return el;
     }
 
-    /** A new kind of picture: the chart, live with its sliders (and its player), and the text it is written in. */
-    private demoChart(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
-        const frame = demo.createDiv({ cls: 'etz-whatsnew-frame' });
-        lives.push(new LiveChart(frame, parseChartText(x.charts[0]).data, live({ maxSliders: x.sliders ?? 1 })));
-        const side = demo.createDiv({ cls: 'etz-whatsnew-side' });
-        this.recipe(side, t('panels.whatsNew.languageWords'), ['```easy-tikz', x.charts[0], '```'].join('\n'));
+    /** A live chart filling the stage, with its player (steps, the clock) or its sliders under it. */
+    private demoChart(stage: HTMLElement, x: WhatsNewSlide, i: number) {
+        const live = new LiveChart(stage, whatsNewChartOf(x.chart ?? ''), liveOptions({ maxSliders: x.sliders ?? 1 }));
+        this.lives.set(i, live);
     }
 
-    /** Ask the curve: a chart that opens its questions when a curve is clicked, and its block as the answers change it. */
-    private demoAsk(demo: HTMLElement, x: WhatsNewSlide, i: number) {
-        const frame = demo.createDiv({ cls: 'etz-whatsnew-frame' });
-        const side = demo.createDiv({ cls: 'etz-whatsnew-side' });
-        const pre = this.recipe(side, t('panels.whatsNew.askLines'), '');
-        const show = (data: Record<string, unknown>) => pre.setText(['```easy-tikz', printChartText(data), '```'].join('\n'));
-        const ask = new AskChart(frame, parseChartText(x.charts[0]).data, this, show);
-        this.asks.set(i, ask);
-        show(ask.chart());
-        const hint = frame.createDiv({ cls: ['etz-whatsnew-caption', 'mod-ask'] });
-        setIcon(hint.createSpan({ cls: 'etz-whatsnew-hint-icon', attr: { 'aria-hidden': 'true' } }), 'mouse-pointer-2');
-        hint.createSpan({ text: t('panels.whatsNew.askHint') });
-    }
-
-    /** Hover reads sets and maps: a note's sentence with a set under the pointer, and the card that opens on it. */
-    private demoHover(demo: HTMLElement, x: WhatsNewSlide, lives: LiveChart[]) {
-        const note = demo.createDiv({ cls: 'etz-whatsnew-hero' });
-        note.createDiv({ cls: 'etz-whatsnew-recipe-title', text: t('panels.whatsNew.noteTitle') });
-        const sentence = note.createEl('p', { cls: 'etz-whatsnew-note-text' });
-        // Filled when the sentence places the formula (a holder: TypeScript does not see the callback assign it).
-        const marked: { el: HTMLElement | null } = { el: null };
-        appendWithPlaces(sentence, t('panels.whatsNew.hoverNote'), {
-            definition: (into) => typeset(into.createSpan(), WHATS_NEW_NOTE_DEFINITION),
-            formula: (into) => {
-                // Marked as in a note with a card open on it, and the pointer resting there.
-                const mark = into.createSpan({ cls: 'etz-whatsnew-formula' });
-                marked.el = mark;
-                typeset(mark.createSpan(), WHATS_NEW_FORMULA);
-                setIcon(mark.createSpan({ cls: 'etz-whatsnew-pointer', attr: { 'aria-hidden': 'true' } }), 'mouse-pointer-2');
-            },
-        });
-        const stage = note.createDiv({ cls: 'etz-whatsnew-stage' });
-        // The card as it opens on the set: the formula and what it is, the chart, where g comes from.
-        const card = stage.createDiv({ cls: 'etz-whatsnew-card' });
-        const head = card.createDiv({ cls: 'etz-formula-head' });
-        typeset(head.createDiv({ cls: 'etz-formula-tex' }), WHATS_NEW_FORMULA);
-        head.createSpan({ cls: 'etz-formula-kind', text: t('notes6.hover.kind.set') });
-        lives.push(new LiveChart(card, parseChartText(x.charts[0]).data, live()));
-        const fn = whatsNewCard()?.fn;
-        if (fn) card.createDiv({ cls: 'etz-whatsnew-caption', text: t('notes6.hover.fromNote', { name: fn.name, body: fn.body }) });
-
-        // Beside the card: more formulas that open a chart now.
-        const side = stage.createDiv({ cls: 'etz-whatsnew-side' });
-        const more = side.createDiv({ cls: 'etz-whatsnew-recipe' });
-        more.createDiv({ cls: 'etz-whatsnew-recipe-title', text: t('panels.whatsNew.hoverMore') });
-        const formulas = more.createEl('ul', { cls: 'etz-whatsnew-formulas' });
-        for (const tex of HOVER_MORE) typeset(formulas.createEl('li'), tex);
-
-        // The card's tip points at the formula, wherever the sentence puts it.
-        const formula = marked.el;
-        if (formula) {
-            const placeTip = () => {
-                const at = formula.getBoundingClientRect();
-                const box = card.getBoundingClientRect();
-                if (!box.width) return;
-                const left = Math.max(18, Math.min(box.width - 18, at.left + at.width / 2 - box.left));
-                card.setCssProps({ '--etz-tip-x': `${Math.round(left)}px` });
-            };
-            this.resize?.disconnect();
-            this.resize = new ResizeObserver(placeTip);
-            this.resize.observe(note);
-            this.resize.observe(formula);
-        }
-    }
-
-    /** The rest of 6.0: one line each. */
-    private demoAlso(demo: HTMLElement) {
-        const grid = demo.createDiv({ cls: ['etz-whatsnew-list', 'mod-grid'] });
-        for (const item of WHATS_NEW_ALSO) this.item(grid, item);
-    }
-
-    /** Versions 5 and 4: one line each, under a heading per version. */
-    private demoEarlier(demo: HTMLElement) {
-        for (const [title, items] of [
-            [t('panels.whatsNew.v5Title'), WHATS_NEW_V5],
-            [t('panels.whatsNew.v4Title'), WHATS_NEW_MORE],
-        ] as const) {
-            demo.createEl('h4', { cls: 'etz-whatsnew-group-title', text: title });
-            const grid = demo.createDiv({ cls: ['etz-whatsnew-list', 'mod-grid'] });
-            for (const item of items) this.item(grid, item);
-        }
-        demo.createDiv({ cls: 'etz-whatsnew-hint', text: t('panels.whatsNew.hint') });
-    }
-
-    /** A titled panel of text: chart lines, a file, a line to paste. Returns its text. */
-    private recipe(parent: HTMLElement, title: string, text: string): HTMLElement {
-        const recipe = parent.createDiv({ cls: 'etz-whatsnew-recipe' });
-        const head = recipe.createDiv({ cls: 'etz-whatsnew-recipe-title', text: title });
-        head.id = uniqueId('whatsnew-recipe');
-        return recipe.createEl('pre', { cls: 'etz-whatsnew-text', text, attr: { 'aria-labelledby': head.id } });
+    /** Ask your chart: a chart that opens its questions when a curve is clicked; an answer goes into the chart. */
+    private demoAsk(stage: HTMLElement, x: WhatsNewSlide, i: number) {
+        this.asks.set(i, new AskChart(stage, whatsNewChartOf(x.chart ?? ''), this));
     }
 
     /** Close first, then act: the editor (or its Replace dialog) opens on its own, not under the popup. */
@@ -348,38 +273,10 @@ export class WhatsNewModal extends Modal {
         this.close();
         action(this.opts.actions);
     }
-
-    private guideLink(parent: HTMLElement, text: string, guideId: string, cls = 'etz-whatsnew-guide') {
-        return textButton(parent, {
-            text,
-            variant: 'link',
-            cls,
-            onClick: () => this.run((a) => a.openGuides(guideId)),
-        });
-    }
-
-    /** Icon tile, title (with a link to its guide, when there is one) and one line; inline `backticks` become code. */
-    private item(parent: HTMLElement, item: WhatsNewItem): HTMLElement {
-        const row = parent.createDiv({ cls: 'etz-whatsnew-item' });
-        setIcon(row.createSpan({ cls: 'etz-whatsnew-icon', attr: { 'aria-hidden': 'true' } }), item.icon);
-        const body = row.createDiv({ cls: 'etz-whatsnew-item-body' });
-        const head = body.createDiv({ cls: 'etz-whatsnew-item-head' });
-        head.createSpan({ cls: 'etz-whatsnew-item-title', text: item.title });
-        const guide = item.guide ? localGuideById(item.guide) : undefined;
-        if (guide) {
-            // The visible word is short; the name (and Obsidian's tooltip) says which guide.
-            const link = this.guideLink(head, t('panels.whatsNew.guide'), guide.id, 'etz-whatsnew-item-guide');
-            link.el.setAttr('aria-label', t('panels.whatsNew.guideLabel', { title: guide.title }));
-        } else if (item === WHATS_NEW_AI && this.opts.actions.openAi) {
-            textButton(head, { text: t('panels.whatsNew.openAi'), variant: 'link', cls: 'etz-whatsnew-item-guide', onClick: () => this.run((a) => a.openAi?.()) });
-        }
-        codeText(body.createDiv({ cls: 'etz-whatsnew-item-text' }), item.text);
-        return row;
-    }
 }
 
 /** The live chart of a slide: one slider row (unless more), the labels and classes of What's new. */
-function live(more: Partial<LiveChartOptions> = {}): LiveChartOptions {
+function liveOptions(more: Partial<LiveChartOptions> = {}): LiveChartOptions {
     return {
         label: t('panels.whatsNew.chartLabel'),
         sliders: t('panels.whatsNew.sliderGroup'),
@@ -392,21 +289,57 @@ function live(more: Partial<LiveChartOptions> = {}): LiveChartOptions {
     };
 }
 
-/** More formulas that open a chart in a note now (the hover slide). */
-const HOVER_MORE = [
-    'g: \\mathbb{R}^n \\to \\mathbb{R}',
-    '\\lambda \\in [0, 1]',
-    'g(\\lambda x + (1 - \\lambda) y) \\le \\lambda g(x) + (1 - \\lambda) g(y)',
-    'A v = \\lambda v',
-    'z_{n+1} = z_n^2 + c',
-    '\\sum_{k=1}^{n} \\frac{1}{k^2}',
-];
+/**
+ * The film: its poster (inside the plugin) with a play button, and after a
+ * click YouTube's player in its place. Leaving the slide or closing the
+ * popup removes the player, so the sound stops and the poster is back.
+ */
+class FilmPlayer {
+    private readonly poster: HTMLButtonElement;
+    private frame: HTMLIFrameElement | null = null;
+
+    constructor(private readonly stage: HTMLElement) {
+        this.poster = stage.createEl('button', { cls: 'etz-whatsnew-poster', attr: { type: 'button' } });
+        // The button's name in hidden text: the play sign says it to the eye, and no tooltip covers the poster.
+        visuallyHidden(this.poster, t('panels.whatsNew.film.play', { length: WHATS_NEW_FILM.length }));
+        this.poster.createEl('img', { cls: 'etz-whatsnew-poster-img', attr: { src: FILM_POSTER, alt: '', draggable: 'false' } });
+        setIcon(this.poster.createSpan({ cls: 'etz-whatsnew-poster-play', attr: { 'aria-hidden': 'true' } }), 'play');
+        this.poster.createSpan({ cls: 'etz-whatsnew-poster-length', text: WHATS_NEW_FILM.length, attr: { 'aria-hidden': 'true' } });
+        this.poster.addEventListener('click', () => this.play());
+    }
+
+    /** The player in place of the poster; it starts the film (a click asked for it). */
+    play(): void {
+        if (this.frame || !this.stage.isConnected) return;
+        const frame = this.stage.createEl('iframe', {
+            cls: 'etz-whatsnew-player',
+            attr: {
+                src: WHATS_NEW_FILM.embed,
+                title: t('panels.whatsNew.film.player'),
+                allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen',
+                allowfullscreen: 'true',
+                referrerpolicy: 'strict-origin-when-cross-origin',
+            },
+        });
+        this.frame = frame;
+        this.poster.addClass('tikz-hidden');
+        frame.focus();
+    }
+
+    /** The poster again; the player and its sound are gone. */
+    stop(): void {
+        if (!this.frame) return;
+        this.frame.remove();
+        this.frame = null;
+        this.poster.removeClass('tikz-hidden');
+    }
+}
 
 /**
  * The chart of the Ask slide: drawn as a live chart is (no sliders), and
  * asked as the chart under a block is (src/notes6/askHost.ts). A click on a
  * curve that does not move, or Enter on the chart, opens the questions;
- * an answer goes into this chart (the popup's own copy) and its block.
+ * an answer goes into this chart (the popup's own copy).
  */
 class AskChart {
     private data: Record<string, unknown>;
@@ -417,7 +350,7 @@ class AskChart {
     private readonly ask: AskController;
     private destroyed = false;
 
-    constructor(parent: HTMLElement, data: Record<string, unknown>, keys: Modal, private readonly changed: (data: Record<string, unknown>) => void) {
+    constructor(parent: HTMLElement, data: Record<string, unknown>, keys: Modal) {
         this.data = SettingsManager.fromJSON(cloneData(data)).serialize();
         this.box = parent.createDiv({ cls: ['etz-live-chart', 'etz-whatsnew-chart', 'etz-askable'], attr: { tabindex: '0', role: 'button', 'aria-haspopup': 'menu' } });
         const name = visuallyHidden(parent, t('panels.whatsNew.askLabel'));
@@ -436,7 +369,6 @@ class AskChart {
             apply: (next) => {
                 this.data = next;
                 this.render();
-                this.changed(this.chart());
             },
             focusEl: () => this.box,
             trapEscape: (fn) => trapEscape(keys, fn),
@@ -464,7 +396,7 @@ class AskChart {
         window.requestAnimationFrame(() => this.render());
     }
 
-    /** The chart as it is now, with the answers chosen: what Try an example opens. */
+    /** The chart as it is now, with the answers chosen: what Try it opens. */
     chart(): Record<string, unknown> {
         return cloneData(this.data);
     }
@@ -504,40 +436,4 @@ class AskChart {
             // The last drawing stays.
         }
     }
-}
-
-/** Text with inline `backticks` as code. */
-function codeText(el: HTMLElement, text: string): void {
-    text.split('`').forEach((part, i) => {
-        if (!part) return;
-        if (i % 2 === 1) el.createEl('code', { text: part });
-        else el.appendText(part);
-    });
-}
-
-
-/**
- * Append `text`, a message whose named places are left unfilled, to `el`:
- * its words as text, and each {place} made by its function, so a
- * translation can put code or a link wherever its word order wants it.
- */
-/** A formula typeset by Obsidian's MathJax; its TeX until MathJax is there (a vault without math has not loaded it). */
-function typeset(el: HTMLElement, tex: string): void {
-    el.setText(tex);
-    void loadMathJax()
-        .then(() => {
-            el.empty();
-            el.appendChild(renderMath(tex, false));
-            return finishRenderMath();
-        })
-        .catch(() => el.setText(tex));
-}
-
-function appendWithPlaces(el: HTMLElement, text: string, places: Record<string, (into: HTMLElement) => void>): void {
-    text.split(/\{(\w+)\}/).forEach((part, i) => {
-        if (i % 2 === 0) {
-            if (part) el.appendText(part);
-        } else if (places[part]) places[part](el);
-        else el.appendText(`{${part}}`);
-    });
 }

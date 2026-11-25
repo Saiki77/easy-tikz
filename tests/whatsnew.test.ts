@@ -7,11 +7,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test, assert, near } from './_lib';
 import { parseChartText } from '../src/text/parse';
+import { NO_WORDS } from '../src/text/words';
 import { canonical } from '../src/chartdata';
 import { GUIDES, guideById } from '../src/guides';
+import { tIn } from '../src/i18n';
 import { issueText } from '../src/issues';
 import { LABEL_LOCALS } from '../src/mathcontext';
-import { computeScene2D, labelMetricsFor, SceneIssue } from '../src/scene';
+import { computeScene2D, computeScene3D, labelMetricsFor, SceneIssue } from '../src/scene';
 import { SettingsManager } from '../src/settings';
 import { DEFAULT_PLUGIN_DATA } from '../src/templates';
 import { Parameter } from '../src/types';
@@ -20,20 +22,19 @@ import { askContext, askQuestions, applyAnswer, answerPresent } from '../src/not
 import '../src/linear/ask';
 import '../src/iterate/ask';
 import {
-    WHATS_NEW_ALSO,
     WHATS_NEW_ASK_CHART,
+    WHATS_NEW_CHANGELOG,
+    WHATS_NEW_CHAOS_CHART,
     WHATS_NEW_CHART_TEXT,
-    WHATS_NEW_FORMULA,
-    WHATS_NEW_SLIDES,
-    WHATS_NEW_RECENT,
-    WHATS_NEW_AI,
+    WHATS_NEW_FILM,
+    WHATS_NEW_FILM_SLIDE,
+    WHATS_NEW_FLOW_CHART,
     WHATS_NEW_ICONS,
-    WHATS_NEW_LIVE,
-    WHATS_NEW_MORE,
+    WHATS_NEW_ML_GUIDE,
     WHATS_NEW_SLIDER,
-    WHATS_NEW_SUBTITLE,
+    WHATS_NEW_SLIDES,
+    WHATS_NEW_STEPS_CHART,
     WHATS_NEW_TITLE,
-    WHATS_NEW_V5,
     WHATS_NEW_VERSION,
     chartScanRank,
     compareVersions,
@@ -41,10 +42,9 @@ import {
     isFreshInstall,
     needsVaultCheck,
     shouldShowWhatsNew,
-    whatsNewCard,
     whatsNewChart,
+    whatsNewChartOf,
     whatsNewSeen,
-    whatsNewText,
 } from '../src/whatsnew';
 
 const EM_DASH = String.fromCharCode(0x2014);
@@ -159,148 +159,144 @@ test('whats new: compareVersions', () => {
 
 // ---------------------------------------------------------------- content
 
-// The slides of 6.0, the rest of 6.0, version 5, and version 4 (with the live and AI items): every item once.
-const ITEMS = [...WHATS_NEW_RECENT, ...WHATS_NEW_ALSO, ...WHATS_NEW_V5, ...WHATS_NEW_MORE];
+const slideById = (id: string) => {
+    const x = WHATS_NEW_SLIDES.find((s) => s.id === id);
+    if (!x) throw new Error(`no slide ${id}`);
+    return x;
+};
+const chartOfSlide = (id: string) => whatsNewChartOf(slideById(id).chart ?? '');
+type Tool = { type: string; step?: number; [key: string]: unknown };
+const toolsOf = (chart: Record<string, unknown>) => (chart.tools as Tool[]) ?? [];
 
-test('whats new: every line is short, plain and free of em dashes', () => {
-    const texts = [WHATS_NEW_TITLE, WHATS_NEW_SUBTITLE, ...ITEMS.flatMap((i) => [i.title, i.text])];
-    for (const text of texts) {
-        assert.ok(!text.includes(EM_DASH), `em dash in "${text}"`);
-        assert.ok(text.trim() === text && text.length > 0, `blank or padded text "${text}"`);
-    }
-    for (const item of ITEMS) {
-        assert.ok(item.title.length <= 40, `title too long: ${item.title}`);
-        assert.ok(item.text.length <= 150, `text too long (${item.text.length}): ${item.text}`);
-        assert.ok(/[.]$/.test(item.text), `a sentence ends with a full stop: ${item.text}`);
-        assert.equal((item.text.match(/`/g) || []).length % 2, 0, `unbalanced backticks: ${item.text}`);
-    }
+test('whats new: seven slides in order, the film last', () => {
+    assert.deepEqual(WHATS_NEW_SLIDES.map((x) => x.id), ['flow', 'chaos', 'ml', 'steps', 'fractal', 'ask', 'film']);
+    assert.deepEqual(WHATS_NEW_SLIDES.map((x) => x.title), [
+        'Fields that flow',
+        'Chaos in 3D',
+        'Machine learning',
+        'Step by step',
+        'Fractals, live',
+        'Ask your chart',
+        'Every idea deserves a picture',
+    ]);
+    assert.deepEqual(WHATS_NEW_SLIDES.map((x) => x.label), [
+        'Live: particles move',
+        'Live: draws itself and turns',
+        'Live: Python, frame by frame',
+        'Plays in steps',
+        'Live: drag a and b',
+        'Click a curve',
+        '',
+    ]);
+    assert.equal(slideById('film').text, 'See all of 6.0 in two minutes.');
+    assert.equal(WHATS_NEW_FILM_SLIDE, WHATS_NEW_SLIDES.length - 1);
     assert.equal(WHATS_NEW_TITLE, 'Easy Graphs Charts and TikZ 6');
-});
-
-test('whats new: it covers the highlights of version 4, with sliders, calculations and AI among them', () => {
-    const all = ITEMS.map((i) => `${i.title} ${i.text}`.toLowerCase()).join('\n');
-    for (const topic of ['editor', 'slider', 'play', 'drag', 'shift', 'five general tools', 'inequalities', 'equations', 'intersections', 'optimum', 'segments', '3d planes', 'p1_x', 'labels', 'notes', 'latex', 'guides', '3.x']) {
-        assert.ok(all.includes(topic), `nothing says "${topic}"`);
-    }
-    assert.deepEqual(WHATS_NEW_LIVE.map((i) => i.title), ['Live sliders', 'Live calculations', 'Sliders in your notes']);
-    for (const item of [...WHATS_NEW_LIVE, WHATS_NEW_AI]) assert.ok(WHATS_NEW_MORE.includes(item), `${item.title} is not in the popup`);
-});
-
-test('whats new: icons are lucide ids, guides exist', () => {
-    for (const icon of WHATS_NEW_ICONS) assert.ok(/^[a-z0-9]+(-[a-z0-9]+)*$/.test(icon), `not an icon id: ${icon}`);
-    assert.equal(new Set(ITEMS.map((i) => i.icon)).size, ITEMS.length, 'two items share an icon');
-    for (const item of ITEMS) if (item.guide) assert.ok(guideById(item.guide), `${item.title}: no guide ${item.guide}`);
-    for (const item of WHATS_NEW_LIVE) assert.ok(item.guide, `${item.title} links no guide`);
-});
-
-test('whats new: the number of guides it names is the number in the Help tab, on GitHub and in the README', () => {
-    const said = ITEMS.map((i) => /(\d+) step-by-step guides/.exec(i.text)).find((m) => m);
-    assert.ok(said, 'no item counts the guides');
-    const count = Number(said[1]);
-    assert.equal(count, GUIDES.length, 'the number of guides in the text');
-    // The text takes its number from the guide list. The pages on GitHub are files made by
-    // `npm run media:guides`, so they tell independently whether a guide was added or removed
-    // without running the script: one page per guide, none left over.
-    const root = process.cwd();
-    const pages = fs
-        .readdirSync(path.join(root, 'docs', 'guides'))
-        .filter((f) => f.endsWith('.md') && f !== 'README.md')
-        .map((f) => f.slice(0, -'.md'.length))
-        .sort();
-    assert.deepEqual(pages, GUIDES.map((g) => g.id).sort(), 'docs/guides holds one page per guide');
-    // The index of the pages and the README say the same number.
-    for (const file of [path.join('docs', 'guides', 'README.md'), 'README.md']) {
-        const m = /(\d+) step-by-step guides/i.exec(fs.readFileSync(path.join(root, file), 'utf8'));
-        assert.ok(m, `${file} does not say how many guides there are`);
-        assert.equal(Number(m[1]), count, `${file} counts the guides differently`);
-    }
-});
-
-test('whats new: the text beside the chart is the whole chart, in a few lines', () => {
-    const text = whatsNewText();
-    const back = parseChartText(text);
-    assert.deepEqual(back.problems, []);
-    assert.equal(canonical(back.data), canonical(whatsNewChart()));
-    const lines = text.split('\n');
-    assert.ok(lines.length <= 10, `${lines.length} lines`);
-    assert.ok(!lines.some((l) => l.startsWith('raw ') || l.startsWith('set ')), text);
-});
-
-test('whats new: a slideshow of 6.0, one feature per slide, then the rest of 6.0, then versions 5 and 4', () => {
-    assert.deepEqual(WHATS_NEW_SLIDES.map((x) => x.id), ['picture', 'matrix', 'motion', 'ask', 'hover', 'values', 'also', 'earlier']);
-    assert.deepEqual(WHATS_NEW_RECENT.map((i) => i.title), [
-        'Every idea is a picture',
-        'A matrix moves the plane',
-        'Motion',
-        'Ask the curve',
-        'Hover reads sets and maps',
-        'Values and sums',
-    ]);
-    assert.equal(WHATS_NEW_SLIDES[WHATS_NEW_SLIDES.length - 2].title, 'Also new in 6.0');
-    assert.equal(WHATS_NEW_SLIDES[WHATS_NEW_SLIDES.length - 1].title, 'Earlier versions');
-    assert.deepEqual(WHATS_NEW_V5.map((i) => i.title), [
-        'Every formula is a chart',
-        'LaTeX is the chart language',
-        'Connected sliders',
-        'Data and a regression line',
-        'Probability',
-        'Riemann sums',
-        'Slope fields',
-        'Charts as SVG files',
-    ]);
-    assert.deepEqual(WHATS_NEW_MORE.slice(0, 3).map((i) => i.title), ['Axis numbers your way', 'White background for images', 'Solid surfaces in 3D']);
     assert.equal(WHATS_NEW_VERSION, '6.0.0');
-    // Each feature slide shows something live; the first is the Julia set with its two sliders.
-    for (const x of WHATS_NEW_SLIDES) if (x.id !== 'also' && x.id !== 'earlier') assert.ok(x.charts.length > 0, `${x.id} has no chart`);
-    assert.equal(WHATS_NEW_SLIDES[0].charts[0], WHATS_NEW_CHART_TEXT);
-    assert.equal(WHATS_NEW_SLIDES[0].sliders, 2);
-    // The examples in the texts are lines the plugin reads (with what they need around them).
-    const needs: Record<string, string> = {
-        'Every idea is a picture': '',
-        'A matrix moves the plane': 'let A = [[1, 1], [0, 1]]',
-        'LaTeX is the chart language': '',
-        'Connected sliders': '',
-        "Newton's method": 'plot f(x) = x^2 - 2',
-        'Sets on an axis and chords': 'plot g(x) = x^2 - 4',
-    };
-    for (const [title, before] of Object.entries(needs)) {
-        const it = ITEMS.find((i) => i.title === title);
-        const example = it ? /`([^`]+)`/.exec(it.text) : null;
-        assert.ok(it && example, `no example in ${title}`);
-        const text = [before, example[1]].filter((l) => l).join('\n');
-        assert.deepEqual(parseChartText(text).problems, [], text);
+    // Every slide but the film has a live chart; the film has none.
+    for (const x of WHATS_NEW_SLIDES) assert.equal(!!x.chart, x.id !== 'film', `${x.id}: chart ${!!x.chart}`);
+    assert.equal(slideById('fractal').chart, WHATS_NEW_CHART_TEXT);
+    assert.equal(slideById('fractal').sliders, 2);
+});
+
+test('whats new: every line is short, plain and free of em dashes, in English and Japanese', () => {
+    const keys = ['flow', 'chaos', 'ml', 'steps', 'fractal', 'ask', 'film'] as const;
+    for (const lang of ['en', 'ja'] as const) {
+        for (const id of keys) {
+            const title = tIn(lang, `panels.whatsNew.${id}.title`);
+            const text = tIn(lang, `panels.whatsNew.${id}.text`);
+            for (const s of [title, text]) {
+                assert.ok(!s.includes(EM_DASH), `em dash in "${s}"`);
+                assert.ok(s.trim() === s && s.length > 0, `blank or padded text "${s}"`);
+            }
+            assert.ok(title.length <= 40, `${lang} title too long: ${title}`);
+            assert.ok(text.length <= 130, `${lang} text too long (${text.length}): ${text}`);
+            assert.ok(/[.。]$/.test(text), `${lang}: a sentence ends with a full stop: ${text}`);
+            if (id !== 'film') assert.ok(tIn(lang, `panels.whatsNew.${id}.label`).length <= 32, `${lang} label of ${id} too long`);
+        }
     }
-    // The example of the mesh lines is a surface option the plugin reads.
-    const mesh = WHATS_NEW_MORE.find((i) => i.title === 'Mesh lines');
-    const option = mesh ? /`([^`]+)`/.exec(mesh.text) : null;
-    assert.ok(mesh && option && parseChartText(`3d\nplot z = x^2 - y^2, ${option[1]}`).problems.length === 0, mesh ? mesh.text : 'no item Mesh lines');
-    // The example of the lines in words is a line the plugin reads.
-    const plain = ITEMS.find((i) => i.title === 'Charts in plain words');
-    const example = plain ? /`([^`]+)`/.exec(plain.text) : null;
-    assert.ok(plain && example && parseChartText(example[1]).problems.length === 0, plain ? plain.text : 'no item Charts in plain words');
 });
 
-test('whats new: the matrix slide plays in steps, the motion slide moves by itself', () => {
-    const matrix = WHATS_NEW_SLIDES.find((x) => x.id === 'matrix');
-    const motion = WHATS_NEW_SLIDES.find((x) => x.id === 'motion');
-    const steps = (text: string) => ((parseChartText(text).data.tools as Array<{ step?: number }>) ?? []).map((x) => x.step ?? 0);
-    assert.ok(matrix && Math.max(...steps(matrix.charts[0])) === 2, 'the matrix moves in step 2, its eigenvectors come in step 3');
-    const field = motion ? (parseChartText(motion.charts[0]).data.tools as Array<{ type: string; particles?: boolean }>).find((x) => x.type === 'vectorField') : null;
-    assert.ok(field && field.particles === true, 'the field has moving particles');
+test('whats new: every chart fills a 16:9 stage, the machine learning slide shows the Showcase page', () => {
+    for (const x of WHATS_NEW_SLIDES) {
+        if (!x.chart || x.id === 'ml') continue;
+        const chart = whatsNewChartOf(x.chart);
+        assert.deepEqual([chart.size_x_cm, chart.size_y_cm], [16, 9], `${x.id}: size`);
+    }
+    // Read in the built-in words, whatever words a reader set up for their own charts.
+    for (const x of WHATS_NEW_SLIDES) if (x.chart) assert.deepEqual(parseChartText(x.chart, { words: NO_WORDS }).problems, [], `${x.id}: ${x.chart}`);
+    const guide = guideById(WHATS_NEW_ML_GUIDE);
+    assert.ok(guide, `no guide ${WHATS_NEW_ML_GUIDE}`);
+    assert.equal(canonical(chartOfSlide('ml')), canonical(guide.chart), 'the slide shows the chart of the Showcase page');
+    const python = toolsOf(chartOfSlide('ml')).find((t) => t.type === 'python');
+    assert.ok(python && /^def frame\(t\):/m.test(String(python.code)), 'the script plays with frame(t)');
 });
 
-test('whats new: the hover slide is the card a note shows for the set, with g from the note', () => {
-    const card = whatsNewCard();
-    assert.ok(card, `no card for ${WHATS_NEW_FORMULA}`);
-    assert.equal(card.kind, 'set');
-    assert.deepEqual(card.fn, { name: 'g', body: 'x^2 - 4', from: 'note' });
-    const hover = WHATS_NEW_SLIDES.find((x) => x.id === 'hover');
-    assert.ok(hover && card.lines.every((line) => hover.charts[0].includes(line)), 'the slide draws the lines of the card');
+test('whats new: the flow slide moves by itself, the chaos slide draws itself and turns, the steps slide plays in steps', () => {
+    assert.equal(slideById('flow').chart, WHATS_NEW_FLOW_CHART);
+    const flow = chartOfSlide('flow');
+    const field = toolsOf(flow).find((t) => t.type === 'vectorField');
+    assert.ok(field && field.particles === true && field.count === 600 && field.trails === 0.92, `the field: ${JSON.stringify(field)}`);
+    assert.equal(field.expression, '(y, -\\sin x - 0.25y)');
+    assert.ok(toolsOf(flow).some((t) => t.type === 'restPoints'), 'the rest points are marked');
+    assert.deepEqual([flow.xmin, flow.xmax, flow.ymin, flow.ymax].map(Number), [-6.3, 6.3, -3.6, 3.6]);
+
+    assert.equal(slideById('chaos').chart, WHATS_NEW_CHAOS_CHART);
+    const chaos = chartOfSlide('chaos');
+    assert.equal(chaos.dimension, true);
+    assert.equal(chaos.turning, true);
+    assert.equal(chaos.rotationX, 12, 'seen low');
+    assert.equal(chaos.rotationZ, 0, 'from the front: the butterfly faces the reader');
+    const path = toolsOf(chaos).find((t) => t.type === 'trajectory');
+    assert.ok(path && path.traced === true && path.byTime === true, `the path: ${JSON.stringify(path)}`);
+    // The Lorenz system of the Showcase page, through the same point.
+    const lorenz = guideById('lorenz-butterfly');
+    const first = lorenz ? toolsOf(lorenz.steps[0].chart ?? lorenz.chart).find((t) => t.type === 'trajectory') : null;
+    assert.ok(first, 'the Showcase page lorenz-butterfly draws a path');
+    assert.equal(path.expression, first.expression);
+    assert.equal(path.through, first.through);
+
+    const steps = toolsOf(chartOfSlide('steps')).map((t) => t.step ?? 0);
+    assert.equal(Math.max(...steps), 2, 'the matrix moves in step 2, its eigenvectors come in step 3');
+    assert.equal(slideById('steps').chart, WHATS_NEW_STEPS_CHART);
+});
+
+test('whats new slides: every chart reads without a problem and draws without an error at both ends of its slider', () => {
+    for (const x of WHATS_NEW_SLIDES) {
+        if (!x.chart) continue;
+        const settings = SettingsManager.fromJSON(whatsNewChartOf(x.chart));
+        const params = (settings.getValue('parameters') as Parameter[]) ?? [];
+        const ends = params.length ? [params[0].min, params[0].value, params[0].max] : [NaN];
+        for (const v of ends) {
+            const math = settings.createMathContext({ memo: false });
+            math.setParams(params.map((p, k) => (k === 0 && Number.isFinite(v) ? { ...p, value: v } : p)));
+            const config = settings.toRendererConfig(math);
+            const issues: SceneIssue[] = [...math.parameterIssues()];
+            if (config.is3D) {
+                const view = { xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax, zmin: config.zmin ?? -5, zmax: config.zmax ?? 5 };
+                issues.push(...computeScene3D({ tools: config.tools, math, view }).issues);
+            } else {
+                const scene = computeScene2D({
+                    functions: config.functions || [],
+                    tools: config.tools,
+                    math,
+                    view: { xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax },
+                    grid: marchingGrid(config.width * 0.85, config.height * 0.8, 1, 'full'),
+                    axisStyle: config.axisStyle,
+                    polar: false,
+                    labelMetrics: labelMetricsFor(config.paperWidthCm ?? 10, config.paperHeightCm ?? 10),
+                });
+                issues.push(...scene.issues);
+            }
+            const errors = issues.filter((i) => i.severity === 'error').map((i) => issueText(i));
+            for (const info of math.functions()) if (info.error) errors.push(`${info.name}: ${info.error}`);
+            assert.deepEqual(errors, [], `${x.id} at ${v}`);
+        }
+    }
 });
 
 test('whats new: the ask slide asks real questions, and every answer draws', () => {
     const data = new SettingsManager().serialize();
-    Object.assign(data, parseChartText(WHATS_NEW_ASK_CHART).data);
+    Object.assign(data, whatsNewChartOf(WHATS_NEW_ASK_CHART));
     const chart = SettingsManager.fromJSON(data).serialize();
     const settings = SettingsManager.fromJSON(chart);
     const math = settings.createMathContext({ memo: false });
@@ -318,13 +314,81 @@ test('whats new: the ask slide asks real questions, and every answer draws', () 
     }
 });
 
-test('whats new: the popup loads nothing from the network', () => {
+test('whats new: icons are lucide ids', () => {
+    for (const icon of WHATS_NEW_ICONS) assert.ok(/^[a-z0-9]+(-[a-z0-9]+)*$/.test(icon), `not an icon id: ${icon}`);
+    assert.equal(new Set(WHATS_NEW_ICONS).size, WHATS_NEW_ICONS.length, 'an icon is listed twice');
+});
+
+test('whats new: the number of guides it names is the number in the Help tab, on GitHub and in the README', () => {
+    // 6.0: the popup no longer counts the guides (its list of earlier versions is gone); the Help tab's
+    // number is the guide list's, and the pages on GitHub and the README must say the same.
+    const count = GUIDES.length;
+    // The pages on GitHub are files made by `npm run media:guides`, so they tell independently whether
+    // a guide was added or removed without running the script: one page per guide, none left over.
     const root = process.cwd();
-    for (const file of ['src/whatsnew.ts', 'src/ui/whatsNewModal.ts', 'src/ui/whatsnew.css']) {
-        const text = fs.readFileSync(path.join(root, file), 'utf8');
-        assert.ok(!/https?:\/\//.test(text), `${file} names a URL`);
-        assert.ok(!/\bfetch\(|requestUrl|XMLHttpRequest|<img|createEl\('img'|url\(/.test(text), `${file} loads something`);
+    const pages = fs
+        .readdirSync(path.join(root, 'docs', 'guides'))
+        .filter((f) => f.endsWith('.md') && f !== 'README.md')
+        .map((f) => f.slice(0, -'.md'.length))
+        .sort();
+    assert.deepEqual(pages, GUIDES.map((g) => g.id).sort(), 'docs/guides holds one page per guide');
+    // The index of the pages and the README say the same number.
+    for (const file of [path.join('docs', 'guides', 'README.md'), 'README.md']) {
+        const m = /(\d+) step-by-step guides/i.exec(fs.readFileSync(path.join(root, file), 'utf8'));
+        assert.ok(m, `${file} does not say how many guides there are`);
+        assert.equal(Number(m[1]), count, `${file} counts the guides differently`);
     }
+});
+
+// ------------------------------------------------------------------- film
+
+/** The width and height of a baseline or progressive JPEG, from its SOF marker. */
+function jpegSize(bytes: Buffer): { width: number; height: number } | null {
+    if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+    let i = 2;
+    while (i + 9 < bytes.length) {
+        if (bytes[i] !== 0xff) return null;
+        const marker = bytes[i + 1];
+        const length = bytes.readUInt16BE(i + 2);
+        if (marker >= 0xc0 && marker <= 0xc3) return { height: bytes.readUInt16BE(i + 5), width: bytes.readUInt16BE(i + 7) };
+        i += 2 + length;
+    }
+    return null;
+}
+
+test('whats new: the film plays from YouTube only after a click; the poster ships with the plugin', () => {
+    const root = process.cwd();
+    const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
+    // The only addresses: the player, the film's page and the changelog, all in src/whatsnew.ts.
+    const urls = (text: string) => text.match(/https?:\/\/[^\s'"`)]+/g) ?? [];
+    assert.deepEqual(urls(read('src/whatsnew.ts')).sort(), [WHATS_NEW_CHANGELOG, WHATS_NEW_FILM.embed, WHATS_NEW_FILM.watch].sort());
+    assert.ok(WHATS_NEW_FILM.embed.startsWith('https://www.youtube-nocookie.com/embed/X--vCnK-u7Q?'), WHATS_NEW_FILM.embed);
+    assert.ok(/[?&]autoplay=1(&|$)/.test(WHATS_NEW_FILM.embed) && /[?&]playsinline=1(&|$)/.test(WHATS_NEW_FILM.embed), 'the player starts at once, also on phones');
+    assert.equal(WHATS_NEW_FILM.watch, 'https://www.youtube.com/watch?v=X--vCnK-u7Q');
+    assert.equal(WHATS_NEW_FILM.length, '2:21');
+    for (const file of ['src/whatsnew.ts', 'src/ui/whatsNewModal.ts', 'src/ui/whatsnew.css']) {
+        const text = read(file);
+        if (file !== 'src/whatsnew.ts') assert.deepEqual(urls(text), [], `${file} names a URL`);
+        assert.ok(!/\bfetch\(|requestUrl|XMLHttpRequest|preconnect|dns-prefetch|url\(/.test(text), `${file} loads something`);
+    }
+    // The popup makes one picture, the poster (a data: URL in main.js), and one player.
+    const modal = read('src/ui/whatsNewModal.ts');
+    assert.ok(/^import FILM_POSTER from '\.\/assets\/film-poster\.jpg';$/m.test(modal), 'the poster is the bundled picture');
+    assert.equal((modal.match(/createEl\('img'/g) || []).length, 1, 'one picture');
+    assert.ok(/createEl\('img', \{[^}]*src: FILM_POSTER\b/.test(modal), 'its source is the bundled poster');
+    assert.equal((modal.match(/createEl\('iframe'/g) || []).length, 1, 'one player');
+    // The player is made in FilmPlayer.play, and play() runs only from a click (the poster, the header's button).
+    const play = /\n {4}play\(\): void \{\n([\s\S]*?)\n {4}\}\n/.exec(modal);
+    assert.ok(play && play[1].includes("createEl('iframe'"), 'the player is made in play()');
+    const calls = [...modal.matchAll(/\.play\(\)/g)].map((m) => modal.slice(Math.max(0, (m.index ?? 0) - 240), m.index));
+    assert.equal(calls.length, 2, `play() is called ${calls.length} times`);
+    for (const before of calls) assert.ok(/addEventListener\('click', \(\) => \{?[^}]*$/.test(before), `play() outside a click: ...${before.slice(-120)}`);
+    assert.ok(/allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen'/.test(modal) && /referrerpolicy: 'strict-origin-when-cross-origin'/.test(modal) && /allowfullscreen/.test(modal), 'the player is allowed to play and go full screen');
+    // The poster: a JPEG of about 960 x 540, at most 100 KB, bundled as a data: URL.
+    const poster = fs.readFileSync(path.join(root, 'src', 'ui', 'assets', 'film-poster.jpg'));
+    assert.ok(poster.length <= 100 * 1024, `the poster is ${poster.length} bytes`);
+    assert.deepEqual(jpegSize(poster), { width: 960, height: 540 });
+    assert.ok(/'\.jpg': 'dataurl'/.test(read('esbuild.config.mjs')), 'esbuild.config.mjs bundles .jpg as data: URLs');
 });
 
 // ------------------------------------------------------------------ chart
@@ -410,32 +474,3 @@ test('whats new chart: the set has an inside and an outside at the start and at 
     }
 });
 
-test('whats new slides: every chart reads without a problem and draws without an error at both ends of its slider', () => {
-    for (const x of WHATS_NEW_SLIDES) {
-        for (const text of x.charts) {
-            const parsed = parseChartText(text);
-            assert.deepEqual(parsed.problems, [], `${x.id}: ${text}`);
-            const settings = SettingsManager.fromJSON(parsed.data);
-            const params = (settings.getValue('parameters') as Parameter[]) ?? [];
-            const ends = params.length ? [params[0].min, params[0].value, params[0].max] : [NaN];
-            for (const v of ends) {
-                const math = settings.createMathContext({ memo: false });
-                math.setParams(params.map((p, k) => (k === 0 && Number.isFinite(v) ? { ...p, value: v } : p)));
-                const config = settings.toRendererConfig(math);
-                const scene = computeScene2D({
-                    functions: config.functions || [],
-                    tools: config.tools,
-                    math,
-                    view: { xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax },
-                    grid: marchingGrid(config.width * 0.85, config.height * 0.8, 1, 'full'),
-                    axisStyle: config.axisStyle,
-                    polar: false,
-                    labelMetrics: labelMetricsFor(config.paperWidthCm ?? 10, config.paperHeightCm ?? 10),
-                });
-                const errors = [...math.parameterIssues(), ...scene.issues].filter((i) => i.severity === 'error').map((i) => issueText(i));
-                for (const info of math.functions()) if (info.error) errors.push(`${info.name}: ${info.error}`);
-                assert.deepEqual(errors, [], `${x.id} at ${v}`);
-            }
-        }
-    }
-});
