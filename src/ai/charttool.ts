@@ -129,6 +129,7 @@ function knownKeys(part: string, defaults: Record<string, Data>): Set<string> {
     }
     if (TOOL_TYPES.includes(part as ToolType)) keys.add('type');
     if (part === 'function') keys.add('legendLabel');
+    if (part === 'function') keys.add('head'); // 6.0 ML: \sigma, \mathrm{ReLU} as written
     if (part === 'label') keys.add('z');
     // A slider that moves with the sliders of its name in the note's other charts (5.0).
     if (part === 'parameter') keys.add('connected');

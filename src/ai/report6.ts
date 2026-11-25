@@ -54,6 +54,11 @@ export function valueText(v: Value): string {
         const shown = items.length <= 4 ? items.map((x) => formatValue(x, 3)).join(', ') : `${formatValue(items[0], 3)}, ${formatValue(items[1], 3)}, ..., ${formatValue(items[items.length - 1], 3)}`;
         return `a list of ${items.length} ${what}: ${shown.length > 240 ? `${shown.slice(0, 240)}...` : shown}`;
     }
+    // 6.0 ML: a large matrix (a grid of a script) by its size and corners, not every number.
+    if (v.kind === 'mat' && v.rows * v.cols > 36) {
+        const at = (i: number, j: number) => num(v.a[i * v.cols + j]);
+        return `a ${v.rows} x ${v.cols} matrix: ${at(0, 0)}, ${at(0, 1)}, ... ${at(v.rows - 1, v.cols - 1)}`;
+    }
     const text = formatValue(v, 3);
     if (v.kind === 'mat') return `${text}${matrixFacts(v)}`;
     if (v.kind === 'complex') return `${text} (modulus ${num(Math.hypot(v.re, v.im))}, argument ${num(Math.atan2(v.im, v.re))})`;
@@ -382,11 +387,20 @@ function pythonText(tool: Extract<Tool, { type: 'python' }>, tools: Tool[], math
     result.figure.draws.forEach((dr, i) => {
         if (result.figure.blocks[i] === block) kinds.set(dr.k, (kinds.get(dr.k) ?? 0) + 1);
     });
-    const word: Record<string, [string, string]> = { line: ['line', 'lines'], dots: ['set of dots', 'sets of dots'], fill: ['fill', 'fills'], arrow: ['arrow', 'arrows'], text: ['text', 'texts'], hline: ['line across', 'lines across'], vline: ['line across', 'lines across'], circle: ['circle', 'circles'], image: ['picture (pixel layer)', 'pictures (pixel layers)'] };
+    const word: Record<string, [string, string]> = { line: ['line', 'lines'], dots: ['set of dots', 'sets of dots'], fill: ['fill', 'fills'], arrow: ['arrow', 'arrows'], text: ['text', 'texts'], hline: ['line across', 'lines across'], vline: ['line across', 'lines across'], circle: ['circle', 'circles'], image: ['picture (pixel layer)', 'pictures (pixel layers)'], bands: ['filled contour (pixel layer)', 'filled contours (pixel layers)'] /* 6.0 ML */ };
     if (kinds.size) parts.push(`draws ${Array.from(kinds.entries()).map(([k, c]) => `${c} ${(word[k] ?? [k, `${k}s`])[c > 1 ? 1 : 0]}`).join(', ')}`);
     const drawn = items.flatMap((it) => [...it.strokes.flatMap((s) => s.lines).flat(), ...it.markers, ...it.fills.flatMap((f) => f.rings).flat()]);
     if (drawn.length) parts.push(`where ${h.bbox(drawn)}`);
-    if (result.frame && FRAME_DEF.test(tool.code)) parts.push('frame(t) moves on the clock (the check shows frame(0))');
+    if (result.frame && FRAME_DEF.test(tool.code)) {
+        parts.push('frame(t) moves on the clock (the check shows frame(0))');
+        // 6.0 ML: what frame(0) draws, and the title it sets (the chart's title while the still drawing has none).
+        const still = result.frameAt(0);
+        const counts = new Map<string, number>();
+        for (const dr of still.figure.draws) counts.set(dr.k, (counts.get(dr.k) ?? 0) + 1);
+        if (counts.size) parts.push(`frame(0) draws ${Array.from(counts.entries()).map(([k, c]) => `${c} ${(word[k] ?? [k, `${k}s`])[c > 1 ? 1 : 0]}`).join(', ')}`);
+        if (still.figure.title && !result.figure.title) parts.push(`frame(0) title "${still.figure.title}"`);
+        if (still.error) parts.push(`frame(t) STOPPED at line ${still.error.line}: ${still.error.message}`);
+    }
     if (block === 0 && result.figure.title) parts.push(`title "${result.figure.title}"`);
     if (result.error && result.error.block === block) parts.push(`STOPPED at line ${result.error.line}: ${result.error.message}`);
     if (!parts.length) parts.push('draws nothing');

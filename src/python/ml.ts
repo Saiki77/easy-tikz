@@ -2,8 +2,8 @@
  * 6.0 ML: the NumPy a machine learning script needs beyond the 6.0 P
  * subset (docs/v6/ml.md): keepdims on reductions, np.linalg.svd, pinv,
  * lstsq and matrix_rank (one-sided Jacobi, exact to rounding for the small
- * matrices a chart holds), np.cov, np.corrcoef, np.logaddexp, np.bincount
- * and np.random.multivariate_normal. src/python/numpy.ts adds them to its
+ * matrices a chart holds), np.cov, np.corrcoef, np.logaddexp, np.bincount,
+ * np.vander and np.random.multivariate_normal. src/python/numpy.ts adds them to its
  * modules in small blocks marked `// 6.0 ML`. Pure: no DOM, no Obsidian.
  */
 import { valueError } from './errors';
@@ -273,6 +273,17 @@ export function mlNumpy(m: Map<string, PyValue>, la: Map<string, PyValue>, binar
             for (let q = 0; q < k; q++) out[p * k + q] = Math.max(-1, Math.min(1, c[p * k + q] / Math.sqrt(c[p * k + p] * c[q * k + q])));
         }
         return k === 1 ? out[0] : new NDArray([k, k], out, 'float');
+    }));
+    // np.vander(x, N, increasing): the powers of x, highest first (the features of a polynomial fit).
+    m.set('vander', fn('vander', (a, kw) => {
+        const x = toArray(a[0] ?? null);
+        const nV = arg(a, kw, 1, 'N', null);
+        const n = nV === null ? x.size : Math.max(0, intArg(nV));
+        const up = truthy(arg(a, kw, 2, 'increasing', false));
+        const out = new Float64Array(x.size * n);
+        work(x.size * n);
+        for (let i = 0; i < x.size; i++) for (let j = 0; j < n; j++) out[i * n + j] = x.data[i] ** (up ? j : n - 1 - j);
+        return new NDArray([x.size, n], out, 'float');
     }));
     m.set('bincount', fn('bincount', (a, kw) => {
         const x = toArray(a[0] ?? null);

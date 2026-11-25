@@ -56,6 +56,7 @@ import { LINEAR_GUIDES } from '../src/guides/linear';
 import { DYNAMICS_GUIDES } from '../src/guides/dynamics';
 import { GEOGEBRA_GUIDES } from '../src/guides/geogebra'; // 6.0 G
 import { PYTHON_GUIDES } from '../src/guides/python'; // 6.0 P
+import { ML_GUIDES } from '../src/guides/ml'; // 6.0 ML
 
 /** The guides SPEC4 section 3 lists, per data file. README, docs/guides and the release posts link to them by id. */
 const DOCUMENTED: Record<string, string[]> = {
@@ -67,6 +68,8 @@ const DOCUMENTED: Record<string, string[]> = {
         'mandelbrot-orbit', 'matrix-grid', 'lorenz-butterfly', 'pendulum-field', 'domain-colouring', 'fourier-circles',
         // 6.0 showcase: the other prototypes of the plan page
         'complex-two-ways', 'two-valleys', 'julia-newton', 'logistic-map', 'unity-roots',
+        // 6.0 ML
+        'optimizer-race', 'network-learns',
     ],
     functions: ['sliders', 'parametric-polar', 'animate-play'],
     calculus: ['tangents-extrema', 'secant-tangent', 'area-accumulation', 'riemann-sums', 'slope-fields'],
@@ -84,6 +87,8 @@ const DOCUMENTED: Record<string, string[]> = {
     // 6.0 G
     geogebra: ['geogebra-commands'],
     python: ['python-chart', 'python-heart', 'python-plot', 'python-wave'], // 6.0 P
+    // 6.0 ML: docs/v6/ml.md lists them
+    ml: ['ml-activations', 'ml-optimizers', 'ml-logistic', 'ml-network', 'ml-kmeans', 'ml-pca', 'ml-overfitting', 'ml-landscape'],
 };
 const FILES: Record<string, Guide[]> = {
     start: START_GUIDES,
@@ -104,6 +109,7 @@ const FILES: Record<string, Guide[]> = {
     dynamics: DYNAMICS_GUIDES,
     geogebra: GEOGEBRA_GUIDES, // 6.0 G
     python: PYTHON_GUIDES, // 6.0 P
+    ml: ML_GUIDES, // 6.0 ML
 };
 
 const EM_DASH = String.fromCharCode(0x2014);
@@ -850,7 +856,7 @@ test('6.0 guides: the numbers the steps name are the ones the charts compute', (
 
 /** The Showcase pages of version 6, in the order the Showcase shows them. */
 const V6_SHOWCASE = [
-    'lorenz-butterfly', 'complex-two-ways', 'fourier-circles', 'two-valleys', 'mandelbrot-orbit', 'pendulum-field',
+    'lorenz-butterfly', 'optimizer-race', 'network-learns' /* 6.0 ML */, 'complex-two-ways', 'fourier-circles', 'two-valleys', 'mandelbrot-orbit', 'pendulum-field',
     'julia-newton', 'matrix-grid', 'logistic-map', 'domain-colouring', 'unity-roots',
 ];
 

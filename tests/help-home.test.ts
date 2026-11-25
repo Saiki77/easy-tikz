@@ -22,6 +22,8 @@ test('every guide is on the home, in one place of its own', () => {
         for (const g of s.guides) {
             // The 3D section shows the 3D guides of other sections as well: those count where they belong.
             if (s.id === 'space' && g.category !== '3D') continue;
+            // 6.0 ML: so does Machine learning with its two Showcase pages.
+            if (s.id === 'ml' && g.category === 'Showcase') continue;
             put(g.id, s.id);
         }
     }
@@ -53,13 +55,17 @@ test('sections: the order, Python and GeoGebra in Scripting, the let values with
     const sections = homeSections();
     assert.deepEqual(
         sections.map((s) => s.id),
-        ['basics', 'showcase', 'calculus', 'regions', 'linear', 'dynamics', 'scripting', 'space', 'notes']
+        ['basics', 'showcase', 'calculus', 'regions', 'linear', 'dynamics', 'ml', 'scripting', 'space', 'notes']
     );
     const of = (id: string) => sections.find((s) => s.id === id)?.guides.map((g) => g.id) ?? [];
     assert.deepEqual(of('scripting').slice(0, 2), ['python-chart', 'geogebra-commands']);
     for (const id of ['python-heart', 'python-plot', 'python-wave']) assert.ok(of('scripting').includes(id), id);
     assert.equal(of('linear')[0], 'values-let');
     assert.ok(of('space').includes('surfaces-3d') && of('space').includes('systems'));
+    // 6.0 ML: its guides in order, then the optimizer race and the network that learns; the 3D landscape in 3D too.
+    assert.deepEqual(of('ml'), ['ml-activations', 'ml-optimizers', 'ml-logistic', 'ml-network', 'ml-kmeans', 'ml-pca', 'ml-overfitting', 'ml-landscape', 'optimizer-race', 'network-learns']);
+    assert.ok(of('space').includes('ml-landscape'));
+    assert.ok(of('showcase').includes('optimizer-race') && of('showcase').includes('network-learns'));
     // The Showcase section leaves out the pages of New in 6, just above it.
     for (const { id } of NEW_IN_6) assert.ok(!of('showcase').includes(id), id);
     for (const s of sections) assert.ok(s.guides.length > 0, s.id);
