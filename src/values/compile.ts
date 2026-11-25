@@ -38,6 +38,7 @@ import { COMPLEX_FUNCTIONS, VALUE_FUNCTIONS, abs, add, complexFunction, cross, d
 import { MAX_TERMS, termRange } from './special';
 // 6.0 G: GeoGebra's commands in every formula (src/geogebra/commands.ts).
 import { coordinateCall, geogebraCall, geogebraNeeds } from '../geogebra/commands';
+import { isMlFunction } from '../ml/builtins'; // 6.0 ML
 
 /** A local name's value, written before the closures that read it run. */
 export interface Cell {
@@ -573,6 +574,12 @@ export class ValueCompiler {
                 if (ref.error) fail('problems.expr.dependsOnError', { name: n.name }, n.ns);
                 if (n.args.length !== 1) fail('problems.expr.takesArguments', { name: n.name, count: 1 }, n.ns);
                 const a = this.node(n.args[0]);
+                // 6.0 ML: an activation function of a vector or a list works item by item (relu(v), sigmoid(S)).
+                if (isMlFunction(ref) && (a.shape.k === 'vec' || a.shape.k === 'list')) {
+                    const each = ref.call;
+                    const af0 = a.f;
+                    return dyn(() => itemByItem(af0(), each), a.shape.k === 'list' ? listShape(NUM) : a.shape);
+                }
                 if (!isNum(a.shape)) fail('values.problem.chartFunction', { name: n.name, what: shapeText(a.shape) }, n.args[0].s);
                 const af = a.f;
                 const call = ref.call;
@@ -652,7 +659,12 @@ export class ValueCompiler {
                 return s;
             case 'norm':
             case 'len':
+            case 'logsumexp': // 6.0 ML
                 return NUM;
+            // 6.0 ML: softmax keeps the kind (a vector of the same size, or a list).
+            case 'softmax':
+                want(s.k === 'vec' || s.k === 'list');
+                return s;
             case 'det':
             case 'tr':
                 want(s.k === 'mat');
@@ -887,6 +899,14 @@ export function needsValues(n: VNode, env: Env, defs: Definitions | null, src: s
         default:
             return children(n).some((c) => needsValues(c, env, defs, src, locals));
     }
+}
+
+/** 6.0 ML: a real function item by item over a vector or a list (of numbers). */
+function itemByItem(v: Value, f: (x: number) => number): Value {
+    if (typeof v === 'number') return f(v);
+    if (v.kind === 'vec') return vec(v.v.map(f));
+    if (v.kind === 'list') return list(v.items.map((x) => itemByItem(x, f)));
+    return NaN;
 }
 
 /** Is the shape what a field of numbers can show (a number, or a complex number that may be real)? */

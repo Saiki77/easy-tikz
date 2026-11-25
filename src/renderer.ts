@@ -143,6 +143,9 @@ const Y_TICK_RATIO = 0.75;
 const DEFAULT_VIEW: View = { xmin: -0.5, xmax: 10, ymin: -0.5, ymax: 5 };
 
 const MARKER_RADIUS: Record<MarkerSize, number> = { small: 3, normal: 4, large: 5.5 };
+// 6.0 ML
+/** matplotlib's default dot radius in points (scatter's s = 36): a dot with MarkerPrim.radius this big has the normal size. */
+const MATPLOTLIB_NORMAL_PT = 3;
 
 /** Texts may sit this fraction of the view outside it (the export uses `clip mode=individual`). */
 const TEXT_SLACK = 0.05;
@@ -1023,8 +1026,11 @@ export class SVGRenderer {
         const rect = this.plot;
         for (const item of items) {
             for (const prim of item.pixels ?? []) {
-                const fo = pixelLayer(prim, { ...this.view }, rect, this.quality === 'draft');
+                // 6.0 ML: the still picture of a frame(t) is hidden (and not painted) while the live canvas draws the moving one.
+                const hidden = !!prim.still && this.liveOn;
+                const fo = pixelLayer(prim, { ...this.view }, rect, this.quality === 'draft', hidden);
                 fo.setAttribute('data-etz-item', item.source);
+                if (hidden) for (const [k, v] of Object.entries(this.stillAttrs(prim, {}))) fo.setAttribute(k, k === 'class' ? `etz-pixels ${v}` : v);
                 svg.appendChild(fo);
             }
         }
@@ -1052,6 +1058,9 @@ export class SVGRenderer {
                 width: (w) => this.strokeWidth(w),
                 radius: (size) => (MARKER_RADIUS[size] || MARKER_RADIUS.normal) * (this.compact ? 0.6 : 1),
                 css: (c) => this.css(c),
+                // 6.0 ML: dots with matplotlib's radius, and texts at the sizes of the chart's texts.
+                pointRadius: (pt) => Math.max(0.3, pt * (MARKER_RADIUS.normal / MATPLOTLIB_NORMAL_PT) * (this.compact ? 0.6 : 1)),
+                fontSize: (size) => this.fontPx(FONT_PT[size] || FONT_PT.normal),
             },
             this.config.motion?.time ?? 0
         );
@@ -1182,18 +1191,19 @@ export class SVGRenderer {
         if (!this.compact && cfg.showAxisLabels) {
             const axisFs = this.fontPx(AXIS_LABEL_PT);
             const gap = LABEL_GAP_PT * this.ptPx;
-            const label = (hAnchor: HAnchor, vAnchor: VAnchor): LabelOptions => ({ color: TEXT_NORMAL, fontSize: axisFs, hAnchor, vAnchor, weight: '500' });
+            // 6.0 ML: each axis name says which it is, so the live canvas can write a script's frame(t) xlabel and ylabel into it.
+            const label = (hAnchor: HAnchor, vAnchor: VAnchor, axis?: 'x' | 'y'): LabelOptions => ({ color: TEXT_NORMAL, fontSize: axisFs, hAnchor, vAnchor, weight: '500', attrs: axis ? { 'data-etz-axis-name': axis } : undefined });
             if (cfg.axisStyle === 'middle') {
                 // Beyond the arrow tips, unrotated, like the export (xlabel anchor=west, ylabel anchor=south).
-                this.drawLabel(g, String(cfg.xLabel ?? ''), right + gap, oy, label('start', 'middle'));
-                this.drawLabel(g, String(cfg.yLabel ?? ''), ox, top - gap, label('middle', 'above'));
+                this.drawLabel(g, String(cfg.xLabel ?? ''), right + gap, oy, label('start', 'middle', 'x'));
+                this.drawLabel(g, String(cfg.yLabel ?? ''), ox, top - gap, label('middle', 'above', 'y'));
             } else {
                 const yTickW = yT.ticks.reduce((m, k) => Math.max(m, tickText(k).length * tickFs * CHAR_WIDTH_EM), 0);
-                this.drawLabel(g, String(cfg.xLabel ?? ''), left + w / 2, bottom + TICK_LEN + tickGap + tickFs * 1.1 + gap, label('middle', 'below'));
+                this.drawLabel(g, String(cfg.xLabel ?? ''), left + w / 2, bottom + TICK_LEN + tickGap + tickFs * 1.1 + gap, label('middle', 'below', 'x'));
                 const cx = Math.max(axisFs * 0.6, left - TICK_LEN - tickGap - yTickW - gap - axisFs * 0.6);
                 const cy = top + h / 2;
                 const rotated = this.el('g', { transform: `rotate(-90, ${num(cx)}, ${num(cy)})` });
-                this.drawLabel(rotated, String(cfg.yLabel ?? ''), cx, cy, label('middle', 'middle'));
+                this.drawLabel(rotated, String(cfg.yLabel ?? ''), cx, cy, label('middle', 'middle', 'y'));
                 this.attach(g, rotated);
             }
         }
@@ -1366,14 +1376,21 @@ export class SVGRenderer {
 
     private drawMarker(g: SVGElement, m: MarkerPrim): void {
         if (!finitePt(m) || !this.inView(m.x, m.y, 0)) return;
-        const r = (MARKER_RADIUS[m.size] || MARKER_RADIUS.normal) * (this.compact ? 0.6 : 1);
+        let r = (MARKER_RADIUS[m.size] || MARKER_RADIUS.normal) * (this.compact ? 0.6 : 1);
+        let rim = this.compact ? '1' : '1.5';
+        // 6.0 ML: a dot with matplotlib's radius in points: the colour that wide (3 points is the normal size), a thin rim outside it.
+        if (m.radius !== undefined) {
+            const k = (MARKER_RADIUS.normal / MATPLOTLIB_NORMAL_PT) * (this.compact ? 0.6 : 1);
+            r = Math.max(0.3, m.radius * k + 0.375);
+            rim = '0.75';
+        }
         const attrs: Record<string, string> = {
             cx: num(this.sx(m.x)),
             cy: num(this.sy(m.y)),
-            r: String(r),
+            r: num(r),
             fill: this.css(m.color),
             stroke: BACKGROUND,
-            'stroke-width': this.compact ? '1' : '1.5',
+            'stroke-width': rim,
         };
         if (m.dim) attrs.opacity = '0.45';
         // 6.0 B, C: an open dot (an end a set does not hold, a rest point that is not stable) is a ring in the colour around the background.
@@ -1475,6 +1492,7 @@ export class SVGRenderer {
                     halo: !!t.halo,
                     weight: bold ? '600' : undefined,
                     offset: finitePt(t.offset) ? t.offset : undefined,
+                    attrs: t.still ? this.stillAttrs(t, {}) : undefined, // 6.0 ML: a frame(t) text the live canvas draws
                 });
             }
             this.tag(g, from, item.source);

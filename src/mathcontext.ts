@@ -8,6 +8,7 @@
  * change or remove anything exported here.
  */
 import { FunctionParameters, Parameter } from './types';
+import { mlFunction } from './ml/builtins'; // 6.0 ML
 import { AffinePlan, BinaryNode, CmpOp, Compiled, Env, ExprError, FnRef, Lru, Node, Scalar, TupleItem, compile, dollarMath, formatFixed, formatNumber, identifierTokens, identifiers, isReservedName, linearPlan, matchingBrace, parse, parseList, parseTuples, renameIdentifier as renameIdentifierImpl, renameTokens, scanTemplate, toPgf, toTex, tokenize, topLevelColon, isLatexFormula } from './expr';
 import { MessageKey, language, t as msg } from './i18n';
 import { NoteTable, tableKey } from './beyond/table';
@@ -1291,6 +1292,8 @@ export class MathContext {
             },
             fn: (name: string): FnRef | null => {
                 const rec = this.byName.get(name);
+                // 6.0 ML: sigmoid, relu, softplus, gelu, silu (and sigma, ReLU, GELU) after the chart's own names and let values.
+                if (!rec && !this.letTable.has(name) && !this.paramIndex.has(name)) return mlFunction(name);
                 return rec ? rec.ref : null;
             },
             bareFnError: (name: string): string | null => {
@@ -1321,7 +1324,9 @@ export class MathContext {
             const rec = this.makeRec(name, index, kind, f);
             this.recs.push(rec);
             // Variables, sliders and builtins resolve before functions, so a clash would silently lose.
-            if (isReservedName(name) || this.allVariableNames.has(name)) rec.error = msg('problems.math.reservedName', { name });
+            // 6.0 ML: t may name a function of x (t(x) = ...): t stays the parameter of parametric curves, where it is a variable first.
+            const tFunction = name === 't' && kind === 'cartesian' && !this.aliases[0].includes('t') && !this.aliases[1].includes('t');
+            if ((isReservedName(name) || this.allVariableNames.has(name)) && !tFunction) rec.error = msg('problems.math.reservedName', { name });
             else if (this.paramIndex.has(name)) rec.error = msg('problems.math.alsoSliderName', { name });
             else if (!this.byName.has(name)) this.byName.set(name, rec);
             else rec.error = msg('problems.math.duplicateFunction', { name });

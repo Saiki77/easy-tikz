@@ -7,6 +7,7 @@
  */
 import type { Guide } from './types';
 import { chart } from './chart';
+import { ML_SHOWCASE } from './ml'; // 6.0 ML
 
 // ------------------------------------------------------------------ shade under a tangent
 const TT_WINDOW = ['size 12 x 8', 'show x from 0 to 6 and y from 0 to 4.5', 'axes on the edges', 'with a grid'];
@@ -833,7 +834,7 @@ const ROOTS_OF_UNITY: Guide = {
 
 export const SHOWCASE_GUIDES: Guide[] = [
     // 6.0: the pictures of version 6 first (F2, and the other prototypes of the plan page); the ones that move lead
-    LORENZ_BUTTERFLY, COMPLEX_TWO_WAYS, FOURIER_CIRCLES, TWO_VALLEYS, MANDELBROT_ORBIT, PENDULUM_FIELD,
+    LORENZ_BUTTERFLY, ...ML_SHOWCASE /* 6.0 ML: the optimizer race, a network learns */, COMPLEX_TWO_WAYS, FOURIER_CIRCLES, TWO_VALLEYS, MANDELBROT_ORBIT, PENDULUM_FIELD,
     JULIA_NEWTON, MATRIX_GRID, LOGISTIC_MAP, DOMAIN_COLOURING, ROOTS_OF_UNITY,
     TANGENT_TRIANGLE, LARGEST_RECTANGLE, MEAN_VALUE, TAYLOR_SINE, GRADIENT_LEVELS, CROSSING_LINES, SLIDING_LADDER, THROW,
 ];

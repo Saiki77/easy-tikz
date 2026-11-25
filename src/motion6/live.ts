@@ -34,7 +34,7 @@ import type { MarkerSize } from '../types';
 import type { SceneItem2D } from '../scene';
 import { resolveCssColor } from '../colors';
 import { colormapRgb } from '../colormaps';
-import type { LiveParticles, LivePrim, LiveShapes } from './liveprims';
+import type { LiveImage, LiveParticles, LivePrim, LiveShapes } from './liveprims';
 import { themedColor } from './liveprims';
 
 /** Canvas pixels per screen pixel at most. */
@@ -67,7 +67,15 @@ export interface LiveGeometry {
     radius(size: MarkerSize): number;
     /** A chart colour as CSS (a palette name to its variable). */
     css(color: string): string;
+    // 6.0 ML
+    /** A dot's radius for a radius in points of a matplotlib figure (MarkerPrim.radius). */
+    pointRadius?(pt: number): number;
+    /** The font size of the chart's texts of a size, in SVG units. */
+    fontSize?(size: MarkerSize): number;
 }
+
+/** 6.0 ML: pictures of frame(t) kept (by key), most recently used last. */
+const PICTURES_KEPT = 96;
 
 /** The particles of one field and the arrow grid they move over (screen positions in SVG units). */
 interface Flow {
@@ -105,6 +113,13 @@ export class LiveLayer {
     /** What the flow canvas shows: a new one (other view, size or theme) is cleared and warmed up. */
     private flowKey = '';
     private lastTime = NaN;
+    // 6.0 ML
+    /** The canvases of frame(t)'s pictures by key: a picture that comes again (the same snapshot) costs one drawImage. */
+    private readonly pictures = new Map<string, HTMLCanvasElement>();
+    /** The chart's title and axis names as the last frame set them (written into the SVG's own texts). */
+    private axesTexts: { title?: string | null; xlabel?: string | null; ylabel?: string | null } = {};
+    /** The font of the chart's texts (resolved once: a canvas does not read CSS variables). */
+    private font = '';
     /** Milliseconds the last paint took; every 30th paint also on the layer (data-paint-ms), for the smoke test. */
     lastPaintMs = 0;
     private paints = 0;
@@ -131,9 +146,12 @@ export class LiveLayer {
         }
         this.geo = geo;
         this.colors.clear();
+        this.axesTexts = {}; // 6.0 ML: a new drawing has its own title
         const body = typeof activeDocument !== 'undefined' ? activeDocument.body : null;
         this.dark = !!body && body.hasClass('theme-dark');
         this.background = this.color('var(--background-primary)');
+        // 6.0 ML
+        if (!this.font && body) this.font = getComputedStyle(body).getPropertyValue('--font-text').trim() || 'sans-serif';
         const { rect } = geo;
         if (!this.fo) {
             this.fo = createSvg('foreignObject', { cls: 'etz-motion-layer', attr: { 'pointer-events': 'none', 'aria-hidden': 'true' } });
@@ -173,6 +191,7 @@ export class LiveLayer {
         window.requestAnimationFrame(() => {
             this.watch();
             if (this.measure()) this.paint(this.lastTime);
+            this.writeAxesTexts(); // 6.0 ML: the SVG's title is there now
         });
         return fo;
     }
@@ -449,7 +468,13 @@ export class LiveLayer {
             for (const p of this.prims) {
                 if (!p.at) continue;
                 try {
-                    this.shapes(ctx, p.at(time));
+                    const shapes = p.at(time);
+                    this.shapes(ctx, shapes);
+                    // 6.0 ML: a frame's title and axis names.
+                    if (shapes.title !== undefined || shapes.xlabel !== undefined || shapes.ylabel !== undefined) {
+                        this.axesTexts = { title: shapes.title, xlabel: shapes.xlabel, ylabel: shapes.ylabel };
+                        this.writeAxesTexts();
+                    }
                 } catch {
                     // A part that cannot be drawn now is left out of this frame.
                 }
@@ -470,6 +495,8 @@ export class LiveLayer {
         const geo = this.geo;
         if (!geo) return;
         const { ax, bx, ay, by } = geo;
+        // 6.0 ML: pictures first, under the frame's lines and dots.
+        for (const img of s.images ?? []) this.picture(ctx, img);
         // 6.0 P: fills of a script's frame(t), under its lines.
         for (const f of s.fills ?? []) {
             if (f.pts.length < 3) continue;
@@ -515,28 +542,96 @@ export class LiveLayer {
         ctx.globalAlpha = 1;
         for (const dot of s.dots) {
             if (!Number.isFinite(dot.x) || !Number.isFinite(dot.y)) continue;
-            const r = geo.radius(dot.size);
+            // 6.0 ML: a dot with matplotlib's radius: the colour that wide and a thin rim, as the SVG draws it.
+            const sized = dot.radius !== undefined && !!geo.pointRadius;
+            const r = sized && geo.pointRadius ? geo.pointRadius(dot.radius ?? 3) + 0.375 : geo.radius(dot.size);
             ctx.beginPath();
             ctx.arc(ax + bx * dot.x, ay + by * dot.y, r, 0, 2 * Math.PI);
             const c = this.chartColor(dot.color);
             ctx.fillStyle = dot.open ? this.background : c;
             ctx.fill();
-            ctx.lineWidth = dot.open ? 2 : 1.5;
+            ctx.lineWidth = dot.open ? 2 : sized ? 0.75 : 1.5;
             ctx.strokeStyle = dot.open ? c : this.background;
             ctx.stroke();
         }
         // 6.0 P: texts of a script's frame(t), beside their point as the anchor says.
         for (const t of s.texts ?? []) {
             if (!Number.isFinite(t.x) || !Number.isFinite(t.y) || !t.text) continue;
-            const px = t.size === 'large' ? 15 : t.size === 'small' ? 10 : 12;
-            ctx.font = `${px}px var(--font-text, sans-serif)`;
-            ctx.fillStyle = this.chartColor(t.color);
+            // 6.0 ML: the chart's font and sizes (a canvas cannot read the CSS variable itself).
+            const px = geo.fontSize ? geo.fontSize(t.size) : t.size === 'large' ? 15 : t.size === 'small' ? 10 : 12;
+            ctx.font = `${px}px ${this.font || 'sans-serif'}`;
             ctx.textAlign = t.anchor.includes('right') ? 'left' : t.anchor.includes('left') ? 'right' : 'center';
             ctx.textBaseline = t.anchor.includes('above') ? 'bottom' : t.anchor.includes('below') ? 'top' : 'middle';
-            const dx = ctx.textAlign === 'left' ? 4 : ctx.textAlign === 'right' ? -4 : 0;
-            const dy = ctx.textBaseline === 'bottom' ? -4 : ctx.textBaseline === 'top' ? 4 : 0;
-            ctx.fillText(t.text, ax + bx * t.x + dx, ay + by * t.y + dy);
+            const gap = 0.35 * px;
+            const dx = ctx.textAlign === 'left' ? gap : ctx.textAlign === 'right' ? -gap : 0;
+            const dy = ctx.textBaseline === 'bottom' ? -gap : ctx.textBaseline === 'top' ? gap : 0;
+            const x = ax + bx * t.x + dx;
+            const y = ay + by * t.y + dy;
+            if (t.halo) {
+                ctx.lineJoin = 'round';
+                ctx.lineWidth = 0.25 * px;
+                ctx.strokeStyle = this.background;
+                ctx.strokeText(t.text, x, y);
+            }
+            ctx.fillStyle = this.chartColor(t.color);
+            ctx.fillText(t.text, x, y);
         }
+    }
+
+    /**
+     * 6.0 ML: a picture of frame(t) over its box: its own pixels on a small
+     * canvas, kept by key (a picture that comes again is drawn at once),
+     * scaled with or without blending (imshow's bilinear or its sharp cells).
+     */
+    private picture(ctx: CanvasRenderingContext2D, img: LiveImage): void {
+        const geo = this.geo;
+        if (!geo || !(img.w > 0) || !(img.h > 0)) return;
+        let source = this.pictures.get(img.key);
+        if (source) {
+            // Most recently used last.
+            this.pictures.delete(img.key);
+            this.pictures.set(img.key, source);
+        } else {
+            source = createEl('canvas');
+            source.width = img.w;
+            source.height = img.h;
+            const sctx = source.getContext('2d');
+            if (!sctx) return;
+            const data = sctx.createImageData(img.w, img.h);
+            data.data.set(img.rgba());
+            sctx.putImageData(data, 0, 0);
+            this.pictures.set(img.key, source);
+            while (this.pictures.size > PICTURES_KEPT) {
+                const first = this.pictures.keys().next().value;
+                if (first === undefined) break;
+                this.pictures.delete(first);
+            }
+        }
+        const { ax, bx, ay, by } = geo;
+        const left = ax + bx * img.x0;
+        const right = ax + bx * img.x1;
+        const top = ay + by * img.y1;
+        const bottom = ay + by * img.y0;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, img.opacity));
+        ctx.imageSmoothingEnabled = img.smooth;
+        if (img.smooth) ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(source, Math.min(left, right), Math.min(top, bottom), Math.abs(right - left), Math.abs(bottom - top));
+        ctx.restore();
+    }
+
+    /** 6.0 ML: the last frame's title and axis names into the chart's own SVG texts (plain texts only; math stays as drawn). */
+    private writeAxesTexts(): void {
+        const svg = this.fo?.ownerSVGElement;
+        if (!svg) return;
+        const put = (selector: string, text: string | null | undefined) => {
+            if (text === undefined || text === null) return;
+            const el = svg.querySelector(selector);
+            if (el && el.tagName.toLowerCase() === 'text' && el.textContent !== text) el.textContent = text;
+        };
+        put('.etz-title text', this.axesTexts.title);
+        put('text[data-etz-axis-name="x"]', this.axesTexts.xlabel);
+        put('text[data-etz-axis-name="y"]', this.axesTexts.ylabel);
     }
 
     /** The chart left the page. */
@@ -553,6 +648,7 @@ export class LiveLayer {
         this.prims = [];
         this.flows.clear();
         this.flowKey = '';
+        this.pictures.clear(); // 6.0 ML
     }
 }
 

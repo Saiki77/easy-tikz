@@ -37,6 +37,28 @@ export interface LiveDot {
     color: string;
     size: MarkerSize;
     open?: boolean;
+    /** 6.0 ML: the radius in points of a matplotlib figure (MarkerPrim.radius). */
+    radius?: number;
+}
+
+/**
+ * 6.0 ML: a picture of a script's frame(t) (imshow, contourf): `w` x `h`
+ * RGBA pixels, row 0 at the top, over the box x0..x1, y0..y1 of the chart.
+ * The live canvas keeps the picture of each key (the same key: the same
+ * pixels) and asks `rgba` only for a key it has not seen.
+ */
+export interface LiveImage {
+    key: string;
+    w: number;
+    h: number;
+    x0: number;
+    x1: number;
+    y0: number;
+    y1: number;
+    opacity: number;
+    /** Blend the pixels when scaled up (imshow's bilinear); else each one stays a sharp square. */
+    smooth: boolean;
+    rgba(): Uint8ClampedArray;
 }
 
 export interface LiveShapes {
@@ -45,7 +67,12 @@ export interface LiveShapes {
     dots: LiveDot[];
     // 6.0 P: what a script's frame(t) draws besides lines and dots.
     fills?: Array<{ pts: Pt[]; color: string; opacity: number }>;
-    texts?: Array<{ x: number; y: number; text: string; color: string; size: MarkerSize; anchor: string }>;
+    texts?: Array<{ x: number; y: number; text: string; color: string; size: MarkerSize; anchor: string; halo?: boolean }>;
+    // 6.0 ML: pictures under the rest, and the chart's title and axis names of this frame (the SVG's own texts change).
+    images?: LiveImage[];
+    title?: string | null;
+    xlabel?: string | null;
+    ylabel?: string | null;
 }
 
 /** A flow: particles that follow F and leave fading trails over faint arrows (src/motion6/live.ts). */

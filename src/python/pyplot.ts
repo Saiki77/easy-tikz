@@ -18,15 +18,17 @@ export type Pt2 = [number, number];
 export type Size = 'small' | 'normal' | 'large';
 
 export type Draw =
-    | { k: 'line'; pts: Pt2[]; color: string; width: string; dashed: boolean; opacity: number; label: string | null; marker: boolean; markerSize: Size; markerOnly: boolean; closed?: boolean }
-    | { k: 'dots'; pts: Pt2[]; colors: string[]; size: Size; label: string | null; opacity: number }
+    | { k: 'line'; pts: Pt2[]; color: string; width: string; dashed: boolean; opacity: number; label: string | null; marker: boolean; markerSize: Size; markerOnly: boolean; closed?: boolean; markerRadius?: number }
+    | { k: 'dots'; pts: Pt2[]; colors: string[]; size: Size; label: string | null; opacity: number; radii?: number[] }
     | { k: 'fill'; ring: Pt2[]; color: string; opacity: number; label: string | null; edge: string | null }
     | { k: 'arrow'; from: Pt2; to: Pt2; color: string; width: string }
     | { k: 'text'; x: number; y: number; text: string; color: string; size: Size; anchor: string }
     | { k: 'hline'; y: number; color: string; width: string; dashed: boolean; label: string | null }
     | { k: 'vline'; x: number; color: string; width: string; dashed: boolean; label: string | null }
     | { k: 'circle'; x: number; y: number; r: number; color: string; fill: string | null; opacity: number; width: string; dashed: boolean }
-    | { k: 'image'; z: Float64Array; nx: number; ny: number; extent: [number, number, number, number]; map: Colormap | 'cyclic'; lower: boolean; vmin: number; vmax: number; opacity: number };
+    | { k: 'image'; z: Float64Array; nx: number; ny: number; extent: [number, number, number, number]; map: Colormap | 'cyclic'; lower: boolean; vmin: number; vmax: number; opacity: number; smooth?: boolean }
+    // 6.0 ML: contourf, filled bands between levels over a grid (xs, ys increasing), colour i between levels i and i + 1.
+    | { k: 'bands'; xs: Float64Array; ys: Float64Array; z: Float64Array; levels: number[]; colors: string[]; opacity: number };
 
 /** What a script drew, and the settings of its axes. */
 export interface Figure {
@@ -38,6 +40,9 @@ export interface Figure {
     ylim: Pt2 | null;
     equal: boolean;
     legend: boolean;
+    // 6.0 ML
+    /** Where the legend goes: 'best' (null) or a corner, matplotlib's loc ('upper right', 'lower left', ...). */
+    legendLoc?: string | null;
     /** The next colour of the cycle (C0, C1, ...). */
     cycle: number;
     /** Which block each draw came from (index into `draws`, the block of the chart). */
@@ -74,40 +79,75 @@ const NAMES: Record<string, string> = {
     pink: 'magenta',
     fuchsia: 'magenta',
     yellow: '#d4ac0d',
-    gold: '#d4ac0d',
     black: 'black',
     white: '#ffffff',
     gray: 'gray',
     grey: 'gray',
-    darkgray: 'gray',
-    darkgrey: 'gray',
+    orange: 'orange',
+    purple: 'purple',
+    brown: 'brown',
+    olive: '#bcbd22',
     lightgray: '#c8c8c8',
     lightgrey: '#c8c8c8',
-    silver: '#c8c8c8',
-    orange: 'orange',
-    darkorange: 'orange',
-    purple: 'purple',
-    violet: 'purple',
-    indigo: 'purple',
-    brown: 'brown',
-    maroon: 'brown',
-    olive: '#bcbd22',
-    navy: 'blue',
-    darkblue: 'blue',
-    royalblue: 'blue',
-    steelblue: 'blue',
     skyblue: '#87ceeb',
-    lightblue: '#87ceeb',
-    darkgreen: 'green',
-    lime: 'green',
-    limegreen: 'green',
-    forestgreen: 'green',
-    crimson: 'red',
-    darkred: 'red',
-    tomato: 'red',
     salmon: '#fa8072',
-    coral: 'orange',
-    turquoise: 'teal',
+    // 6.0 ML: the shades are matplotlib's own colours, so two different names never draw alike (a legend tells them apart).
+    gold: '#ffd700',
+    darkgray: '#a9a9a9',
+    darkgrey: '#a9a9a9',
+    dimgray: '#696969',
+    dimgrey: '#696969',
+    silver: '#c0c0c0',
+    darkorange: '#ff8c00',
+    violet: '#ee82ee',
+    indigo: '#4b0082',
+    maroon: '#800000',
+    navy: '#000080',
+    darkblue: '#00008b',
+    mediumblue: '#0000cd',
+    royalblue: '#4169e1',
+    steelblue: '#4682b4',
+    dodgerblue: '#1e90ff',
+    deepskyblue: '#00bfff',
+    cornflowerblue: '#6495ed',
+    midnightblue: '#191970',
+    lightblue: '#add8e6',
+    slateblue: '#6a5acd',
+    slategray: '#708090',
+    slategrey: '#708090',
+    darkgreen: '#006400',
+    lime: '#00ff00',
+    limegreen: '#32cd32',
+    forestgreen: '#228b22',
+    seagreen: '#2e8b57',
+    mediumseagreen: '#3cb371',
+    springgreen: '#00ff7f',
+    yellowgreen: '#9acd32',
+    olivedrab: '#6b8e23',
+    lightgreen: '#90ee90',
+    crimson: '#dc143c',
+    darkred: '#8b0000',
+    firebrick: '#b22222',
+    tomato: '#ff6347',
+    orangered: '#ff4500',
+    coral: '#ff7f50',
+    hotpink: '#ff69b4',
+    deeppink: '#ff1493',
+    orchid: '#da70d6',
+    plum: '#dda0dd',
+    darkviolet: '#9400d3',
+    mediumpurple: '#9370db',
+    rebeccapurple: '#663399',
+    turquoise: '#40e0d0',
+    darkcyan: '#008b8b',
+    aqua: '#00ffff',
+    aquamarine: '#7fffd4',
+    chocolate: '#d2691e',
+    sienna: '#a0522d',
+    peru: '#cd853f',
+    tan: '#d2b48c',
+    goldenrod: '#daa520',
+    khaki: '#f0e68c',
 };
 
 function hex2(v: number): string {
@@ -283,6 +323,7 @@ function axesCalls(fig: Figure, push: (d: Draw) => void): Map<string, Call> {
                 marker,
                 markerSize: ms === undefined || ms === null ? 'normal' : sizeOfPoints(num(ms) ** 2),
                 markerOnly: noLine,
+                ...(ms === undefined || ms === null ? {} : { markerRadius: Math.max(0, num(ms)) / 2 }), // 6.0 ML: markersize is a diameter in points
             });
             made++;
         }
@@ -304,8 +345,10 @@ function axesCalls(fig: Figure, push: (d: Draw) => void): Map<string, Call> {
             const map = mapOf(kwv(kw, 'cmap'));
             colors = Array.from(v, (t) => mapHex(map, hi > lo ? (t - lo) / (hi - lo) : 0.5));
         } else colors = [chartColour(c ?? undefined, fig) ?? 'blue'];
-        const size = s === null ? 'normal' : sizeOfPoints(s instanceof NDArray ? s.data[0] : num(s));
-        push({ k: 'dots', pts: pairs(x, y), colors, size, label: labelOf(kw), opacity: opacityOf(kw) });
+        const size = s === null ? 'normal' : sizeOfPoints(isNum(s) ? num(s) : (numbers(s)[0] ?? 36)); // 6.0 ML: a list of sizes too
+        // 6.0 ML: s is matplotlib's area in points^2 (one, or one per dot): the dot's radius is sqrt(s) / 2 points.
+        const radii = s === null ? undefined : Array.from(isNum(s) ? [num(s)] : numbers(s), (a) => Math.sqrt(Math.max(0, a)) / 2);
+        push({ k: 'dots', pts: pairs(x, y), colors, size, label: labelOf(kw), opacity: opacityOf(kw), ...(radii && radii.length ? { radii } : {}) });
         return null;
     });
     calls.set('fill_between', (args, kw) => {
@@ -441,7 +484,8 @@ function axesCalls(fig: Figure, push: (d: Draw) => void): Map<string, Call> {
         xs.forEach((x, i) => push({ k: 'line', pts: [[x, lo[Math.min(i, lo.length - 1)]], [x, hi[Math.min(i, hi.length - 1)]]], color, width: widthOf(kwv(kw, 'linewidth', 'lw'), 'thin'), dashed: dashedOf(kwv(kw, 'linestyles', 'linestyle')), opacity: 1, label: null, marker: false, markerSize: 'normal', markerOnly: false }));
         return null;
     });
-    calls.set('contour', (args, kw) => {
+    // 6.0 ML: contour and contourf read the grid alike; levels a count or a list, colors one colour or one per level.
+    const grid = (args: PyValue[], kw: Kwargs | null) => {
         let X: NDArray, Y: NDArray, Z: NDArray;
         let levelsArg: PyValue | null = null;
         if (args.length >= 3) {
@@ -467,21 +511,53 @@ function axesCalls(fig: Figure, push: (d: Draw) => void): Map<string, Call> {
             if (z < lo) lo = z;
             if (z > hi) hi = z;
         }
-        let levels: number[];
-        if (levelsArg === null || isNum(levelsArg)) {
-            const n = levelsArg === null ? 7 : intArg(levelsArg);
-            levels = niceLevels(lo, hi, n);
-        } else levels = Array.from(numbers(levelsArg));
+        const count = levelsArg === null ? 7 : isNum(levelsArg) ? intArg(levelsArg) : null;
+        const levels = count === null ? Array.from(numbers(levelsArg ?? [])).sort((a, b) => a - b) : null;
+        return { xs, ys, z: Z.data, nx, ny, lo, hi, count, levels };
+    };
+    /** Colours from `colors=` (one, or one per level, cycled), else null. */
+    const levelColours = (kw: Kwargs | null, n: number): string[] | null => {
         const colorsV = kwv(kw, 'colors');
-        const one = colorsV !== undefined && colorsV !== null && typeof colorsV === 'string' ? chartColour(colorsV, null) : null;
+        if (colorsV === undefined || colorsV === null) return null;
+        if (typeof colorsV === 'string') return new Array<string>(n).fill(chartColour(colorsV, null) ?? 'black');
+        const list = iterate(colorsV).map((c) => chartColour(c, null) ?? 'black');
+        return list.length ? Array.from({ length: n }, (_, i) => list[i % list.length]) : null;
+    };
+    calls.set('contour', (args, kw) => {
+        const g = grid(args, kw);
+        const levels = g.levels ?? niceLevels(g.lo, g.hi, g.count ?? 7);
+        const given = levelColours(kw, levels.length);
         const map = mapOf(kwv(kw, 'cmap'));
         const width = widthOf(kwv(kw, 'linewidths', 'linewidth'), 'thin');
+        const styles = kwv(kw, 'linestyles', 'linestyle');
+        const opacity = opacityOf(kw);
         levels.forEach((level, li) => {
-            const color = one ?? mapHex(map, levels.length > 1 ? li / (levels.length - 1) : 0.5);
-            for (const line of marching(xs, ys, Z.data, nx, ny, level)) {
-                push({ k: 'line', pts: line, color, width, dashed: false, opacity: 1, label: null, marker: false, markerSize: 'normal', markerOnly: false });
+            const color = given ? given[li] : mapHex(map, levels.length > 1 ? li / (levels.length - 1) : 0.5);
+            // matplotlib draws the negative levels of a one-colour contour dashed.
+            const dashed = styles !== undefined && styles !== null ? dashedOf(styles) : !!given && new Set(given).size === 1 && level < 0;
+            for (const line of marching(g.xs, g.ys, g.z, g.nx, g.ny, level)) {
+                push({ k: 'line', pts: line, color, width, dashed, opacity, label: null, marker: false, markerSize: 'normal', markerOnly: false });
             }
         });
+        return null;
+    });
+    calls.set('contourf', (args, kw) => {
+        const g = grid(args, kw);
+        // Boundaries that hold every value: matplotlib's round levels, widened to the lowest and the highest.
+        let levels = g.levels;
+        if (!levels) {
+            const inner = niceLevels(g.lo, g.hi, g.count ?? 7);
+            const step = inner.length > 1 ? inner[1] - inner[0] : 1;
+            levels = inner.slice();
+            if (!(levels[0] <= g.lo)) levels.unshift(Number((levels[0] - step).toPrecision(12)));
+            if (!(levels[levels.length - 1] >= g.hi)) levels.push(Number((levels[levels.length - 1] + step).toPrecision(12)));
+        }
+        if (levels.length < 2) levels = [g.lo, g.hi > g.lo ? g.hi : g.lo + 1];
+        const bandCount = levels.length - 1;
+        const given = levelColours(kw, bandCount);
+        const map = mapOf(kwv(kw, 'cmap'));
+        const colors = Array.from({ length: bandCount }, (_, i) => (given ? given[i] : mapHex(map, bandCount > 1 ? i / (bandCount - 1) : 0.5)));
+        push({ k: 'bands', xs: Float64Array.from(g.xs), ys: Float64Array.from(g.ys), z: Float64Array.from(g.z), levels, colors, opacity: opacityOf(kw) });
         return null;
     });
     calls.set('imshow', (args, kw) => {
@@ -489,8 +565,9 @@ function axesCalls(fig: Figure, push: (d: Draw) => void): Map<string, Call> {
         if (Z.ndim !== 2) throw valueError('python.plot.imshow2D');
         const [ny, nx] = Z.shape;
         const ext = kwv(kw, 'extent');
-        const extent: [number, number, number, number] = ext === undefined || ext === null ? [-0.5, nx - 0.5, ny - 0.5, -0.5] : (iterate(ext).map((v) => num(v)) as [number, number, number, number]);
         const origin = kwv(kw, 'origin');
+        // 6.0 ML: matplotlib's default extent follows the origin (row 0 at y = -0.5 with origin='lower').
+        const extent: [number, number, number, number] = ext === undefined || ext === null ? (origin === 'lower' ? [-0.5, nx - 0.5, -0.5, ny - 0.5] : [-0.5, nx - 0.5, ny - 0.5, -0.5]) : (iterate(ext).map((v) => num(v)) as [number, number, number, number]);
         let lo = Infinity;
         let hi = -Infinity;
         for (const z of Z.data) {
@@ -511,41 +588,85 @@ function axesCalls(fig: Figure, push: (d: Draw) => void): Map<string, Call> {
             vmin: vmin === undefined || vmin === null ? lo : num(vmin),
             vmax: vmax === undefined || vmax === null ? hi : num(vmax),
             opacity: opacityOf(kw),
+            smooth: smoothOf(kwv(kw, 'interpolation')), // 6.0 ML
         });
         return null;
     });
     calls.set('hist', (args, kw) => {
-        const data = numbers(arg(args, kw, 0, 'x', null));
+        // 6.0 ML: range=, weights=, bins='auto', cumulative, histtype 'step'; returns (n, bins, patches) as matplotlib.
+        const data = numbers(arg(args, kw, 0, 'x', null)).filter((v) => Number.isFinite(v));
         const binsV = arg(args, kw, 1, 'bins', 10);
+        const rangeV = kwv(kw, 'range');
         let lo = Infinity;
         let hi = -Infinity;
-        for (const v of data) {
-            if (v < lo) lo = v;
-            if (v > hi) hi = v;
-        }
-        if (!(hi > lo)) hi = lo + 1;
-        const edges = isNum(binsV) ? Array.from({ length: intArg(binsV) + 1 }, (_, i) => lo + ((hi - lo) * i) / intArg(binsV)) : Array.from(numbers(binsV));
-        const counts = new Array<number>(edges.length - 1).fill(0);
-        for (const v of data) {
-            for (let i = 0; i < counts.length; i++) {
-                if (v >= edges[i] && (v < edges[i + 1] || (i === counts.length - 1 && v === edges[i + 1]))) {
-                    counts[i]++;
-                    break;
-                }
+        if (rangeV !== undefined && rangeV !== null) [lo, hi] = iterate(rangeV).map((v) => num(v));
+        else {
+            for (const v of data) {
+                if (v < lo) lo = v;
+                if (v > hi) hi = v;
             }
         }
-        if (truthy(kwv(kw, 'density') ?? false)) {
-            for (let i = 0; i < counts.length; i++) counts[i] /= data.length * (edges[i + 1] - edges[i]);
-        }
-        const color = chartColour(kwv(kw, 'color'), fig) ?? 'blue';
-        let label = labelOf(kw);
-        const opacity = opacityOf(kw, 0.6);
-        counts.forEach((c, i) => {
-            if (!c) return;
-            push({ k: 'fill', ring: [[edges[i], 0], [edges[i + 1], 0], [edges[i + 1], c], [edges[i], c]], color, opacity, label, edge: color });
-            label = null;
+        if (!Number.isFinite(lo) || !Number.isFinite(hi)) [lo, hi] = [0, 1];
+        if (!(hi > lo)) [lo, hi] = [lo - 0.5, lo + 0.5];
+        let count = 10;
+        let edges: number[];
+        if (typeof binsV === 'string') {
+            // 'auto' and the named rules: the larger of Sturges and Freedman-Diaconis, as numpy's 'auto'.
+            const n = Math.max(1, data.length);
+            const sturges = Math.ceil(Math.log2(n)) + 1;
+            const sorted = Array.from(data).sort((a, b) => a - b);
+            const q = (p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))))] ?? 0;
+            const iqr = q(0.75) - q(0.25);
+            const fd = iqr > 0 ? Math.ceil((hi - lo) / ((2 * iqr) / Math.cbrt(n))) : sturges;
+            count = Math.max(1, Math.min(1000, Math.max(sturges, fd)));
+            edges = Array.from({ length: count + 1 }, (_, i) => lo + ((hi - lo) * i) / count);
+        } else if (isNum(binsV)) {
+            count = Math.max(1, intArg(binsV));
+            edges = Array.from({ length: count + 1 }, (_, i) => lo + ((hi - lo) * i) / count);
+        } else edges = Array.from(numbers(binsV));
+        const weightsV = kwv(kw, 'weights');
+        const allW = weightsV === undefined || weightsV === null ? null : numbers(weightsV);
+        const counts = new Array<number>(Math.max(0, edges.length - 1)).fill(0);
+        const raw = numbers(arg(args, kw, 0, 'x', null));
+        raw.forEach((v, idx) => {
+            if (!Number.isFinite(v) || v < edges[0] || v > edges[edges.length - 1]) return;
+            // The bin by binary search; the last bin holds its right edge.
+            let a = 0;
+            let b = counts.length - 1;
+            while (a < b) {
+                const mid = (a + b + 1) >> 1;
+                if (v >= edges[mid]) a = mid;
+                else b = mid - 1;
+            }
+            counts[a] += allW ? allW[idx] ?? 0 : 1;
         });
-        return new PyTuple([toArray(counts), toArray(edges)]);
+        const total = counts.reduce((p, c) => p + c, 0);
+        if (truthy(kwv(kw, 'density') ?? false) && total > 0) {
+            for (let i = 0; i < counts.length; i++) counts[i] /= total * (edges[i + 1] - edges[i]);
+        }
+        if (truthy(kwv(kw, 'cumulative') ?? false)) {
+            for (let i = 1; i < counts.length; i++) counts[i] += counts[i - 1];
+        }
+        const color = chartColour(kwv(kw, 'color', 'facecolor', 'fc'), fig) ?? 'blue';
+        let label = labelOf(kw);
+        const type = kwv(kw, 'histtype');
+        if (type === 'step') {
+            // The outline only, as one line.
+            const pts: Pt2[] = [[edges[0], 0]];
+            counts.forEach((c, i) => pts.push([edges[i], c], [edges[i + 1], c]));
+            pts.push([edges[edges.length - 1], 0]);
+            push({ k: 'line', pts, color, width: widthOf(kwv(kw, 'linewidth', 'lw')), dashed: false, opacity: opacityOf(kw), label, marker: false, markerSize: 'normal', markerOnly: false });
+        } else {
+            const opacity = opacityOf(kw, 0.6);
+            const edge = kwv(kw, 'edgecolor', 'ec');
+            const edgeColour = edge === undefined ? color : chartColour(edge, null);
+            counts.forEach((c, i) => {
+                if (!c) return;
+                push({ k: 'fill', ring: [[edges[i], 0], [edges[i + 1], 0], [edges[i + 1], c], [edges[i], c]], color, opacity, label, edge: edgeColour });
+                label = null;
+            });
+        }
+        return new PyTuple([toArray(counts), toArray(edges), []]);
     });
     calls.set('bar', (args, kw) => {
         const x = numbers(arg(args, kw, 0, 'x', null));
@@ -632,12 +753,16 @@ function axesCalls(fig: Figure, push: (d: Draw) => void): Map<string, Call> {
     calls.set('set_xlabel', xlabel);
     calls.set('ylabel', ylabel);
     calls.set('set_ylabel', ylabel);
-    calls.set('legend', () => {
+    calls.set('legend', (args, kw) => {
         fig.legend = true;
+        // 6.0 ML: loc='upper left' and the other corners; 'best' (or none) finds the emptiest corner.
+        const loc = arg(args, kw, -1, 'loc', null);
+        fig.legendLoc = typeof loc === 'string' && /^(upper|lower) (left|right)$/.test(loc) ? loc : null;
         return null;
     });
     // Accepted and left to the chart: its grid, ticks, size and colour bar are its own lines.
-    for (const name of ['grid', 'xticks', 'yticks', 'set_xticks', 'set_yticks', 'set_xticklabels', 'set_yticklabels', 'tick_params', 'margins', 'minorticks_on', 'set_facecolor', 'spines', 'colorbar', 'tight_layout', 'locator_params']) calls.set(name, () => null);
+    // 6.0 ML: colorbar and clabel too (the chart has no room beside the plot; docs/v6/ml.md).
+    for (const name of ['grid', 'xticks', 'yticks', 'set_xticks', 'set_yticks', 'set_xticklabels', 'set_yticklabels', 'tick_params', 'margins', 'minorticks_on', 'set_facecolor', 'spines', 'colorbar', 'tight_layout', 'locator_params', 'clabel']) calls.set(name, () => null);
     calls.set('add_patch', (args) => {
         const p = args[0];
         if (p instanceof PyModule && p.typeName === 'Patch') {
@@ -658,6 +783,11 @@ function fontSize(v: PyValue | undefined): Size {
     if (typeof v === 'string') return /small/.test(v) ? 'small' : /large/.test(v) ? 'large' : 'normal';
     const n = num(v);
     return n < 9 ? 'small' : n > 13 ? 'large' : 'normal';
+}
+
+/** 6.0 ML: imshow's interpolation: the smooth ones blend cells; 'nearest', 'none' and 'antialiased' (matplotlib's default, nearest when a cell is large) keep them square. */
+function smoothOf(v: PyValue | undefined): boolean {
+    return typeof v === 'string' && /^(?:bilinear|bicubic|spline16|spline36|hanning|hamming|hermite|kaiser|quadric|catrom|gaussian|bessel|mitchell|sinc|lanczos|blackman)$/.test(v);
 }
 
 function anchorOf(ha: PyValue | undefined, va: PyValue | undefined): string {

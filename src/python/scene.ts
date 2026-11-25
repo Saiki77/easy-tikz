@@ -10,13 +10,14 @@
 import type { MotionFrame, PythonTool, Tool } from '../types';
 import type { Pt, View } from '../geometry';
 import type { MathContext } from '../mathcontext';
-import type { FillPrim, MarkerPrim, SceneCtx, SceneItem2D, SceneOutput, SceneTextSpec, StrokePrim } from '../scene';
+import type { FillPrim, MarkerPrim, SceneCtx, SceneItem2D, SceneOutput, SceneTextSpec, StrokePrim, TextPrim } from '../scene';
 import { addIssue, fail, newOutput } from '../scene';
 import type { TextAnchor } from '../scene';
 import { t as msg } from '../i18n';
-import { clockTime, registerClockType } from '../motion6/clock';
-import type { LiveShapes } from '../motion6/liveprims';
+import { clockTime, registerClockType, stillFrame } from '../motion6/clock';
+import type { LiveImage, LiveShapes } from '../motion6/liveprims';
 import { emptyShapes } from '../motion6/liveprims';
+import { TIKZ_COLOR_DEFS } from '../colors'; // 6.0 ML
 import type { PixelPrim } from '../iterate/pixels';
 import { mapRgb } from '../iterate/colour';
 import { Draw, FIRST, Figure, MAP_RGB } from './pyplot';
@@ -82,6 +83,9 @@ export function addPythonMotion(item: SceneItem2D, out: SceneOutput, frame: Moti
         const held = HELD.get(out.fills);
         if (held) HELD.set(item.fills, held);
     }
+    // 6.0 ML: the still frame's pictures and texts (hidden while the live canvas draws them).
+    if (moving.pixels.length) item.pixels = (item.pixels ?? []).concat(moving.pixels);
+    if (moving.texts.length) item.texts = item.texts.concat(moving.texts);
     if (moving.problem) issue(moving.problem);
 }
 
@@ -127,10 +131,7 @@ export function computePython(t: Tool, ctx: SceneCtx): SceneOutput | null {
         out.live = [
             {
                 key: `${t.id}:frame`,
-                at: (time) => {
-                    const f = result.frameAt(time);
-                    return liveShapes(f.figure.draws, view, first);
-                },
+                at: (time) => frameShapes(result.frameAt(time).figure, view, first), // 6.0 ML: pictures, legend, title
             },
         ];
     }
@@ -143,17 +144,23 @@ export function computePython(t: Tool, ctx: SceneCtx): SceneOutput | null {
  * instead; the export, print and the SVG files draw these. Called after the
  * scene memo. Null for other tools.
  */
-export function pythonMotion(tool: Tool | undefined, out: SceneOutput, frame: MotionFrame | undefined): { strokes: StrokePrim[]; fills: FillPrim[]; markers: MarkerPrim[]; problem: string | null } | null {
+export function pythonMotion(tool: Tool | undefined, out: SceneOutput, frame: MotionFrame | undefined): { strokes: StrokePrim[]; fills: FillPrim[]; markers: MarkerPrim[]; pixels: PixelPrim[]; texts: TextPrim[]; problem: string | null } | null {
     if (!tool || tool.type !== 'python') return null;
     const held = HELD.get(out.fills);
     if (!held || !held.moves) return null;
     const f = held.result.frameAt(clockTime(frame));
     const still = newOutput();
-    drawInto(still, f.figure.draws, held.view, null, true, tool.color || 'blue');
+    const first = tool.color || 'blue';
+    drawInto(still, f.figure.draws, held.view, null, true, first);
+    // 6.0 ML: the frame's legend and the texts the chart cannot take as its own, still too.
+    axesTexts(still, f.figure, held.view, first, true);
+    const texts: TextPrim[] = still.texts.map((t) => ({ x: t.x, y: t.y, text: t.literal ?? '', color: t.color, anchor: t.anchor ?? 'above right', size: t.size, halo: !!t.halo, still: true }));
     return {
         strokes: still.strokes,
         fills: still.fills,
         markers: still.markers,
+        pixels: still.pixels ?? [],
+        texts,
         problem: f.error ? problemText(f.error, 1, true) : null,
     };
 }
@@ -231,6 +238,13 @@ export function drawnBox(result: RunResult): View | null {
                 add(d.extent[0], d.extent[2]);
                 add(d.extent[1], d.extent[3]);
                 break;
+            // 6.0 ML
+            case 'bands':
+                if (d.xs.length && d.ys.length) {
+                    add(d.xs[0], d.ys[0]);
+                    add(d.xs[d.xs.length - 1], d.ys[d.ys.length - 1]);
+                }
+                break;
             case 'hline':
                 add(NaN, d.y);
                 break;
@@ -307,13 +321,13 @@ function drawInto(out: SceneOutput, raw: readonly Draw[], view: View, fit: Pt[] 
                     if (d.opacity < 1) stroke.opacity = d.opacity;
                     out.strokes.push(ms(stroke));
                 }
-                if (d.marker || d.markerOnly) for (const r of runs) for (const p of r) out.markers.push(mm({ x: p.x, y: p.y, color: d.color, size: d.markerSize === 'normal' ? 'small' : d.markerSize }));
+                if (d.marker || d.markerOnly) for (const r of runs) for (const p of r) out.markers.push(mm(withRadius({ x: p.x, y: p.y, color: d.color, size: d.markerSize === 'normal' ? 'small' : d.markerSize }, d.markerRadius)));
                 break;
             }
             case 'dots':
                 d.pts.forEach(([x, y], i) => {
                     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-                    out.markers.push(mm({ x, y, color: d.colors[i % d.colors.length] ?? 'blue', size: d.size }));
+                    out.markers.push(mm(withRadius({ x, y, color: d.colors[i % d.colors.length] ?? 'blue', size: d.size }, d.radii ? d.radii[i % d.radii.length] : undefined))); // 6.0 ML: scatter's s
                     if (fit) fit.push({ x, y });
                 });
                 break;
@@ -336,7 +350,8 @@ function drawInto(out: SceneOutput, raw: readonly Draw[], view: View, fit: Pt[] 
             case 'text':
                 if (!Number.isFinite(d.x) || !Number.isFinite(d.y) || !d.text) break;
                 if (fit) fit.push({ x: d.x, y: d.y });
-                if (!still) out.texts.push(textSpec(d.x, d.y, d.text, d.color, d.size, d.anchor));
+                // 6.0 ML: the still frame's texts too (pythonMotion marks them still).
+                out.texts.push(textSpec(d.x, d.y, d.text, d.color, d.size, d.anchor));
                 break;
             case 'hline':
                 if (Number.isFinite(d.y)) out.strokes.push(ms({ lines: [[{ x: view.xmin, y: d.y }, { x: view.xmax, y: d.y }]], color: d.color, width: d.width, dashed: d.dashed, exact: true }));
@@ -354,13 +369,28 @@ function drawInto(out: SceneOutput, raw: readonly Draw[], view: View, fit: Pt[] 
                 out.strokes.push(ms({ lines: [ring], color: d.color, width: d.width, dashed: d.dashed, closed: true }));
                 break;
             }
-            case 'image':
-                if (still) break;
-                (out.pixels ??= []).push(imagePrim(d));
+            case 'image': {
+                // 6.0 ML: the still frame's picture too, hidden while the live canvas draws the moving one.
+                const prim = picturePrim(imagePicture(d));
+                (out.pixels ??= []).push(still ? { ...prim, still: true } : prim);
                 keep([{ x: d.extent[0], y: d.extent[2] }, { x: d.extent[1], y: d.extent[3] }]);
                 break;
+            }
+            case 'bands': {
+                const picture = bandsPicture(d);
+                if (!picture) break;
+                const prim = picturePrim(picture);
+                (out.pixels ??= []).push(still ? { ...prim, still: true } : prim);
+                keep([{ x: picture.box.x0, y: picture.box.y0 }, { x: picture.box.x1, y: picture.box.y1 }]);
+                break;
+            }
         }
     }
+}
+
+/** 6.0 ML: a marker with matplotlib's radius in points, when it has one. */
+function withRadius(m: MarkerPrim, radius: number | undefined): MarkerPrim {
+    return radius !== undefined && Number.isFinite(radius) ? { ...m, radius } : m;
 }
 
 /** A script's title or axis name the chart can take as its own (a template has no braces of its own). */
@@ -368,23 +398,33 @@ export function chartTakes(text: string | null): boolean {
     return !!text && !/[{}]/.test(text);
 }
 
+/** One row of a legend: its key (a short line, a dot or a patch) and its text, in chart units. */
+interface LegendRow {
+    kind: 'line' | 'dot' | 'patch';
+    color: string;
+    width: string;
+    dashed: boolean;
+    opacity: number;
+    radius?: number;
+    x0: number;
+    x1: number;
+    y: number;
+    h: number;
+    text: string;
+    tx: number;
+}
+
 /**
- * The script's title, xlabel and ylabel: the chart takes them where it has
- * none (settings.toRendererConfig); one it cannot take (braces in it) is a
- * text in the plot. The legend is a key in the corner where it covers the
- * least of what is drawn (matplotlib's 'best').
+ * The rows of a legend: a key in the corner `loc` names, else (matplotlib's
+ * 'best') the corner where it covers the least of what is drawn.
  */
-function axesTexts(out: SceneOutput, fig: Figure, view: View, first: string): void {
+function legendRows(fig: Figure, view: View, first: string): LegendRow[] {
+    if (!fig.legend) return [];
     const w = view.xmax - view.xmin;
     const h = view.ymax - view.ymin;
-    const cx = view.xmin + w / 2;
-    if (fig.title && !chartTakes(fig.title)) out.texts.push(textSpec(cx, view.ymax - 0.02 * h, fig.title, 'black', 'large', 'below'));
-    if (fig.xlabel && !chartTakes(fig.xlabel)) out.texts.push(textSpec(view.xmax - 0.02 * w, view.ymin + 0.02 * h, fig.xlabel, 'black', 'normal', 'above left'));
-    if (fig.ylabel && !chartTakes(fig.ylabel)) out.texts.push(textSpec(view.xmin + 0.02 * w, view.ymax - 0.02 * h, fig.ylabel, 'black', 'normal', 'below right'));
-    if (!fig.legend) return;
     const draws = withFirst(fig.draws, first);
     const entries = draws.filter((d): d is Extract<Draw, { label: string | null }> => 'label' in d && !!d.label).slice(0, 12);
-    if (!entries.length) return;
+    if (!entries.length) return [];
     const row = 0.075 * h;
     const boxW = 0.34 * w;
     const boxH = entries.length * row + 0.03 * h;
@@ -395,96 +435,282 @@ function axesTexts(out: SceneOutput, fig: Figure, view: View, first: string): vo
         else if (d.k === 'fill') pts.push(...d.ring);
     }
     const corners = [
-        { x0: view.xmax - boxW, y1: view.ymax },
-        { x0: view.xmin + 0.02 * w, y1: view.ymax },
-        { x0: view.xmax - boxW, y1: view.ymin + boxH },
-        { x0: view.xmin + 0.02 * w, y1: view.ymin + boxH },
+        { at: 'upper right', x0: view.xmax - boxW, y1: view.ymax },
+        { at: 'upper left', x0: view.xmin + 0.02 * w, y1: view.ymax },
+        { at: 'lower right', x0: view.xmax - boxW, y1: view.ymin + boxH },
+        { at: 'lower left', x0: view.xmin + 0.02 * w, y1: view.ymin + boxH },
     ];
-    let best = corners[0];
-    let fewest = Infinity;
-    for (const c of corners) {
-        let n = 0;
-        for (const [x, y] of pts) if (x >= c.x0 && x <= c.x0 + boxW && y <= c.y1 && y >= c.y1 - boxH) n++;
-        if (n < fewest) {
-            fewest = n;
-            best = c;
+    // 6.0 ML: legend(loc='upper left') puts it there.
+    let best = corners.find((c) => c.at === fig.legendLoc) ?? corners[0];
+    if (!fig.legendLoc) {
+        let fewest = Infinity;
+        for (const c of corners) {
+            let n = 0;
+            for (const [x, y] of pts) if (x >= c.x0 && x <= c.x0 + boxW && y <= c.y1 && y >= c.y1 - boxH) n++;
+            if (n < fewest) {
+                fewest = n;
+                best = c;
+            }
         }
     }
-    entries.forEach((d, i) => {
+    return entries.map((d, i) => {
         const y = best.y1 - 0.05 * h - i * row;
         const x0 = best.x0 + 0.02 * w;
         const x1 = x0 + 0.06 * w;
-        const color = d.k === 'dots' ? (d.colors[0] ?? 'blue') : d.color;
-        if (d.k === 'fill') out.fills.push({ rings: [[{ x: x0, y: y - 0.02 * h }, { x: x1, y: y - 0.02 * h }, { x: x1, y: y + 0.02 * h }, { x: x0, y: y + 0.02 * h }]], color, opacity: Math.max(0.3, d.opacity), pattern: 'solid' });
-        else if (d.k === 'dots') out.markers.push({ x: (x0 + x1) / 2, y, color, size: 'small' });
-        else out.strokes.push({ lines: [[{ x: x0, y }, { x: x1, y }]], color, width: d.width, dashed: d.dashed, exact: true });
-        out.texts.push({ ...textSpec(x1 + 0.01 * w, y, d.label ?? '', 'black', 'small', 'right'), halo: true });
+        const base = { x0, x1, y, h, text: d.label ?? '', tx: x1 + 0.01 * w, width: 'thick', dashed: false, opacity: 1 };
+        if (d.k === 'fill') return { ...base, kind: 'patch' as const, color: d.color, opacity: Math.max(0.3, d.opacity) };
+        if (d.k === 'dots') return { ...base, kind: 'dot' as const, color: d.colors[0] ?? 'blue', radius: d.radii ? d.radii[0] : undefined };
+        return { ...base, kind: 'line' as const, color: d.color, width: d.width, dashed: d.dashed };
     });
 }
 
+/**
+ * The script's title, xlabel and ylabel: the chart takes them where it has
+ * none (settings.toRendererConfig); one it cannot take (braces in it) is a
+ * text in the plot. The legend is a key in the corner where it covers the
+ * least of what is drawn (matplotlib's 'best'), or where `loc` says.
+ * `still`: the parts of a frame(t) (6.0 ML), drawn by the live canvas.
+ */
+function axesTexts(out: SceneOutput, fig: Figure, view: View, first: string, still = false): void {
+    const w = view.xmax - view.xmin;
+    const h = view.ymax - view.ymin;
+    const cx = view.xmin + w / 2;
+    if (fig.title && !chartTakes(fig.title)) out.texts.push(textSpec(cx, view.ymax - 0.02 * h, fig.title, 'black', 'large', 'below'));
+    if (fig.xlabel && !chartTakes(fig.xlabel)) out.texts.push(textSpec(view.xmax - 0.02 * w, view.ymin + 0.02 * h, fig.xlabel, 'black', 'normal', 'above left'));
+    if (fig.ylabel && !chartTakes(fig.ylabel)) out.texts.push(textSpec(view.xmin + 0.02 * w, view.ymax - 0.02 * h, fig.ylabel, 'black', 'normal', 'below right'));
+    const mark = <T extends object>(p: T): T => (still ? { ...p, still: true } : p);
+    for (const r of legendRows(fig, view, first)) {
+        if (r.kind === 'patch') out.fills.push(mark({ rings: [[{ x: r.x0, y: r.y - 0.02 * r.h }, { x: r.x1, y: r.y - 0.02 * r.h }, { x: r.x1, y: r.y + 0.02 * r.h }, { x: r.x0, y: r.y + 0.02 * r.h }]], color: r.color, opacity: r.opacity, pattern: 'solid' as const }));
+        else if (r.kind === 'dot') out.markers.push(mark(withRadius({ x: (r.x0 + r.x1) / 2, y: r.y, color: r.color, size: 'small' }, r.radius)));
+        else out.strokes.push(mark({ lines: [[{ x: r.x0, y: r.y }, { x: r.x1, y: r.y }]], color: r.color, width: r.width, dashed: r.dashed, exact: true }));
+        out.texts.push({ ...textSpec(r.tx, r.y, r.text, 'black', 'small', 'right'), halo: true });
+    }
+}
+
 /** The title and axis names a chart's scripts set (null when it has no python block). */
-export function pythonAxes(tools: unknown, math: MathContext): { title: string | null; xlabel: string | null; ylabel: string | null } | null {
+export function pythonAxes(tools: unknown, math: MathContext, stillTime?: unknown): { title: string | null; xlabel: string | null; ylabel: string | null } | null {
     const program = chartProgram(tools);
     if (!program) return null;
     const env = math.envFor('value');
-    const fig = program.run(inputsOf(program, (name) => (NAME_RE.test(name) ? env.scalar(name)?.read() : undefined))).figure;
-    return { title: chartTakes(fig.title) ? fig.title : null, xlabel: chartTakes(fig.xlabel) ? fig.xlabel : null, ylabel: chartTakes(fig.ylabel) ? fig.ylabel : null };
+    const result = program.run(inputsOf(program, (name) => (NAME_RE.test(name) ? env.scalar(name)?.read() : undefined)));
+    const fig = result.figure;
+    // 6.0 ML: what frame(t) sets at the still time, where the still drawing sets nothing (the live canvas changes it each frame).
+    const moving = result.frame ? result.frameAt(clockTime(stillFrame(stillTime))).figure : null;
+    const pick = (own: string | null, frame: string | null | undefined) => (chartTakes(own) ? own : chartTakes(frame ?? null) ? (frame ?? null) : null);
+    return { title: pick(fig.title, moving?.title), xlabel: pick(fig.xlabel, moving?.xlabel), ylabel: pick(fig.ylabel, moving?.ylabel) };
 }
 
-/** imshow as a pixel layer over its extent (nearest cell; row 0 at the top unless origin='lower'). */
-function imagePrim(d: Extract<Draw, { k: 'image' }>): PixelPrim {
-    const [x0, x1, y0, y1] = d.extent;
+// ------------------------------------------------------------ pictures (6.0 ML)
+
+/** A picture over a box of the chart: imshow's cells or contourf's bands, for the pixel layer and the live canvas. */
+interface Picture {
+    /** The same key: the same pixels. */
+    key: string;
+    opacity: number;
+    smooth: boolean;
+    box: { x0: number; x1: number; y0: number; y1: number };
+    /** The colour at a point of the chart into out[k..k+3] (alpha 0 where it has none). */
+    paint(x: number, y: number, out: Uint8ClampedArray, k: number): void;
+    /** Its own pixels for the live canvas: w x h, row 0 at the top of the box. */
+    native(): { w: number; h: number; rgba: () => Uint8ClampedArray };
+}
+
+/** A hash of the numbers of an array (all of them, by their bits): the same numbers, the same key. */
+function hashNumbers(a: Float64Array): string {
+    const words = new Uint32Array(a.buffer, a.byteOffset, a.length * 2);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < words.length; i++) {
+        h ^= words[i];
+        h = Math.imul(h, 0x01000193);
+    }
+    return (h >>> 0).toString(36);
+}
+
+function putRgb(out: Uint8ClampedArray, k: number, c: readonly number[]): void {
+    out[k] = Math.round(c[0] * 255);
+    out[k + 1] = Math.round(c[1] * 255);
+    out[k + 2] = Math.round(c[2] * 255);
+    out[k + 3] = 255;
+}
+
+/**
+ * imshow's picture: an nx x ny array over its extent (left, right, bottom,
+ * top). Row 0 is at the top edge, or at the bottom with origin='lower';
+ * each cell keeps its colour (or the cells blend, interpolation='bilinear').
+ */
+function imagePicture(d: Extract<Draw, { k: 'image' }>): Picture {
+    const [left, right, bottom, top] = d.extent;
+    // Row i lies between start and end along y: from the top with origin 'upper', from the bottom with 'lower'.
+    const start = d.lower ? bottom : top;
+    const end = d.lower ? top : bottom;
     const lo = d.vmin;
     const span = d.vmax - d.vmin;
-    const key = `py-image:${hashText(`${d.nx}x${d.ny}|${d.extent.join(',')}|${d.map}|${d.lower}|${lo}|${span}|${Array.from(d.z.subarray(0, 64)).join(',')}|${d.z.length}|${sum(d.z)}`)}`;
+    const smooth = !!d.smooth;
+    const { nx, ny, z } = d;
+    const colour = (v: number, out: Uint8ClampedArray, k: number) => {
+        if (!Number.isFinite(v)) {
+            out[k + 3] = 0;
+            return;
+        }
+        putRgb(out, k, mapRgb(d.map, span > 0 ? (v - lo) / span : 0.5));
+    };
+    /** The value at a fraction u (columns) and v (rows) of the array. */
+    const at = (u: number, v: number): number => {
+        if (!smooth) return z[Math.min(ny - 1, Math.floor(v * ny)) * nx + Math.min(nx - 1, Math.floor(u * nx))];
+        const fx = Math.max(0, Math.min(nx - 1, u * nx - 0.5));
+        const fy = Math.max(0, Math.min(ny - 1, v * ny - 0.5));
+        const j = Math.min(nx - 2, Math.floor(fx));
+        const i = Math.min(ny - 2, Math.floor(fy));
+        if (nx < 2 || ny < 2) return z[Math.min(ny - 1, Math.round(fy)) * nx + Math.min(nx - 1, Math.round(fx))];
+        const a = fx - j;
+        const b = fy - i;
+        const z00 = z[i * nx + j];
+        const z01 = z[i * nx + j + 1];
+        const z10 = z[(i + 1) * nx + j];
+        const z11 = z[(i + 1) * nx + j + 1];
+        return (1 - b) * ((1 - a) * z00 + a * z01) + b * ((1 - a) * z10 + a * z11);
+    };
+    const key = `py-image:${hashText(`${nx}x${ny}|${d.extent.join(',')}|${d.map}|${d.lower}|${lo}|${span}|${smooth}`)}:${hashNumbers(z)}`;
     return {
         key,
         opacity: d.opacity,
+        smooth,
+        box: { x0: Math.min(left, right), x1: Math.max(left, right), y0: Math.min(bottom, top), y1: Math.max(bottom, top) },
+        paint(x, y, out, k) {
+            const u = (x - left) / (right - left);
+            const v = (y - start) / (end - start);
+            if (!(u >= 0 && u < 1 && v >= 0 && v < 1)) {
+                out[k + 3] = 0;
+                return;
+            }
+            colour(at(u, v), out, k);
+        },
+        native() {
+            return {
+                w: nx,
+                h: ny,
+                rgba: () => {
+                    const buf = new Uint8ClampedArray(nx * ny * 4);
+                    // Row r of the picture (from the top of the box) is the array's row at that height.
+                    const rowsUp = end > start;
+                    const colsLeft = right < left;
+                    for (let r = 0; r < ny; r++) {
+                        const i = rowsUp ? ny - 1 - r : r;
+                        for (let c = 0; c < nx; c++) colour(z[i * nx + (colsLeft ? nx - 1 - c : c)], buf, (r * nx + c) * 4);
+                    }
+                    return buf;
+                },
+            };
+        },
+    };
+}
+
+/** The index of the last of `edges` (increasing) at or below v, or -1. */
+function below(edges: ArrayLike<number>, v: number): number {
+    let a = 0;
+    let b = edges.length - 1;
+    if (!(v >= edges[0])) return -1;
+    while (a < b) {
+        const mid = (a + b + 1) >> 1;
+        if (v >= edges[mid]) a = mid;
+        else b = mid - 1;
+    }
+    return a;
+}
+
+/** A chart colour as 0..1 channels for a picture: a palette name as the colour it exports in, #rrggbb as it is. */
+function rgbOf(color: string): [number, number, number] {
+    const hex = /^#[0-9a-f]{6}$/i.test(color) ? color.slice(1) : (TIKZ_COLOR_DEFS[color]?.hex ?? '000000');
+    return [parseInt(hex.slice(0, 2), 16) / 255, parseInt(hex.slice(2, 4), 16) / 255, parseInt(hex.slice(4, 6), 16) / 255];
+}
+
+/** contourf's picture: z over the grid (bilinear in each cell), coloured by the band it falls in; none outside the levels. */
+function bandsPicture(d: Extract<Draw, { k: 'bands' }>): Picture | null {
+    let xs = d.xs;
+    let ys = d.ys;
+    const nx = xs.length;
+    const ny = ys.length;
+    if (nx < 2 || ny < 2 || d.z.length !== nx * ny) return null;
+    // Axes that run down are turned round, so both grow.
+    const flipX = xs[nx - 1] < xs[0];
+    const flipY = ys[ny - 1] < ys[0];
+    const z = new Float64Array(nx * ny);
+    for (let i = 0; i < ny; i++) for (let j = 0; j < nx; j++) z[i * nx + j] = d.z[(flipY ? ny - 1 - i : i) * nx + (flipX ? nx - 1 - j : j)];
+    if (flipX) xs = Float64Array.from(xs).reverse();
+    if (flipY) ys = Float64Array.from(ys).reverse();
+    const rgb = d.colors.map(rgbOf);
+    const levels = d.levels;
+    const box = { x0: xs[0], x1: xs[nx - 1], y0: ys[0], y1: ys[ny - 1] };
+    const value = (x: number, y: number): number => {
+        const j = Math.min(nx - 2, below(xs, x));
+        const i = Math.min(ny - 2, below(ys, y));
+        if (j < 0 || i < 0 || x > box.x1 || y > box.y1) return NaN;
+        const a = (x - xs[j]) / (xs[j + 1] - xs[j]);
+        const b = (y - ys[i]) / (ys[i + 1] - ys[i]);
+        return (1 - b) * ((1 - a) * z[i * nx + j] + a * z[i * nx + j + 1]) + b * ((1 - a) * z[(i + 1) * nx + j] + a * z[(i + 1) * nx + j + 1]);
+    };
+    const paint = (x: number, y: number, out: Uint8ClampedArray, k: number) => {
+        const v = value(x, y);
+        const band = Number.isFinite(v) && v <= levels[levels.length - 1] ? Math.min(rgb.length - 1, below(levels, v)) : -1;
+        if (band < 0) {
+            out[k + 3] = 0;
+            return;
+        }
+        putRgb(out, k, rgb[band]);
+    };
+    const key = `py-bands:${hashText(`${nx}x${ny}|${levels.join(',')}|${d.colors.join(',')}`)}:${hashNumbers(xs)}${hashNumbers(ys)}${hashNumbers(z)}`;
+    return {
+        key,
+        opacity: d.opacity,
+        smooth: false,
+        box,
+        paint,
+        native() {
+            // Four pixels a cell, at most 360 a side: sharp enough when scaled, cheap to make once per key.
+            const w = Math.max(2, Math.min(360, (nx - 1) * 4));
+            const h = Math.max(2, Math.min(360, (ny - 1) * 4));
+            return {
+                w,
+                h,
+                rgba: () => {
+                    const buf = new Uint8ClampedArray(w * h * 4);
+                    for (let r = 0; r < h; r++) {
+                        const y = box.y1 - ((r + 0.5) / h) * (box.y1 - box.y0);
+                        for (let c = 0; c < w; c++) paint(box.x0 + ((c + 0.5) / w) * (box.x1 - box.x0), y, buf, (r * w + c) * 4);
+                    }
+                    return buf;
+                },
+            };
+        },
+    };
+}
+
+/** A picture as a pixel layer (the preview's, and the PNG of the export). */
+function picturePrim(p: Picture): PixelPrim {
+    return {
+        key: p.key,
+        opacity: p.opacity,
         shader: null,
         cost: 1,
         tile(view, w, h, px0, py0, px1, py1, buf) {
             for (let py = py0; py < py1; py++) {
                 const y = view.ymax - ((py + 0.5) / h) * (view.ymax - view.ymin);
-                for (let px = px0; px < px1; px++) {
-                    const x = view.xmin + ((px + 0.5) / w) * (view.xmax - view.xmin);
-                    const k = (py * w + px) * 4;
-                    const u = (x - x0) / (x1 - x0);
-                    // Row 0 of the array is at y0 with origin='lower', else at the top (y1 for an extent written the usual way).
-                    const vTop = (y1 - y) / (y1 - y0);
-                    const v = d.lower ? 1 - vTop : vTop;
-                    if (!(u >= 0 && u < 1 && v >= 0 && v < 1)) {
-                        buf[k + 3] = 0;
-                        continue;
-                    }
-                    const j = Math.min(d.nx - 1, Math.floor(u * d.nx));
-                    const i = Math.min(d.ny - 1, Math.floor((d.lower ? 1 - v : v) * d.ny));
-                    const row = d.lower ? d.ny - 1 - i : i;
-                    const z = d.z[(d.lower ? i : row) * d.nx + j];
-                    if (!Number.isFinite(z)) {
-                        buf[k + 3] = 0;
-                        continue;
-                    }
-                    const c = mapRgb(d.map, span > 0 ? (z - lo) / span : 0.5);
-                    buf[k] = Math.round(c[0] * 255);
-                    buf[k + 1] = Math.round(c[1] * 255);
-                    buf[k + 2] = Math.round(c[2] * 255);
-                    buf[k + 3] = 255;
-                }
+                for (let px = px0; px < px1; px++) p.paint(view.xmin + ((px + 0.5) / w) * (view.xmax - view.xmin), y, buf, (py * w + px) * 4);
             }
         },
-        bounds: () => ({ xmin: Math.min(x0, x1), xmax: Math.max(x0, x1), ymin: Math.min(y0, y1), ymax: Math.max(y0, y1) }),
+        bounds: () => ({ xmin: p.box.x0, xmax: p.box.x1, ymin: p.box.y0, ymax: p.box.y1 }),
     };
 }
 
-function sum(a: Float64Array): number {
-    let s = 0;
-    for (let i = 0; i < a.length; i++) if (Number.isFinite(a[i])) s += a[i] * ((i % 7) + 1);
-    return s;
+/** A picture for the live canvas. */
+function liveImage(p: Picture): LiveImage {
+    const n = p.native();
+    return { key: p.key, w: n.w, h: n.h, x0: p.box.x0, x1: p.box.x1, y0: p.box.y0, y1: p.box.y1, opacity: p.opacity, smooth: p.smooth, rgba: n.rgba };
 }
 
 // ------------------------------------------------------------ the live canvas
 
-/** frame(t)'s draws as shapes of the live canvas (lines, rings, dots, fills, texts). */
+/** frame(t)'s draws as shapes of the live canvas (lines, rings, dots, fills, texts, pictures). */
 export function liveShapes(raw: readonly Draw[], view: View, first: string): LiveShapes {
     const draws = withFirst(raw, first);
     const out = emptyShapes();
@@ -493,11 +719,11 @@ export function liveShapes(raw: readonly Draw[], view: View, first: string): Liv
             case 'line': {
                 const runs = finiteRuns(d.pts);
                 if (!d.markerOnly) for (const r of runs) if (r.length > 1) out.lines.push({ pts: r, color: d.color, width: d.width, dashed: d.dashed, opacity: d.opacity < 1 ? d.opacity : undefined });
-                if (d.marker || d.markerOnly) for (const r of runs) for (const p of r) out.dots.push({ x: p.x, y: p.y, color: d.color, size: d.markerSize === 'normal' ? 'small' : d.markerSize });
+                if (d.marker || d.markerOnly) for (const r of runs) for (const p of r) out.dots.push({ x: p.x, y: p.y, color: d.color, size: d.markerSize === 'normal' ? 'small' : d.markerSize, ...(d.markerRadius !== undefined ? { radius: d.markerRadius } : {}) });
                 break;
             }
             case 'dots':
-                d.pts.forEach(([x, y], i) => out.dots.push({ x, y, color: d.colors[i % d.colors.length] ?? 'blue', size: d.size }));
+                d.pts.forEach(([x, y], i) => out.dots.push({ x, y, color: d.colors[i % d.colors.length] ?? 'blue', size: d.size, ...(d.radii ? { radius: d.radii[i % d.radii.length] } : {}) }));
                 break;
             case 'fill': {
                 const ring = finiteRuns(d.ring)[0];
@@ -533,9 +759,41 @@ export function liveShapes(raw: readonly Draw[], view: View, first: string): Liv
                 if (d.fill) (out.fills ??= []).push({ pts: ringOf(d.x, d.y, d.r), color: d.fill, opacity: d.opacity });
                 out.lines.push({ pts: ringOf(d.x, d.y, d.r), color: d.color, width: d.width, dashed: d.dashed });
                 break;
+            // 6.0 ML: pictures, drawn under the rest of the frame.
             case 'image':
+                (out.images ??= []).push(liveImage(imagePicture(d)));
                 break;
+            case 'bands': {
+                const picture = bandsPicture(d);
+                if (picture) (out.images ??= []).push(liveImage(picture));
+                break;
+            }
         }
+    }
+    return out;
+}
+
+/**
+ * 6.0 ML: all of a frame on the live canvas: its draws, its legend, and its
+ * title and axis names (the SVG's own texts change to them; one the chart
+ * cannot take, with braces, is a text in the plot).
+ */
+export function frameShapes(fig: Figure, view: View, first: string): LiveShapes {
+    const out = liveShapes(fig.draws, view, first);
+    const texts = (out.texts ??= []);
+    const w = view.xmax - view.xmin;
+    const h = view.ymax - view.ymin;
+    if (fig.title) {
+        if (chartTakes(fig.title)) out.title = fig.title;
+        else texts.push({ x: view.xmin + w / 2, y: view.ymax - 0.02 * h, text: fig.title.replace(/\$/g, ''), color: 'black', size: 'large', anchor: 'below' });
+    }
+    if (fig.xlabel && chartTakes(fig.xlabel)) out.xlabel = fig.xlabel;
+    if (fig.ylabel && chartTakes(fig.ylabel)) out.ylabel = fig.ylabel;
+    for (const r of legendRows(fig, view, first)) {
+        if (r.kind === 'patch') (out.fills ??= []).push({ pts: [{ x: r.x0, y: r.y - 0.02 * r.h }, { x: r.x1, y: r.y - 0.02 * r.h }, { x: r.x1, y: r.y + 0.02 * r.h }, { x: r.x0, y: r.y + 0.02 * r.h }], color: r.color, opacity: r.opacity });
+        else if (r.kind === 'dot') out.dots.push({ x: (r.x0 + r.x1) / 2, y: r.y, color: r.color, size: 'small', ...(r.radius !== undefined ? { radius: r.radius } : {}) });
+        else out.lines.push({ pts: [{ x: r.x0, y: r.y }, { x: r.x1, y: r.y }], color: r.color, width: r.width, dashed: r.dashed });
+        texts.push({ x: r.tx, y: r.y, text: r.text.replace(/\$/g, ''), color: 'black', size: 'small', anchor: 'right', halo: true });
     }
     return out;
 }
@@ -553,6 +811,9 @@ function withFirst(draws: readonly Draw[], first: string): Draw[] {
                 return d.color === FIRST || d.fill === FIRST ? { ...d, color: c(d.color), fill: d.fill === null ? null : c(d.fill) } : d;
             case 'image':
                 return d;
+            // 6.0 ML: contourf's bands in C0 (colors='C0') take the block's colour.
+            case 'bands':
+                return d.colors.includes(FIRST) ? { ...d, colors: d.colors.map(c) } : d;
             default:
                 return d.color === FIRST ? { ...d, color: first } : d;
         }

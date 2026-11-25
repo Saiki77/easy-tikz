@@ -13,6 +13,7 @@ import { language } from '../i18n';
 import type { ChartExample } from '../migrate';
 import { chart } from './chart';
 import { PYTHON_EXAMPLES } from './examplesPython'; // 6.0 P
+import { ML_EXAMPLES } from './examplesMl'; // 6.0 ML
 
 interface ExampleText {
     title: string;
@@ -193,6 +194,8 @@ const SOURCES: ExampleSource[] = [
     },
     // 6.0 P: Python in a chart
     ...PYTHON_EXAMPLES,
+    // 6.0 ML: machine learning
+    ...ML_EXAMPLES,
 ];
 
 /** The examples of version 6, their texts in the reader's language. */

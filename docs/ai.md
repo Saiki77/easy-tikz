@@ -332,10 +332,10 @@ draw the circles of c, using n circles, with its path
 - **Import what you use:** `import numpy as np` and `import matplotlib.pyplot as plt` (drawing calls need it; a bare `plot(...)` without `from matplotlib.pyplot import *` is "name 'plot' is not defined").
 - **Names it sets are values of the chart**, as `let` names (`plot g(x) = f(x)`, `mark the points of pts`, `{k:2}` in a label): a number; `1 + 2j` a complex number; an array of 2 or 3 numbers a vector, a longer one a list; an array of shape (n, 2) a list of points; a square array a matrix; a complex array a list of complex numbers; `def f(x):` a function of the chart. Names a slider, a function or an axis variable has (`x`, `y`, `t`, `z`, `theta`) stay the chart's: the script may set them, the chart does not see them. Names that start with `_` stay in the script.
 - **Sliders and computed names are variables of the script** (`a`, `n`, `P1_x`): it runs again when one it reads changes. The script has no axis variable: make arrays with `np.linspace`.
-- **matplotlib calls draw** (`plt.` or `ax.` after `fig, ax = plt.subplots()`), in the chart's theme colours: `plot(x, y, 'r--', color=, linewidth=, linestyle=, marker=, label=, alpha=)`, `scatter(x, y, s=, c=, cmap=)`, `fill_between(x, y1, y2, where=, alpha=)`, `fill`, `bar`, `hist(x, bins, density=)`, `stem`, `step`, `arrow(x, y, dx, dy)`, `quiver(X, Y, U, V)`, `text(x, y, s)`, `annotate`, `axhline`, `axvline`, `hlines`, `vlines`, `contour(X, Y, Z, levels)`, `imshow(Z, extent=, origin=, cmap=)` (a picture: a PNG in the export), `plt.Circle`, `plt.Rectangle`, `plt.Polygon` with `add_patch`, `title`, `xlabel`, `ylabel` (the chart's own where it has none), `legend()`, `xlim`, `ylim`. Colours: `C0` to `C9`, `b g r c m y k w`, names (`red`, `tab:blue`), `#rrggbb`, `'0.5'`. A chart with no `show` line takes the script's `xlim` and `ylim`, else what it draws; a `show` line wins. A script mixes with chart lines: `plot the normal distribution with mean 0 and sd 1` over a script's `plt.hist(...)`. `grid`, ticks, `figure`, `show`, `savefig`, `colorbar`, `tight_layout` do nothing (the chart's own lines set those).
-- **`def frame(t):`** (t in seconds): what it draws moves on the chart's clock; the export, print and SVG files draw `frame(0)` (or `stillTime`). Draw in it; do not change names outside it.
+- **matplotlib calls draw** (`plt.` or `ax.` after `fig, ax = plt.subplots()`), in the chart's theme colours: `plot(x, y, 'r--', color=, linewidth=, linestyle=, marker=, label=, alpha=)`, `scatter(x, y, s=, c=, cmap=)` (`s` is matplotlib's area in points squared, one or one per dot: `s=36` is the normal dot), `fill_between(x, y1, y2, where=, alpha=)`, `fill`, `bar`, `hist(x, bins, range=, weights=, density=, cumulative=, histtype='step')` (`bins='auto'` too; returns `n, bins, patches`), `stem`, `step`, `arrow(x, y, dx, dy)`, `quiver(X, Y, U, V)`, `text(x, y, s)`, `annotate`, `axhline`, `axvline`, `hlines`, `vlines`, `contour(X, Y, Z, levels, colors=)` (one colour per level, or one: then the negative levels are dashed), `contourf(X, Y, Z, levels, cmap=, colors=, alpha=)` (filled bands: a picture), `imshow(Z, extent=, origin=, cmap=, vmin=, vmax=, alpha=, interpolation='bilinear')` (a picture: a PNG in the export; `origin='lower'` puts row 0 at the bottom), `plt.Circle`, `plt.Rectangle`, `plt.Polygon` with `add_patch`, `title`, `xlabel`, `ylabel` (the chart's own where it has none), `legend()` (`loc='upper left'` and the other corners), `xlim`, `ylim`. Colours: `C0` to `C9`, `b g r c m y k w`, names (`red`, `tab:blue`), `#rrggbb`, `'0.5'`. A chart with no `show` line takes the script's `xlim` and `ylim`, else what it draws; a `show` line wins. A script mixes with chart lines: `plot the normal distribution with mean 0 and sd 1` over a script's `plt.hist(...)`. `grid`, ticks, `figure`, `show`, `savefig`, `colorbar`, `clabel`, `tight_layout` do nothing (the chart's own lines set those; the chart has no room beside the plot for a colour bar, so say what the colours mean in the title). Lines without a colour take `C0`, `C1`, ... in turn (also in `frame(t)`, after the still drawing's), and two different colour names never draw alike (`crimson` and `darkred` are matplotlib's own colours).
+- **`def frame(t):`** (t in seconds): what it draws moves on the chart's clock, pictures (`imshow`, `contourf`), texts, the legend and `plt.title(...)` included (the chart's title changes each frame); the export, print and SVG files draw `frame(0)` (or `stillTime`). Draw in it; do not change names outside it. To play a training, keep a picture every few steps in a list (`snaps.append(...)`) and show `snaps[int(t * 12) % len(snaps)]`: a picture that comes again is drawn from memory, so a 50 x 50 picture costs about a millisecond a frame.
 - **The language:** assignment (also `+=`, tuple unpacking), `if/elif/else`, `for`, `while`, `break`, `continue`, `pass`, `def` (defaults, keywords, `*args`, `**kwargs`, closures), `return`, `lambda`, comprehensions, `try/except/finally`, `raise`, `assert`, `del`, f-strings, `%` and `str.format`, slicing; int, float, complex (`1j`), bool, None, str, list, tuple, dict, set, range. Built-ins: `len range enumerate zip map filter sum min max abs round sorted reversed list tuple dict set float int complex bool str isinstance any all divmod pow print` and more; `print` shows in the chart's problem line as a note. Imports: `numpy`, `math`, `cmath`, `random`, `matplotlib.pyplot`, `matplotlib.patches`.
-- **NumPy:** `array linspace arange zeros ones full eye meshgrid concatenate stack vstack hstack column_stack reshape transpose (.T) flatten sum mean std var min max argmin argmax cumsum cumprod diff dot outer matmul (@) cross sin cos tan arcsin arccos arctan arctan2 sinh cosh tanh exp log log10 log2 sqrt abs angle real imag conj floor ceil round clip where sign maximum minimum hypot mod isnan isfinite sort argsort unique roll flip interp trapz polyfit polyval histogram pi e inf nan`, broadcasting, boolean masks, fancy indexing, `a[:, 0]`; `np.linalg` (`det inv solve eig eigh eigvals norm matrix_power`), `np.fft` (`fft ifft fftfreq fftshift ifftshift rfft rfftfreq`), `np.random` (`seed rand randn random uniform normal randint choice shuffle permutation default_rng`; every run starts from seed 0, so a chart draws the same each time).
+- **NumPy:** `array linspace arange zeros ones full eye meshgrid concatenate stack vstack hstack column_stack reshape transpose (.T) flatten sum mean std var min max argmin argmax cumsum cumprod diff dot outer matmul (@) cross sin cos tan arcsin arccos arctan arctan2 sinh cosh tanh exp log log10 log2 sqrt abs angle real imag conj floor ceil round clip where sign maximum minimum hypot mod isnan isfinite sort argsort unique roll flip interp trapz polyfit polyval vander histogram cov corrcoef logaddexp bincount pi e inf nan`, reductions with `axis=` and `keepdims=True`, broadcasting, boolean masks, fancy indexing, `a[:, 0]`; `np.linalg` (`det inv solve eig eigh eigvals norm matrix_power svd pinv lstsq matrix_rank`), `np.fft` (`fft ifft fftfreq fftshift ifftshift rfft rfftfreq`), `np.random` (`seed rand randn random uniform normal multivariate_normal randint choice shuffle permutation default_rng`; every run starts from seed 0, so a chart draws the same each time).
 - **Not there:** classes, `with`, `yield`, `async`, decorators, other modules (pandas, scipy, sympy, os, files, the internet), 3D plots and subplots (a chart is one plot; in a 3D chart a script's names work, its drawing does not show), views of arrays (a slice is a copy). `2.0` prints as `2`.
 - **Problems** name the script's line: "Line 4 of the script: name 'np' is not defined". A script stops after 2 000 000 steps, 1.5 seconds or 120 calls deep; an array holds at most 4 000 000 items.
 
@@ -655,6 +655,8 @@ Let names, GeoGebra values and the names a script sets are values themselves: `{
 - Operators: `+ - * /`, `^` (power, right-associative; `-x^2` is `-(x^2)`), `%`, comparisons `< <= > >= == !=` (1 or 0), `and or !`, `c ? a : b`.
 - Implicit multiplication: `2x`, `3(x + 1)`, `(x + 1)(x - 1)`, `2 pi`, `a x + b y`. But `ax` is one name: write `a x`. `1/2x` is `(1/2)*x`: write `1/(2x)` when x is below. `a(x - h)^2` is `a*(x - h)^2`; `f1(x + 1)` is a call because `f1` is a function.
 - Functions: `sin cos tan sec csc cot asin acos atan atan2(y, x) sinh cosh tanh asinh acosh atanh exp ln log log10 log2 sqrt cbrt abs sign floor ceil round trunc min max hypot pow(a, b)`. `ln` and `log` are both natural. Trigonometry is in radians.
+- Machine learning: `sigmoid` (also `\sigma(x)`), `relu` (`ReLU`), `softplus`, `gelu` (`GELU`), `silu` (`swish`) of a number, or item by item of a vector or list; `softmax(v)` of a vector or list (`softmax(u / T)` with a temperature slider) and `logsumexp(v)`; none of them overflows. Plain or LaTeX (`\operatorname{gelu}(x)`, `\mathrm{ReLU}(x)`). A function, slider or let value of the same name wins (`plot $\sigma(x) = ...$` defines your own).
+- Function names as ML notes write them: `plot $\sigma(x) = \frac{1}{1 + e^{-x}}$`, `plot $\mathrm{ReLU}(x) = \max(0, x)$`, `plot $\operatorname{softplus}(x) = ...$`, `plot $\text{relu}(x) = ...$` name the function sigma, ReLU, softplus, relu; the line prints back as written and other formulas call it either way (`\sigma(2x)`, `ReLU(x - 1)`). `plot $t(x) = \tanh x$` is a function t (of x; t stays the parameter of parametric curves).
 - Constants: `pi` (`π`), `e`.
 - Variables: `x` in functions; `x` and `y` in regions, curves and surfaces; `t` in parametric curves, systems and turning circles; `theta` in polar charts; `z` in a complex map or a domain colouring (`$z \mapsto z^2$`, `$f(z) = ...$`).
 - Values (version 6), plain or LaTeX: complex numbers (`i`, `-0.8 + 0.156i`, `e^{i\theta}`, `|z|`, `\arg z`, `\bar z`, `\Re z`, `\Im z`; plain `abs`, `arg`, `conj`, `re`, `im`), vectors (`(2, 1)`, `\begin{pmatrix} 2 \\ 1 \end{pmatrix}`, `v + w`, `2v`, `v \cdot w`, `|v|`, `v \times w`, `v_x`; plain `dot`, `cross`, `norm`, `unit`, `angle(v, w)`), matrices (`[[1, 2], [3, 4]]`, `\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}`, `A v`, `AB`, `A^{-1}`, `A^T`, `\det A`, `\operatorname{tr} A`; plain `det`, `tr`, `inv`, `transpose`), lists (`\{1, 2, 3\}`, `\{(k, k^2) : k = 1, \dots, 10\}`; plain `[1, 2, 3]`, `[(k, k^2) : k = 1..10]`, `len`), sums and products (`\sum_{k=1}^{n} \frac{1}{k^2}`, `\prod_{k=1}^{n} k`; plain `sum(1/k^2, k, 1, n)`, `prod(k, k, 1, n)`), `n!`, `\binom{n}{k}` and `\nabla f(p)` (plain `grad(f, p)`). The export writes a sum out term by term at the sliders' values.
@@ -711,6 +713,12 @@ draw the plane z = h in orange
 | A matplotlib plot, a moving script, a histogram | `python-plot`, `python-wave`, `python-histogram`, `python-descent` | a `python:` block with `plt.` calls; `def frame(t):`; `np.random` and `plt.hist`. |
 | A GeoGebra construction | `geogebra-construction`, `geogebra-mandelbrot` | the input lines as they are, below. |
 | Steps you can play | `steps-frames` | `then` before each new object; `frames` for the export. |
+| Activation functions, softmax with a temperature | `ml-activations`, `ml-activation-functions` | `plot $\sigma(x) = ...$`, `plot $g(x) = \operatorname{gelu}(x)$`; `slider T`, bars of a script and `write "p = {softmax(u / T)}"`. |
+| Optimizers on a loss surface, the optimizer race | `ml-optimizers`, `optimizer-race` | a heat map and level curves of a `let` loss; gradient descent as an orbit; momentum and Adam in a script; `frame(t)` draws the paths 40 steps a second. |
+| A classifier and its probability | `ml-logistic`, `ml-classifier` | a script trains logistic regression; `imshow` of p with `interpolation='bilinear'`, `contour(..., levels=[0.5])` for the boundary, accuracy in the title; a slider for the steps. |
+| A network that learns, k-means that moves | `ml-network`, `network-learns`, `ml-kmeans`, `ml-clusters` | a script keeps a picture (or the groups) every few steps; `def frame(t):` shows them with the step in the title. |
+| PCA, overfitting, ridge | `ml-pca`, `ml-overfitting` | `np.linalg.svd` and a projection on a slider; `np.polyfit` with the degree on a slider; ridge with `np.vander` and `np.linalg.solve`. |
+| A loss landscape in 3D | `ml-landscape` | `plot $z = L(x, y)$ for x from ... in viridis`; the gradient flow `draw the solution of $\dot{p} = (-L_x, -L_y, -(L_x^2 + L_y^2))$ through (a, b, L(a, b)) ..., traced`. |
 
 ### A fractal with an orbit
 
@@ -780,6 +788,50 @@ c = -0.12 + 0.75ί
 IterationList(z^2 + c, z, {0 + 0ί}, 30), in red
 Z_0 = (0.3, 0.9)
 IterationList(z - (z^3 - 1) / (3z^2), z, {Z_0}, 30), in blue
+```
+
+### Machine learning
+
+Logistic regression trained in a script: the probability as a smooth picture, the boundary where p = 0.5, the accuracy in the title; drag n to watch the line turn into place. For a model that learns over time, keep pictures in a list and show them from `def frame(t):` (the guides `ml-network` and `network-learns`).
+
+```easy-tikz
+show x from -4 to 4 and y from -3 to 3
+slider n from 0 to 200, starting at 200, in steps of 5
+python:
+    import numpy as np
+    import matplotlib.pyplot as plt
+    np.random.seed(1)
+    A = np.random.randn(60, 2) * 0.8 + np.array([-1.0, -0.8])
+    B = np.random.randn(60, 2) * 0.8 + np.array([1.2, 1.0])
+    X = np.concatenate([A, B])
+    y = np.concatenate([np.zeros(60), np.ones(60)])
+    w = np.array([0.5, -1.5])
+    b = 0.0
+    for i in range(int(n)):
+        p = 1 / (1 + np.exp(-(X @ w + b)))
+        w = w - 0.5 * X.T @ (p - y) / len(y)
+        b = b - 0.5 * np.mean(p - y)
+    GX, GY = np.meshgrid(np.linspace(-4, 4, 81), np.linspace(-3, 3, 61))
+    P = 1 / (1 + np.exp(-(w[0] * GX + w[1] * GY + b)))
+    plt.imshow(P, extent=(-4, 4, -3, 3), origin="lower", cmap="coolwarm", vmin=0, vmax=1, alpha=0.5, interpolation="bilinear")
+    plt.contour(GX, GY, P, levels=[0.5], colors="black", linewidths=2)
+    plt.scatter(A[:, 0], A[:, 1], color="C0", s=30, label="class 0")
+    plt.scatter(B[:, 0], B[:, 1], color="C3", s=30, label="class 1")
+    plt.title(f"after {int(n)} steps: accuracy {np.mean(((X @ w + b) > 0) == y):.2f}")
+    plt.legend(loc="upper left")
+```
+
+Activation functions as notes write them, the built-in names, and a softmax with a temperature in a label:
+
+```easy-tikz
+show x from -4 to 4 and y from -1.5 to 3
+slider T from 0.1 to 5, starting at 1
+let $u = (2, 1, 0.1, -1)$
+plot $\sigma(x) = \frac{1}{1 + e^{-x}}$ in blue, thick, with the legend "sigmoid"
+plot $\mathrm{ReLU}(x) = \max(0, x)$ in red, thick, with the legend "ReLU"
+plot $g(x) = \operatorname{gelu}(x)$ in purple, thick, dashed, with the legend "GELU"
+plot $h(x) = \sigma(2x)$ in teal, with the legend "sigma(2x)"
+write "softmax(u / T) = {softmax(u / T)}" at (-3.8, 2.6)
 ```
 
 ## The local AI server

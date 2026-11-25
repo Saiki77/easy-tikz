@@ -901,7 +901,8 @@ function addMarkers(layers: Layers, item: SceneItem2D, colors: ColorSet, view: V
         // Markers on the border are drawn whole; ones outside the view are dropped like in the preview.
         if (!finitePt(m) || !inView(m, view, 0)) continue;
         const c = colors.use(m.color);
-        const size = MARK_SIZE[m.size] || MARK_SIZE.normal;
+        // 6.0 ML: a dot with matplotlib's radius in points (3 points: the normal 2pt).
+        const size = m.radius !== undefined && Number.isFinite(m.radius) ? `${fmtNum(Math.max(0.2, (m.radius * 2) / 3))}pt` : MARK_SIZE[m.size] || MARK_SIZE.normal;
         const key = `${c}|${size}|${m.dim ? 1 : 0}|${m.open ? 1 : 0}`;
         let g = groups.length ? groups[groups.length - 1] : null;
         if (!g || g.key !== key) {

@@ -10,6 +10,7 @@
 import type { MessageKey } from '../i18n';
 import type { ChartData, Guide, GuideCategory } from './types';
 import { GUIDES, stepChart } from './index';
+import { ML_IDS } from './ml'; // 6.0 ML
 
 /** The guide of the language tour: the home shows it as a card of its own. */
 export const TOUR_ID = 'chart-language';
@@ -32,7 +33,7 @@ const NEW_IDS: ReadonlySet<string> = new Set(NEW_IN_6.map((n) => n.id));
 /** Tiles a section shows before its "Show all" button. */
 export const SECTION_FIRST = 4;
 
-export type HomeSectionId = 'basics' | 'showcase' | 'calculus' | 'regions' | 'linear' | 'dynamics' | 'scripting' | 'space' | 'notes';
+export type HomeSectionId = 'basics' | 'showcase' | 'calculus' | 'regions' | 'linear' | 'dynamics' | 'ml' | 'scripting' | 'space' | 'notes';
 
 interface SectionRule {
     id: HomeSectionId;
@@ -52,6 +53,8 @@ const RULES: readonly SectionRule[] = [
     { id: 'regions', title: 'help.home.section.regions', about: 'help.home.about.regions', categories: ['Regions and optimisation', 'Data and probability'] },
     { id: 'linear', title: 'help.category.linearComplex', about: 'help.home.about.linear', categories: ['Linear algebra and complex numbers'] },
     { id: 'dynamics', title: 'help.category.dynamicsFractals', about: 'help.home.about.dynamics', categories: ['Dynamics and fractals'] },
+    // 6.0 ML: its guides placed by id (below), and the two Showcase pages of machine learning after them.
+    { id: 'ml', title: 'ml.home.section', about: 'ml.home.about', categories: [], also: (g) => g.id === 'optimizer-race' || g.id === 'network-learns' },
     { id: 'scripting', title: 'help.home.section.scripting', about: 'help.home.about.scripting', categories: [] },
     { id: 'space', title: 'help.category.threeD', about: 'help.home.about.space', categories: ['3D'], also: (g) => g.chart.dimension === true },
     { id: 'notes', title: 'help.home.section.notes', about: 'help.home.about.notes', categories: ['Notes and export'] },
@@ -69,6 +72,8 @@ const PLACED: ReadonlyArray<readonly [string, HomeSectionId]> = [
     ['python-heart', 'scripting'],
     ['python-plot', 'scripting'],
     ['python-wave', 'scripting'],
+    // 6.0 ML
+    ...ML_IDS.map((id) => [id, 'ml'] as const),
 ];
 
 /** Categories the home shows above the sections (Start here) or below them (Reference). */

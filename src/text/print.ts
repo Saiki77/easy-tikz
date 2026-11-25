@@ -18,6 +18,7 @@
  * a block someone wrote keeps its form.
  */
 import { Data, canonicalData, minimize, stableJson } from '../chartdata';
+import { headName } from '../ml/heads'; // 6.0 ML
 import { quote } from './quote';
 import { ANCHORS, COLORS, NAME_RE, ObjectList, PATTERNS, THICKNESSES, TOOL_PREFIX, definedNames, isSignCondition, niceStep, parseChartText, splitStatement, splitTop } from './parse';
 import { NO_WORDS, chartWords, hasWords, readWords, typedColumn, writeWords } from './words';
@@ -245,13 +246,15 @@ function functionLine(min: Data, full: Data, ctx: Ctx): string {
     const exprY = str(full.expressionY);
     const parametric = full.parametric === true;
     // A LaTeX formula (5.0) is written in $...$, where a bar is an absolute value, not the option bar.
-    const latex = looksLikeLatex(expr) || (parametric && looksLikeLatex(exprY));
+    // 6.0 ML: a head written in LaTeX (\sigma, \mathrm{ReLU}) is printed as written, in $...$.
+    const head = typeof full.head === 'string' && headName(full.head) === name && !parametric ? full.head : null;
+    const latex = !!head || looksLikeLatex(expr) || (parametric && looksLikeLatex(exprY));
     if (!NAME_RE.test(name) || !expr.trim() || (!latex && hasBar(expr)) || (parametric && (!exprY.trim() || (!latex && hasBar(exprY))))) return raw('function', min);
     const variable = parametric ? 't' : ctx.polar ? 'theta' : 'x';
-    const body = parametric ? `${name}(t) = (${expr}, ${exprY})` : `${name}(${variable}) = ${expr}`;
-    const head = `plot ${latex ? `$${body}$` : body}`;
+    const body = parametric ? `${name}(t) = (${expr}, ${exprY})` : `${head ?? name}(${variable}) = ${expr}`;
+    const line = `plot ${latex ? `$${body}$` : body}`;
     // A y(t) kept from a parametric past stays as an option.
-    const o = new Options(min, parametric ? ['expression', 'expressionY', 'parametric'] : ['expression', 'parametric']);
+    const o = new Options(min, parametric ? ['expression', 'expressionY', 'parametric'] : ['expression', 'parametric', 'head']);
     o.take('domain', (v) => {
         const r = domainBounds(v);
         if (!r) return null;
@@ -272,7 +275,7 @@ function functionLine(min: Data, full: Data, ctx: Ctx): string {
         o.out.push(`with its tangent at ${point}`);
     }
     o.take('extrema', (v) => (v === true ? 'with its extrema' : null));
-    return withOptions(head, o.finish());
+    return withOptions(line, o.finish());
 }
 
 function surfaceLine(min: Data, full: Data, ctx: Ctx): string {

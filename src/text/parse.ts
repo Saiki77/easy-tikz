@@ -19,6 +19,7 @@
  * words do not cover.
  */
 import { RESERVED_NAMES } from '../migrate';
+import { readTexHead, tNamesFunction } from '../ml/heads'; // 6.0 ML
 import { unquote } from './quote';
 import { isColormap } from '../colormaps';
 import { ChartWords, chartWords, hasWords, readWords, shadowed, typedColumn } from './words';
@@ -451,6 +452,17 @@ class Builder {
         }
         this.taken.add(name);
         return name;
+    }
+
+    // 6.0 ML
+    /** The name t for a function of x (t(x) = ...): taken once, like any name the user gives. */
+    claimFunctionT(at: number): string | null {
+        if (this.taken.has('t')) {
+            this.problem(at, msg('problems.text.nameTwice', { name: 't' }));
+            return null;
+        }
+        this.taken.add('t');
+        return 't';
     }
 
     nextName(prefix: string): string {
@@ -1035,6 +1047,7 @@ function statement(b: Builder, line: string) {
     const call = /^([A-Za-z][A-Za-z0-9_]*)\s*\(/.exec(t);
     if (call && RESERVED_NAMES.has(call[1])) return formulaLine(b, name, body, options);
     if (DEFINITION.test(t)) return formulaLine(b, name, body, options);
+    if (DEFINITION.test(readTexHead(t)?.rest ?? '')) return formulaLine(b, name, body, options); // 6.0 ML: \sigma(x) = ...
     // 6.0 G: a GeoGebra input line, `A = (1, 2)`, `c = Circle(A, 3)`, `IterationList(...)` (src/geogebra/text.ts).
     const gg = readGeoGebraLine(t, (n) => b.chartNames.has(n));
     if (gg) return geogebraLine(b, name, body, gg, options);
@@ -1403,7 +1416,7 @@ function draw(b: Builder, name: string | null, rest: Piece, options: Piece[]) {
     // 6.0 A: `draw f(x, y) = 1` with a let function f is its curve, not a new function f.
     const letCall = /^([A-Za-z][A-Za-z0-9_]*)\s*\(/.exec(t);
     if (letCall && b.lets.has(letCall[1])) return curve(b, name, rest, options);
-    if (DEFINITION.test(t)) return formulaLine(b, name, rest, options);
+    if (DEFINITION.test(t) || DEFINITION.test(readTexHead(t)?.rest ?? '')) return formulaLine(b, name, rest, options); // 6.0 ML: or \sigma(x) = ...
     if (motionLine(b, name, readMotionDraw(rest, b.is3D), options)) return; // 6.0 C
     if (iterateLine(b, name, readIterateDraw(rest, options))) return; // 6.0 E
     // 6.0 B: draw the chord of g from a to b (at λ).
@@ -1577,15 +1590,18 @@ function formulaLine(b: Builder, name: string | null, body: Piece, options: Piec
     const formula = (text: string) => formulaOptions({ text, at: body.at + t.length - text.length }, options);
     // f(x) = ..., c(t) = (x(t), y(t)), r(theta) = ..., s(x, y) = ...
     // A built-in name (max(x, y) = 1) is a call in an equation, not a definition.
-    const found = DEFINITION.exec(t);
-    const def = found && !RESERVED_NAMES.has(found[1]) ? found : null;
-    if (def && !def[4].trim()) return b.problem(body.at + t.length, msg('problems.text.needsFormula', { head: `${def[1]}(${def[2]})` }));
+    // 6.0 ML: a head as ML notes write it (\sigma(x), \mathrm{ReLU}(x)) names the function by its plain name; t(x) = ... is a function t.
+    const tex = readTexHead(t);
+    const found = DEFINITION.exec(tex ? tex.rest : t);
+    const tFunction = !!found && tNamesFunction(found[1], found[2], found[3]);
+    const def = found && (!RESERVED_NAMES.has(found[1]) || tFunction) ? found : null;
+    if (def && !def[4].trim()) return b.problem(body.at + t.length, msg('problems.text.needsFormula', { head: `${tex ? tex.head : def[1]}(${def[2]})` }));
     if (def) {
-        const fname = b.claim(def[1], body.at) ?? def[1];
+        const fname = (tFunction ? b.claimFunctionT(body.at) : b.claim(def[1], body.at)) ?? def[1];
         const v = def[2];
         const f = formula(def[4]);
         if (def[3]) return surface(b, fname, f.formula.text, f.options);
-        return fn(b, fname, v, f.formula.text, body, f.options);
+        return fn(b, fname, v, f.formula.text, body, f.options, tex ? tex.head : undefined);
     }
     // y = ..., z = ..., r = ...
     const auto = /^([yzr])\s*=(?!=)\s*(.+)$/.exec(t);
@@ -1604,8 +1620,9 @@ function formulaLine(b: Builder, name: string | null, body: Piece, options: Piec
     b.problem(body.at, msg(fullNow ? 'problems.text.fullNotAChartLine' : 'problems.text.notAChartLine'));
 }
 
-function fn(b: Builder, name: string, v: string, rhs: string, body: Piece, options: Piece[]) {
+function fn(b: Builder, name: string, v: string, rhs: string, body: Piece, options: Piece[], head?: string) {
     const f: Data = { name, expression: rhs.trim() };
+    if (head) f.head = head; // 6.0 ML: printed as written (\sigma, \mathrm{ReLU})
     if (v === 't') {
         const tuple = /^\((.*)\)$/.exec(rhs.trim());
         const parts = tuple ? splitTop(tuple[1], ',') : [];
