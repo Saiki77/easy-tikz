@@ -51,6 +51,8 @@ const PARTICLE_ALPHA = 0.85;
 const MIN_STEP = 0.016;
 const MAX_STEP = 0.05;
 const PARTICLE_AGE = 6;
+/** A particle step longer than this part of the view (across or up) is a jump past a pole, not flow. */
+const JUMP = 0.12;
 /** A new flow canvas runs this many steps before it is first shown. */
 const WARM_STEPS = 40;
 
@@ -430,14 +432,17 @@ export class LiveLayer {
                 const b = F(x + 0.5 * k * a[0], y + 0.5 * k * a[1]);
                 const nx = x + k * b[0];
                 const ny = y + k * b[1];
-                if (Number.isFinite(nx) && Number.isFinite(ny)) {
+                // Near a point where the field grows without bound (1/r^2 at a pole) one step can cross the
+                // whole view: such a jump is no flow line, so the particle starts again elsewhere, undrawn.
+                const jump = Math.abs(nx - x) > JUMP * (v.xmax - v.xmin) || Math.abs(ny - y) > JUMP * (v.ymax - v.ymin);
+                if (!jump && Number.isFinite(nx) && Number.isFinite(ny)) {
                     ctx.moveTo(ax + bx * x, ay + by * y);
                     ctx.lineTo(ax + bx * nx, ay + by * ny);
                 }
                 flow.x[i] = nx;
                 flow.y[i] = ny;
                 flow.age[i] += k;
-                if (!(flow.age[i] <= PARTICLE_AGE) || !(nx >= v.xmin && nx <= v.xmax && ny >= v.ymin && ny <= v.ymax)) this.spawn(flow, i);
+                if (jump || !(flow.age[i] <= PARTICLE_AGE) || !(nx >= v.xmin && nx <= v.xmax && ny >= v.ymin && ny <= v.ymax)) this.spawn(flow, i);
             }
             ctx.stroke();
         }
