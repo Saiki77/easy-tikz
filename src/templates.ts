@@ -127,6 +127,8 @@ export interface PluginData {
     blockFormat: 'text' | 'json';
     /** Charts in notes glide to new values and new objects pop in when the block changes. */
     animateCharts: boolean;
+    /** 6.0 entrances: when a step of a chart comes in, its objects enter by kind (src/motion6/entrances.ts). */
+    stepEntrances: boolean;
     /** Rest the pointer on a formula in a note to see its chart (5.0). */
     formulaHover: boolean;
     /** A dotted line under the formulas of a note that have a chart (5.0). */
@@ -163,6 +165,7 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     aiToken: '',
     blockFormat: 'text',
     animateCharts: true,
+    stepEntrances: true,
     formulaHover: true,
     formulaMarks: true,
     formulaSliders: true,
