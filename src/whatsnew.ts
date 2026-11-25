@@ -1,6 +1,6 @@
 /*
- * The "What's new" popup: when to show it, what it says, and the live
- * chart inside it. Pure (no 'obsidian' import), so tests/whatsnew.test.ts
+ * The "What's new" popup: when to show it, what it says, its live charts
+ * and its film. Pure (no 'obsidian' import), so tests/whatsnew.test.ts
  * can check all of it; the popup itself is src/ui/whatsNewModal.ts and
  * main.ts decides when to open it.
  *

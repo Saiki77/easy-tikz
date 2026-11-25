@@ -84,6 +84,7 @@ export class WhatsNewModal extends Modal {
         // --- the header: the name with its version, and the film
         titleEl.empty();
         titleEl.addClass('etz-whatsnew-title');
+        titleEl.id = uniqueId('whatsnew-title');
         const words = WHATS_NEW_TITLE.split(' ');
         const version = words.pop() || '';
         titleEl.appendText(words.join(' ') + ' ');
@@ -100,7 +101,8 @@ export class WhatsNewModal extends Modal {
         this.filmButton = film;
 
         // --- the slides: one feature each, shown big
-        this.deck = contentEl.createDiv({ cls: 'etz-whatsnew-deck', attr: { role: 'region', 'aria-roledescription': t('panels.whatsNew.slides'), 'aria-label': WHATS_NEW_TITLE } });
+        // Named by the title, not by aria-label: Obsidian shows an aria-label as a tooltip wherever the pointer rests.
+        this.deck = contentEl.createDiv({ cls: 'etz-whatsnew-deck', attr: { role: 'region', 'aria-roledescription': t('panels.whatsNew.slides'), 'aria-labelledby': titleEl.id } });
 
         // --- the footer, outside the scrolling content: where you are, and the way on
         const actions = modalEl.createDiv({ cls: 'etz-whatsnew-actions' });
@@ -211,10 +213,11 @@ export class WhatsNewModal extends Modal {
     private buildSlide(deck: HTMLElement, i: number): HTMLElement {
         const x = WHATS_NEW_SLIDES[i];
         const count = WHATS_NEW_SLIDES.length;
-        const el = deck.createDiv({
-            cls: ['etz-whatsnew-slide', `mod-${x.id}`],
-            attr: { role: 'group', 'aria-roledescription': t('panels.whatsNew.slide'), 'aria-label': t('panels.whatsNew.goTo', { n: i + 1, count, title: x.title }) },
-        });
+        const el = deck.createDiv({ cls: ['etz-whatsnew-slide', `mod-${x.id}`], attr: { role: 'group', 'aria-roledescription': t('panels.whatsNew.slide') } });
+        // Its name in hidden text (an aria-label would show as a tooltip over the whole slide).
+        const name = visuallyHidden(el, t('panels.whatsNew.goTo', { n: i + 1, count, title: x.title }));
+        name.id = uniqueId('whatsnew-slide');
+        el.setAttr('aria-labelledby', name.id);
         const stage = el.createDiv({ cls: ['etz-whatsnew-stage', `mod-${x.id}`] });
         try {
             if (x.id === 'film') this.film = new FilmPlayer(stage);
@@ -296,10 +299,9 @@ class FilmPlayer {
     private frame: HTMLIFrameElement | null = null;
 
     constructor(private readonly stage: HTMLElement) {
-        this.poster = stage.createEl('button', {
-            cls: 'etz-whatsnew-poster',
-            attr: { type: 'button', 'aria-label': t('panels.whatsNew.film.play', { length: WHATS_NEW_FILM.length }) },
-        });
+        this.poster = stage.createEl('button', { cls: 'etz-whatsnew-poster', attr: { type: 'button' } });
+        // The button's name in hidden text: the play sign says it to the eye, and no tooltip covers the poster.
+        visuallyHidden(this.poster, t('panels.whatsNew.film.play', { length: WHATS_NEW_FILM.length }));
         this.poster.createEl('img', { cls: 'etz-whatsnew-poster-img', attr: { src: FILM_POSTER, alt: '', draggable: 'false' } });
         setIcon(this.poster.createSpan({ cls: 'etz-whatsnew-poster-play', attr: { 'aria-hidden': 'true' } }), 'play');
         this.poster.createSpan({ cls: 'etz-whatsnew-poster-length', text: WHATS_NEW_FILM.length, attr: { 'aria-hidden': 'true' } });
