@@ -79,7 +79,7 @@ const DOCUMENTED: Record<string, string[]> = {
     space: ['surfaces-3d'],
     notes: ['charts-in-notes', 'svg-files', 'export-latex'],
     reference: ['from-3x', 'shortcuts'],
-    // 6.0 F2: docs/v6/guides.md lists them
+    // 6.0 F2: the 6.0 plan lists them
     values: ['values-let', 'sums-series'],
     interact: ['ask-curve', 'sets-convexity', 'formula-cards', 'steps-frames'],
     linear: ['vectors-arrows', 'matrix-plane', 'complex-maps'],
@@ -87,7 +87,7 @@ const DOCUMENTED: Record<string, string[]> = {
     // 6.0 G
     geogebra: ['geogebra-commands'],
     python: ['python-chart', 'python-heart', 'python-plot', 'python-wave'], // 6.0 P
-    // 6.0 ML: docs/v6/ml.md lists them
+    // 6.0 ML: the 6.0 plan lists them
     ml: ['ml-activations', 'ml-optimizers', 'ml-logistic', 'ml-network', 'ml-kmeans', 'ml-pca', 'ml-overfitting', 'ml-landscape'],
 };
 const FILES: Record<string, Guide[]> = {

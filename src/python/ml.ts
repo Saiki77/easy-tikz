@@ -1,6 +1,6 @@
 /*
  * 6.0 ML: the NumPy a machine learning script needs beyond the 6.0 P
- * subset (docs/v6/ml.md): keepdims on reductions, np.linalg.svd, pinv,
+ * subset (the 6.0 plan): keepdims on reductions, np.linalg.svd, pinv,
  * lstsq and matrix_rank (one-sided Jacobi, exact to rounding for the small
  * matrices a chart holds), np.cov, np.corrcoef, np.logaddexp, np.bincount,
  * np.vander and np.random.multivariate_normal. src/python/numpy.ts adds them to its

@@ -33,7 +33,7 @@ registerClockType('fourierCircles', (t) => t.type === 'fourierCircles');
 // 6.0 F4: an orbit that draws itself.
 registerClockType('orbit', (t) => t.type === 'orbit' && t.traced === true);
 
-/** Caps, so that a chart cannot freeze a phone (docs/v6/iterate.md). */
+/** Caps, so that a chart cannot freeze a phone (the 6.0 plan). */
 export const MAX_ORBIT = 2000;
 export const MAX_COBWEB = 1000;
 export const MAX_NEWTON = 100;

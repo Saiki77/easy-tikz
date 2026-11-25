@@ -305,7 +305,7 @@ test("the flow without options is the plan's exactly; options and thickness chan
     assert.ok(none.strokes.every((s) => s.opacity === 0.6));
     assert.equal(sceneOf(`${VIEW}\n${FIELD}, thick`).items[0].live?.[0].particles?.width, 2.2);
     assert.equal(sceneOf(`${VIEW}\n${FIELD}, thick, width 3`).items[0].live?.[0].particles?.width, 3);
-    // The plan's picture 1 : 1, its own colours too (docs/v6/design.md).
+    // The plan's picture 1 : 1, its own colours too (the 6.0 plan).
     const plan = `size 15 x 10.5\nequal scale\nshow x from -6.3 to 6.3 and y from -4.2 to 4.2\n${FIELD}, color="#2546c4"\nmark the rest points of F, color="#a86400"`;
     roundTrip(plan);
     const live = sceneOf(plan).items[0].live?.[0].particles;

@@ -1,5 +1,5 @@
 /*
- * 6.0 P: the NumPy subset of chart scripts (docs/v6/python.md): making
+ * 6.0 P: the NumPy subset of chart scripts (the 6.0 plan): making
  * arrays, element-wise functions (real and complex), reductions, shapes,
  * products, np.linalg (det, inv, solve, eig, eigh, norm), np.fft (fft,
  * ifft, fftfreq, fftshift: radix 2 and Bluestein for other lengths) and

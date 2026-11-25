@@ -1,6 +1,6 @@
 /*
  * 6.0 P: a recursive descent parser for the Python subset of chart scripts
- * (docs/v6/python.md): statements, expressions with Python's precedence,
+ * (the 6.0 plan): statements, expressions with Python's precedence,
  * comprehensions, lambdas, f-strings, slices. Throws PyError (SyntaxError)
  * with the line and column. Pure: no DOM, no Obsidian.
  */

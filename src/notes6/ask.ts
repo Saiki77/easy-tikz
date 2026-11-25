@@ -7,7 +7,7 @@
  *
  * Questions come from providers, registered per kind of object: parts D and
  * E add theirs with registerQuestions('function', provider) and the like
- * (docs/v6/notes6.md). The hosts (the editor's preview, the chart under a
+ * (the 6.0 plan). The hosts (the editor's preview, the chart under a
  * block in Live Preview) find what was clicked with pickTarget, list the
  * questions with askQuestions, show an answer faintly with applyAnswer and
  * add it with applyAnswer (or take it away with removeAnswer when it is

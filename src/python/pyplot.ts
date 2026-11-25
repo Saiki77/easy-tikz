@@ -761,7 +761,7 @@ function axesCalls(fig: Figure, push: (d: Draw) => void): Map<string, Call> {
         return null;
     });
     // Accepted and left to the chart: its grid, ticks, size and colour bar are its own lines.
-    // 6.0 ML: colorbar and clabel too (the chart has no room beside the plot; docs/v6/ml.md).
+    // 6.0 ML: colorbar and clabel too (the chart has no room beside the plot; the 6.0 plan).
     for (const name of ['grid', 'xticks', 'yticks', 'set_xticks', 'set_yticks', 'set_xticklabels', 'set_yticklabels', 'tick_params', 'margins', 'minorticks_on', 'set_facecolor', 'spines', 'colorbar', 'tight_layout', 'locator_params', 'clabel']) calls.set(name, () => null);
     calls.set('add_patch', (args) => {
         const p = args[0];

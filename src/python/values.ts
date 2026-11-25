@@ -2,7 +2,7 @@
  * 6.0 P: the values of a chart script and what every value can do: its
  * type name, repr and str, truth, equality, hashing for dicts and sets,
  * iteration, len. Numbers are JS numbers (a whole number prints as an int:
- * 2.0 prints as 2; docs/v6/python.md), booleans are JS booleans, None is
+ * 2.0 prints as 2; the 6.0 plan), booleans are JS booleans, None is
  * null, lists are JS arrays; complex numbers, tuples, dicts, sets, ranges,
  * slices, functions, modules and NumPy arrays have classes here. Pure: no
  * DOM, no Obsidian.
@@ -148,7 +148,7 @@ export type DType = 'float' | 'int' | 'bool' | 'complex';
  * A NumPy array: C order, its numbers in `data` (and the imaginary parts in
  * `imag` for a complex array). Operations make new arrays; a slice is a
  * copy (setting items through a slice of a slice does not reach the first
- * array; docs/v6/python.md).
+ * array; the 6.0 plan).
  */
 export class NDArray {
     constructor(

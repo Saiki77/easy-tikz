@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [6.0.0] - 2026-11-24
+## [6.0.0] - 2026-11-25
 
 Every idea deserves a picture. Formulas take complex numbers, vectors, matrices and sums; a matrix moves the plane; vector fields flow; orbits, cobwebs and fractals colour the plane; charts play in steps; a click on a curve asks it questions; and charts can be written in Python or GeoGebra. The 6.0 film: https://www.youtube.com/watch?v=X--vCnK-u7Q
 

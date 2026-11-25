@@ -1,7 +1,7 @@
 /*
  * 6.0 A: values, the API for the other parts (D: linear algebra and
  * complex maps, E: orbits and the colour of the plane). See
- * docs/v6/values.md for the chart lines.
+ * the 6.0 plan for the chart lines.
  *
  * Values: number | Complex | Vec | Mat | List (types.ts), never changed
  * after they are made; arithmetic in ops.ts (add, mul, ...), never throws
