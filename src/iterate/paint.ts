@@ -172,7 +172,7 @@ function paint(canvas: HTMLCanvasElement, prim: PixelPrim, view: View, draft: bo
  * soon. `density` is the canvas pixels per unit of the drawing (screen
  * density; less for the CPU).
  */
-export function pixelLayer(prim: PixelPrim, view: View, rect: { x: number; y: number; w: number; h: number }, draft: boolean): SVGForeignObjectElement {
+export function pixelLayer(prim: PixelPrim, view: View, rect: { x: number; y: number; w: number; h: number }, draft: boolean, hidden = false): SVGForeignObjectElement {
     const fo = createSvg('foreignObject', { cls: 'etz-pixels', attr: { x: String(rect.x), y: String(rect.y), width: String(rect.w), height: String(rect.h) } });
     if (prim.opacity < 1) fo.setAttribute('opacity', String(Math.max(0, prim.opacity)));
     const canvas = fo.createEl('canvas', { cls: 'etz-pixels-canvas' });
@@ -182,7 +182,8 @@ export function pixelLayer(prim: PixelPrim, view: View, rect: { x: number; y: nu
     canvas.width = Math.max(1, Math.round(rect.w * density));
     canvas.height = Math.max(1, Math.round(rect.h * density));
     LAYERS.set(fo, { prim, view, w: rect.w, h: rect.h });
-    paint(canvas, prim, view, draft);
+    // 6.0 ML: a hidden layer (the still picture of a frame(t)) is painted only for a copied picture (pixelImage).
+    if (!hidden) paint(canvas, prim, view, draft);
     return fo;
 }
 

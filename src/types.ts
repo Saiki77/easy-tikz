@@ -76,6 +76,9 @@ export interface FunctionParameters {
     // 6.0 C
     /** The step it arrives in (a `then` line starts the next step, src/motion6/steps.ts); absent or 0: from the start. */
     step?: number;
+    // 6.0 ML
+    /** The name as the line writes it, when it is LaTeX (`\sigma`, `\mathrm{ReLU}`): its plain form is `name` (src/ml/heads.ts). */
+    head?: string;
 }
 
 /**

@@ -461,6 +461,16 @@ class ValuePgf {
             case 'tr':
                 if (a.k === 'mat' && a.rows === a.cols) return { k: 'num', r: a.a.filter((_, i) => i % (a.cols + 1) === 0).reduce<R>((s, x) => this.add(s, x), 0) };
                 break;
+            // 6.0 ML: written out: e^(v_i) over their sum, and ln of the sum.
+            case 'softmax':
+            case 'logsumexp':
+                if (a.k === 'vec' && a.v.length) {
+                    const e = a.v.map((x) => this.fn('exp', [x]));
+                    const sum = e.slice(1).reduce<R>((s, x) => this.add(s, x), e[0]);
+                    if (name === 'logsumexp') return { k: 'num', r: this.fn('ln', [sum]) };
+                    return { k: 'vec', v: e.map((x) => this.div(x, sum)) };
+                }
+                break;
         }
         return this.none(`${name}(...)`);
     }

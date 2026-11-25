@@ -38,6 +38,7 @@ import {
     transpose,
 } from './ndarray';
 import { DType, Kwargs, NDArray, PyBuiltin, PyComplex, PyModule, PyTuple, PyValue, isNum, iterate, truthy } from './values';
+import { keepDims, mlNumpy, mlRandom } from './ml'; // 6.0 ML
 
 const fn = (name: string, f: (args: PyValue[], kw: Kwargs | null) => PyValue) => new PyBuiltin(name, f);
 
@@ -143,7 +144,7 @@ function reducer(name: string, f: (re: Float64Array, im: Float64Array | null) =>
         const axis = axisArg(a, arg(args, kw, 1, 'axis', null) ?? undefined);
         if (empty && a.size === 0) empty();
         work(a.size);
-        return reduce(a, axis, f, dtype(a));
+        return keepDims(reduce(a, axis, f, dtype(a)), a, axis, kw); // 6.0 ML: keepdims
     });
 }
 
@@ -863,6 +864,7 @@ function randomFunctions(rng: Rng, m: Map<string, PyValue>, generator: boolean):
         return sample(sizeArg(arg(a, kw, 2, 'size', null)), () => rng.int(lo, hi), 'int');
     };
     set(generator ? 'integers' : 'randint', integers);
+    mlRandom(rng, m); // 6.0 ML: multivariate_normal
     set('choice', (a, kw) => {
         const src = a[0] ?? null;
         const items: PyValue[] = isNum(src) ? Array.from({ length: intArg(src) }, (_, i) => i) : iterate(src);
@@ -1306,7 +1308,7 @@ export function numpyModules(rng: Rng): NumpyModules {
             const arr = toArray(a[0] ?? null);
             const ddof = num(arg(a, kw, -1, 'ddof', 0));
             const axis = axisArg(arr, arg(a, kw, 1, 'axis', null) ?? undefined);
-            return reduce(arr, axis, (re) => (sq ? Math.sqrt(variance(re, ddof)) : variance(re, ddof)), 'float');
+            return keepDims(reduce(arr, axis, (re) => (sq ? Math.sqrt(variance(re, ddof)) : variance(re, ddof)), 'float'), arr, axis, kw); // 6.0 ML: keepdims
         }));
     stat('std', true);
     stat('var', false);
@@ -1644,6 +1646,7 @@ export function numpyModules(rng: Rng): NumpyModules {
         }
         return r;
     }));
+    mlNumpy(m, la, binaryUfunc); // 6.0 ML: svd, pinv, lstsq, matrix_rank, cov, corrcoef, logaddexp, bincount
     const linalg = new PyModule('numpy.linalg', la);
     m.set('linalg', linalg);
 

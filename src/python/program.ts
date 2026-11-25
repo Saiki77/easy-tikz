@@ -347,6 +347,8 @@ export class Program {
             ms,
             frameAt: (t) => {
                 const own = newFigure();
+                // 6.0 ML: a frame's lines go on with the colour cycle of the still drawing, so a legend never shows one colour twice.
+                own.cycle = figure.cycle;
                 if (!frame) return { figure: own, error: null };
                 holder.fig = own;
                 let err: PyError | null = null;

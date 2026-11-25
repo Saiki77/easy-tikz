@@ -59,6 +59,9 @@ export interface PixelPrim {
     columns?: boolean;
     /** The box what it draws holds, for the fit; null when it covers the plane. */
     bounds?: () => View | null;
+    // 6.0 ML
+    /** Part of the still frame of something that moves (a picture of a script's frame(t)): hidden while the live canvas draws it. */
+    still?: boolean;
 }
 
 // ---------------------------------------------------------------- shared

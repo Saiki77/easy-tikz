@@ -9,6 +9,7 @@
  * Pure: no DOM, no Obsidian.
  */
 import { Env, ExprError, constantValue } from '../expr';
+import { isMlFunction, mlGlsl } from '../ml/builtins'; // 6.0 ML
 import { t as msg } from '../i18n';
 import type { Definitions } from './compile';
 import type { VNode } from './parse';
@@ -196,6 +197,11 @@ class GlslPrinter {
             sign: 'sign', asin: 'asin', acos: 'acos', atan: 'atan', sinh: 'r_sinh', cosh: 'r_cosh', tanh: 'r_tanh',
         };
         if (!a.cx && args.length === 1 && Object.prototype.hasOwnProperty.call(real, n.name)) return { s: `${real[n.name]}(${a.s})`, cx: false };
+        // 6.0 ML: sigmoid, relu, softplus, gelu, silu of a real number (when the chart names nothing so).
+        if (!a.cx && args.length === 1 && !n.math && isMlFunction(this.env.fn(n.name))) {
+            const code = mlGlsl(n.name, a.s);
+            if (code) return { s: code, cx: false };
+        }
         if (!a.cx && args.length === 2 && (n.name === 'min' || n.name === 'max' || n.name === 'pow' || n.name === 'atan2')) {
             const fn = n.name === 'atan2' ? 'atan' : n.name;
             return { s: `${fn}(${a.s}, ${args[1].s})`, cx: false };

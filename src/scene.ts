@@ -113,6 +113,9 @@ export interface MarkerPrim {
     // 6.0 F4
     /** Part of the still frame of something that moves (StrokePrim.still). */
     still?: boolean;
+    // 6.0 ML
+    /** The dot's radius in points of a matplotlib figure (scatter's sqrt(s) / 2); 3, matplotlib's default, is the normal size. */
+    radius?: number;
 }
 
 /** Side of its anchor point a scene text sits on: the annotation anchors plus the four diagonals. */
@@ -142,6 +145,9 @@ export interface TextPrim {
      * otherwise.
      */
     offset?: Pt;
+    // 6.0 ML
+    /** Part of the still frame of something that moves (a script's frame(t) text): hidden while the live canvas draws it. */
+    still?: boolean;
 }
 
 /**

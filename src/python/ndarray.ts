@@ -329,9 +329,14 @@ export function arrayBinop(op: string, av: PyValue, bv: PyValue): PyValue {
     const dtype = resultDtype(op, a.dtype, b.dtype);
     const shape = broadcastShape(a.shape, b.shape);
     const n = checkCount(sizeOf(shape));
+    const complex = a.dtype === 'complex' || b.dtype === 'complex';
+    // 6.0 ML: speed for training loops: + - * / of the same shape, a number, or a row (X @ W + b) without index arrays.
+    if (!complex && (op === '+' || op === '-' || op === '*' || op === '/')) {
+        const fast = fastBinop(op, a, b, shape, n);
+        if (fast) return new NDArray(shape, fast, dtype);
+    }
     const ia = broadcastIndex(a.shape, shape);
     const ib = broadcastIndex(b.shape, shape);
-    const complex = a.dtype === 'complex' || b.dtype === 'complex';
     if (!complex) {
         const f = REAL[op];
         if (!f) throw typeError('python.type.badOperand', { op, a: 'ndarray', b: 'ndarray' });
@@ -370,6 +375,63 @@ export function arrayBinop(op: string, av: PyValue, bv: PyValue): PyValue {
     }
     if (dtype === 'bool') return new NDArray(shape, re, 'bool');
     return new NDArray(shape, re, 'complex', im);
+}
+
+/** How `small` repeats over `shape`: 'same', 'one' (a number), 'row' (its shape ends `shape`, no 1s), or null (an index array is needed). */
+function repeatKind(small: readonly number[], shape: readonly number[]): 'same' | 'one' | 'row' | null {
+    if (small.length === shape.length && small.every((d, i) => d === shape[i])) return 'same';
+    if (sizeOf(small) === 1) return 'one';
+    const off = shape.length - small.length;
+    if (off >= 0 && small.every((d, i) => d === shape[off + i])) return 'row';
+    return null;
+}
+
+/** 6.0 ML: + - * / without a function call per item, for the shapes training loops use; null for the others. */
+function fastBinop(op: string, a: NDArray, b: NDArray, shape: readonly number[], n: number): Float64Array | null {
+    const ka = repeatKind(a.shape, shape);
+    const kb = repeatKind(b.shape, shape);
+    if (!ka || !kb || (ka !== 'same' && kb !== 'same')) return null;
+    const x = a.data;
+    const y = b.data;
+    const out = new Float64Array(n);
+    const na = x.length;
+    const nb = y.length;
+    // Index of each side: i, the one number, or i modulo the row.
+    if (ka === 'same' && kb === 'same') {
+        if (op === '+') for (let i = 0; i < n; i++) out[i] = x[i] + y[i];
+        else if (op === '-') for (let i = 0; i < n; i++) out[i] = x[i] - y[i];
+        else if (op === '*') for (let i = 0; i < n; i++) out[i] = x[i] * y[i];
+        else for (let i = 0; i < n; i++) out[i] = x[i] / y[i];
+    } else if (ka === 'same' && kb === 'one') {
+        const c = y[0];
+        if (op === '+') for (let i = 0; i < n; i++) out[i] = x[i] + c;
+        else if (op === '-') for (let i = 0; i < n; i++) out[i] = x[i] - c;
+        else if (op === '*') for (let i = 0; i < n; i++) out[i] = x[i] * c;
+        else for (let i = 0; i < n; i++) out[i] = x[i] / c;
+    } else if (ka === 'one') {
+        const c = x[0];
+        if (op === '+') for (let i = 0; i < n; i++) out[i] = c + y[i];
+        else if (op === '-') for (let i = 0; i < n; i++) out[i] = c - y[i];
+        else if (op === '*') for (let i = 0; i < n; i++) out[i] = c * y[i];
+        else for (let i = 0; i < n; i++) out[i] = c / y[i];
+    } else if (kb === 'row') {
+        for (let i = 0; i < n; i += nb) {
+            for (let j = 0; j < nb; j++) {
+                const u = x[i + j];
+                const v = y[j];
+                out[i + j] = op === '+' ? u + v : op === '-' ? u - v : op === '*' ? u * v : u / v;
+            }
+        }
+    } else {
+        for (let i = 0; i < n; i += na) {
+            for (let j = 0; j < na; j++) {
+                const u = x[j];
+                const v = y[i + j];
+                out[i + j] = op === '+' ? u + v : op === '-' ? u - v : op === '*' ? u * v : u / v;
+            }
+        }
+    }
+    return out;
 }
 
 export function arrayCompare(op: string, a: PyValue, b: PyValue): PyValue {
@@ -427,7 +489,20 @@ export function matmul(a: NDArray, b: NDArray): PyValue {
     const im = complex ? new Float64Array(m * p) : null;
     const ai = a2.imag;
     const bi = b2.imag;
-    for (let i = 0; i < m; i++) {
+    // 6.0 ML: speed: real matrices row by row (the inner loop runs along memory).
+    if (!complex) {
+        const x = a2.data;
+        const y = b2.data;
+        for (let i = 0; i < m; i++) {
+            const row = i * p;
+            for (let t = 0; t < k; t++) {
+                const v = x[i * k + t];
+                const col = t * p;
+                for (let j = 0; j < p; j++) re[row + j] += v * y[col + j];
+            }
+        }
+    }
+    for (let i = 0; i < m && complex; i++) {
         for (let j = 0; j < p; j++) {
             let sr = 0;
             let si = 0;
@@ -473,6 +548,13 @@ export function transpose(a: NDArray, axes?: number[]): NDArray {
     const perm = axes ?? Array.from({ length: nd }, (_, i) => nd - 1 - i);
     const shape = perm.map((p) => a.shape[p]);
     const out = newArray(shape, a.dtype);
+    // 6.0 ML: speed: a matrix (X.T in a training loop).
+    if (nd === 2 && perm[0] === 1 && !a.imag) {
+        const [r, c] = a.shape;
+        const x = a.data;
+        for (let i = 0; i < r; i++) for (let j = 0; j < c; j++) out.data[j * r + i] = x[i * c + j];
+        return out;
+    }
     const strides = stridesOf(a.shape);
     const idx = new Array<number>(nd).fill(0);
     const n = a.size;

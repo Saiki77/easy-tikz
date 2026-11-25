@@ -386,7 +386,7 @@ export class SettingsManager {
         // 6.0 P: a script's plt.title, xlabel and ylabel name what the chart leaves empty (or at x and y).
         let title = stringValue(this.getValue('title'), '');
         if (!isPolar && this.getValue('dimension') !== true && this.tools().some((t) => !!t && t.type === 'python')) {
-            const axes = pythonAxes(this.tools(), math);
+            const axes = pythonAxes(this.tools(), math, this.getValue('stillTime')); // 6.0 ML: or what frame(t) sets
             if (axes && !title && axes.title) title = axes.title;
             if (axes && xLabel === 'x' && axes.xlabel) xLabel = axes.xlabel;
             if (axes && yLabel === 'y' && axes.ylabel) yLabel = axes.ylabel;

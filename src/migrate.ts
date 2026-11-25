@@ -27,6 +27,7 @@ import { geogebraRecipes } from './geogebra/recipes';
 // 6.0 P
 import { PYTHON_PREFIX, completePythonTool, pythonDefaults } from './python/tools';
 import { pythonRecipes } from './python/recipes';
+import { headName } from './ml/heads'; // 6.0 ML
 import { notes6Recipes } from './notes6/recipes';
 // 6.0 D
 import { LINEAR_PREFIX, basisVectorsDefaults, completeLinearTool, eigenvectorsDefaults, planeGridDefaults, spanDefaults, transformDefaults, unitSquareDefaults } from './linear/tools';
@@ -886,7 +887,9 @@ export function normalizeFunctions(raw: unknown): { functions: FunctionParameter
     const taken = new Set<string>();
     const names: string[] = entries.map(() => '');
     entries.forEach((entry, k) => {
-        if (isValidName(entry.name) && !taken.has(entry.name)) {
+        // 6.0 ML: t names a function of x (t(x) = ...), never a parametric curve.
+        const tFunction = entry.name === 't' && entry.src.parametric !== true;
+        if ((isValidName(entry.name) || tFunction) && !taken.has(entry.name)) {
             names[k] = entry.name;
             taken.add(entry.name);
         }
@@ -907,6 +910,8 @@ export function normalizeFunctions(raw: unknown): { functions: FunctionParameter
     const functions = entries.map((entry, k) => {
         const fn = completeFunction(entry.src);
         fn.name = names[k];
+        // 6.0 ML: the head as written, while it still names the function.
+        if (typeof entry.src.head === 'string' && headName(entry.src.head) === fn.name) fn.head = entry.src.head;
         return fn;
     });
 

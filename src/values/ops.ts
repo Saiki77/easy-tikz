@@ -9,6 +9,7 @@
 import { Complex, Mat, Value, Vec, complex, isList, list, mat, vec } from './types';
 import { cross3, det, inverse, matMul, matPow, matVec, trace, transpose, vecMat } from './linalg';
 import { binom, factorial } from './special';
+import { logSumExpOf, softmaxOf } from '../ml/builtins'; // 6.0 ML
 
 // ----------------------------------------------------------- complex numbers
 
@@ -326,6 +327,25 @@ export const VALUE_FUNCTIONS: Record<string, { min: number; max: number; fn: (ar
             return typeof a !== 'number' && (a.kind === 'vec' || a.kind === 'complex') && n > 0 ? div(a, n) : BAD;
         },
     },
+    // 6.0 ML: softmax of a vector or a list of numbers (the same kind back), and log-sum-exp; neither overflows.
+    softmax: {
+        min: 1,
+        max: 1,
+        fn: ([a]) => {
+            const nums = numbersOf(a);
+            if (!nums) return BAD;
+            const p = softmaxOf(nums);
+            return typeof a !== 'number' && a.kind === 'list' ? list(p) : vec(p);
+        },
+    },
+    logsumexp: {
+        min: 1,
+        max: 1,
+        fn: ([a]) => {
+            const nums = numbersOf(a);
+            return nums ? logSumExpOf(nums) : BAD;
+        },
+    },
     angle: {
         min: 2,
         max: 2,
@@ -336,6 +356,14 @@ export const VALUE_FUNCTIONS: Record<string, { min: number; max: number; fn: (ar
         },
     },
 };
+
+/** 6.0 ML: the real numbers of a vector or a list of numbers, else null. */
+function numbersOf(a: Value): number[] | null {
+    if (typeof a === 'number') return [a];
+    if (a.kind === 'vec') return a.v.slice();
+    if (a.kind === 'list' && a.items.every((x) => typeof x === 'number')) return a.items.map((x) => Number(x));
+    return null;
+}
 
 function map1(a: Value, f: (v: Complex | Vec | Mat | number) => Value): Value {
     if (typeof a !== 'number' && a.kind === 'list') return list(a.items.map((x) => map1(x, f)));
