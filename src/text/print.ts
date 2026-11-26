@@ -532,12 +532,16 @@ function labelLine(min: Data, full: Data): string {
 
 // ----------------------------------------------------------------- chart
 
-/** 6.2.1: the lines of the chart's own axis lines, arrows, names and number size (src/look.ts); other values print as set lines. */
+/**
+ * 6.2.1: the lines of the chart's own axis lines, arrows, names and number size (src/look.ts); other values print as
+ * set lines. 6.2.2: and what it does with numbers a curve covers.
+ */
 const AXIS_LINES: Record<string, Record<string, string>> = {
     axis_lines: { thin: 'thin axes', thick: 'thick axes' },
     axis_arrows: { on: 'axes with arrows', off: 'axes without arrows', true: 'axes with arrows', false: 'axes without arrows' },
     axis_names: { always: 'with axis names', named: 'no axis letters' },
     axis_numbers: { small: 'small numbers', large: 'large numbers' },
+    covered_numbers: { show: 'keep all numbers', hide: 'hide covered numbers' },
 };
 
 /** The chart lines, each with the fields it covers, in the order a block lists them. */
@@ -618,7 +622,7 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
             return out;
         },
     },
-    // 6.2.1: thick axes, axes with arrows, with axis names, small numbers.
+    // 6.2.1: thick axes, axes with arrows, with axis names, small numbers. 6.2.2: keep all numbers, hide covered numbers.
     ...Object.entries(AXIS_LINES).map(([k, words]) => ({
         keys: [k],
         print: (m: Data) => {

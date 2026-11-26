@@ -2670,6 +2670,7 @@ function exampleChart(overrides: Record<string, unknown>): Record<string, unknow
         axis_arrows: 'auto',
         axis_names: 'auto',
         axis_numbers: 'auto',
+        covered_numbers: 'auto', // 6.2.2
         coordinateSystem: 'cartesian',
         axis_label_x_polar: '',
         axis_label_y_polar: '',

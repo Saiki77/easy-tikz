@@ -47,7 +47,7 @@ import { themedColor } from './motion6/liveprims'; // 6.0 F4
 import { EntranceKind, StepEntrance, clipLines, clipSegment, grownLine, labelStart, middleOf, nearestOn, partialLines, popDelay, riseAt, rippleStops, toolKind } from './motion6/entrances';
 import { LegendCorner, legendCorner, legendLabelOf, legendObstacles } from './legend'; // 6.2.1
 // 6.1 clean look
-import { AxisLook, AxisPlace, CLEAN_AXIS_PX, CLEAN_GRID_ALPHA, CLEAN_LINE_PX, CLEAN_VARS, CleanAxisFrame, LOOK_AXES, NUMBER_PT, TickObstacles, axisPlace, cleanTickSpots } from './look';
+import { AxisLook, AxisPlace, CLEAN_AXIS_PX, CLEAN_GRID_ALPHA, CLEAN_LINE_PX, CLEAN_VARS, CleanAxisFrame, LOOK_AXES, NUMBER_PT, TickObstacles, TickSpot, axisPlace, cleanTickSpots } from './look';
 
 /** 6.0 entrances: how a scene item whose step comes in enters (its object's kind, its start, where its points start popping). */
 interface ItemEntrance {
@@ -433,6 +433,9 @@ export class SVGRenderer {
     private readonly axes: AxisLook;
     /** Function polylines sampled this render (by function index), shared by the axes' numbers and the curves. */
     private readonly sampled = new Map<number, Pt[][]>();
+    /** 6.2.2: numbers a curve covers that stay (Covered numbers: Show), drawn over the curves with a halo, and their size. */
+    private coveredSpots: Array<TickSpot<Tick>> = [];
+    private coveredFs = 0;
     /** 6.0 F4: the live canvas, and whether it draws this render's moving parts (their still frame is hidden then). */
     private readonly live: LiveLayer | null;
     private liveOn = false;
@@ -501,6 +504,7 @@ export class SVGRenderer {
         this.textInk = null;
         this.issues = [];
         this.sampled.clear(); // 6.1
+        this.coveredSpots = []; // 6.2.2
         if (this.ownsMath) this.math.setParams(cfg.parameters || []);
         const [stepX, stepY] = this.tickSteps();
         const v = this.view;
@@ -560,6 +564,7 @@ export class SVGRenderer {
         this.drawn = { items, curves };
         this.drawStrokes(svg, items);
         this.drawLive(svg, items); // 6.0 F4
+        this.drawCoveredNumbers(svg, items); // 6.2.2
         this.drawMarks(svg, items);
         this.drawFrontStrokes(svg, items); // 6.2.1
         this.drawBraces(svg, items);
@@ -1695,9 +1700,14 @@ export class SVGRenderer {
             const frame: CleanAxisFrame = { sx: (v) => this.sx(v), sy: (v) => this.sy(v), ox, oy, place, fs, gap: this.cleanGap(), charEm: CHAR_WIDTH_EM };
             const obstacles = this.tickObstacles(fns, items);
             const inCanvas = (b: { x0: number; x1: number; y0: number; y1: number }) => b.x0 >= 0.5 && b.x1 <= this.width - 0.5 && b.y0 >= 0.5 && b.y1 <= this.height - 0.5;
+            // 6.2.2: Covered numbers: Show keeps the numbers a curve or a point covers; they go over the curves (drawCoveredNumbers).
+            const keep = this.axes.covered === 'show';
+            this.coveredFs = fs;
             for (const [axis, t, step] of [['x', xT, stepX], ['y', yT, stepY]] as const) {
-                for (const spot of cleanTickSpots(axis, t.ticks, tickText, { step, listed: t.mode === 'at', frame, obstacles })) {
-                    if (spot.show && inCanvas(spot.box)) this.tickLabel(g, spot.text, spot.x, spot.y, spot.anchor, fs, CLEAN_VARS.tick);
+                for (const spot of cleanTickSpots(axis, t.ticks, tickText, { step, listed: t.mode === 'at', frame, obstacles, keep })) {
+                    if (!spot.show || !inCanvas(spot.box)) continue;
+                    if (spot.covered) this.coveredSpots.push(spot);
+                    else this.tickLabel(g, spot.text, spot.x, spot.y, spot.anchor, fs, CLEAN_VARS.tick);
                 }
             }
             if (cfg.showAxisLabels) {
@@ -1726,18 +1736,52 @@ export class SVGRenderer {
         svg.appendChild(g);
     }
 
-    /** One tick label with its baseline at (x, y); `fill`: 6.1, the clean look's grey. */
-    private tickLabel(g: SVGElement, text: string, x: number, y: number, anchor: HAnchor, fs: number, fill = TEXT_MUTED): void {
-        const t = this.el('text', {
+    /**
+     * One tick label with its baseline at (x, y); `fill`: 6.1, the clean
+     * look's grey. 6.2.2: `halo`, the colour of a halo around it (a stroke
+     * under the glyphs, as plain labels on a fill have).
+     */
+    private tickLabel(g: SVGElement, text: string, x: number, y: number, anchor: HAnchor, fs: number, fill = TEXT_MUTED, halo?: string): void {
+        const attrs: Record<string, string> = {
             x: num(x),
             y: num(y),
             'text-anchor': anchor,
             fill,
             'font-size': num(fs),
             'font-family': 'var(--font-text)',
-        });
+        };
+        if (halo) {
+            attrs.stroke = halo;
+            attrs['stroke-width'] = num(2 * HALO_EM * fs);
+            attrs['stroke-linejoin'] = 'round';
+            attrs['paint-order'] = 'stroke';
+        }
+        const t = this.el('text', attrs);
         t.textContent = text;
         g.appendChild(t);
+    }
+
+    /**
+     * 6.2.2, over the curves and strokes, under the marked points: the
+     * numbers of the clean look that a curve or a point covers, kept by
+     * Covered numbers: Show. Each has a halo in the colour behind it (the
+     * fills under its middle over the background, as a label's halo), so it
+     * reads over the curve.
+     */
+    private drawCoveredNumbers(svg: SVGElement, items: SceneItem2D[]): void {
+        if (!this.coveredSpots.length) return;
+        const fills: FillPrim[] = [];
+        for (const item of items) fills.push(...(item.fills || []));
+        const v = this.view;
+        const { x: left, y: top, w, h } = this.plot;
+        const g = this.el('g', { class: 'etz-covered-numbers' });
+        for (const spot of this.coveredSpots) {
+            // The middle of the number in the chart's own coordinates, for the fills under it.
+            const at = { x: v.xmin + (((spot.box.x0 + spot.box.x1) / 2 - left) / w) * (v.xmax - v.xmin), y: v.ymin + ((top + h - (spot.box.y0 + spot.box.y1) / 2) / h) * (v.ymax - v.ymin) };
+            const ink = this.haloInk(tintsAt(at, fills)) ?? BACKGROUND;
+            this.tickLabel(g, spot.text, spot.x, spot.y, spot.anchor, this.coveredFs, CLEAN_VARS.tick, ink);
+        }
+        this.attach(svg, g);
     }
 
     /**

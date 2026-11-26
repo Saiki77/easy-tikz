@@ -869,12 +869,16 @@ function genericWords(cmd: Command): Mapped {
     return m;
 }
 
-/** 6.2.1: the chart's own axis lines, arrows, names and number size in \axis[...]: the words of the chart lines, as flags. */
+/**
+ * 6.2.1: the chart's own axis lines, arrows, names and number size in \axis[...]: the words of the chart lines, as
+ * flags. 6.2.2: and what it does with numbers a curve covers (\axis[keep all numbers]).
+ */
 const AXIS_FLAGS_OF: Record<string, Record<string, string>> = {
     axis_lines: { thin: 'thin axes', thick: 'thick axes' },
     axis_arrows: { on: 'axes with arrows', off: 'axes without arrows', true: 'axes with arrows', false: 'axes without arrows' },
     axis_names: { always: 'with axis names', named: 'no axis letters' },
     axis_numbers: { small: 'small numbers', large: 'large numbers' },
+    covered_numbers: { show: 'keep all numbers', hide: 'hide covered numbers' },
 };
 const AXIS_LOOK_FLAGS = new Set(Object.values(AXIS_FLAGS_OF).flatMap((w) => Object.values(w)));
 
@@ -922,7 +926,7 @@ function axisWords(cmd: Command, line: number, problems: TextProblem[]): Mapped[
         if (o.value === null) {
             if (['3d', 'cube', 'polar', 'snippet', 'frames', 'turning'].includes(o.key)) say(o.key, o.at); // frames: 6.0 C, turning: 6.0 F4
             else if (o.key === 'hide axis') say('no axes', o.at);
-            else if (AXIS_LOOK_FLAGS.has(o.key)) say(o.key, o.at); // 6.2.1: thick axes, axes with arrows, with axis names, small numbers
+            else if (AXIS_LOOK_FLAGS.has(o.key)) say(o.key, o.at); // 6.2.1: thick axes, axes with arrows, with axis names, small numbers; 6.2.2: keep all numbers
             else if (o.key === 'axis equal' || o.key === 'axis equal image') say('equal scale', o.at);
             else unknown(o);
         } else if (!v) continue;
@@ -1520,7 +1524,7 @@ function verbFor(list: ObjectList, item: Data | undefined): string | null {
 }
 
 /** A line that starts a chart line in words (show, axes, title, set, x numbers, ...). */
-const CHART_LINE = /^(?:(?:view|show|axes|no|with|grid|size|equal|polar|3d|cube|box|snippet|frames|turning|variables|set|title|xlabel|ylabel|zlabel)(?![A-Za-z0-9_(])|[xyz]\s+numbers\b|(?:thin|thick)\s+axes\s*$|(?:small|large)\s+numbers\s*$)/i; // frames: 6.0 C, turning: 6.0 F4, thick axes and small numbers: 6.2.1
+const CHART_LINE = /^(?:(?:view|show|axes|no|with|grid|size|equal|polar|3d|cube|box|snippet|frames|turning|variables|set|title|xlabel|ylabel|zlabel)(?![A-Za-z0-9_(])|[xyz]\s+numbers\b|(?:thin|thick)\s+axes\s*$|(?:small|large)\s+numbers\s*$|(?:keep\s+all|hide\s+covered)\s+numbers\s*$)/i; // frames: 6.0 C, turning: 6.0 F4, thick axes and small numbers: 6.2.1, keep all numbers: 6.2.2
 
 const listItems = (v: unknown): Data[] => (Array.isArray(v) ? (v.filter((x) => x && typeof x === 'object' && !Array.isArray(x)) as Data[]) : []);
 

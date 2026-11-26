@@ -514,8 +514,11 @@ class Builder {
     }
 }
 
-/** 6.2.1: `thin axes`, `thick axes`, `small numbers`, `large numbers`: the chart's own axis lines and number size. */
-const AXIS_LINES_OF = /^(?:(thin|thick)\s+axes|(small|large)\s+numbers)\s*$/i;
+/**
+ * 6.2.1: `thin axes`, `thick axes`, `small numbers`, `large numbers`: the chart's own axis lines and number size.
+ * 6.2.2: `keep all numbers`, `hide covered numbers`: what it does with numbers a curve covers.
+ */
+const AXIS_LINES_OF = /^(?:(thin|thick)\s+axes|(small|large)\s+numbers|(keep\s+all|hide\s+covered)\s+numbers)\s*$/i;
 
 /** Lines about the chart itself, and sliders: their words are their own, and they take no options. */
 // 6.0 F4: not `turning`: its line takes an option after a comma (`turning, speed 2`).
@@ -1065,11 +1068,14 @@ function statement(b: Builder, line: string) {
     if (/^(show|no|with|plot|draw|mark|write|double|use|data|transform|colour|color)$/.test(word) && /^(?:[*/^=<>!]|[-+]\s)/.test(rest.text)) return formulaLine(b, name, body, options); // transform: 6.0 D; colour, color: 6.0 E
 
     // 6.2.1: the chart's own axis lines and number size: `thick axes`, `thin axes`, `small numbers`, `large numbers`.
+    // 6.2.2: `keep all numbers` (every number, a covered one with a halo), `hide covered numbers`.
     const own = AXIS_LINES_OF.exec(t);
     if (own) {
-        if (split.bar >= 0) b.problem(split.bar, msg('problems.text.noOptions', { word: (own[1] ?? own[2]).toLowerCase() }));
+        const covered = own[3] ? (/^keep/i.test(own[3]) ? 'show' : 'hide') : null;
+        if (split.bar >= 0) b.problem(split.bar, msg('problems.text.noOptions', { word: covered ? t.trim().toLowerCase().replace(/\s+/g, ' ') : (own[1] ?? own[2]).toLowerCase() }));
         if (own[1]) b.chart.axis_lines = own[1].toLowerCase();
-        else b.chart.axis_numbers = own[2].toLowerCase();
+        else if (own[2]) b.chart.axis_numbers = own[2].toLowerCase();
+        else if (covered) b.chart.covered_numbers = covered;
         return;
     }
 

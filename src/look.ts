@@ -25,7 +25,11 @@
  * by default. A chart can set each of them itself (axis_lines, axis_arrows,
  * axis_names, axis_numbers: the lines `thick axes`, `axes with arrows`,
  * `with axis names`, `small numbers` and their opposites, or the editor's
- * Chart tab), and what it sets wins (resolveAxes).
+ * Chart tab), and what it sets wins (resolveAxes). A fifth, Covered numbers,
+ * says what the clean look does with a number that a curve or a marked
+ * point covers: Hide (default) leaves it out, Show keeps every number and
+ * gives a covered one a halo (covered_numbers: `keep all numbers`, `hide
+ * covered numbers`).
  *
  * Pure: no DOM, no Obsidian. The settings are module state, set by the
  * plugin when it loads (like the interface language).
@@ -110,6 +114,12 @@ export type AxisLine = 'thin' | 'thick';
 export type AxisNames = 'always' | 'named';
 /** The axis numbers: small (\scriptsize, 7 pt, the clean look's) or large (10 pt, Classic's). */
 export type AxisNumberSize = 'small' | 'large';
+/**
+ * A number of the clean look that a curve or a marked point covers: hide it
+ * (as up to 6.2.1) or show it with a halo in the colour under it. Classic
+ * draws all its numbers either way.
+ */
+export type CoveredNumbers = 'hide' | 'show';
 
 /** How a chart draws its axes: what its look gives, what the four settings change and what the chart sets itself. */
 export interface AxisLook {
@@ -118,24 +128,31 @@ export interface AxisLook {
     arrows: boolean;
     names: AxisNames;
     numbers: AxisNumberSize;
+    /** 6.2.2: numbers a curve or a marked point covers, in the clean look. */
+    covered: CoveredNumbers;
 }
 
 /** What each look draws. */
 export const LOOK_AXES: Readonly<Record<ChartLook, Readonly<AxisLook>>> = {
-    clean: { line: 'thin', arrows: false, names: 'named', numbers: 'small' },
-    classic: { line: 'thick', arrows: true, names: 'always', numbers: 'large' },
+    clean: { line: 'thin', arrows: false, names: 'named', numbers: 'small', covered: 'hide' },
+    classic: { line: 'thick', arrows: true, names: 'always', numbers: 'large', covered: 'hide' },
 };
 
-/** The four settings under Chart look (Axis lines, Axis arrows, Axis names, Axis numbers): 'look' is As the look. */
+/**
+ * The settings under Chart look (Axis lines, Axis arrows, Axis names, Axis
+ * numbers): 'look' is As the look. 6.2.2: Covered numbers, Hide (the
+ * default, what the clean look does) or Show; it has no As the look.
+ */
 export interface AxisSettings {
     line: 'look' | AxisLine;
     arrows: 'look' | 'on' | 'off';
     names: 'look' | AxisNames;
     numbers: 'look' | AxisNumberSize;
+    covered: CoveredNumbers;
 }
 
-/** Every setting As the look: the axes of the chosen look, as up to 6.2.0. */
-export const AS_THE_LOOK: Readonly<AxisSettings> = { line: 'look', arrows: 'look', names: 'look', numbers: 'look' };
+/** Every setting As the look: the axes of the chosen look, as up to 6.2.0 (covered numbers hidden). */
+export const AS_THE_LOOK: Readonly<AxisSettings> = { line: 'look', arrows: 'look', names: 'look', numbers: 'look', covered: 'hide' };
 
 let axes: AxisSettings = { ...AS_THE_LOOK };
 
@@ -150,39 +167,55 @@ export function setAxisSettings(s: AxisSettings): void {
 
 const pick = <T extends string>(v: unknown, values: readonly T[]): T | null => (typeof v === 'string' && (values as readonly string[]).includes(v) ? (v as T) : null);
 
-/** Stored setting values (plugin data axisLines, axisArrows, axisNames, axisNumbers) as settings: As the look unless one says otherwise. */
-export function axisSettingsOf(stored: { axisLines?: unknown; axisArrows?: unknown; axisNames?: unknown; axisNumbers?: unknown } | null | undefined): AxisSettings {
+/**
+ * Stored setting values (plugin data axisLines, axisArrows, axisNames,
+ * axisNumbers, coveredNumbers) as settings: As the look (covered numbers:
+ * Hide) unless one says otherwise.
+ */
+export function axisSettingsOf(stored: { axisLines?: unknown; axisArrows?: unknown; axisNames?: unknown; axisNumbers?: unknown; coveredNumbers?: unknown } | null | undefined): AxisSettings {
     const s = stored ?? {};
     return {
         line: pick(s.axisLines, ['thin', 'thick'] as const) ?? 'look',
         arrows: pick(s.axisArrows, ['on', 'off'] as const) ?? 'look',
         names: pick(s.axisNames, ['always', 'named'] as const) ?? 'look',
         numbers: pick(s.axisNumbers, ['small', 'large'] as const) ?? 'look',
+        covered: pick(s.coveredNumbers, ['hide', 'show'] as const) ?? 'hide',
     };
+}
+
+/** The chart fields of the axes (axis_lines, axis_arrows, axis_names, axis_numbers, covered_numbers), as ownAxes reads them. */
+export interface AxisFields {
+    line?: unknown;
+    arrows?: unknown;
+    names?: unknown;
+    numbers?: unknown;
+    covered?: unknown;
 }
 
 /**
  * What a chart sets itself (the chart fields axis_lines, axis_arrows,
- * axis_names and axis_numbers: `thin axes`, `axes without arrows`, `no axis
- * letters`, `large numbers`, ...): one of their values, else null, left open
- * ('auto', the default). Arrows also take true and false.
+ * axis_names, axis_numbers and covered_numbers: `thin axes`, `axes without
+ * arrows`, `no axis letters`, `large numbers`, `keep all numbers`, ...): one
+ * of their values, else null, left open ('auto', the default). Arrows also
+ * take true and false.
  */
-export function ownAxes(fields: { line?: unknown; arrows?: unknown; names?: unknown; numbers?: unknown }): { line: AxisLine | null; arrows: boolean | null; names: AxisNames | null; numbers: AxisNumberSize | null } {
+export function ownAxes(fields: AxisFields): { line: AxisLine | null; arrows: boolean | null; names: AxisNames | null; numbers: AxisNumberSize | null; covered: CoveredNumbers | null } {
     const arrows = fields.arrows === true || fields.arrows === 'on' ? true : fields.arrows === false || fields.arrows === 'off' ? false : null;
     return {
         line: pick(fields.line, ['thin', 'thick'] as const),
         arrows,
         names: pick(fields.names, ['always', 'named'] as const),
         numbers: pick(fields.numbers, ['small', 'large'] as const),
+        covered: pick(fields.covered, ['hide', 'show'] as const),
     };
 }
 
 /**
  * The axes of a chart drawn in `look` (the look it is drawn in: a box, a
- * polar or a 3D chart is Classic): each of the four is what the chart sets,
+ * polar or a 3D chart is Classic): each of the five is what the chart sets,
  * else the setting, else the look's.
  */
-export function resolveAxes(look: ChartLook, fields: { line?: unknown; arrows?: unknown; names?: unknown; numbers?: unknown }, settings: AxisSettings = axes): AxisLook {
+export function resolveAxes(look: ChartLook, fields: AxisFields, settings: AxisSettings = axes): AxisLook {
     const own = ownAxes(fields);
     const base = LOOK_AXES[look];
     return {
@@ -190,6 +223,7 @@ export function resolveAxes(look: ChartLook, fields: { line?: unknown; arrows?: 
         arrows: own.arrows ?? (settings.arrows !== 'look' ? settings.arrows === 'on' : base.arrows),
         names: own.names ?? (settings.names !== 'look' ? settings.names : base.names),
         numbers: own.numbers ?? (settings.numbers !== 'look' ? settings.numbers : base.numbers),
+        covered: own.covered ?? settings.covered ?? base.covered,
     };
 }
 
@@ -331,6 +365,12 @@ export interface TickSpot<T> {
     show: boolean;
     /** 6.2.1: how far the number moved away from its axis to clear a marked point or a curve (0: not moved). */
     shift: number;
+    /**
+     * 6.2.2: a marked point or a curve covers its digits wherever it may
+     * move. Shown only with `keep` (Covered numbers: Show), where it stays
+     * in its place and is drawn over the curves with a halo.
+     */
+    covered: boolean;
 }
 
 /**
@@ -355,12 +395,14 @@ const TICK_SHIFTS_EM = [0.1, 0.2, 0.3];
  * curve really covers its digits (up to 6.2.0 a dot on the axis next to
  * it was enough: the integer points on an axis hid all its whole numbers);
  * when moving it a little away from its axis clears them, it moves instead.
+ * 6.2.2: with `keep` (Covered numbers: Show) a covered number shows too,
+ * in its place, marked `covered` for its halo.
  */
 export function cleanTickSpots<T extends { value: number }>(
     axis: 'x' | 'y',
     ticks: readonly T[],
     textOf: (t: T) => string,
-    o: { step: number; listed: boolean; frame: CleanAxisFrame; obstacles: TickObstacles }
+    o: { step: number; listed: boolean; frame: CleanAxisFrame; obstacles: TickObstacles; keep?: boolean }
 ): Array<TickSpot<T>> {
     const f = o.frame;
     const out: Array<TickSpot<T>> = [];
@@ -374,13 +416,13 @@ export function cleanTickSpots<T extends { value: number }>(
         if (axis === 'x') {
             const px = f.sx(tick.value);
             const y0 = f.place.x === 'high' ? f.oy - f.gap - f.fs : f.oy + f.gap;
-            spot = { tick, text, x: px, y: y0 + 0.8 * f.fs, anchor: 'middle', box: { x0: px - tw / 2, x1: px + tw / 2, y0, y1: y0 + f.fs }, show: true, shift: 0 };
+            spot = { tick, text, x: px, y: y0 + 0.8 * f.fs, anchor: 'middle', box: { x0: px - tw / 2, x1: px + tw / 2, y0, y1: y0 + f.fs }, show: true, shift: 0, covered: false };
             ink = { x0: px - tw / 2, x1: px + tw / 2, y0: y0 + INK_X.top * f.fs, y1: y0 + INK_X.bottom * f.fs };
         } else {
             const py = f.sy(tick.value);
             const after = f.place.y === 'high';
             const x = after ? f.ox + f.gap : f.ox - f.gap;
-            spot = { tick, text, x, y: py + 0.35 * f.fs, anchor: after ? 'start' : 'end', box: { x0: after ? x : x - tw, x1: after ? x + tw : x, y0: py - 0.5 * f.fs, y1: py + 0.5 * f.fs }, show: true, shift: 0 };
+            spot = { tick, text, x, y: py + 0.35 * f.fs, anchor: after ? 'start' : 'end', box: { x0: after ? x : x - tw, x1: after ? x + tw : x, y0: py - 0.5 * f.fs, y1: py + 0.5 * f.fs }, show: true, shift: 0, covered: false };
             ink = { x0: spot.box.x0, x1: spot.box.x1, y0: py - INK_Y.top * f.fs, y1: py + INK_Y.bottom * f.fs };
         }
         const crossing = (axis === 'x' ? f.place.y : f.place.x) === 'zero' && !o.listed && Math.abs(tick.value) < o.step * 0.01;
@@ -396,7 +438,8 @@ export function cleanTickSpots<T extends { value: number }>(
             if (shift >= 0) break;
             if (tickClear(moved(ink, k * f.fs), o.obstacles, gap)) shift = k * f.fs;
         }
-        spot.show = shift >= 0;
+        spot.covered = shift < 0;
+        spot.show = !spot.covered || !!o.keep;
         if (shift > 0) {
             spot.shift = shift;
             spot.box = moved(spot.box, shift);

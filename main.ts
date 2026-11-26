@@ -2267,6 +2267,18 @@ class EasyTikzSettingTab extends PluginSettingTab {
                             defaultValue: 'look',
                         },
                     },
+                    {
+                        // 6.2.2: numbers a curve or a marked point covers, in the clean look.
+                        name: t('plugin.settings.coveredNumbers.name'),
+                        desc: t('plugin.settings.coveredNumbers.desc'),
+                        aliases: ['axis', 'axes', 'numbers', 'ticks', 'tick labels', 'covered', 'hidden', 'hide', 'show', 'halo', 'curve', '軸', '数値', '目盛り', '重なる', '隠す', '表示'],
+                        control: {
+                            type: 'dropdown',
+                            key: 'coveredNumbers',
+                            options: { hide: t('plugin.settings.coveredNumbers.hide'), show: t('plugin.settings.coveredNumbers.show') },
+                            defaultValue: 'hide',
+                        },
+                    },
                 ],
             },
             {
@@ -2645,6 +2657,7 @@ class EasyTikzSettingTab extends PluginSettingTab {
             case 'axisArrows':
             case 'axisNames':
             case 'axisNumbers':
+            case 'coveredNumbers': // 6.2.2
                 Object.assign(this.plugin.data, axisData({ ...this.plugin.data, [key]: value }));
                 setAxisSettings(axisSettingsOf(this.plugin.data));
                 this.plugin.redrawCharts();
@@ -2692,10 +2705,13 @@ async function copyText(text: string, done: string): Promise<void> {
     }
 }
 
-/** 6.2.1: the four settings under Chart look as plugin data, from stored values: As the look unless one holds a choice. */
-function axisData(stored: Partial<PluginData> | null | undefined): Pick<PluginData, 'axisLines' | 'axisArrows' | 'axisNames' | 'axisNumbers'> {
+/**
+ * 6.2.1: the four settings under Chart look as plugin data, from stored values: As the look unless one holds a choice.
+ * 6.2.2: and Covered numbers, Hide unless it holds Show.
+ */
+function axisData(stored: Partial<PluginData> | null | undefined): Pick<PluginData, 'axisLines' | 'axisArrows' | 'axisNames' | 'axisNumbers' | 'coveredNumbers'> {
     const s = axisSettingsOf(stored);
-    return { axisLines: s.line, axisArrows: s.arrows, axisNames: s.names, axisNumbers: s.numbers };
+    return { axisLines: s.line, axisArrows: s.arrows, axisNames: s.names, axisNumbers: s.numbers, coveredNumbers: s.covered };
 }
 
 /** File names in a sentence: 'AGENTS.md and CLAUDE.md' (one after another, as join(' and ') would). */

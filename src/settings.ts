@@ -99,6 +99,9 @@ function defaultValues(): Record<string, unknown> {
         axis_arrows: AUTO,
         axis_names: AUTO,
         axis_numbers: AUTO,
+        // 6.2.2: what the clean look does with a number a curve covers: 'hide' (`hide covered numbers`) or 'show'
+        // (`keep all numbers`), else ('auto') the setting Covered numbers (Hide by default).
+        covered_numbers: AUTO,
         // Polar treats function expressions as r(theta).
         coordinateSystem: 'cartesian',
         // Separate axis labels for polar mode so toggling Cartesian <-> Polar
@@ -477,8 +480,9 @@ export class SettingsManager {
 
     /**
      * 6.2.1: the axes of this chart in `look` (the look it is drawn in): its
-     * own axis_lines, axis_arrows, axis_names and axis_numbers, else the
-     * settings under Chart look, else the look's (src/look.ts).
+     * own axis_lines, axis_arrows, axis_names and axis_numbers (6.2.2: and
+     * covered_numbers), else the settings under Chart look, else the look's
+     * (src/look.ts).
      */
     resolvedAxes(look: ChartLook = this.resolvedLook().look): AxisLook {
         return resolveAxes(look, {
@@ -486,6 +490,7 @@ export class SettingsManager {
             arrows: this.getValue('axis_arrows'),
             names: this.getValue('axis_names'),
             numbers: this.getValue('axis_numbers'),
+            covered: this.getValue('covered_numbers'), // 6.2.2
         });
     }
 

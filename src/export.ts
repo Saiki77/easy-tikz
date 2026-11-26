@@ -145,6 +145,13 @@ const DIM_OPACITY = 0.45;
 const HALO = 'fill=white, fill opacity=0.7, text opacity=1, inner sep=1pt, rounded corners=1pt, outer sep=2pt';
 /** 6.2.1: the rest of the backdrop of a label on a fill, whose colour is the fill's tint on the paper (haloOptions). */
 const HALO_ON_FILL = 'inner sep=1pt, rounded corners=1pt, outer sep=2pt';
+/**
+ * 6.2.2: the backdrop of an axis number that a curve covers (Covered
+ * numbers: Show): the label backdrop without its outer sep, so the number
+ * keeps the place pgfplots gives its tick label (coveredNumberNode).
+ */
+const NUMBER_HALO = 'fill=white, fill opacity=0.7, text opacity=1, inner sep=1pt, rounded corners=1pt';
+const NUMBER_HALO_ON_FILL = 'inner sep=1pt, rounded corners=1pt';
 /** 6.1: a value label of the clean look: a soft white pill with a thin line, as in the preview. */
 const PILL = 'fill=white, draw=etzPill, line width=0.4pt, rounded corners=4pt, inner xsep=3.5pt, inner ysep=1.5pt, outer sep=2.5pt';
 /** Bold labels (region names) are drawn in a darker shade of their colour. */
@@ -438,6 +445,8 @@ class Layers {
     readonly braces: string[] = [];
     readonly texts: string[] = [];
     readonly labels: string[] = [];
+    /** 6.2.2: axis numbers a curve covers (Covered numbers: Show), over the curves and strokes, under the markers. */
+    readonly numbers: string[] = [];
     /** Lines before `\begin{axis}`: legend entries typeset into save boxes. */
     readonly boxes: string[] = [];
 
@@ -475,7 +484,7 @@ class Layers {
         // the axes over markers on the border, such as an LP corner (0, 0).
         const fills = flat(this.fills);
         if (fills.length) out.push('\\begin{pgfonlayer}{axis background}', ...fills, '\\end{pgfonlayer}');
-        for (const list of [this.functions, this.strokes, this.guides, this.markers, this.front, this.braces, this.texts, this.labels]) {
+        for (const list of [this.functions, this.strokes, this.numbers, this.guides, this.markers, this.front, this.braces, this.texts, this.labels]) {
             out.push(...flat(list));
         }
         return out;
@@ -654,7 +663,7 @@ function tikz2D(settings: SettingsManager, ctx: MathContext, config: RendererCon
         else opts.push('axis line style={draw=none}', 'major tick length=0pt, minor tick length=0pt', 'xticklabels={}, yticklabels={}', ...gridOptions(config));
     } else if (cleanNow) {
         // 6.1: the clean look's axes, grid and numbers.
-        opts.push(...cleanOptions(config, ctx, view, settings.paperSize(), items, colors));
+        opts.push(...cleanOptions(config, ctx, view, settings.paperSize(), items, colors, layers.numbers)); // 6.2.2: layers.numbers
     } else {
         if (config.axisStyle === 'middle') {
             opts.push('axis lines=middle, xlabel style={anchor=west}, ylabel style={anchor=south}');
@@ -737,8 +746,11 @@ const Y_LINE: Record<AxisPlace, string> = { zero: 'middle', low: 'left', high: '
  * grey numbers listed with the preview's steps, the ones the preview
  * leaves out (the 0 where the axes cross, numbers on a marked point or
  * under a curve) left empty. Axis names stand beyond the ends of the axes.
+ * 6.2.2: with Covered numbers: Show, a number a curve or a point covers is
+ * a node over the curves in `covered` (its tick label left empty), on a
+ * white backdrop.
  */
-function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, paper: { w: number; h: number }, items: SceneItem2D[], colors: ColorSet): string[] {
+function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, paper: { w: number; h: number }, items: SceneItem2D[], colors: ColorSet, covered: string[]): string[] {
     const opts: string[] = [];
     const place = config.axisStyle === 'axes' ? { x: 'low' as const, y: 'low' as const } : { x: axisPlace(view.ymin, view.ymax), y: axisPlace(view.xmin, view.xmax) };
     // 6.2.1: thin or thick lines (thick: Classic's, pgfplots' own), with or without arrowheads, small or large numbers.
@@ -787,6 +799,8 @@ function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, pape
         charEm: NUMBER_CHAR_EM,
     };
     const obstacles = cleanObstacles(config, ctx, view, items, sx, sy);
+    const fills: FillPrim[] = [];
+    for (const item of items) fills.push(...(item.fills || []));
     const [stepX, stepY] = autoTickSteps(view, {
         target: config.majorTickNum > 0 ? config.majorTickNum : 8,
         equal: !!config.equalScale,
@@ -807,11 +821,19 @@ function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, pape
             opts.push(`${a}tick=\\empty`);
             continue;
         }
-        const spots = cleanTickSpots(a, t.ticks, (k: Tick) => k.text, { step: t.mode === 'every' && t.step ? t.step : step, listed: t.mode === 'at', frame, obstacles });
+        const spots = cleanTickSpots(a, t.ticks, (k: Tick) => k.text, { step: t.mode === 'every' && t.step ? t.step : step, listed: t.mode === 'at', frame, obstacles, keep: axes.covered === 'show' });
         const labels = spots.map((sp) => {
             if (!sp.show) return '{}';
             const k = sp.tick;
             const text = k.label !== undefined ? labelText(k.label) : k.piTex !== undefined ? k.piTex : `$\\pgfmathprintnumber{${fmtNum(k.value)}}$`;
+            // 6.2.2: a covered number that stays is a node over the curves.
+            if (sp.covered) {
+                // The middle of its digits in the chart's coordinates: the fill under it gives its backdrop.
+                const middle = { x: view.xmin + ((sp.box.x0 + sp.box.x1) / 2 / W) * (view.xmax - view.xmin), y: view.ymin + ((H - (sp.box.y0 + sp.box.y1) / 2) / H) * (view.ymax - view.ymin) };
+                if (!covered.length) covered.push('% covered axis numbers');
+                covered.push(coveredNumberNode(a, k.value, text, { view, place, small: axes.numbers === 'small', tick, under: tintsAt(middle, fills), colors }));
+                return '{}';
+            }
             return `{${shiftedTick(text, a, place, sp.shift)}}`;
         });
         opts.push(`${a}tick={${t.ticks.map((k) => fmtNum(k.value)).join(',')}}`, `${a}ticklabels={${labels.join(',')}}`);
@@ -831,6 +853,33 @@ function shiftedTick(text: string, axis: 'x' | 'y', place: { x: AxisPlace; y: Ax
     const d = `${fmtNum(Math.round(shift * 100) / 100)}pt`;
     if (axis === 'x') return `\\raisebox{${place.x === 'high' ? '' : '-'}${d}}[\\height][\\depth]{${text}}`;
     return place.y === 'high' ? `\\kern${d}${text}` : `${text}\\kern${d}`;
+}
+
+/**
+ * 6.2.2: an axis number that a curve or a marked point covers, drawn over
+ * the curves (Covered numbers: Show): a node where pgfplots puts the tick
+ * label (at the axis line, anchored on the side that faces it), on the
+ * backdrop of a label, white or the tint of the fill under the number. Its
+ * inner sep is 1pt where a tick label has .3333em, so the shift by the
+ * difference keeps the digits where pgfplots would print them.
+ */
+function coveredNumberNode(
+    axis: 'x' | 'y',
+    value: number,
+    text: string,
+    o: { view: View; place: { x: AxisPlace; y: AxisPlace }; small: boolean; tick: string; under: HaloTint[]; colors: ColorSet }
+): string {
+    const { view, place } = o;
+    const line = (p: AxisPlace, lo: number, hi: number) => (p === 'zero' ? 0 : p === 'low' ? lo : hi);
+    const xLine = line(place.y, view.xmin, view.xmax);
+    const yLine = line(place.x, view.ymin, view.ymax);
+    const at = axis === 'x' ? { x: value, y: yLine } : { x: xLine, y: value };
+    // (.3333em - 1pt) away from the axis line: down or left, up or right.
+    const minus = '1pt-0.3333em';
+    const plus = '0.3333em-1pt';
+    const [anchor, shift] = axis === 'x' ? (place.x === 'high' ? ['south', `yshift={${plus}}`] : ['north', `yshift={${minus}}`]) : place.y === 'high' ? ['west', `xshift={${plus}}`] : ['east', `xshift={${minus}}`];
+    const opts = [`text=${o.tick}`, `anchor=${anchor}`, ...(o.small ? ['font=\\scriptsize'] : []), haloOptions(o.under, o.colors, NUMBER_HALO, NUMBER_HALO_ON_FILL), shift];
+    return `\\node[${opts.join(', ')}] at (axis cs:${fmtNum(at.x)},${fmtNum(at.y)}) {${text}};`;
 }
 
 /** 6.1: the marked points and function curves of the picture, in the plot's pt (y down), for the numbers to keep clear of. */
@@ -1277,13 +1326,14 @@ function addTexts(layers: Layers, item: SceneItem2D, colors: ColorSet, view: Vie
  * 6.2.1: the backdrop of a label with a halo. On a fill it is the top
  * fill's tint on the white paper, opaque, as the preview's halo takes the
  * colour under the text: it hides lines but not the fill. Elsewhere the
- * soft white box.
+ * soft white box. 6.2.2: `plain` and `onFill`, the rest of the backdrop
+ * (an axis number's has no outer sep).
  */
-function haloOptions(under: HaloTint[] | undefined, colors: ColorSet): string {
+function haloOptions(under: HaloTint[] | undefined, colors: ColorSet, plain = HALO, onFill = HALO_ON_FILL): string {
     const top = under && under.length ? under[under.length - 1] : null;
-    if (!top) return HALO;
+    if (!top) return plain;
     const pct = Math.round(clamp(num(top.opacity, 0.25), 0, 1) * 100);
-    return `fill=${colors.use(top.color)}!${pct}!white, ${HALO_ON_FILL}`;
+    return `fill=${colors.use(top.color)}!${pct}!white, ${onFill}`;
 }
 
 /**

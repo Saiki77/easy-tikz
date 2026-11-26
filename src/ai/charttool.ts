@@ -297,6 +297,7 @@ function allowed(key: string): string {
         axis_arrows: ['on', 'off', 'auto'],
         axis_names: ['always', 'named', 'auto'],
         axis_numbers: ['small', 'large', 'auto'],
+        covered_numbers: ['hide', 'show', 'auto'], // 6.2.2: auto, the setting Covered numbers decides
         coordinateSystem: ['cartesian', 'polar'],
         fillPattern: ['solid', 'horizontal', 'vertical', 'crosshatch', 'dots', 'north-east', 'north-west'],
         outline: ['none', 'solid', 'dashed'],

@@ -64,8 +64,8 @@ const TANGENT = [
 test('resolveAxes: As the look gives the look; a setting changes one thing; the chart wins over both', () => {
     assert.deepEqual(resolveAxes('clean', {}, AS_THE_LOOK), LOOK_AXES.clean);
     assert.deepEqual(resolveAxes('classic', {}, AS_THE_LOOK), LOOK_AXES.classic);
-    assert.deepEqual(LOOK_AXES.clean, { line: 'thin', arrows: false, names: 'named', numbers: 'small' });
-    assert.deepEqual(LOOK_AXES.classic, { line: 'thick', arrows: true, names: 'always', numbers: 'large' });
+    assert.deepEqual(LOOK_AXES.clean, { line: 'thin', arrows: false, names: 'named', numbers: 'small', covered: 'hide' });
+    assert.deepEqual(LOOK_AXES.classic, { line: 'thick', arrows: true, names: 'always', numbers: 'large', covered: 'hide' });
     // Each setting alone, in both looks: only its own part changes.
     const cases: Array<[Partial<AxisSettings>, Partial<typeof LOOK_AXES.clean>]> = [
         [{ line: 'thick' }, { line: 'thick' }],
@@ -81,18 +81,19 @@ test('resolveAxes: As the look gives the look; a setting changes one thing; the 
         for (const [set, want] of cases) assert.deepEqual(resolveAxes(look, {}, { ...AS_THE_LOOK, ...set }), { ...LOOK_AXES[look], ...want }, `${look} ${JSON.stringify(set)}`);
     }
     // The chart's own fields beat the settings and the look; 'auto' and unknown values are left open.
-    const all: AxisSettings = { line: 'thick', arrows: 'on', names: 'always', numbers: 'large' };
-    assert.deepEqual(resolveAxes('clean', { line: 'thin', arrows: 'off', names: 'named', numbers: 'small' }, all), LOOK_AXES.clean);
+    const all: AxisSettings = { line: 'thick', arrows: 'on', names: 'always', numbers: 'large', covered: 'show' };
+    assert.deepEqual(resolveAxes('clean', { line: 'thin', arrows: 'off', names: 'named', numbers: 'small', covered: 'hide' }, all), LOOK_AXES.clean);
     assert.deepEqual(resolveAxes('classic', { arrows: false }, AS_THE_LOOK).arrows, false);
     assert.deepEqual(resolveAxes('clean', { arrows: true }, AS_THE_LOOK).arrows, true);
-    assert.deepEqual(resolveAxes('clean', { line: 'auto', arrows: 'auto', names: 'bold', numbers: 3 }, all), { line: 'thick', arrows: true, names: 'always', numbers: 'large' });
+    assert.deepEqual(resolveAxes('clean', { line: 'auto', arrows: 'auto', names: 'bold', numbers: 3, covered: 'auto' }, all), { line: 'thick', arrows: true, names: 'always', numbers: 'large', covered: 'show' });
 });
 
 test('axisSettingsOf: stored values become settings, anything else As the look', () => {
     assert.deepEqual(axisSettingsOf(null), AS_THE_LOOK);
     assert.deepEqual(axisSettingsOf({}), AS_THE_LOOK);
-    assert.deepEqual(axisSettingsOf({ axisLines: 'thick', axisArrows: 'on', axisNames: 'always', axisNumbers: 'small' }), { line: 'thick', arrows: 'on', names: 'always', numbers: 'small' });
-    assert.deepEqual(axisSettingsOf({ axisLines: 'bold', axisArrows: true, axisNames: 'x', axisNumbers: 12 }), AS_THE_LOOK);
+    assert.deepEqual(axisSettingsOf({ axisLines: 'thick', axisArrows: 'on', axisNames: 'always', axisNumbers: 'small' }), { line: 'thick', arrows: 'on', names: 'always', numbers: 'small', covered: 'hide' });
+    assert.deepEqual(axisSettingsOf({ axisLines: 'bold', axisArrows: true, axisNames: 'x', axisNumbers: 12, coveredNumbers: 'look' }), AS_THE_LOOK);
+    assert.equal(axisSettingsOf({ coveredNumbers: 'show' }).covered, 'show');
 });
 
 test('a box, polar and 3D chart take the settings on Classic; the renderer config carries the axes', () => {

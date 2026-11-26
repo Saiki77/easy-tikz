@@ -275,6 +275,9 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
         let axisNames: ChipHandle | null = null;
         const own: Array<DropdownHandle<string>> = []; // 6.2.1
         let ownNames: DropdownHandle<string> | null = null;
+        let ownCovered: DropdownHandle<string> | null = null; // 6.2.2
+        // 6.2.2: only the clean look leaves covered numbers out (a box, polar and the Classic look draw them all).
+        const coveredOff = (style: string) => style === 'none' || settings.resolvedLook().look !== 'clean';
         axisStyle = segmented(styleField.controlEl, {
             label: t('panels.chart.axisStyle'),
             value: styleValue(),
@@ -286,6 +289,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
                 axisNames?.setDisabled(value === 'none');
                 for (const d of own) d.setDisabled(value === 'none'); // 6.2.1
                 ownNames?.setDisabled(value === 'none' || settings.getValue('show_axis_label') === false);
+                ownCovered?.setDisabled(coveredOff(value)); // 6.2.2
                 // The look's grid follows the style (a box or no axes: none unless the chart asks for one).
                 gridMajor?.setValue(settings.resolvedLook().gridMajor);
                 host.requestUpdate();
@@ -318,6 +322,11 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
         ownNames = ownRow('axis_names', 'plugin.settings.axisNames.name', [['always', 'plugin.settings.axisNames.always'], ['named', 'plugin.settings.axisNames.named']]);
         ownNames.setDisabled(styleValue() === 'none' || settings.getValue('show_axis_label') === false);
         ownRow('axis_numbers', 'plugin.settings.axisNumbers.name', [['small', 'plugin.settings.axisNumbers.small'], ['large', 'plugin.settings.axisNumbers.large']]);
+        // 6.2.2: numbers a curve covers: hidden, or all of them with a halo (2D: the clean look draws no 3D charts).
+        if (!host.is3D()) {
+            ownCovered = ownRow('covered_numbers', 'plugin.settings.coveredNumbers.name', [['hide', 'plugin.settings.coveredNumbers.hide'], ['show', 'plugin.settings.coveredNumbers.show']]);
+            ownCovered.setDisabled(coveredOff(styleValue()));
+        }
         g.body.createDiv({ cls: 'etz-chart-hint', text: t('panels.chart.asTheDefaultHint') });
 
         const chips = g.body.createDiv({ cls: 'etz-chip-row' });
