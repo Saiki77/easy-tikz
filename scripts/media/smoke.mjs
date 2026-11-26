@@ -578,6 +578,74 @@ if (started) {
             assert(fns.length === 1 && fns[0] === 'x^2', `functions now: ${JSON.stringify(fns)}`);
             return 'prose and field pastes left alone';
         });
+        await check('formula field (6.2.2): a long formula wraps and shows typeset under its field, Enter keeps its old behaviour, a short one stays one line', async () => {
+            await loadClean(TEXT.parseChartText(ISSUE_TEXT + '\nplot g(x) = sin(x) in red').data, false);
+            /** The function cards' formula fields: lines, preview, header tooltip. */
+            const fields = () =>
+                obs.call(() =>
+                    Array.from(window.__etzMedia.requireEditor().modalEl.querySelectorAll('.etz-fn-card')).map((card) => {
+                        const box = card.querySelector('.etz-expr');
+                        const area = box.querySelector('.etz-expr-input');
+                        const math = box.querySelector('.etz-expr-math');
+                        const lineH = parseFloat(getComputedStyle(area).lineHeight);
+                        return {
+                            tag: area.tagName,
+                            value: area.value,
+                            lines: Math.round((area.clientHeight - parseFloat(getComputedStyle(area).paddingTop) * 2) / lineH),
+                            height: Math.round(area.getBoundingClientRect().height),
+                            fits: area.scrollHeight <= area.clientHeight + 1,
+                            math: !!math && !math.classList.contains('tikz-hidden') && !!math.querySelector('mjx-container'),
+                            // MathJax draws glyphs with CSS: look for its fraction and root elements.
+                            typeset: math ? ['mjx-mfrac', 'mjx-msqrt'].filter((tag) => !!math.querySelector(tag)).join() : '',
+                            pairs: Array.from(box.querySelectorAll('.etz-expr-pair')).map((p) => p.textContent).join(''),
+                            title: card.querySelector('.etz-card-summary').getAttribute('title') || '',
+                        };
+                    })
+                );
+            const [t, g] = await fields();
+            assert(t.tag === 'TEXTAREA', `the formula field is a ${t.tag}`);
+            assert(t.lines >= 2 && t.fits, `the Student t formula shows on ${t.lines} line(s), all of it: ${t.fits}`);
+            assert(t.math && t.typeset === 'mjx-mfrac,mjx-msqrt', `no typeset preview under the long formula (${t.typeset})`);
+            assert(t.title.endsWith(t.value), 'the card header has no tooltip with the whole formula');
+            assert(g.lines === 1 && g.height === 28 && !g.math, `the short formula: ${g.lines} line(s), ${g.height} px, preview ${g.math}`);
+            // Editing: the bracket that matches the one at the caret is marked; Enter adds no line and keeps the text.
+            await obs.reveal('f', 'expression');
+            await obs.call(() => {
+                const el = document.activeElement;
+                el.setSelectionRange(7, 7);
+                el.dispatchEvent(new Event('keyup'));
+            });
+            await obs.frames(3);
+            const marked = (await fields())[0].pairs;
+            assert(marked === '()', `the brackets marked at the caret: "${marked}"`);
+            await obs.key('Enter');
+            await obs.key('Enter', { shift: true });
+            await obs.frames(2);
+            const after = await obs.call(() => ({ value: document.activeElement.value, cls: document.activeElement.className }));
+            assert(after.value === t.value && /etz-expr-input/.test(after.cls), `after Enter the field holds "${after.value.slice(0, 40)}" (${after.cls})`);
+            // A pasted line break becomes a space; a short formula shrinks the field back to one line.
+            await obs.selectAll();
+            await obs.type('x^2\n+ 1', { instant: true });
+            await obs.frames(3);
+            const short = (await fields())[0];
+            assert(short.value === 'x^2 + 1' && short.lines === 1 && !short.math, `typed x^2 + 1: ${JSON.stringify({ value: short.value, lines: short.lines, math: short.math })}`);
+            // Past six lines the field stops growing and scrolls.
+            await obs.selectAll();
+            await obs.type(Array.from({ length: 90 }, (_, i) => `${i % 9 + 1}*x`).join(' + '), { instant: true });
+            await obs.frames(3);
+            const long = (await fields())[0];
+            assert(long.lines === 6 && !long.fits, `a very long formula: ${long.lines} lines, scrolls: ${!long.fits}`);
+            await obs.selectAll();
+            await obs.type(t.value, { instant: true });
+            await obs.blur();
+            await obs.waitForRender({ settle: 200 });
+            const [issues, info] = [await obs.issues(), await obs.previewInfo()];
+            assert(!issues.length, `issues: ${issues.map((i) => i.message).join('; ')}`);
+            assert(info.shapes > 8, `the chart looks empty (${info.shapes} shapes)`);
+            const back = (await fields())[0];
+            assert(back.lines === t.lines && back.math, `back to the Student t formula: ${back.lines} lines, preview ${back.math}`);
+            return `${t.lines} lines + typeset preview, the short one 1 line, 6 lines at most, Enter adds no line`;
+        });
         await check('examples (6.2.1): Open an example searches every example and loads the one chosen', async () => {
             await obs.call(() => document.querySelector('.modal.tikz-modal .etz-header button[aria-label="Examples and templates"]').click());
             await obs.waitFor(() => obs.call(() => !!document.querySelector('.menu')), { timeout: 2000, message: 'the menu' });

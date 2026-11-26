@@ -96,7 +96,7 @@ export default {
         await d.caption('Type a new limit: region, corners and optimum follow');
         const digit = await obs.call(() => {
             const m = window.__etzMedia.requireEditor();
-            const input = Array.from(m.modalEl.querySelectorAll('.etz-build input.etz-expr-input')).find((el) => el.value === 'x + y <= 4');
+            const input = Array.from(m.modalEl.querySelectorAll('.etz-build .etz-expr-input')).find((el) => el.value === 'x + y <= 4');
             if (!input) return null;
             const style = getComputedStyle(input);
             const ctx = document.createElement('canvas').getContext('2d');

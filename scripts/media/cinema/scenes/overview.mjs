@@ -516,7 +516,7 @@ async function partTwo(d) {
         return Array.from(m.modalEl.querySelectorAll('.etz-card')).map((card) => ({
             name: ((card.querySelector('.etz-card-name') || {}).textContent || '').trim(),
             card: M.rect(card),
-            inputs: Array.from(card.querySelectorAll('input.etz-expr-input')).filter(M.visible).map((i) => ({ value: i.value, r: M.rect(i) })),
+            inputs: Array.from(card.querySelectorAll('.etz-expr-input')).filter(M.visible).map((i) => ({ value: i.value, r: M.rect(i) })),
         }));
     });
     const card = (name) => cards.find((c) => c.name === name);
@@ -619,7 +619,7 @@ function field(d, name, index) {
         const M = window.__etzMedia;
         const m = M.editor();
         const card = Array.from(m.modalEl.querySelectorAll('.etz-card')).find((node) => ((node.querySelector('.etz-card-name') || {}).textContent || '').trim() === wanted);
-        const input = card ? Array.from(card.querySelectorAll('input.etz-expr-input')).filter(M.visible)[n] : null;
+        const input = card ? Array.from(card.querySelectorAll('.etz-expr-input')).filter(M.visible)[n] : null;
         return input ? { card: M.rect(card), input: M.rect(input), value: input.value } : null;
     }, name, index);
 }
