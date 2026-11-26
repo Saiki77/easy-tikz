@@ -32,6 +32,8 @@ import {
     TextAnchor,
     TextPrim,
     computeScene2D,
+    INSIDE_EM,
+    insideShift,
     labelMetricsFor,
     tintsAt,
 } from './scene';
@@ -2034,6 +2036,8 @@ export class SVGRenderer {
                     offset,
                     attrs: t.still ? this.stillAttrs(t, {}) : undefined, // 6.0 ML: a frame(t) text the live canvas draws
                 });
+                // 6.2.1: a text the placer measured narrower than it is drawn stays on the picture.
+                if (drawnText) this.keepInside(drawnText, this.canvasBounds(t.size));
                 if (pill && drawnText) this.pillBehind(g, at, drawnText, this.fontPx(FONT_PT[t.size || 'normal'] || FONT_PT.normal));
             }
             this.tag(g, from, item.source);
@@ -2095,17 +2099,51 @@ export class SVGRenderer {
             const attrs: Record<string, string> = { 'data-annotation-idx': String(idx), 'data-etz-item': source, 'pointer-events': 'bounding-box' };
             const from = g.children.length;
             const under = tintsAt({ x, y }, fills); // 6.2.1
-            this.drawPlaced(g, this.math.formatTemplate(text), x, y, a.anchor, a.size, {
+            const drawnText = this.drawPlaced(g, this.math.formatTemplate(text), x, y, a.anchor, a.size, {
                 color: this.css(a.color),
                 halo: under.length > 0,
                 haloInk: this.haloInk(under),
                 weight: '500',
                 attrs,
             });
+            // 6.2.1: a text written near the edge stays inside the plot frame (the export anchors it at that
+            // edge: textInside); one whose point lies outside the view stays on the picture.
+            if (drawnText) this.keepInside(drawnText, this.inView(x, y, 0) ? this.plotBounds(a.size) : this.canvasBounds(a.size));
             // 6.0 entrances: a label of the step rises in just after the step's other objects.
             if (this.ent && this.ent.moves(a)) this.riseEls(kidsFrom(g, from), this.ent.labels);
         });
         this.attach(svg, g);
+    }
+
+    /** 6.2.1: the plot rectangle less a margin of INSIDE_EM: where a text written in the view stays. */
+    private plotBounds(size: AnnotationSize | undefined): { x0: number; y0: number; x1: number; y1: number } {
+        const e = INSIDE_EM * this.fontPx(FONT_PT[size || 'normal'] || FONT_PT.normal);
+        const { x, y, w, h } = this.plot;
+        return { x0: x + e, y0: y + e, x1: x + w - e, y1: y + h - e };
+    }
+
+    /** 6.2.1: the canvas less the edge: where every text stays. */
+    private canvasBounds(size: AnnotationSize | undefined): { x0: number; y0: number; x1: number; y1: number } {
+        const e = INSIDE_EM * this.fontPx(FONT_PT[size || 'normal'] || FONT_PT.normal);
+        return { x0: e, y0: e, x1: this.width - e, y1: this.height - e };
+    }
+
+    /** 6.2.1: move a drawn label by the least shift that brings its box inside `bounds` (insideShift). */
+    private keepInside(label: DrawnLabel, bounds: { x0: number; y0: number; x1: number; y1: number }): void {
+        const d = insideShift({ x0: label.x0, y0: label.y0, x1: label.x0 + label.width, y1: label.y0 + label.height }, bounds);
+        if (Math.abs(d.x) < 0.01 && Math.abs(d.y) < 0.01) return;
+        const el = label.el;
+        const add = (name: string, by: number) => {
+            const v = Number(el.getAttribute(name));
+            if (el.hasAttribute(name) && Number.isFinite(v)) el.setAttribute(name, num(v + by));
+        };
+        // A <text> at its anchor and baseline; a MathJax label at its box, and the plain text a copy draws (svgExport).
+        add('x', d.x);
+        add('y', d.y);
+        add('data-export-x', d.x);
+        add('data-export-y', d.y);
+        label.x0 += d.x;
+        label.y0 += d.y;
     }
 
     /** A label coordinate, or NaN after reporting why (unless it waits on a derived name, whose tool reports). */

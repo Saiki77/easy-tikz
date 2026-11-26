@@ -22,6 +22,7 @@ import {
     BracePrim,
     FillPrim,
     HaloTint,
+    LabelMetrics,
     Scene3D,
     SceneItem2D,
     StrokePrim,
@@ -30,7 +31,10 @@ import {
     computeScene2D,
     computeScene3D,
     edgeLabelSide3D,
+    INSIDE_EM,
+    InsideSide,
     labelMetricsFor,
+    textInside,
     tintsAt,
 } from './scene';
 import { sampleCurve, tickValues } from './util';
@@ -629,7 +633,7 @@ function tikz2D(settings: SettingsManager, ctx: MathContext, config: RendererCon
     const paper = paperScale(settings.paperSize(), view);
     for (const item of items) addBraces(layers, item, colors, view, paper, libs);
     for (const item of items) addTexts(layers, item, colors, view);
-    addAnnotations2D(layers, config, ctx, items, colors, view);
+    addAnnotations2D(layers, config, ctx, items, colors, view, labelMetricsFor(paperCm.w, paperCm.h));
 
     const paths = layers.paths();
     fitBudget(paths, view);
@@ -1236,21 +1240,71 @@ function haloOptions(under: HaloTint[] | undefined, colors: ColorSet): string {
     return `fill=${colors.use(top.color)}!${pct}!white, ${HALO_ON_FILL}`;
 }
 
-/** Layer 8, user labels: positions and text through the context like the preview; halo when on a fill. */
-function addAnnotations2D(layers: Layers, config: RendererConfig, ctx: MathContext, items: SceneItem2D[], colors: ColorSet, view: View): void {
+/**
+ * Layer 8, user labels: positions and text through the context like the
+ * preview; halo when on a fill. 6.2.1: a text written near the edge of the
+ * plot moves back inside its frame, as the preview moves it.
+ */
+function addAnnotations2D(layers: Layers, config: RendererConfig, ctx: MathContext, items: SceneItem2D[], colors: ColorSet, view: View, metrics: LabelMetrics): void {
     const fills: FillPrim[] = [];
     for (const item of items) fills.push(...(item.fills || []));
     const lines: string[] = [];
     (config.annotations || []).forEach((a) => {
         if (!a || a.hidden) return;
-        const text = labelText(ctx.formatTemplate(String(a.text ?? '')));
+        const typed = ctx.formatTemplate(String(a.text ?? ''));
+        const text = labelText(typed);
         if (!text) return;
         const p = { x: ctx.value(a.x), y: ctx.value(a.y) };
         if (!finitePt(p) || !inView(p, view, TEXT_SLACK)) return;
         const under = tintsAt(p, fills); // 6.2.1
-        lines.push(nodeCmd(colors.use(a.color), ANCHOR[a.anchor] || 'center', a.size, under.length ? haloOptions(under, colors) : false, axisCs(p, view), text));
+        const anchor: TextAnchor = ANCHOR[a.anchor] ? a.anchor : 'center';
+        const size = a.size || 'normal';
+        const inside = textInside({ x: p.x, y: p.y, text: typed, anchor, size }, view, metrics, !!config.equalScale || config.coordinateSystem === 'polar');
+        const place = insidePlacement(p, ANCHOR[anchor], inside, view, INSIDE_EM * (metrics.em[size] || metrics.em.normal));
+        lines.push(nodeCmd(colors.use(a.color), place.anchor, a.size, under.length ? haloOptions(under, colors) : false, axisCs(place.at, view), text, undefined, place.offset));
     });
     if (lines.length) layers.labels.push('% labels', ...lines);
+}
+
+/**
+ * 6.2.1: where a written text that would cross the plot's edge goes in the
+ * export: on that edge, anchored on that side of the text, `margin` pt in
+ * (centred on the plot when it is larger than it). Anchoring at the edge
+ * keeps it inside however large pgfplots makes the plot; the preview moves
+ * the text by its measured box to the same place.
+ */
+function insidePlacement(p: Pt, anchor: string, inside: { x: InsideSide; y: InsideSide }, view: View, margin: number): { at: Pt; anchor: string; offset: Pt } {
+    const parts = anchor.split(' ');
+    let v = parts.find((w) => w === 'north' || w === 'south') ?? 'center';
+    let h = parts.find((w) => w === 'east' || w === 'west') ?? 'center';
+    const at = { ...p };
+    const offset = { x: 0, y: 0 };
+    if (inside.x === 'both') {
+        h = 'center';
+        at.x = (view.xmin + view.xmax) / 2;
+    } else if (inside.x === 'high') {
+        h = 'east';
+        at.x = view.xmax;
+        offset.x = -margin;
+    } else if (inside.x === 'low') {
+        h = 'west';
+        at.x = view.xmin;
+        offset.x = margin;
+    }
+    if (inside.y === 'both') {
+        v = 'center';
+        at.y = (view.ymin + view.ymax) / 2;
+    } else if (inside.y === 'high') {
+        v = 'north';
+        at.y = view.ymax;
+        offset.y = -margin;
+    } else if (inside.y === 'low') {
+        v = 'south';
+        at.y = view.ymin;
+        offset.y = margin;
+    }
+    const name = v === 'center' ? h : h === 'center' ? v : `${v} ${h}`;
+    return { at, anchor: name, offset };
 }
 
 // ----------------------------------------------------------------- 3D
