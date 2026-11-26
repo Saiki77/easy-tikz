@@ -113,33 +113,3 @@ button.etz-ask-item[aria-checked='true'] .etz-ask-box {
     outline: none;
     box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
 }
-
-/* ------------------------------------------------------------- hover card */
-
-.etz-formula-note {
-    margin: 6px 0 0;
-    font-size: var(--etz-font-meta, 11px);
-    color: var(--text-muted);
-    line-height: 1.35;
-}
-
-.etz-formula-switch {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    margin-top: 6px;
-}
-
-button.etz-formula-n {
-    height: 24px;
-    padding: 0 10px;
-    font-size: 12px;
-    border-radius: var(--radius-s, 4px);
-    background-color: var(--background-secondary);
-    box-shadow: none;
-}
-
-button.etz-formula-n[aria-pressed='true'] {
-    background-color: var(--interactive-accent);
-    color: var(--text-on-accent);
-}

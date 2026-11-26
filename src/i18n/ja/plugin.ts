@@ -21,7 +21,7 @@ export const plugin: Messages<typeof en> = {
     'plugin.formula.insert': 'グラフを挿入',
     'plugin.formula.open': 'エディタで開く',
     'plugin.formula.cannotDraw': 'このグラフは描けません。',
-    'plugin.formula.dialog': '数式のグラフ',
+    'plugin.formula.dialogKind': '数式のグラフ（{kind}）',
     'plugin.formula.kind.function': '関数',
     'plugin.formula.kind.surface': '曲面',
     'plugin.formula.kind.polar': '極座標の曲線',

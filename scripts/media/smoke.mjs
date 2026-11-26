@@ -712,6 +712,13 @@ if (started) {
             assert(charts.length === 1 && charts[0].drawn, `rendered charts: ${JSON.stringify(charts)}`);
             assert(sameJson(charts[0].sliders, ['c']), `slider strip: ${JSON.stringify(charts[0].sliders)}`);
             assert(charts[0].issues === null, `the chart shows a problem line: "${charts[0].issues}"`);
+            // 6.0.1, clean look: the strip has no box.
+            const strip = await obs.call(() => {
+                const el = document.querySelector('.workspace-leaf.mod-active .block-language-easy-tikz .etz-inline-strip');
+                const cs = el ? getComputedStyle(el) : null;
+                return cs ? { border: cs.borderTopStyle, background: cs.backgroundColor } : null;
+            });
+            assert(strip && strip.border === 'none' && strip.background === 'rgba(0, 0, 0, 0)', `the slider strip has a box: ${JSON.stringify(strip)}`);
             const before = await obs.readNote(note);
             await obs.setSlider('c', 6, { scope: 'note' });
             assert((await obs.sliderValue('c', { scope: 'note' })) === 6, 'the strip slider did not move');
@@ -797,11 +804,32 @@ if (started) {
             await obs.waitFor(() => obs.call(() => !!document.querySelector('.etz-formula-pop .etz-formula-chart svg')), { timeout: 4000, message: 'the chart of the formula to open' });
             const sliders = await obs.call(() => Array.from(document.querySelectorAll('.etz-formula-pop .etz-formula-name')).map((n) => n.textContent));
             assert(sameJson(sliders, ['a', 'b']), `sliders: ${JSON.stringify(sliders)}`);
+            // 6.0.1, clean look: no header row, close named without aria-label (no tooltip over the card), both buttons
+            // always there, the vertex of x^2 + 1 as a dot.
+            const card = await obs.call(() => {
+                const pop = document.querySelector('.etz-formula-pop');
+                const close = pop.querySelector('button.etz-formula-close');
+                const shown = (el) => !!el && el.getBoundingClientRect().width > 0 && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).opacity !== '0';
+                return {
+                    head: !!pop.querySelector('.etz-formula-head, .etz-formula-kind, .etz-formula-tex'),
+                    labels: Array.from(pop.querySelectorAll('[aria-label]')).map((el) => el.className),
+                    close: close ? (close.textContent || '').trim() : null,
+                    buttons: Array.from(pop.querySelectorAll('.etz-formula-acts button')).filter(shown).map((b) => (b.textContent || '').trim()),
+                    vertex: !!pop.querySelector('[data-etz-item="etzKeyExtrema"]'),
+                };
+            });
+            assert(!card.head, 'the card still has its header row');
+            assert(card.labels.length === 0, `elements with aria-label in the card: ${JSON.stringify(card.labels)}`);
+            assert(card.close === 'Close', `the close button is named "${card.close}"`);
+            assert(sameJson(card.buttons, ['Open in the editor', 'Insert chart']), `buttons: ${JSON.stringify(card.buttons)}`);
+            assert(card.vertex, 'the card shows no dot on the vertex');
             await obs.mouse.click('.etz-formula-pop button.mod-cta');
             await obs.sleep(600);
             const text = await obs.readNote(formulaNote);
             const m = /```easy-tikz\n([\s\S]*?)\n```/.exec(text);
             assert(m && /plot /.test(m[1]) && /slider a /.test(m[1]) && /slider b /.test(m[1]), `the note after Insert chart:\n${text}`);
+            // The framed view goes in with the chart, the dots do not.
+            assert(/^show x from -2 to 2 and y from -1 to 3$/m.test(m[1]) && !/etzKey/.test(m[1]), `the inserted view:\n${m[1]}`);
             const charts = await obs.noteCharts();
             assert(charts.length === 1 && charts[0].drawn && charts[0].issues === null, `the inserted chart: ${JSON.stringify(charts)}`);
             return `${m[1].split('\n').length} lines`;
