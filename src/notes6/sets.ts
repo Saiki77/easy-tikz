@@ -287,3 +287,33 @@ export function setTex(pieces: AxisPiece[]): string {
 export function setLabel(variable: string, conditionTex: string, pieces: AxisPiece[]): string {
     return `$\\{${variable} \\mid ${conditionTex}\\} = ${setTex(pieces)}$`;
 }
+
+// 6.2.1
+
+/** Greek letters an axis may be named after. */
+const AXIS_GREEK = 'alpha|beta|gamma|delta|varepsilon|epsilon|zeta|eta|theta|vartheta|kappa|lambda|mu|nu|xi|rho|sigma|tau|varphi|phi|chi|psi|omega';
+const AXIS_VARIABLE = new RegExp(String.raw`^(?:\\(?:${AXIS_GREEK})(?![A-Za-z])|[A-Za-z])(?:\s*_\s*(?:\{\s*[A-Za-z0-9]+\s*\}|[A-Za-z0-9]))?$`);
+
+/**
+ * The variable an axis name stands for, as TeX: t, $t$, $\lambda$, $x_1$,
+ * $x_{12}$, $\alpha_1$. Null for any other name (Zeit in s, $f(x)$, Preis).
+ */
+export function axisVariable(name: string | undefined): string | null {
+    const raw = (name ?? '').trim();
+    const math = /^\$([^$]*)\$$/.exec(raw);
+    const v = (math ? math[1] : raw).trim();
+    if (!AXIS_VARIABLE.test(v) || (!math && v.length > 1)) return null;
+    return v.replace(/\s+/g, '');
+}
+
+/**
+ * The label of a set on an axis named after a variable (λ, x_1): the set of
+ * that variable, {λ | 0 ≤ λ ≤ 1} = [0, 1]. `conditionTex` is the condition in
+ * the axis' own letter (x or y).
+ */
+export function namedSetLabel(axis: 'x' | 'y', axisName: string | undefined, conditionTex: string, pieces: AxisPiece[]): string {
+    const v = axisVariable(axisName);
+    if (!v || v === axis) return setLabel(axis, conditionTex, pieces);
+    const renamed = conditionTex.replace(new RegExp(`(?<![\\\\A-Za-z])${axis}(?![A-Za-z])`, 'g'), `{${v}}`);
+    return setLabel(v, renamed, pieces);
+}

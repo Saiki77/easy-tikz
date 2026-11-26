@@ -1023,6 +1023,32 @@ if (started) {
                 });
             }
         });
+        await check('formulas (6.2.1): a condition in x_1 opens a card with a ray on an axis named x_1, and no MathJax error', async () => {
+            const conditionNote = 'Schranke';
+            await obs.writeNote(conditionNote, 'Die Schranke $x_1 \\ge \\tfrac18$ gilt für jeden zulässigen Punkt.\n');
+            await obs.openNote(conditionNote, { mode: 'reading' });
+            await obs.sleep(800);
+            const m = await marks();
+            assert(m['x_1 \\ge \\tfrac18'] === '1', `the mark of x_1 >= 1/8: ${JSON.stringify(m)}`);
+            const card = await cardOf('x_1 \\ge \\tfrac18');
+            assert(card && /Condition/.test(card), `the card of x_1 >= 1/8: ${card}`);
+            await obs.sleep(600);
+            const drawn = await obs.call(() => {
+                const pop = document.querySelector('.etz-formula-pop');
+                const svg = pop.querySelector('.etz-formula-chart svg');
+                return {
+                    errors: pop.querySelectorAll('mjx-merror, [data-mjx-error]').length,
+                    bars: svg ? svg.querySelectorAll('.etz-strokes > *').length : 0,
+                    dots: svg ? svg.querySelectorAll('.etz-markers > *').length : 0,
+                    text: (pop.querySelector('.etz-formula-chart')?.textContent || '').replace(/\s+/g, ' '),
+                };
+            });
+            assert(drawn.errors === 0, `the card shows ${drawn.errors} MathJax errors: ${drawn.text}`);
+            assert(drawn.bars >= 1 && drawn.dots >= 1, `the card draws no ray: ${JSON.stringify(drawn)}`);
+            assert(!drawn.text.includes('\\x'), `the card shows the TeX of an axis name: ${drawn.text}`);
+            await obs.mouse.move({ x: 5, y: 5 });
+            return `${card}; ${drawn.bars} bar, ${drawn.dots} dot`;
+        });
         const linkedNote = 'Connected';
         const linked = (body) => ['```easy-tikz', 'size 6 x 2.4', ...body, '```', ''].join('\n');
         await check('connected sliders: moving one moves the same name in the other connected chart of the note, never the file', async () => {

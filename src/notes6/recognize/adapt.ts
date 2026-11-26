@@ -12,6 +12,7 @@
  */
 import type { Label } from './net';
 import { splitLetterRuns } from '../../latex';
+import { isEmptyPair } from '../hover';
 
 /** The builder a label's card comes from. */
 export type CardGroup = 'chart' | 'notes6' | 'linear' | 'iterate';
@@ -297,7 +298,8 @@ function intervalSpellings(tex: string): Spelling[] {
     const out: Spelling[] = [{ tex: s }];
     const member = /^\s*(\\?[A-Za-z]+)(?:\s*_\s*\{?\w+\}?)?\s*\\in\s*([[(][\s\S]*[\])])\s*$/.exec(s);
     if (member) out.push({ tex: `x \\in ${member[2]}` });
-    else if (/^\s*[[(][^,]+,[^,]+[\])]\s*$/.test(s)) out.push({ tex: `x \\in ${s.trim()}` });
+    // 6.2.1: a pair of equal or reversed numbers alone, (1,1), is a point: no x in it.
+    else if (/^\s*[[(][^,]+,[^,]+[\])]\s*$/.test(s) && !isEmptyPair(s)) out.push({ tex: `x \\in ${s.trim()}` });
     return out;
 }
 
@@ -383,6 +385,43 @@ function plainGreek(tex: string): string {
     return out;
 }
 
+/** Single letters that call a function before a bracket even when the note defines none: f, g and h, as notes name functions. */
+const FUNCTION_LETTERS: ReadonlySet<string> = new Set(['f', 'g', 'h']);
+/** A bracket of names alone, as a call writes its arguments: (x), (t), (K, L), (x_1, x_2), (\lambda). */
+const ARGUMENTS = /^\s*(?:\\?[A-Za-z]+(?:\s*_\s*(?:\{[A-Za-z0-9]+\}|[A-Za-z0-9]))?\s*,\s*)*\\?[A-Za-z]+(?:\s*_\s*(?:\{[A-Za-z0-9]+\}|[A-Za-z0-9]))?\s*$/;
+
+/** The bracket closing the one opened at `open` (tex[open] is "("), or -1. */
+function closing(tex: string, open: number): number {
+    let depth = 0;
+    for (let i = open; i < tex.length; i++) {
+        if (tex[i] === '(') depth++;
+        else if (tex[i] === ')' && --depth === 0) return i;
+    }
+    return -1;
+}
+
+/**
+ * 6.2.1: a single letter before a bracket that is no function of the note,
+ * as a product: M(1 - y) is M \cdot (1 - y), a(x - 1) is a \cdot (x - 1).
+ * A call stays a call: a name the note defines as a function (`functions`),
+ * f, g and h, a built-in or a longer name (\sin, \max, exp), a bracket of
+ * names alone (f(x), g(t), M(x), F(K, L)).
+ */
+export function productsOf(tex: string, functions: ReadonlySet<string> = new Set()): string {
+    let out = '';
+    let from = 0;
+    for (const m of tex.matchAll(/(?<![\\A-Za-z_^])([A-Za-z])\s*\(/g)) {
+        const at = m.index ?? 0;
+        const letter = m[1];
+        const open = at + m[0].length - 1;
+        const close = closing(tex, open);
+        if (close < 0 || functions.has(letter) || FUNCTION_LETTERS.has(letter) || ARGUMENTS.test(tex.slice(open + 1, close))) continue;
+        out += `${tex.slice(from, at)}${letter} \\cdot (`;
+        from = open + 1;
+    }
+    return from === 0 ? tex : out + tex.slice(from);
+}
+
 /** The labels whose card is a chart of src/formula.ts. */
 const CHART_LABELS: ReadonlySet<Label> = new Set(['function', 'surface', 'polar', 'implicit', 'region']);
 
@@ -408,8 +447,10 @@ const MAX = 16;
  * The spellings of a formula for the builder of the label's card, in the
  * order to try: the formula as written first, then plain spacing, then each
  * part and each shorter chain, each with the rewrites of the label's kind.
+ * 6.2.1: for a chart, then each with a letter before a bracket as a product
+ * (M(1 - y)), unless the note defines it as a function (`functions`).
  */
-export function spellings(tex: string, label: Label): Spelling[] {
+export function spellings(tex: string, label: Label, functions?: ReadonlySet<string>): Spelling[] {
     const out: Spelling[] = [];
     const add = (s: Spelling) => {
         if (out.length < MAX && s.tex.trim() && !out.some((o) => o.tex === s.tex && o.axis === s.axis)) out.push(s);
@@ -423,7 +464,21 @@ export function spellings(tex: string, label: Label): Spelling[] {
         for (const f of forms) add({ tex: f });
         if (own) for (const f of forms) for (const s of own(f)) add(s);
     }
-    if (CHART_LABELS.has(label)) for (const s of out.slice(1)) add({ ...s, tex: plainGreek(s.tex) });
+    if (CHART_LABELS.has(label)) {
+        // 6.2.1: the formula as written too (-\alpha_1 \le x_1 + x_2 \le \alpha_1 has no other spelling).
+        for (const s of out.slice()) add({ ...s, tex: plainGreek(s.tex) });
+        for (const s of out.slice()) add({ ...s, tex: productsOf(s.tex, functions) });
+    }
+    return out;
+}
+
+/** 6.2.1: the functions a note defines (g(x) = ...), by the heads of its defining formulas: their calls are no products. */
+export function definedFunctions(defs: readonly string[] | undefined): Set<string> {
+    const out = new Set<string>();
+    for (const d of defs ?? []) {
+        const head = /^\s*\\?([A-Za-z][A-Za-z0-9_]*)\s*\(/.exec(d);
+        if (head) out.add(head[1]);
+    }
     return out;
 }
 
