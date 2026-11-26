@@ -14,6 +14,7 @@ import {
     computeScene3D,
     labelMetricsFor,
     textBoxPt,
+    tintsAt,
 } from '../src/scene';
 import {
     AxisStyle,
@@ -751,6 +752,22 @@ test('labels see final derived values without creating cycles', () => {
     assert.ok(t);
     assert.equal(t.text, 'z* = 9');
     assert.equal(t.halo, true);
+    // 6.2.1: the halo knows the tint it sits on, so it takes that colour.
+    const fill = item(s, 'R1').fills[0];
+    assert.deepEqual(t.under, [{ color: fill.color, opacity: fill.opacity }]);
+});
+
+test('tintsAt: the fills under a point in drawing order, none outside (6.2.1)', () => {
+    const square = (x0: number, color: string, opacity: number) => ({
+        rings: [[{ x: x0, y: 0 }, { x: x0 + 2, y: 0 }, { x: x0 + 2, y: 2 }, { x: x0, y: 2 }]],
+        color,
+        opacity,
+        pattern: 'solid' as const,
+    });
+    const fills = [square(0, 'blue', 0.25), square(1, 'red', 0.5)];
+    assert.deepEqual(tintsAt({ x: 1.5, y: 1 }, fills), [{ color: 'blue', opacity: 0.25 }, { color: 'red', opacity: 0.5 }]);
+    assert.deepEqual(tintsAt({ x: 0.5, y: 1 }, fills), [{ color: 'blue', opacity: 0.25 }]);
+    assert.deepEqual(tintsAt({ x: 5, y: 1 }, fills), []);
 });
 
 // ------------------------------------------------------------------ issues

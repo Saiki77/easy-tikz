@@ -121,6 +121,19 @@ export interface MarkerPrim {
 /** Side of its anchor point a scene text sits on: the annotation anchors plus the four diagonals. */
 export type TextAnchor = AnnotationAnchor | 'above right' | 'below left' | 'above left' | 'below right';
 
+/** 6.2.1: a fill under a text: its colour and opacity as drawn. */
+export interface HaloTint {
+    color: string;
+    opacity: number;
+}
+
+/** The tints of `fills` under point `p`, in drawing order (the halo colour of a text there). */
+export function tintsAt(p: Pt, fills: FillPrim[]): HaloTint[] {
+    const out: HaloTint[] = [];
+    for (const f of fills) if (pointInRings(p, f.rings || [])) out.push({ color: f.color, opacity: f.opacity });
+    return out;
+}
+
 export interface TextPrim {
     x: number;
     y: number;
@@ -138,6 +151,13 @@ export interface TextPrim {
     weight?: 'bold';
     /** Draw a background-coloured halo (labels on top of fills). */
     halo: boolean;
+    // 6.2.1
+    /**
+     * The tints the text sits on, in drawing order: its halo takes their
+     * colour over the background, so it hides lines but not the fill.
+     * Absent when no fill lies under the text.
+     */
+    under?: HaloTint[];
     // 6.1
     /** A value the plugin writes (an object `labelled` without a text of its own): the clean look sets it in a pill. */
     value?: boolean;
@@ -2340,8 +2360,8 @@ function scene2D(input: SceneInput2D): Scene2D {
         for (const job of jobs) if (job.scored) spots.set(job.key, { dir: job.dir, ring: job.ring, k: job.k });
         state.labels = spots;
     }
-    const fills = items.reduce<Pt[][][]>((acc, it) => {
-        for (const f of it.fills) acc.push(f.rings);
+    const fills = items.reduce<FillPrim[]>((acc, it) => {
+        acc.push(...it.fills);
         return acc;
     }, []);
     for (const job of jobs) {
@@ -2352,8 +2372,10 @@ function scene2D(input: SceneInput2D): Scene2D {
             x: job.x + side.x * HALO_PROBE * (view.xmax - view.xmin),
             y: job.y + side.y * HALO_PROBE * (view.ymax - view.ymin),
         };
-        const halo = !!spec.halo || fills.some((rings) => pointInRings(body, rings));
+        const under = tintsAt(body, fills);
+        const halo = !!spec.halo || under.length > 0;
         const prim: TextPrim = { x: job.x, y: job.y, text: job.text, color: spec.color, anchor: job.anchor, size: spec.size, halo };
+        if (under.length) prim.under = under; // 6.2.1
         if (spec.weight) prim.weight = spec.weight;
         if (job.offset) prim.offset = job.offset;
         if (job.value && !spec.region) prim.value = true; // 6.1

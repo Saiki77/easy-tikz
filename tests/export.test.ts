@@ -7,7 +7,7 @@ import { test, assert, near } from './_lib';
 import { RANGE_DEFAULTS, SettingsManager } from '../src/settings';
 import { EXAMPLES } from '../src/migrate';
 import { Function3DParameters, FunctionParameters, RendererConfig, Tool } from '../src/types';
-import { stableSvgIds } from '../src/svgExport';
+import { flattenColorMix, stableSvgIds } from '../src/svgExport';
 import { setChartLook } from '../src/look';
 
 // 6.1: these checks pin the export of 6.0 exactly: they run in the Classic look. The clean look's export is checked in tests/look.test.ts.
@@ -522,8 +522,33 @@ test('label text is escaped outside math', () => {
     assert.ok(code.includes('  title={x\\_1 \\& 50\\% \\#1 2},'), code);
     assert.ok(code.includes('xlabel={x\\_1}, ylabel={$x_2$}'));
     assert.ok(code.includes('{50\\% cut};'));
-    assert.ok(code.includes('\\node[etRed, anchor=south, font=\\large, fill=white'));
+    // 6.2.1: the label sits on R1, so its backdrop is R1's tint on the paper, opaque (not a white box).
+    assert.ok(/\\node\[etRed, anchor=south, font=\\large, fill=et\w+!\d+!white, inner sep=1pt/.test(code), code);
     assert.ok(code.includes('{$x^*$ and x\\_1};'));
+});
+
+test('labels on fills: the backdrop is the tint under the text, elsewhere none (6.2.1)', () => {
+    const code = exportOf({
+        tools: [region('R1', ['x + y <= 4', 'x >= 0', 'y >= 0'], { label: 'A', color: 'green', fillOpacity: 0.4 })],
+        annotations: [
+            { x: '1', y: '1', text: 'on', color: 'black', size: 'normal', anchor: 'center' },
+            { x: '4', y: '4', text: 'off', color: 'black', size: 'normal', anchor: 'center' },
+        ],
+    });
+    const line = (text: string) => code.split('\n').find((l) => l.includes('\\node') && l.endsWith(`{${text}};`)) ?? '';
+    assert.ok(line('on').includes('fill=etGreen!40!white, inner sep=1pt'), line('on'));
+    assert.ok(!line('on').includes('fill opacity'), line('on'));
+    assert.ok(!line('off').includes('fill='), line('off'));
+    // The region's own name sits on its fill too.
+    assert.ok(line('A').includes('fill=etGreen!40!white'), line('A'));
+});
+
+test('copies flatten color-mix to a hex, also nested (6.2.1)', () => {
+    assert.equal(flattenColorMix('color-mix(in srgb, #ff0000 25%, #ffffff)'), '#ffbfbf');
+    assert.equal(flattenColorMix('color-mix(in srgb, #0000ff 50%, color-mix(in srgb, #ff0000 25%, #ffffff))'), '#8060df');
+    assert.equal(flattenColorMix('1px 0px 2px color-mix(in srgb, #ff0000 25%, #ffffff), 0px 1px 2px color-mix(in srgb, #ff0000 25%, #ffffff)'), '1px 0px 2px #ffbfbf, 0px 1px 2px #ffbfbf');
+    assert.equal(flattenColorMix('#123456'), '#123456');
+    assert.equal(flattenColorMix('color-mix(in srgb, red, blue)'), 'color-mix(in srgb, red, blue)');
 });
 
 test('patterns: tint plus hatch over the same rings, library loaded', () => {

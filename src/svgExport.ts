@@ -8,6 +8,7 @@ import { stripLatex } from './util';
 import { t } from './i18n';
 import { pixelImage } from './iterate/paint'; // 6.0 E
 import { lightColor } from './motion6/liveprims'; // 6.0 F4
+import { mixHex, resolveCssColor } from './colors';
 
 /**
  * A copy of `svg` that renders on its own: MathJax labels (foreignObject)
@@ -51,6 +52,14 @@ export function exportableSvg(svg: SVGElement, doc: Document, opts: { white?: bo
         t.setAttribute('font-family', 'var(--font-text)');
         const weight = fo.getAttribute('font-weight');
         if (weight) t.setAttribute('font-weight', weight);
+        // 6.2.1: a math label on a fill keeps its halo, as a stroke in the colour under it.
+        const halo = fo.getAttribute('data-export-halo');
+        if (halo) {
+            t.setAttribute('stroke', halo);
+            t.setAttribute('stroke-width', fo.getAttribute('data-export-halo-width') || '2');
+            t.setAttribute('stroke-linejoin', 'round');
+            t.setAttribute('paint-order', 'stroke');
+        }
         t.textContent = stripLatex(fo.getAttribute('data-export-text') || '');
         fo.replaceWith(t);
     });
@@ -87,11 +96,11 @@ export function exportableSvg(svg: SVGElement, doc: Document, opts: { white?: bo
         el.removeAttribute('data-etz-item');
         for (const attrName of ['fill', 'stroke', 'font-family', 'stop-color']) {
             const v = el.getAttribute(attrName);
-            if (v && v.includes('var(')) el.setAttribute(attrName, resolveVars(v));
+            if (v && v.includes('var(')) el.setAttribute(attrName, flattenColorMix(resolveVars(v)));
             else if (v && opts.white && v.startsWith('#')) el.setAttribute(attrName, lightColor(v)); // 6.0 F4: time ramps in light colours
         }
         const styleAttr = el.getAttribute('style');
-        if (styleAttr && styleAttr.includes('var(')) el.setAttribute('style', resolveVars(styleAttr));
+        if (styleAttr && styleAttr.includes('var(')) el.setAttribute('style', flattenColorMix(resolveVars(styleAttr)));
     }
 
     if (opts.white) {
@@ -114,6 +123,41 @@ export function exportableSvg(svg: SVGElement, doc: Document, opts: { white?: bo
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
     return clone;
+}
+
+/**
+ * 6.2.1: every `color-mix(in srgb, A p%, B)` in `value` (also nested, as
+ * the halo of a text on fills writes it) as one `#rrggbb`, for programs
+ * that do not know color-mix. The inner mix is always the last one that
+ * opens. Leaves a mix it cannot read as it is.
+ */
+export function flattenColorMix(value: string): string {
+    let out = value;
+    for (let guard = 0; guard < 32; guard++) {
+        const start = out.lastIndexOf('color-mix(');
+        if (start < 0) break;
+        const open = start + 'color-mix('.length;
+        let depth = 1;
+        let end = open;
+        const cuts: number[] = [];
+        for (; end < out.length && depth > 0; end++) {
+            const ch = out[end];
+            if (ch === '(') depth++;
+            else if (ch === ')') depth--;
+            else if (ch === ',' && depth === 1) cuts.push(end);
+        }
+        if (depth !== 0 || cuts.length !== 2) break;
+        const first = out.slice(cuts[0] + 1, cuts[1]).trim();
+        const second = out.slice(cuts[1] + 1, end - 1).trim();
+        const pct = /^(.*\S)\s+([\d.]+)%$/.exec(first);
+        if (!pct) break;
+        const a = resolveCssColor(pct[1]);
+        const b = resolveCssColor(second.replace(/\s+[\d.]+%$/, ''));
+        const hex = mixHex(b, a, Number(pct[2]) / 100);
+        if (!hex.startsWith('#')) break;
+        out = out.slice(0, start) + hex + out.slice(end);
+    }
+    return out;
 }
 
 /**

@@ -20,6 +20,8 @@ import { Pt, View, clipPolylineToView, pointInRings, simplifyPolyline } from './
 import {
     ArrowHeads,
     BracePrim,
+    FillPrim,
+    HaloTint,
     Scene3D,
     SceneItem2D,
     StrokePrim,
@@ -29,6 +31,7 @@ import {
     computeScene3D,
     edgeLabelSide3D,
     labelMetricsFor,
+    tintsAt,
 } from './scene';
 import { sampleCurve, tickValues } from './util';
 import { boxFactors } from './box3d';
@@ -135,6 +138,8 @@ const DIM_OPACITY = 0.45;
  * background-coloured halo; the outer sep keeps it off a 2.8pt marker.
  */
 const HALO = 'fill=white, fill opacity=0.7, text opacity=1, inner sep=1pt, rounded corners=1pt, outer sep=2pt';
+/** 6.2.1: the rest of the backdrop of a label on a fill, whose colour is the fill's tint on the paper (haloOptions). */
+const HALO_ON_FILL = 'inner sep=1pt, rounded corners=1pt, outer sep=2pt';
 /** 6.1: a value label of the clean look: a soft white pill with a thin line, as in the preview. */
 const PILL = 'fill=white, draw=etzPill, line width=0.4pt, rounded corners=4pt, inner xsep=3.5pt, inner ysep=1.5pt, outer sep=2.5pt';
 /** Bold labels (region names) are drawn in a darker shade of their colour. */
@@ -1162,7 +1167,7 @@ function nodeCmd(
     color: string,
     anchor: string,
     size: AnnotationSize,
-    halo: boolean,
+    halo: boolean | string,
     at: string,
     text: string,
     weight?: TextPrim['weight'],
@@ -1172,6 +1177,7 @@ function nodeCmd(
     const bold = weight === 'bold';
     const opts = [bold ? color + BOLD_INK : color, `anchor=${anchor}`, `font=${FONT[size] || FONT.normal}${bold ? '\\bfseries' : ''}`];
     if (pill) opts.push(PILL);
+    else if (typeof halo === 'string') opts.push(halo);
     else if (halo) opts.push(HALO);
     if (offset && finitePt(offset)) {
         const pt = (v: number) => `${fmtNum(Math.round(v * 100) / 100)}pt`;
@@ -1190,16 +1196,29 @@ function addTexts(layers: Layers, item: SceneItem2D, colors: ColorSet, view: Vie
         // 6.1: a value the plugin writes sits in a pill in the clean look.
         const pill = cleanNow && !!t.value && t.weight !== 'bold';
         if (pill) colors.named('etzPill', CLEAN_COLOURS.pillLine.slice(1));
-        lines.push(nodeCmd(colors.use(t.color), ANCHOR[t.anchor] || 'center', t.size, !!t.halo, axisCs(t, view), text, t.weight, t.offset, pill));
+        lines.push(nodeCmd(colors.use(t.color), ANCHOR[t.anchor] || 'center', t.size, t.halo ? haloOptions(t.under, colors) : false, axisCs(t, view), text, t.weight, t.offset, pill));
     }
     if (!lines.length) return;
     layers.texts.push(comment(item.source), ...lines);
 }
 
+/**
+ * 6.2.1: the backdrop of a label with a halo. On a fill it is the top
+ * fill's tint on the white paper, opaque, as the preview's halo takes the
+ * colour under the text: it hides lines but not the fill. Elsewhere the
+ * soft white box.
+ */
+function haloOptions(under: HaloTint[] | undefined, colors: ColorSet): string {
+    const top = under && under.length ? under[under.length - 1] : null;
+    if (!top) return HALO;
+    const pct = Math.round(clamp(num(top.opacity, 0.25), 0, 1) * 100);
+    return `fill=${colors.use(top.color)}!${pct}!white, ${HALO_ON_FILL}`;
+}
+
 /** Layer 8, user labels: positions and text through the context like the preview; halo when on a fill. */
 function addAnnotations2D(layers: Layers, config: RendererConfig, ctx: MathContext, items: SceneItem2D[], colors: ColorSet, view: View): void {
-    const fills: Pt[][][] = [];
-    for (const item of items) for (const f of item.fills || []) fills.push(f.rings || []);
+    const fills: FillPrim[] = [];
+    for (const item of items) fills.push(...(item.fills || []));
     const lines: string[] = [];
     (config.annotations || []).forEach((a) => {
         if (!a || a.hidden) return;
@@ -1207,8 +1226,8 @@ function addAnnotations2D(layers: Layers, config: RendererConfig, ctx: MathConte
         if (!text) return;
         const p = { x: ctx.value(a.x), y: ctx.value(a.y) };
         if (!finitePt(p) || !inView(p, view, TEXT_SLACK)) return;
-        const halo = fills.some((rings) => pointInRings(p, rings));
-        lines.push(nodeCmd(colors.use(a.color), ANCHOR[a.anchor] || 'center', a.size, halo, axisCs(p, view), text));
+        const under = tintsAt(p, fills); // 6.2.1
+        lines.push(nodeCmd(colors.use(a.color), ANCHOR[a.anchor] || 'center', a.size, under.length ? haloOptions(under, colors) : false, axisCs(p, view), text));
     });
     if (lines.length) layers.labels.push('% labels', ...lines);
 }

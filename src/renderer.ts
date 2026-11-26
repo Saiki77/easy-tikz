@@ -14,13 +14,14 @@ import { AnnotationSize, FillPattern, FunctionParameters, MarkerSize, RendererCo
 import { COLOR_MAP, THICKNESS_MAP, mixHex, resolveCssColor } from './colors';
 import { marchingGrid, sampleCurve, stripLatex, tickValues } from './util';
 import { AxisTicks, Tick, autoTickSteps, axisTicks } from './ticks';
-import { extractMathSource, renderMathLabel, flushMathRenders } from './mathlabel';
+import { ensureMathJax, extractMathSource, renderMathLabel, flushMathRenders } from './mathlabel';
 import { FunctionInfo, FunctionKind, MathContext, labelDisplayText } from './mathcontext';
 // 6.0 A
 import { valueDefinitions } from './values/defs';
 import {
     BracePrim,
     FillPrim,
+    HaloTint,
     MarkerPrim,
     Scene2D,
     SceneCache,
@@ -32,6 +33,7 @@ import {
     TextPrim,
     computeScene2D,
     labelMetricsFor,
+    tintsAt,
 } from './scene';
 import { Grid, Pt, View, pointInRings } from './geometry';
 import { t as msg } from './i18n';
@@ -172,6 +174,8 @@ const CHAR_WIDTH_EM = 0.56;
 const BOLD_INK_MIX = 0.6;
 
 const BACKGROUND = 'var(--background-primary)';
+/** 6.2.1: how far a text's halo reaches beyond its glyphs, in em (plain text: a stroke twice as wide). */
+const HALO_EM = 0.125;
 const BORDER = 'var(--background-modifier-border)';
 const TEXT_NORMAL = 'var(--text-normal)';
 const TEXT_MUTED = 'var(--text-muted)';
@@ -248,6 +252,8 @@ interface LabelOptions {
     weight?: string;
     /** Background-coloured outline (texts on top of fills). */
     halo?: boolean;
+    /** 6.2.1: the halo's colour (haloInk): the fill under the text over the background. Absent: the background. */
+    haloInk?: string;
     /** Extra attributes on the outermost element drawn. */
     attrs?: Record<string, string>;
 }
@@ -303,6 +309,19 @@ const lastGoodScene = new WeakMap<SceneCache, Scene2D>();
 /** Short coordinate text for path data and attributes. */
 function num(n: number): string {
     return String(Math.round(n * 100) / 100);
+}
+
+/**
+ * 6.2.1: a halo around HTML text (MathJax labels) as CSS text shadows: 12
+ * copies on a ring of `r` px, slightly blurred so the ring closes, in `ink`.
+ */
+function haloShadow(ink: string, r: number): string {
+    const parts: string[] = [];
+    for (let k = 0; k < 12; k++) {
+        const a = (k * Math.PI) / 6;
+        parts.push(`${num(r * Math.cos(a))}px ${num(r * Math.sin(a))}px ${num(0.5 * r)}px ${ink}`);
+    }
+    return parts.join(', ');
 }
 
 /** Arrowhead length in px: grows with the line width like TikZ tips, but less than proportionally. */
@@ -390,6 +409,8 @@ export class SVGRenderer {
     private readonly arrows = new Map<string, string>();
     /** Set when a `$...$`-wrapped label was rendered via MathJax during this render() pass. */
     private usedMath = false;
+    /** 6.2.1: a `$...$` label fell back to plain text (MathJax may not be loaded yet). */
+    private mathFailed = false;
 
     /** CONTRACT (v4): function + tool problems found during the last render(). */
     issues: SceneIssue[] = [];
@@ -466,6 +487,7 @@ export class SVGRenderer {
         this.patterns.clear();
         this.arrows.clear();
         this.usedMath = false;
+        this.mathFailed = false;
         this.textInk = null;
         this.issues = [];
         this.sampled.clear(); // 6.1
@@ -535,6 +557,11 @@ export class SVGRenderer {
         this.drawLegend(svg, legend);
         this.drawTitle(svg);
         this.mathSettled = this.usedMath ? flushMathRenders() : null;
+        // 6.2.1: a label that fell back because MathJax was not loaded yet: load it, then draw again.
+        if (this.mathFailed) {
+            const flushed = this.mathSettled;
+            this.mathSettled = ensureMathJax().then(async (loaded) => loaded || (flushed ? await flushed : false));
+        }
         return svg;
     }
 
@@ -1050,33 +1077,25 @@ export class SVGRenderer {
                     'data-export-fill': o.color,
                     'data-export-font-size': String(fs),
                 });
-                fo.appendChild(el);
-                let outer: SVGElement = fo;
+                // 6.2.1: a stroke cannot reach into HTML, so the halo of a math label is a ring of text
+                // shadows in the colour under it: shaped like the glyphs, not a box.
                 if (o.halo) {
-                    // A stroke halo cannot reach into HTML, so math labels on fills get a soft backdrop:
-                    // as light as the white box the export puts behind such a label (fill opacity 0.7).
-                    outer = this.el('g');
-                    const padX = 0.12 * fs;
-                    const padY = 0.04 * fs;
-                    outer.appendChild(
-                        this.el('rect', {
-                            x: num(fx - padX),
-                            y: num(fy - padY),
-                            width: num(w + 2 * padX),
-                            height: num(h + 2 * padY),
-                            rx: '3',
-                            fill: BACKGROUND,
-                            'fill-opacity': '0.7',
-                        })
-                    );
-                    outer.appendChild(fo);
+                    const ink = o.haloInk ?? BACKGROUND;
+                    el.setCssStyles({ textShadow: haloShadow(ink, HALO_EM * fs) });
+                    // Copies draw the label as plain text with this stroke (svgExport).
+                    fo.setAttribute('data-export-halo', ink);
+                    fo.setAttribute('data-export-halo-width', num(2 * HALO_EM * fs));
                 }
-                for (const [k, v] of Object.entries(o.attrs || {})) outer.setAttribute(k, v);
-                parent.appendChild(outer);
-                return { el: outer, width: w, height: h, x0: fx, y0: fy };
+                fo.appendChild(el);
+                for (const [k, v] of Object.entries(o.attrs || {})) fo.setAttribute(k, v);
+                parent.appendChild(fo);
+                return { el: fo, width: w, height: h, x0: fx, y0: fy };
             } catch {
                 // MathJax rejected the source (unbalanced braces, unknown
-                // environment, ...); fall through to the plain-text path.
+                // environment, ...) or is not loaded yet (6.2.1: render()
+                // loads it and asks for a redraw); fall through to the
+                // plain-text path.
+                this.mathFailed = true;
             }
         }
         const plain = labelDisplayText(text, stripLatex);
@@ -1091,8 +1110,8 @@ export class SVGRenderer {
         };
         if (o.weight) attrs['font-weight'] = o.weight;
         if (o.halo) {
-            attrs.stroke = BACKGROUND;
-            attrs['stroke-width'] = num(0.25 * fs);
+            attrs.stroke = o.haloInk ?? BACKGROUND; // 6.2.1: the colour under the text
+            attrs['stroke-width'] = num(2 * HALO_EM * fs);
             attrs['stroke-linejoin'] = 'round';
             attrs['paint-order'] = 'stroke';
         }
@@ -1115,7 +1134,7 @@ export class SVGRenderer {
         y: number,
         anchor: TextPrim['anchor'] | undefined,
         size: AnnotationSize | undefined,
-        o: { color: string; halo: boolean; weight?: string; attrs?: Record<string, string>; offset?: Pt }
+        o: { color: string; halo: boolean; haloInk?: string; weight?: string; attrs?: Record<string, string>; offset?: Pt }
     ): DrawnLabel | null {
         const side = anchor && TEXT_ALIGN[anchor] ? anchor : 'center';
         const place = TEXT_ALIGN[side];
@@ -1130,6 +1149,7 @@ export class SVGRenderer {
             vAnchor: place.v,
             weight: o.weight,
             halo: o.halo,
+            haloInk: o.haloInk,
             attrs: o.attrs,
         });
     }
@@ -1980,6 +2000,7 @@ export class SVGRenderer {
                 const drawnText = this.drawPlaced(g, t.text, t.x, t.y, t.anchor, t.size, {
                     color: bold ? this.boldInk(t.color) : this.css(t.color),
                     halo: !!t.halo && !pill,
+                    haloInk: this.haloInk(t.under), // 6.2.1
                     weight: bold ? '600' : undefined,
                     offset,
                     attrs: t.still ? this.stillAttrs(t, {}) : undefined, // 6.0 ML: a frame(t) text the live canvas draws
@@ -1990,6 +2011,23 @@ export class SVGRenderer {
             if (this.entering.has(item)) this.enterEls(kidsFrom(g, from), item, 'rise'); // 6.0 entrances: just after its object
         }
         this.attach(svg, g);
+    }
+
+    /**
+     * 6.2.1: the colour of a halo over `under` (the tints under a text, in
+     * drawing order): each tint over what lies below it, as the fills paint
+     * it, ending on the background. A theme variable expression, so it
+     * follows the theme; copies flatten it to a hex (svgExport). Undefined
+     * when nothing lies under the text: the halo is the background then.
+     */
+    private haloInk(under: HaloTint[] | undefined): string | undefined {
+        if (!under || !under.length) return undefined;
+        let ink = BACKGROUND;
+        for (const t of under) {
+            const opacity = Number.isFinite(t.opacity) ? clamp(t.opacity, 0, 1) : 0.25; // as drawFill
+            ink = `color-mix(in srgb, ${this.css(t.color)} ${num(opacity * 100)}%, ${ink})`;
+        }
+        return ink;
     }
 
     /**
@@ -2012,8 +2050,8 @@ export class SVGRenderer {
     private drawAnnotations(svg: SVGElement, items: SceneItem2D[]): void {
         const list = this.config.annotations || [];
         if (!list.length) return;
-        const fillRings: Pt[][][] = [];
-        for (const item of items) for (const fill of item.fills || []) fillRings.push(fill.rings || []);
+        const fills: FillPrim[] = [];
+        for (const item of items) fills.push(...(item.fills || []));
         const g = this.layer('etz-labels', false);
         list.forEach((a, idx) => {
             if (!a || a.hidden) return;
@@ -2027,9 +2065,11 @@ export class SVGRenderer {
             if (this.compact || !Number.isFinite(x) || !Number.isFinite(y) || !this.inView(x, y, TEXT_SLACK)) return;
             const attrs: Record<string, string> = { 'data-annotation-idx': String(idx), 'data-etz-item': source, 'pointer-events': 'bounding-box' };
             const from = g.children.length;
+            const under = tintsAt({ x, y }, fills); // 6.2.1
             this.drawPlaced(g, this.math.formatTemplate(text), x, y, a.anchor, a.size, {
                 color: this.css(a.color),
-                halo: fillRings.some((rings) => pointInRings({ x, y }, rings)),
+                halo: under.length > 0,
+                haloInk: this.haloInk(under),
                 weight: '500',
                 attrs,
             });
