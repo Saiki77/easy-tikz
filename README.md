@@ -26,7 +26,7 @@ Vector fields with moving particles and their rest points, solutions of systems 
 
 ### Write it in Python or GeoGebra
 
-<img src="docs/media/v6-code.png" alt="Two charts. Left: a small neural network learning two rings of points in a Python block, at training step 530: the blue region inside a closed black boundary around the blue points, red around it. Right: a chart from GeoGebra lines, a triangle ABC with its circumcircle, a segment to a midpoint and a Sequence of points, with its ten input lines printed under it." width="100%">
+<img src="docs/media/v6-code.png" alt="Two charts. Left: a small neural network learning two rings of points in a Python block, at training step 530: the blue region inside a closed black boundary around the blue points, red around it. Right: a chart from GeoGebra lines, a triangle ABC with the round curve through its three corners, a segment to a midpoint and a Sequence of points, with its ten input lines printed under it." width="100%">
 
 A Python block with NumPy and matplotlib draws in the chart and can play over time, so a network learns while you watch. GeoGebra lines paste as they are. Or [ask any chatbot](docs/ai.md) to write the chart.
 
@@ -92,7 +92,7 @@ Every chart can also be an SVG file in your vault, so Obsidian Publish and GitHu
 
 ### Learn it step by step
 
-<img src="docs/media/readme/help.png" alt="The Help tab of the editor: a search field, Start here with four first guides (your first chart, every formula is a chart, drag shapes to edit them, ask the curve), the card Write a chart in words with its lines beside the linear program they draw, and the row New in 6 with the Lorenz system, complex functions seen two ways, circles that draw square and sawtooth waves, and the orbit of a point in the Mandelbrot set." width="100%">
+<img src="docs/media/readme/help.png" alt="The Help tab of the editor: a search field, Start here with four first guides (your first chart, every formula is a chart, drag shapes to edit them, ask the curve), the card Write a chart in words with its lines beside the linear program they draw, and the row New in 6 with the Lorenz system, complex functions seen two ways, turning wheels that draw square and sawtooth waves, and the orbit of a point in the Mandelbrot set." width="100%">
 
 The Help tab starts with Start here and New in 6, then 79 short guides by topic. Each step shows its chart live with its sliders, and the lines it adds to the chart, so you learn the chart language while you build.
 
