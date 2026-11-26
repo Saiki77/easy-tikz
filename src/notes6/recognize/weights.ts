@@ -1,6 +1,6 @@
 // The weights of the formula recognition network (src/notes6/recognize), written by hand: no number in this
-// file comes from an optimiser. A copy of the frozen design (hover-ml, designed-r1) without its hybrid part.
-// Data only: net.ts turns it into matrices.
+// file comes from an optimiser. A copy of the frozen design of round 2 (hover-ml, designed2: the circuit,
+// best.mjs) without its hybrid part. Data only: net.ts turns it into matrices.
 //
 // A unit is [name, bias, 'input weight input weight ...']. Inputs are features (features.ts) or earlier units.
 // Every unit computes clip01(bias + sum of weight * input). With 0/1 inputs this gives the three patterns used here:
@@ -63,23 +63,26 @@ export const SPEC: NetSpec = {
         ['TWO', 0, 'XY 1 X12 1'],
         ['NL2', 0, 'C_nonlin 1 varProduct 1'],
         ['VETO_F', 0, 'V_ops 1 V_prob 1 V_data 1 V_unk 1 V_value 1 let6p 1 paramPair 1 op_sum 1 deco_bar 1 V_mat 1 V_set 1'],
-        ['VETO_G', 0, 'V_ops 1 V_prob 1 V_data 1 V_unk 1 let7p 1 op_sum 1 hasStar 1 hasPm 1 deco_bar 1 V_mat 1 V_set 1'],
+        ['VETO_G', 0, 'pointCoords 1 laterSolve 1 V_ops 1 V_prob 1 V_data 1 V_unk 1 let7p 1 op_sum 1 hasStar 1 hasPm 1 deco_bar 1 V_mat 1 V_set 1'],
         ['VETO_D', 0, 'V_ops 1 V_prob 1 V_data 1 V_unk 1 V_value 1 let5 1 let6p 1 op_sum 1 V_set 1'],
         ['RV', 0, 'XY 1 X12 1 RX12 1 RMIDY 1'],
-        ['IVR', 0, 'ZS_ok 1 MEM_ok 1 CTX_ok 1'],
+        ['INF_ok', 0, 'ivHasInf 1 ivEndsExpr -2'],
+        ['IVR', 0, 'ZS_ok 1 MEM_ok 1 CTX_ok 1 INF_ok 1'],
         ['EPIP', 0, 'EPI_a 1 EPI_b 1'],
         ['JP', 0, 'JCOMB 1 jensenE 1 jensenSum 1'],
 
         // ---- layer 3: one unit per way a card can be earned
         // function
         ['F_head', -1, 'HV_real 1 JWABS 1 bodyHasArg 1 VETO_F -2 hasImag -2 INEQ -2 laterEval -2'],
+        ['F_yline', -3, 'ha_y 1 lastNumeric 1 ctxLine 1 eq1 1'],
         ['F_headz', -2, 'hcArg_z 1 bodyHasArg 1 ZREAL 1 VETO_F -2'],
         ['F_heads', -2, 'hcArg_s 1 bodyHasArg 1 SREAL 1 VETO_F -2'],
-        ['F_y', -1, 'ha_y 1 has_x 1 VETO_F -2 INEQ -2 hasImag -2 has_y -2 ha_prime -2'],
+        ['F_y', -1, 'ha_y 1 has_x 1 VETO_F -2 INEQ -2 hasImag -2 has_y -2 ha_prime -2 laterSolve -2'],
         ['F_name', -1, 'NAMEHEAD 1 BODY1V 1 VETO_F -2 INEQ -2'],
         ['F_seq', -2, 'ha_subIdx 1 bodyHasIdx 1 SEQSHAPE 1 VETO_F -2 recPrev -2 recOtherIdx -2 ha_hat -2 INEQ -2 V_cplx -2 ctxProb -2'],
         ['F_xsub', -2, 'ha_xsub 2 has_x1 1 has_x2 1 VETO_F -2 eq2p -2 INEQ -2'],
         ['F_bare', -2, 'bare 1 XVAR 1 C_nonlin 1 VETO_F -2 V_struct -2 V_cplx -2 has_y -2 has_x1 -2 has_x2 -2 has_z -2 hasStar -2 has_k -2'],
+        ['F_bare_q', -2, 'bare 1 bodyOnlyQ 1 C_nonlin 1 VETO_F -2 V_struct -2 V_cplx -2'],
         ['F_bare_t', -2, 'bare 1 has_t 1 C_nonlin 1 VETO_F -2 V_struct -2 V_cplx -2 has_x -2 has_y -2 has_z -2 has_s -2 has_n -2'],
         ['F_bare_z', -3, 'bare 1 has_z 1 C_nonlin 1 ZREAL 1 VETO_F -2 V_struct -2 V_cplx -2 has_x -2 has_y -2'],
         ['F_bare_n', -3, 'bare 1 has_n 1 C_nonlin 1 ctxSeq 1 VETO_F -2 V_struct -2 V_cplx -2 has_x -2 has_y -2'],
@@ -93,6 +96,7 @@ export const SPEC: NetSpec = {
         ['P_polar', -1, 'polarR 1 PHEAD 1 has_x -2 has_y -2 V_cplx -2 V_ops -2 INEQ -2'],
         // implicit
         ['I_expr', -2, 'hexpr 1 eq1 1 TWO 1 VETO_G -2 V_cplx -2 IDENT -2 INEQ -2 hasNe -2 has_z -2 V_struct -2 hasIn -2 hasTo -2'],
+        ['I_xline', -3, 'ha_x 1 lastNumeric 1 ctxLine 1 eq1 1'],
         ['I_x', -2, 'ha_x 1 has_y 1 eq1 1 VETO_G -2 V_cplx -2 INEQ -2 has_z -2 V_struct -2 has_x -2'],
         // region
         ['RG', -1, 'INEQ 1 RV 1 EQANY -2 VETO_G -2 V_cplx -2 hasNe -2 hasIn -2 has_z -2'],
@@ -101,6 +105,7 @@ export const SPEC: NetSpec = {
         ['C_abs', -2, 'c_lhsAbs 1 c_less 1 CR 1 c_lhsHasZL -2 V_data -2 V_ops -2 V_prob -2 hasStar -2 deco_bar -2 deco_hat -2 anyLogic -2'],
         ['C_call', -2, 'c_lhsCallX 1 c_rhsNum 1 ineq1 1'],
         ['C_two', -3, 'ineq2 1 c_midAtom 1 c_endsNum 1 c_less 1 c_midIdx -2 V_ops -2'],
+        ['C_ctx', -2, 'ineq1 1 c_lhsCtxVar 1 c_rhsNum 1 V_data -2 V_ops -2 V_prob -2 anyLogic -2'],
         ['C_sig', -2, 'c_lhsOmegaZ 1 c_rhsNum 1 CTXSIG 1'],
         // interval
         ['IV_sq', -3, 'iv 1 ivSquare 1 IVENDS 1 IVFORM 1 hasArr -2 V_prob -2 anyPm -2'],
@@ -130,13 +135,13 @@ export const SPEC: NetSpec = {
     ],
     // ---- output layer (linear)
     out: [
-        ['none', 0.5, 'afterWord 1 genericProgram 1'],
-        ['function', 0, 'F_head 1 F_headz 1 F_heads 1 F_y 1 F_name 1 F_seq 1 F_xsub 1 F_bare 1 F_bare_t 1 F_bare_z 1 F_bare_n 1'],
+        ['none', 0.5, 'afterWord 2 genericProgram 1 prose 3 rowCont 3 unreadable 3'],
+        ['function', 0, 'F_head 1 F_headz 1 F_heads 1 F_y 1 F_name 1 F_seq 1 F_xsub 1 F_yline 1 F_bare_q 1 F_bare 1 F_bare_t 1 F_bare_z 1 F_bare_n 1'],
         ['surface', 0, 'S_head 1.1 S_hx 1.1 S_name 1.1 S_z 1.1 S_bare 1.1'],
         ['polar', 0, 'P_polar 1.3'],
-        ['implicit', 0, 'I_expr 1 I_x 1'],
+        ['implicit', 0, 'I_expr 1 I_x 1 I_xline 1'],
         ['region', 0, 'RG 1.2'],
-        ['condition', 0, 'C_one 1 C_abs 1 C_call 1 C_two 1 C_sig 1'],
+        ['condition', 0, 'C_one 1 C_abs 1 C_call 1 C_two 1 C_sig 1 C_ctx 1'],
         ['interval', 0, 'IV_sq 1 IV_rd 1'],
         ['set', 0, 'SET 1'],
         ['epigraph', 0, 'EPI 1.5 EPI_op 1.5'],
@@ -151,4 +156,3 @@ export const SPEC: NetSpec = {
         ['domain', 0, 'D_headz 1 D_heads 1 D_bare_z 1 D_bare_s 1'],
     ],
 };
-

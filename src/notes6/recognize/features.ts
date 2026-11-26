@@ -1,13 +1,15 @@
 /*
  * The input encoding of formula recognition (a port of the frozen
- * features.mjs, hover-ml designed-r1; the logic is the same line by line).
- * A formula is cut into parts (as formulaLines does: \qquad, ",\quad",
- * \Rightarrow, \iff, a \text{...} word), and every part becomes one 0/1
- * vector of token-level features. No decision is taken here: each feature
+ * features.mjs of round 2, hover-ml designed2; the logic is the same line by
+ * line). The front end (normalize.ts) writes the formula in canonical TeX;
+ * it is cut into parts (\qquad, \Rightarrow, \iff, a word such as für, a
+ * list of statements, a remark in brackets at the end, a chain f(x) = A = B),
+ * and every part becomes one 0/1 vector of token-level features. No decision is taken here: each feature
  * answers one small question about the tokens ("the head is name(letter) =",
  * "a top-level \le", "the letter x is free"). All decisions are weights
  * (weights.ts). Pure: no DOM, no Obsidian.
  */
+import { normalize } from './normalize';
 
 /** What the encoder reads around a formula: the note's definitions, the words around it, the note's id. */
 export interface RecognizeContext {
@@ -211,7 +213,8 @@ function parse(tIn: string[]): Item[] {
         if (k === '\\text' || k === '\\mathrm' || k === '\\operatorname' || k === '\\textbf' || k === '\\textit' || k === '\\textrm' || k === '\\mathop') {
             let [u, j] = unit(t, i + 1);
             if (u[0] === '*') [u, j] = unit(t, j);
-            const s = u.join('').replace(/SP/g, '');
+            const sRaw = u.join('').replace(/SP/g, '␣');
+            const s = sRaw.replace(/␣/g, '');
             if (s === 'e') push({ t: 'atom', base: 'e', sub: '' });
             else if (s === 'd') push({ t: 'atom', base: 'd', sub: '', dd: 1 });
             else if (s === 'i' || s === 'j') push({ t: 'atom', base: s, sub: '' });
@@ -219,9 +222,9 @@ function parse(tIn: string[]): Item[] {
                 t = [...t.slice(0, i), '\\' + s.replace('arg', ''), ...t.slice(j)];
                 continue;
             } else if (FNWORD.has(s)) items.push({ t: 'fn', name: s });
-            else if (t[j] === '(' || t[j] === '[' || k === '\\operatorname' || k === '\\mathop') items.push({ t: 'name', name: s });
+            else if (!/␣/.test(sRaw) && (t[j] === '(' || t[j] === '[' || k === '\\operatorname' || k === '\\mathop')) items.push({ t: 'name', name: s });
             else if (/^[A-Z][A-Za-z]{0,3}$/.test(s) && k === '\\mathrm' && t[j] === '_') items.push({ t: 'name', name: s });
-            else items.push({ t: 'text', v: s });
+            else items.push({ t: 'text', v: sRaw });
             i = j;
             continue;
         }
@@ -491,35 +494,153 @@ function depths(items: Item[]): number[] {
     return d;
 }
 
-/** Parts of a formula: cut at \qquad, \quad, ", " followed by a space command, \Rightarrow, \iff (top level). */
-function segments(items: Item[]): { segs: Item[][]; joins: string[] } {
+/**
+ * Parts of a formula (segmentation). Cuts, all at bracket depth 0:
+ *   joins         \Rightarrow \iff \Leftarrow \quad \qquad, two space commands in a row
+ *   words         \text{für}, \text{und}, \text{s.t.}, \text{(Kreis)} ... (a unit after a number and a name before a letter are no words)
+ *   lists         a comma or semicolon when both sides are statements (each has a relation): "a = 2, b = 3" but not "x_1, x_2 \ge 0"
+ *   side remarks  a bracket at the end that holds a statement: "... \; (x > 0)"
+ * side[i] is true for a part that only restricts an earlier part (after für / for / if ..., or in a bracket).
+ */
+const W_COND = /(^|[^a-zäöüß])(für|fuer|fur|for|mit|with|wobei|where|falls|if|wenn|when|sofern|whenever|solange|while|da|since|weil|because|unless|given|gegeben|nur|only|provided|gilt|holds|valid|gültig)($|[^a-zäöüß])/i;
+const W_AND = /(^|[^a-zäöüß])(und|and|oder|or|sowie|bzw|aber|but|also|dann|then|d\.h|i\.e|sei|let|somit|hence|thus|folglich|daher|damit|so|bzw\.|resp|sowie|ergibt|gives|yields|liefert|folgt|daraus)($|[^a-zäöüß])/i;
+const W_ST = /^[␣(]*(s\.?␣?t\.?|u\.?␣?d\.?␣?N\.?|subject␣to|such␣that|unter␣der␣Nebenbedingung|unter␣den␣Nebenbedingungen|NB:?|u\.␣?d\.␣?NB\.?)[␣:)]*$/i;
+const STMT = new Set(['eq', 'lt', 'gt', 'le', 'ge', 'ne', 'in', 'approx', 'to', 'mapsto', 'sub', 'equiv', 'sim', 'colon', 'larrow', 'other']);
+const hasTopRel = (its: Item[]) => {
+    const d = depths(its);
+    return its.some((x, i) => d[i] === 0 && x.t === 'rel' && STMT.has(String(x.v)));
+};
+function segments(items: Item[]): { segs: Item[][]; joins: string[]; side: boolean[] } {
     const d = depths(items);
+    // 1. joins and words
     const segs: Item[][] = [[]];
     const joins: string[] = [];
+    const side: boolean[] = [false];
+    const cut = (type: string, isSide?: boolean) => {
+        segs.push([]);
+        joins.push(type);
+        side.push(!!isSide);
+    };
     for (let i = 0; i < items.length; i++) {
         const it = items[i];
-        if (d[i] === 0 && it.t === 'join') {
-            segs.push([]);
-            joins.push(String(it.v));
+        if (d[i] !== 0) {
+            segs[segs.length - 1].push(it);
             continue;
         }
-        if (d[i] === 0 && it.t === 'sym' && it.v === ',' && items[i + 1] && items[i + 1].t === 'sp') {
-            segs.push([]);
-            joins.push(',');
+        if (it.t === 'join') {
+            cut(String(it.v), side[side.length - 1] && (it.v === '\\quad' || it.v === '\\qquad') && segs[segs.length - 1].length === 0);
             continue;
         }
-        if (d[i] === 0 && it.t === 'text' && /(^|[^a-zäöü])(für|for|mit|with|wobei|where|falls|if|wenn|when|und|and)($|[^a-zäöü])/i.test(String(it.v))) {
-            segs.push([]);
-            joins.push('word');
+        if (it.t === 'sp' && items[i + 1] && items[i + 1].t === 'sp') {
+            while (items[i + 1] && items[i + 1].t === 'sp') i++;
+            cut('\\quad', side[side.length - 1] && segs[segs.length - 1].length === 0);
             continue;
         }
-        if (d[i] === 0 && it.t === 'text' && /^(s\.t\.|u\.d\.N\.|subject to|NB:?)$/i.test(String(it.v).trim())) {
-            segs.push([]);
-            joins.push('text');
+        if (it.t === 'text') {
+            const v = String(it.v);
+            let j = i - 1;
+            while (j >= 0 && items[j].t === 'sp') j--;
+            const afterNum = j >= 0 && (items[j].t === 'num' || items[j].t === 'unit' || (items[j].t === 'rb' && /^[^␣]{1,4}$/.test(v)));
+            const next = items[i + 1];
+            if (W_ST.test(v)) {
+                cut('st');
+                continue;
+            }
+            if (afterNum && !/␣[a-zäöü]{2,}/i.test(v.replace(/^␣+/, '')) && !W_COND.test(v) && !W_AND.test(v)) {
+                segs[segs.length - 1].push(it);
+                continue;
+            }
+            if (W_COND.test(v)) {
+                cut('cond', true);
+                continue;
+            }
+            if (W_AND.test(v)) {
+                cut('and');
+                continue;
+            }
+            const glued = !/[␣(:.,]/.test(v) && next && d[i + 1] === 0 && (next.t === 'atom' || next.t === 'rel' || next.t === 'open' || next.t === 'sym');
+            const gluedBefore = !/[␣(:.,]/.test(v) && i > 0 && (items[i - 1].t === 'rel' || (items[i - 1].t === 'sym' && /^(\+|-|cdot|times|\/)$/.test(String(items[i - 1].v))));
+            if (glued || gluedBefore) {
+                segs[segs.length - 1].push(it);
+                continue;
+            }
+            // a label in brackets is a remark; other words stay in the part (a sentence about the formula)
+            if (/^␣*\(.*\)[␣.,]*$/.test(v)) {
+                cut('remark');
+                continue;
+            }
+            segs[segs.length - 1].push(it);
             continue;
         }
         segs[segs.length - 1].push(it);
     }
+    // 2. lists of statements
+    const segs2: Item[][] = [];
+    const joins2: string[] = [];
+    const side2: boolean[] = [];
+    segs.forEach((s, k) => {
+        const ds = depths(s);
+        const chunks: Item[][] = [[]];
+        const seps: Item[] = [];
+        s.forEach((x, i) => {
+            if (ds[i] === 0 && x.t === 'sym' && (x.v === ',' || x.v === ';')) {
+                chunks.push([]);
+                seps.push(x);
+            } else chunks[chunks.length - 1].push(x);
+        });
+        const outp: Item[][] = [];
+        let pending: Item[] = [];
+        chunks.forEach((c, i) => {
+            if (hasTopRel(c)) {
+                outp.push([...pending, ...c]);
+                pending = [];
+            } else {
+                pending.push(...c);
+                if (i < chunks.length - 1) pending.push(seps[i]);
+            }
+        });
+        if (pending.length) {
+            if (outp.length) outp[outp.length - 1].push({ t: 'sym', v: ',' }, ...pending);
+            else outp.push(pending);
+        }
+        if (!outp.length) outp.push([]);
+        outp.forEach((o, i) => {
+            segs2.push(o);
+            side2.push(side[k]);
+            if (i > 0) joins2.push(',');
+            else if (k > 0) joins2.push(joins[k - 1]);
+        });
+    });
+    // 3. a bracket at the end that holds a statement
+    const segs3: Item[][] = [];
+    const joins3: string[] = [];
+    const side3: boolean[] = [];
+    segs2.forEach((s0, k) => {
+        const s = s0.slice();
+        while (s.length && (s[s.length - 1].t === 'sp' || (s[s.length - 1].t === 'sym' && /^[,.;]$/.test(String(s[s.length - 1].v))))) s.pop();
+        const ds = depths(s);
+        let open = -1;
+        if (s.length && s[s.length - 1].t === 'close' && s[s.length - 1].v === ')')
+            for (let i = s.length - 2; i >= 0; i--)
+                if (ds[i] === 0 && s[i].t === 'open') {
+                    open = s[i].v === '(' ? i : -1;
+                    break;
+                }
+        const inner = open >= 0 ? s.slice(open + 1, -1) : null;
+        if (k > 0) joins3.push(joins2[k - 1]);
+        if (inner && hasTopRel(inner) && !inner.some((x, i) => depths(inner)[i] === 0 && x.t === 'sym' && x.v === ',') && (open === 0 || s[open - 1].t === 'sp')) {
+            if (open > 0) {
+                segs3.push(s.slice(0, open));
+                side3.push(side2[k]);
+                joins3.push('paren');
+            }
+            segs3.push(inner);
+            side3.push(true);
+        } else {
+            segs3.push(s0);
+            side3.push(side2[k]);
+        }
+    });
     const strip = (s: Item[]) => {
         let a = 0;
         let b = s.length;
@@ -527,7 +648,15 @@ function segments(items: Item[]): { segs: Item[][]; joins: string[] } {
         while (b > a && (s[b - 1].t === 'sp' || (s[b - 1].t === 'sym' && (s[b - 1].v === ',' || s[b - 1].v === '.' || s[b - 1].v === ';')))) b--;
         return s.slice(a, b).filter((x) => x.t !== 'sp');
     };
-    return { segs: segs.map(strip), joins };
+    const out = segs3.map(strip);
+    // a side part needs a main part before it
+    let seen = false;
+    const sideOut = out.map((s, i) => {
+        const r = side3[i] && seen;
+        if (s.length) seen = true;
+        return r;
+    });
+    return { segs: out, joins: joins3, side: sideOut };
 }
 
 const key = (a: Item) => String(a.base) + (a.hat || a.bar ? '^' : '') + (a.sub ? '_' + a.sub : '');
@@ -650,7 +779,8 @@ sumLead sumBounds sumData
 c_lhsX c_lhsT c_lhsAbs c_lhsCallX c_lhsX12 c_lhsHasZL c_rhsNum c_rhsAtom c_less c_midAtom c_midIdx c_endsNum c_midY c_endsHaveX c_lhsOmegaZ
 polarR
 ctxML ctxComplex ctxSignal ctxProb ctxSeq ctxPoint ctxInterval ctxVec
-paramPair anyLogic anyVec anyPm afterWord genericProgram laterEval bodyHasInit`.split(/\s+/);
+paramPair anyLogic anyVec anyPm afterWord genericProgram laterEval bodyHasInit
+prose rowCont unreadable ctxLine c_lhsCtxVar ivHasInf laterSolve pointCoords`.split(/\s+/);
 const INDEX = new Map(FEATURES.map((n, i) => [n, i]));
 const at = (name: string): number => {
     const k = INDEX.get(name);
@@ -672,6 +802,8 @@ function noteContext(ctx: RecognizeContext | undefined): Answers {
     f.ctxPoint = /Punkt|[Pp]oint|Kante|[Ee]dge|bei \[F\]|at \[F\]|Kandidat|Lösung|Optimum|Nullen|Tupel|Kruskal|Scheitel|Ecke|Tangent|Bsp\.? \d|Max |Min /.test(c);
     f.ctxInterval = /Intervall|[Ii]nterval|auf \[F\]|on \[F\]|in \[F\]|into|segment|[Bb]ereich|to \[F\]/.test(c) || /\\to\s*$/.test(c.split('[F]')[0].replace(/\$\s*$/, ''));
     f.ctxVec = /optimi|ganzzahlig|operations-research/.test(note) || /\\mathbb\{[RZ]\}\^n|\bLP\b|Relaxation|Ax \\le|Ax =/.test(c);
+    f.ctxLine = /(Gerade|[Ll]ine|Linie|Parallele)\b[^.$]{0,12}\$?\s*\[F\]/.test(c);
+    f.ctxPoint = f.ctxPoint || /(durch|through|[Ss]palten|columns?|entry|Eintrag|Punkte?n?|points?|[Vv]ektor(en)?|vectors?)\b[^.$]{0,25}\$?\s*\[F\]/.test(c);
     f.ctxSubst = /(Subst\w*|[Ss]etze|Sei|Let|Mit|With|with|where|wobei|mit)\s*\$?\s*\[F\]/.test(c);
     return f;
 }
@@ -697,7 +829,7 @@ function defNames(defs: unknown): DefNames {
 type Head = { kind: 'call'; name: Item; args: Item[][]; abs?: boolean } | { kind: 'atom'; a: Item; coef: boolean } | { kind: 'name'; a: Item } | { kind: 'expr' };
 
 /** The features of one part. */
-function partFeatures(its: Item[], defs: DefNames): { f: Answers; headBase: string | null } {
+function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: Answers; headBase: string | null } {
     const f: Answers = {};
     const n = its.length;
     f.empty = n === 0;
@@ -787,7 +919,10 @@ function partFeatures(its: Item[], defs: DefNames): { f: Answers; headBase: stri
                 /^[PE]$/.test(String(x.base)) &&
                 all[i + 1] &&
                 all[i + 1].t === 'open' &&
-                all.slice(i + 2, i + 8).some((y) => y.t === 'rel' || (y.t === 'atom' && /^[A-Z+]$/.test(String(y.base))) || (y.t === 'sym' && y.v === '+'))
+                (() => {
+                    const e = all.findIndex((y, q) => q > i + 1 && y.t === 'close');
+                    return all.slice(i + 2, Math.min(i + 8, e < 0 ? i + 8 : e));
+                })().some((y) => y.t === 'rel' || (y.t === 'atom' && /^[A-Z+]$/.test(String(y.base))) || (y.t === 'sym' && y.v === '+'))
         );
     f.op_prob =
         probCall ||
@@ -906,8 +1041,9 @@ function partFeatures(its: Item[], defs: DefNames): { f: Answers; headBase: stri
     f.has_omega = L('omega');
     f.has_lambda = L('lambda');
     f.has_xi = L('xi');
-    f.has_x1 = L('x_1');
-    f.has_x2 = L('x_2');
+    f.has_x1 = L('x_1') || (!L('x') && !L('x_2') && L('theta_1'));
+    f.has_x2 = L('x_2') || (!L('x') && !L('x_1') && L('theta_2'));
+    f.pointCoords = L('y_1') || L('y_2') || L('x_0') || L('y_0');
     f.has_x3p = [...letters.keys()].some((k) => /^x_(3|4|5|i|j|n|k|m|d)$/.test(k));
     const bases: Record<string, Set<string>> = {};
     for (const a of letters.values()) if (a.sub === '1' || a.sub === '2') (bases[String(a.base)] ??= new Set()).add(a.sub);
@@ -1143,6 +1279,7 @@ function partFeatures(its: Item[], defs: DefNames): { f: Answers; headBase: stri
                     f.ivEndsExpr = !f.ivEndsNum && !f.ivEndsAB;
                     const str = (p: Item[]) => p.map((x) => x.v ?? x.t).join('');
                     f.ivZeroSym = f.ivEndsNum && str(A) !== str(B) && (str(A) === '0' || str(A) === '-' + str(B) || A.some((x) => x.t === 'inf') || B.some((x) => x.t === 'inf'));
+                    f.ivHasInf = A.some((x) => x.t === 'inf') || B.some((x) => x.t === 'inf');
                 } else if (seps.length >= 2) f.list3 = true;
             }
         }
@@ -1238,7 +1375,7 @@ function partFeatures(its: Item[], defs: DefNames): { f: Answers; headBase: stri
                 cap(l[1]) &&
                 l[2].t === 'sym' &&
                 l[2].v === '-' &&
-                l[3].t === 'atom' &&
+                (l[3].t === 'atom' || l[3].t === 'num') &&
                 cap(l[4]) &&
                 l[5].t === 'close' &&
                 low(l[6]) &&
@@ -1294,6 +1431,7 @@ function partFeatures(its: Item[], defs: DefNames): { f: Answers; headBase: stri
             f.c_lhsX12 = anyAtom(lhs) && lhs[0].base === 'x' && (lhs[0].sub === '1' || lhs[0].sub === '2');
             f.c_lhsHasZL = lhs.some((x) => x.t === 'atom' && (x.base === 'lambda' || x.base === 'z'));
             f.c_lhsOmegaZ = plainAtom(lhs) && (lhs[0].base === 'omega' || lhs[0].base === 'z');
+            f.c_lhsCtxVar = plainAtom(lhs) && !!ctxVars && ctxVars.has(String(lhs[0].base)) && !INT.has(String(lhs[0].base));
             f.c_lhsFn = lhs.some((x) => x.t === 'fn');
             f.c_rhsNum = isNumLike(rhs);
             f.c_rhsAtom = plainAtom(rhs);
@@ -1315,18 +1453,46 @@ function partFeatures(its: Item[], defs: DefNames): { f: Answers; headBase: stri
 
 /** The feature vectors of the parts of a formula, in order. Throws on a formula it cannot read. */
 export function encode(tex: string, ctx?: RecognizeContext): Float32Array[] {
-    const items = parse(clean(tex));
-    const { segs, joins } = segments(items);
+    const norm = normalize(tex, ctx);
+    const items = parse(clean(norm.tex));
+    const first = segments(items);
     const cf = noteContext(ctx);
     const dn = defNames(ctx?.defs);
-    const raw = segs.map((s) => partFeatures(s, dn));
+    // the variable letters of the functions around the formula: K(q) = ... makes q a variable
+    const ctxVars = new Set<string>();
+    for (const src of [String(ctx?.context ?? ''), ...(Array.isArray(ctx?.defs) ? ctx.defs.map(String) : [])]) for (const m of src.matchAll(/[A-Za-z}']\s*\(\s*(\\?[a-zA-Z]+)\s*\)\s*(?::?=|\\approx)/g)) ctxVars.add(m[1].replace('\\', ''));
+    // a chain "head(x) = A = B" that does not end in a number: every "head(x) = part" is read by itself
+    const segs: Item[][] = [];
+    const side: boolean[] = [];
+    const joins: string[] = [];
+    first.segs.forEach((sg, k) => {
+        const { parts, rels } = relSplit(sg);
+        const chain = rels.length >= 2 && rels.every((r) => r === 'eq' || r === 'approx') && !!asCall(parts[0]) && !isNumLike(parts[parts.length - 1]) && parts.every((q) => q.length);
+        const list = chain ? parts.slice(1).map((b): Item[] => [...parts[0], { t: 'rel', v: 'eq' }, ...b]) : [sg];
+        list.forEach((q, i) => {
+            segs.push(q);
+            side.push(first.side[k]);
+            if (k > 0 || i > 0) joins.push(i > 0 ? 'chain' : first.joins[k - 1]);
+        });
+    });
+    const raw = segs.map((s) => partFeatures(s, dn, ctxVars));
     const prog = raw.some((q) => q.f.opt && (q.f.unkCall || q.f.hasTop || q.f.capMul));
     const out: Float32Array[] = [];
     const heads = raw.map((r) => r.headBase);
     // a pair of heads x(t), y(t) is a parametric curve
     const paramPair = raw.filter((r) => r.f.hc1 && r.f.hcArg_t).length >= 2 && heads.includes('x') && heads.includes('y');
     const anyOf = (name: string) => raw.some((q) => q.f[name]);
-    const whole: Answers = { paramPair, anyMapsto: anyOf('hasMapsto'), anyLogic: anyOf('op_logic'), anyPm: anyOf('hasPm'), anyVec: anyOf('hasTop') || anyOf('capMul') || anyOf('hasVec'), genericProgram: prog };
+    const whole: Answers = {
+        unreadable: norm.unreadable,
+        prose: norm.prose,
+        rowCont: norm.rowCont,
+        paramPair,
+        anyMapsto: anyOf('hasMapsto'),
+        anyLogic: anyOf('op_logic'),
+        anyPm: anyOf('hasPm'),
+        anyVec: anyOf('hasTop') || anyOf('capMul') || anyOf('hasVec'),
+        genericProgram: prog,
+    };
     const put = (v: Float32Array, obj: Answers) => {
         for (const name in obj)
             if (obj[name]) {
@@ -1339,8 +1505,10 @@ export function encode(tex: string, ctx?: RecognizeContext): Float32Array[] {
         put(v, raw[i].f);
         put(v, cf);
         put(v, whole);
-        if (i > 0 && joins.slice(0, i).includes('word')) v[at('afterWord')] = 1;
+        if (side[i]) v[at('afterWord')] = 1;
         if (i < raw.length - 1 && joins.includes('\\Rightarrow') && raw.slice(i + 1).some((q) => q.f.hcArgNum || q.f.hcArgExpr || q.f.hcArgMarked)) v[at('laterEval')] = 1;
+        // a later part after an arrow solves for x or ends in a value: the chain is a calculation
+        if (i < raw.length - 1 && joins.slice(i).some((j) => j === '\\Rightarrow' || j === '\\iff') && raw.slice(i + 1).some((q) => q.f.ha_x || (q.f.lastNumeric && q.f.eq1 && !q.f.hc && !q.f.hexpr))) v[at('laterSolve')] = 1;
         out.push(v);
     }
     return out;

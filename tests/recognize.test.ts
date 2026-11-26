@@ -11,7 +11,7 @@ interface Case extends RecognizeContext {
     label: Label;
 }
 
-test('recognize: the TypeScript port gives the frozen network\'s label on the committed fixture (about 200 formulas)', () => {
+test('recognize: the TypeScript port gives the frozen round 2 network\'s label on the committed fixture (about 200 formulas)', () => {
     // tests/recognize-fixture.json: formulas of train and dev with what is around them, and the frozen network's label.
     const cases = JSON.parse(fs.readFileSync('tests/recognize-fixture.json', 'utf8')) as Case[];
     assert.ok(cases.length >= 180, `${cases.length} cases`);
@@ -26,10 +26,10 @@ test('recognize: the TypeScript port gives the frozen network\'s label on the co
 
 // The experiment's corpus and the frozen network (hover-ml): only on the machine that has them, so CI without them passes.
 const SCRATCH = '/private/tmp/claude-501/-Users-justus-PycharmProjects-tikz-graph-help/d7060021-8494-476b-bf42-b1974d650603/scratchpad/hover-ml';
-const FROZEN = `${SCRATCH}/designed-r1-frozen/pure.mjs`;
-const SPLITS = ['train', 'dev'].map((s) => `${SCRATCH}/data/${s}.jsonl`);
+const FROZEN = `${SCRATCH}/designed2-frozen/best.mjs`;
+const SPLITS = ['train', 'dev', 'hard_dev'].map((s) => `${SCRATCH}/data/${s}.jsonl`);
 
-test('recognize: the port gives the frozen pure network\'s label on every formula of train and dev (skipped without the corpus)', async () => {
+test('recognize: the port gives the frozen round 2 network\'s label (best.mjs) on every formula of train, dev and hard_dev (skipped without the corpus)', async () => {
     if (!fs.existsSync(FROZEN) || !SPLITS.every((f) => fs.existsSync(f))) {
         console.log('    (skipped: the hover-ml corpus is not on this machine)');
         return;
@@ -48,7 +48,7 @@ test('recognize: the port gives the frozen pure network\'s label on every formul
         }
     }
     console.log(`    ${n} formulas, ${wrong.length} with another label`);
-    assert.ok(n > 4000, `${n} formulas`);
+    assert.ok(n > 6000, `${n} formulas`);
     assert.deepEqual(wrong, []);
 });
 
