@@ -1860,18 +1860,33 @@ export function texText(s: string): string {
  * they work outside $...$ too. Braces that pair up are LaTeX groups.
  * Everything else prints as typed: % & # _ ^ ~ < > | " and unpaired braces
  * are escaped ('50% cut', 'x_1', 'x + y <= 4'), and a dollar sign that
- * opens no math becomes \$ ('costs $5').
+ * opens no math becomes \$ ('costs $5'). 6.2.1: symbols LaTeX's UTF-8
+ * input does not know (→, ≤, ≥, Greek letters) are written as math
+ * commands, and a letter with combining accents (v̂) or one of Latin
+ * Extended Additional (ṽ) as a text accent, so pdflatex prints what the
+ * preview shows instead of stopping.
  */
 export function texLabel(s: string): string {
     let out = '';
-    for (const tok of labelTokens(str(s))) {
+    const toks = labelTokens(str(s));
+    for (let j = 0; j < toks.length; j++) {
+        const tok = toks[j];
         switch (tok.k) {
             case 'math':
-                out += tok.raw;
+                out += mathUnicode(tok.raw);
                 break;
-            case 'char':
-                out += escapeChar(tok.ch);
+            case 'char': {
+                // 6.2.1: a letter with combining accents after it (v̂) as LaTeX's text accents.
+                let marks = '';
+                while (j + 1 < toks.length) {
+                    const next = toks[j + 1];
+                    if (next.k !== 'char' || !ownValue(COMBINING, next.ch)) break;
+                    marks += next.ch;
+                    j++;
+                }
+                out += marks ? accented(tok.ch, marks, false) : unicodeChar(tok.ch);
                 break;
+            }
             case 'open':
                 out += '{';
                 break;
@@ -1885,6 +1900,78 @@ export function texLabel(s: string): string {
                 out += tok.math ? `\\ensuremath{${tok.raw}}` : tok.raw;
                 break;
         }
+    }
+    return out;
+}
+
+/**
+ * 6.2.1: symbols pdflatex cannot print from UTF-8 text without a Unicode
+ * setup (the preview shows them, so labels have them: 'x ≤ 2', 'A → B'),
+ * as their math commands.
+ */
+const UNICODE_MATH: Record<string, string> = {
+    '→': '\\rightarrow', '←': '\\leftarrow', '↔': '\\leftrightarrow', '⇒': '\\Rightarrow', '⇐': '\\Leftarrow',
+    '⇔': '\\Leftrightarrow', '↦': '\\mapsto', '↑': '\\uparrow', '↓': '\\downarrow',
+    '≤': '\\le', '≥': '\\ge', '≠': '\\neq', '≈': '\\approx', '≡': '\\equiv', '∼': '\\sim', '∝': '\\propto',
+    '∈': '\\in', '∉': '\\notin', '⊂': '\\subset', '⊆': '\\subseteq', '⊃': '\\supset', '⊇': '\\supseteq',
+    '∪': '\\cup', '∩': '\\cap', '∅': '\\emptyset', '∀': '\\forall', '∃': '\\exists', '∧': '\\wedge', '∨': '\\vee',
+    '∞': '\\infty', '∂': '\\partial', '∇': '\\nabla', '∑': '\\sum', '∏': '\\prod', '∫': '\\int', '√': '\\surd',
+    '∘': '\\circ', '⋅': '\\cdot', '∙': '\\cdot', '−': '-', '∓': '\\mp', '′': "'", '″': "''",
+    'α': '\\alpha', 'β': '\\beta', 'γ': '\\gamma', 'δ': '\\delta', 'ε': '\\varepsilon', 'ζ': '\\zeta', 'η': '\\eta',
+    'θ': '\\theta', 'ι': '\\iota', 'κ': '\\kappa', 'λ': '\\lambda', 'μ': '\\mu', 'ν': '\\nu', 'ξ': '\\xi', 'π': '\\pi',
+    'ρ': '\\rho', 'σ': '\\sigma', 'ς': '\\varsigma', 'τ': '\\tau', 'υ': '\\upsilon', 'φ': '\\varphi', 'χ': '\\chi',
+    'ψ': '\\psi', 'ω': '\\omega', 'Γ': '\\Gamma', 'Δ': '\\Delta', 'Θ': '\\Theta', 'Λ': '\\Lambda', 'Ξ': '\\Xi',
+    'Π': '\\Pi', 'Σ': '\\Sigma', 'Υ': '\\Upsilon', 'Φ': '\\Phi', 'Ψ': '\\Psi', 'Ω': '\\Omega',
+};
+
+/** 6.2.1: combining accents: LaTeX's text accent and math accent for each. */
+const COMBINING: Record<string, [string, string]> = {
+    '̀': ['\\`', '\\grave'], '́': ["\\'", '\\acute'], '̂': ['\\^', '\\hat'], '̃': ['\\~', '\\tilde'],
+    '̄': ['\\=', '\\bar'], '̆': ['\\u', '\\breve'], '̇': ['\\.', '\\dot'], '̈': ['\\"', '\\ddot'],
+    '̊': ['\\r', '\\mathring'], '̌': ['\\v', '\\check'],
+};
+
+/** `base` under the accents `marks` (combining characters of COMBINING), as text (`\^{v}`) or in math (`\hat{v}`). */
+function accented(base: string, marks: string, math: boolean): string {
+    let out = math ? base : escapeChar(base);
+    for (const m of marks) {
+        const a = ownValue(COMBINING, m);
+        if (a) out = `${a[math ? 1 : 0]}{${out}}`;
+    }
+    return out;
+}
+
+/**
+ * One character of label text for LaTeX (6.2.1): a symbol of
+ * UNICODE_MATH in \ensuremath, a letter of Latin Extended Additional
+ * (ṽ, which LaTeX's UTF-8 input does not know) as its letter with
+ * accents, else as typed (escapeChar).
+ */
+function unicodeChar(ch: string): string {
+    const cmd = ownValue(UNICODE_MATH, ch);
+    if (cmd !== undefined) return `\\ensuremath{${cmd}}`;
+    const code = ch.charCodeAt(0);
+    if (code >= 0x1e00 && code <= 0x1eff) {
+        const parts = ch.normalize('NFD');
+        const marks = parts.slice(1);
+        if (parts.length > 1 && [...marks].every((m) => ownValue(COMBINING, m))) return accented(parts[0], marks, false);
+    }
+    return escapeChar(ch);
+}
+
+/** 6.2.1: math source with the symbols of UNICODE_MATH as their commands and combining accents as math accents. */
+function mathUnicode(raw: string): string {
+    let out = '';
+    for (let i = 0; i < raw.length; i++) {
+        const ch = raw[i];
+        let marks = '';
+        while (i + 1 < raw.length && ownValue(COMBINING, raw[i + 1])) marks += raw[++i];
+        if (marks) {
+            out += accented(ch, marks, true);
+            continue;
+        }
+        const cmd = ownValue(UNICODE_MATH, ch);
+        out += cmd === undefined ? ch : /^\\[A-Za-z]+$/.test(cmd) ? `${cmd} ` : cmd;
     }
     return out;
 }
@@ -1946,7 +2033,11 @@ function skipGroups(toks: LabelToken[], from: number, count: number): number {
  * 'R&D', '\"a' shows 'ä').
  */
 export function labelDisplayText(s: string, mathText: (src: string) => string): string {
-    const toks = labelTokens(str(s));
+    return tokensText(labelTokens(str(s)), mathText);
+}
+
+/** The preview text of label tokens (labelDisplayText). */
+function tokensText(toks: LabelToken[], mathText: (src: string) => string): string {
     let out = '';
     for (let j = 0; j < toks.length; j++) {
         const tok = toks[j];
@@ -1993,6 +2084,45 @@ export function labelDisplayText(s: string, mathText: (src: string) => string): 
             }
         }
     }
+    return out;
+}
+
+/** 6.2.1: one piece of a label that mixes words and math: text to show in the chart's font, or LaTeX source for MathJax. */
+export interface LabelPart {
+    math: boolean;
+    text: string;
+}
+
+/**
+ * 6.2.1: a label that mixes words and math ('LP 3: $\max 2x_1 + x_2$ –
+ * eine Kante', 'Preis $f_1$', '$x^2$ konkav'), in pieces: each math
+ * segment as its LaTeX source, the text between them read as
+ * labelDisplayText reads it (`mathText` for math-only commands in the
+ * text). The preview typesets the math pieces with MathJax and writes the
+ * words in its text font, in one line. Null for a label without math and
+ * for one that is a single math segment as a whole (labelMathSource).
+ */
+export function labelParts(s: string, mathText: (src: string) => string): LabelPart[] | null {
+    const text = str(s);
+    if (labelMathSource(text) !== null) return null;
+    const toks = labelTokens(text);
+    if (!toks.some((t) => t.k === 'math')) return null;
+    const out: LabelPart[] = [];
+    let run: LabelToken[] = [];
+    const flush = () => {
+        const words = tokensText(run, mathText);
+        if (words) out.push({ math: false, text: words });
+        run = [];
+    };
+    for (const tok of toks) {
+        if (tok.k !== 'math') {
+            run.push(tok);
+            continue;
+        }
+        flush();
+        out.push({ math: true, text: tok.src });
+    }
+    flush();
     return out;
 }
 

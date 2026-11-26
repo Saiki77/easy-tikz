@@ -2741,15 +2741,22 @@ function labelRank(node: SceneNode): number {
     return 4;
 }
 
+/** 6.2.1: math commands MathJax and TeX set as their upright letters (\max is three of them). */
+const OPERATOR_NAMES = new Set(['max', 'min', 'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln', 'exp', 'lim', 'det', 'arg', 'sup', 'inf', 'deg', 'gcd', 'sinh', 'cosh', 'tanh', 'arcsin', 'arccos', 'arctan']);
+/** 6.2.1: relations and arrows: one glyph with a space on each side. */
+const SPACED_COMMANDS = new Set(['to', 'le', 'leq', 'ge', 'geq', 'ne', 'neq', 'in', 'notin', 'approx', 'equiv', 'sim', 'rightarrow', 'leftarrow', 'Rightarrow', 'Leftarrow', 'leftrightarrow', 'Leftrightarrow', 'mapsto', 'implies', 'iff', 'subset', 'subseteq', 'cdot', 'times', 'pm', 'mp']);
+
 /**
  * Width of a label in em, roughly as it renders: math delimiters and braces
- * dropped, a command counts as one glyph, every other character by its class.
+ * dropped, a command counts as one glyph (6.2.1: an operator name as its
+ * letters, a relation or arrow with its spaces), every other character by
+ * its class.
  */
 function plainWidth(text: string): number {
     const t = text
         .replace(/\\[()]/g, '')
         .replace(/\$/g, '')
-        .replace(/\\[a-zA-Z]+\s*/g, 'x')
+        .replace(/\\([a-zA-Z]+)\s*/g, (_m: string, name: string) => (OPERATOR_NAMES.has(name) ? `${name} ` : SPACED_COMMANDS.has(name) ? ' x ' : 'x'))
         .replace(/\\./g, 'x')
         .replace(/[{}^_]/g, '');
     let w = 0;
@@ -2763,6 +2770,11 @@ function plainWidth(text: string): number {
         else w += CHAR_EM;
     }
     return Math.max(NARROW_EM, w);
+}
+
+/** 6.2.1: the width of a label in em of its size, as the label placer measures it (plainWidth): for the legend's place. */
+export function labelWidthEm(text: string): number {
+    return plainWidth(text);
 }
 
 /** Width and height of a label text in pt, as the placer measures it. */
@@ -2806,6 +2818,60 @@ export function textBoxPt(
     const X = ((t.x - view.xmin) / (view.xmax - view.xmin)) * m.w;
     const Y = ((t.y - view.ymin) / (view.ymax - view.ymin)) * m.h;
     return boxAt(t.anchor, X, Y, w, h, t.offset ? t.offset.x : 0, t.offset ? t.offset.y : 0);
+}
+
+/**
+ * 6.2.1: the least shift that brings `box` inside `bounds` (both in one
+ * frame); a box larger than the bounds is centred on them. A written text
+ * near the edge of the plot moves back in by this much instead of running
+ * over the frame or off the picture.
+ */
+export function insideShift(box: { x0: number; y0: number; x1: number; y1: number }, bounds: { x0: number; y0: number; x1: number; y1: number }): Pt {
+    const along = (lo: number, hi: number, blo: number, bhi: number): number => {
+        if (hi - lo > bhi - blo) return (blo + bhi) / 2 - (lo + hi) / 2;
+        if (lo < blo) return blo - lo;
+        if (hi > bhi) return bhi - hi;
+        return 0;
+    };
+    return { x: along(box.x0, box.x1, bounds.x0, bounds.x1), y: along(box.y0, box.y1, bounds.y0, bounds.y1) };
+}
+
+/** 6.2.1: a written text keeps this far inside the plot frame, in em of its size. */
+export const INSIDE_EM = 0.25;
+
+/** 6.2.1: which edge of the plot a text crosses along one axis: the low one (left, bottom), the high one, both (it is larger than the plot), or none. */
+export type InsideSide = 'low' | 'high' | 'both' | null;
+
+/**
+ * 6.2.1: a written text (a `write` label) whose point lies in the view,
+ * as the label placer measures it: the shift in pt (x right, y up) that
+ * keeps it inside the plot frame (INSIDE_EM in), and the edges it would
+ * cross. Zero and none for a text that fits or whose point lies outside
+ * the view. `equal`: the chart has equal units on both axes, so the plot
+ * shrinks along one side. The preview moves the text by its measured box;
+ * the export anchors it at the edge it would cross (insidePlacement in
+ * src/export.ts), which holds however large pgfplots makes the plot.
+ */
+export function textInside(t: Pick<TextPrim, 'x' | 'y' | 'text' | 'anchor' | 'size' | 'weight' | 'offset'>, view: View, metrics: LabelMetrics, equal = false): { shift: Pt; x: InsideSide; y: InsideSide } {
+    const v = view;
+    const none = { shift: { x: 0, y: 0 }, x: null, y: null };
+    if (!(t.x >= v.xmin && t.x <= v.xmax && t.y >= v.ymin && t.y <= v.ymax)) return none;
+    let m = validMetrics(metrics);
+    if (equal) {
+        // Equal units on both axes (`axis equal image`): the plot shrinks along one side to keep them.
+        const unit = Math.min(m.w / (v.xmax - v.xmin), m.h / (v.ymax - v.ymin));
+        if (Number.isFinite(unit) && unit > 0) m = { ...m, w: unit * (v.xmax - v.xmin), h: unit * (v.ymax - v.ymin) };
+    }
+    const b = textBoxPt(t, view, m);
+    const e = INSIDE_EM * (m.em[t.size] || m.em.normal);
+    const bounds = { x0: e, y0: e, x1: m.w - e, y1: m.h - e };
+    const side = (lo: number, hi: number, blo: number, bhi: number): InsideSide => (hi - lo > bhi - blo ? 'both' : lo < blo ? 'low' : hi > bhi ? 'high' : null);
+    return { shift: insideShift(b, bounds), x: side(b.x0, b.x1, bounds.x0, bounds.x1), y: side(b.y0, b.y1, bounds.y0, bounds.y1) };
+}
+
+/** 6.2.1: the shift of textInside alone, in pt (x right, y up). */
+export function textInsideShiftPt(t: Pick<TextPrim, 'x' | 'y' | 'text' | 'anchor' | 'size' | 'weight' | 'offset'>, view: View, metrics: LabelMetrics, equal = false): Pt {
+    return textInside(t, view, metrics, equal).shift;
 }
 
 function overlapArea(a: Box, b: Box): number {

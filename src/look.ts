@@ -187,18 +187,19 @@ function segmentHitsBox(ax: number, ay: number, bx: number, by: number, b: Box):
     return t0 <= t1;
 }
 
-/** A tick number in `box` is clear: no marked point within `gap` of it, no curve through it. */
+/** A tick number in `box` is clear: no marked point within `gap` of it, no curve within `gap` of it. */
 export function tickClear(box: Box, obstacles: TickObstacles, gap: number): boolean {
     for (const d of obstacles.dots) {
         const nx = Math.max(box.x0, Math.min(d.x, box.x1));
         const ny = Math.max(box.y0, Math.min(d.y, box.y1));
         if (Math.hypot(nx - d.x, ny - d.y) < d.r + gap) return false;
     }
+    const near: Box = { x0: box.x0 - gap, y0: box.y0 - gap, x1: box.x1 + gap, y1: box.y1 + gap };
     for (const line of obstacles.lines) {
         for (let i = 0; i + 1 < line.length; i++) {
             const a = line[i];
             const b = line[i + 1];
-            if (segmentHitsBox(a.x, a.y, b.x, b.y, box)) return false;
+            if (segmentHitsBox(a.x, a.y, b.x, b.y, near)) return false;
         }
     }
     return true;
@@ -227,14 +228,32 @@ export interface TickSpot<T> {
     anchor: 'start' | 'middle' | 'end';
     box: Box;
     show: boolean;
+    /** 6.2.1: how far the number moved away from its axis to clear a marked point or a curve (0: not moved). */
+    shift: number;
 }
 
 /**
+ * 6.2.1: the ink of a number (digits are about 0.72 em tall, standing on
+ * the baseline) within its box, in em of its font: top and bottom below
+ * the top of an x number's box, and above and below the middle of a
+ * y number's box.
+ */
+const INK_X = { top: 0.08, bottom: 0.8 };
+const INK_Y = { top: 0.37, bottom: 0.35 };
+/** 6.2.1: a number counts as covered when a marked point's rim or a curve comes this close to its ink, in em. */
+const CLEAR_EM = 0.1;
+/** 6.2.1: how far a covered number may move away from its axis to clear it, tried in this order (em). */
+const TICK_SHIFTS_EM = [0.1, 0.2, 0.3];
+
+/**
  * The numbers of one axis in the clean look, shared by the preview and the
- * export so both leave out the same ones: x numbers under the x-axis (over
- * it at the top edge), y numbers left of the y-axis (right of it at the
- * right edge); the 0 where the two axes cross is left out (unless the chart
- * lists it: `listed`), and so is a number on a marked point or under a curve.
+ * export so both show the same ones: x numbers under the x-axis (over it
+ * at the top edge), y numbers left of the y-axis (right of it at the right
+ * edge); the 0 where the two axes cross is left out (unless the chart lists
+ * it: `listed`). 6.2.1: a number is left out only when a marked point or a
+ * curve really covers its digits (up to 6.2.0 a dot on the axis next to
+ * it was enough: the integer points on an axis hid all its whole numbers);
+ * when moving it a little away from its axis clears them, it moves instead.
  */
 export function cleanTickSpots<T extends { value: number }>(
     axis: 'x' | 'y',
@@ -244,22 +263,45 @@ export function cleanTickSpots<T extends { value: number }>(
 ): Array<TickSpot<T>> {
     const f = o.frame;
     const out: Array<TickSpot<T>> = [];
+    // Away from the axis: down (up at the top edge) for x numbers, left (right at the right edge) for y numbers.
+    const away = axis === 'x' ? (f.place.x === 'high' ? -1 : 1) : f.place.y === 'high' ? 1 : -1;
     for (const tick of ticks) {
         const text = textOf(tick);
         const tw = text.length * f.fs * f.charEm;
         let spot: TickSpot<T>;
+        let ink: Box;
         if (axis === 'x') {
             const px = f.sx(tick.value);
             const y0 = f.place.x === 'high' ? f.oy - f.gap - f.fs : f.oy + f.gap;
-            spot = { tick, text, x: px, y: y0 + 0.8 * f.fs, anchor: 'middle', box: { x0: px - tw / 2, x1: px + tw / 2, y0, y1: y0 + f.fs }, show: true };
+            spot = { tick, text, x: px, y: y0 + 0.8 * f.fs, anchor: 'middle', box: { x0: px - tw / 2, x1: px + tw / 2, y0, y1: y0 + f.fs }, show: true, shift: 0 };
+            ink = { x0: px - tw / 2, x1: px + tw / 2, y0: y0 + INK_X.top * f.fs, y1: y0 + INK_X.bottom * f.fs };
         } else {
             const py = f.sy(tick.value);
             const after = f.place.y === 'high';
             const x = after ? f.ox + f.gap : f.ox - f.gap;
-            spot = { tick, text, x, y: py + 0.35 * f.fs, anchor: after ? 'start' : 'end', box: { x0: after ? x : x - tw, x1: after ? x + tw : x, y0: py - 0.5 * f.fs, y1: py + 0.5 * f.fs }, show: true };
+            spot = { tick, text, x, y: py + 0.35 * f.fs, anchor: after ? 'start' : 'end', box: { x0: after ? x : x - tw, x1: after ? x + tw : x, y0: py - 0.5 * f.fs, y1: py + 0.5 * f.fs }, show: true, shift: 0 };
+            ink = { x0: spot.box.x0, x1: spot.box.x1, y0: py - INK_Y.top * f.fs, y1: py + INK_Y.bottom * f.fs };
         }
         const crossing = (axis === 'x' ? f.place.y : f.place.x) === 'zero' && !o.listed && Math.abs(tick.value) < o.step * 0.01;
-        spot.show = !!text.trim() && !crossing && tickClear(spot.box, o.obstacles, 0.25 * f.fs);
+        if (!text.trim() || crossing) {
+            spot.show = false;
+            out.push(spot);
+            continue;
+        }
+        const moved = (b: Box, d: number): Box => (axis === 'x' ? { ...b, y0: b.y0 + away * d, y1: b.y1 + away * d } : { ...b, x0: b.x0 + away * d, x1: b.x1 + away * d });
+        const gap = CLEAR_EM * f.fs;
+        let shift = tickClear(ink, o.obstacles, gap) ? 0 : -1;
+        for (const k of TICK_SHIFTS_EM) {
+            if (shift >= 0) break;
+            if (tickClear(moved(ink, k * f.fs), o.obstacles, gap)) shift = k * f.fs;
+        }
+        spot.show = shift >= 0;
+        if (shift > 0) {
+            spot.shift = shift;
+            spot.box = moved(spot.box, shift);
+            if (axis === 'x') spot.y += away * shift;
+            else spot.x += away * shift;
+        }
         out.push(spot);
     }
     return out;

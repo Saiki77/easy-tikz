@@ -295,7 +295,7 @@ export class LiveChart {
         // A new `$...$` label is measured before MathJax has styled it: draw once more when it has (as charts in notes do).
         void renderer.mathSettled?.then((redraw) => {
             if (!redraw) this.mathRedraws = 0;
-            else if (this.chartEl === svg && svg.isConnected && !this.destroyed && this.mathRedraws < 3) {
+            else if (this.chartEl === svg && !this.destroyed && this.mathRedraws < 3) {
                 this.mathRedraws++;
                 this.safeRender('full');
             }

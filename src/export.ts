@@ -22,6 +22,7 @@ import {
     BracePrim,
     FillPrim,
     HaloTint,
+    LabelMetrics,
     Scene3D,
     SceneItem2D,
     StrokePrim,
@@ -30,7 +31,10 @@ import {
     computeScene2D,
     computeScene3D,
     edgeLabelSide3D,
+    INSIDE_EM,
+    InsideSide,
     labelMetricsFor,
+    textInside,
     tintsAt,
 } from './scene';
 import { sampleCurve, tickValues } from './util';
@@ -39,6 +43,7 @@ import { AxisTicks, Tick, TickAxis, autoTickSteps, axisTicks, tickOptions } from
 // 6.1 clean look
 import { AxisPlace, CLEAN_COLOURS, CLEAN_GRID_ALPHA, CLEAN_LINE_TIKZ, CLEAN_TICK_PT, CleanAxisFrame, TickObstacles, axisPlace, cleanTickSpots } from './look';
 import { stillFrame } from './motion6/clock'; // 6.0 C
+import { legendCorner, legendLabelOf, legendObstacles } from './legend'; // 6.2.1
 import { pixelsTikz } from './iterate/export'; // 6.0 E
 import { pythonComments } from './python/text'; // 6.0 P
 
@@ -630,7 +635,7 @@ function tikz2D(settings: SettingsManager, ctx: MathContext, config: RendererCon
     const paper = paperScale(settings.paperSize(), view);
     for (const item of items) addBraces(layers, item, colors, view, paper, libs);
     for (const item of items) addTexts(layers, item, colors, view);
-    addAnnotations2D(layers, config, ctx, items, colors, view);
+    addAnnotations2D(layers, config, ctx, items, colors, view, labelMetricsFor(paperCm.w, paperCm.h));
 
     const paths = layers.paths();
     fitBudget(paths, view);
@@ -673,7 +678,18 @@ function tikz2D(settings: SettingsManager, ctx: MathContext, config: RendererCon
     if (config.equalScale || polar) opts.push('axis equal image');
     // Layers put the fills under the grid and axis lines (see Layers.render).
     if (anyFill || pictures.length) opts.push('set layers'); // pictures: 6.0 E
-    if (legends) opts.push(`legend pos=north east, legend cell align=left, legend style={font=${LEGEND_FONT}}`);
+    if (legends) {
+        // 6.2.1: the corner where the legend covers no label, as the preview picks it.
+        const labels: string[] = [];
+        for (const info of ctx.functions()) {
+            const f = (config.functions || [])[info.index];
+            if (f && f.showLegend && !info.hidden && !info.error && !info.domainError && String(f.expression ?? '').trim()) labels.push(legendLabelOf(info, f, ctx));
+        }
+        const metrics = labelMetricsFor(paperCm.w, paperCm.h);
+        const input = { functions: config.functions || [], annotations: config.annotations, axisStyle: config.axisStyle, clean: cleanNow };
+        const corner = legendCorner(labels, legendObstacles(input, ctx, items, view, metrics), metrics);
+        opts.push(`legend pos=${corner}, legend cell align=left, legend style={font=${LEGEND_FONT}}`);
+    }
 
     const picture = ['\\begin{tikzpicture}', ...pythonComments(config.tools) /* 6.0 P */, ...colors.lines(), ...layers.boxes, ...axisBlock(opts), ...pictures, ...layers.render(view), '\\end{axis}', '\\end{tikzpicture}']; // pictures: 6.0 E
     return wrap(settings.isStandalone(), libs, picture);
@@ -767,11 +783,26 @@ function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, pape
         const labels = spots.map((sp) => {
             if (!sp.show) return '{}';
             const k = sp.tick;
-            return `{${k.label !== undefined ? labelText(k.label) : k.piTex !== undefined ? k.piTex : `$\\pgfmathprintnumber{${fmtNum(k.value)}}$`}}`;
+            const text = k.label !== undefined ? labelText(k.label) : k.piTex !== undefined ? k.piTex : `$\\pgfmathprintnumber{${fmtNum(k.value)}}$`;
+            return `{${shiftedTick(text, a, place, sp.shift)}}`;
         });
         opts.push(`${a}tick={${t.ticks.map((k) => fmtNum(k.value)).join(',')}}`, `${a}ticklabels={${labels.join(',')}}`);
     }
     return opts;
+}
+
+/**
+ * 6.2.1: a tick number moved `shift` pt away from its axis, as the preview
+ * moves a number that a marked point or a curve would cover
+ * (cleanTickSpots): an x number lowered (raised at the top edge) inside a
+ * box of its own height, a y number pushed left (right at the right edge)
+ * by a kern on its axis side.
+ */
+function shiftedTick(text: string, axis: 'x' | 'y', place: { x: AxisPlace; y: AxisPlace }, shift: number): string {
+    if (!(shift > 0.005)) return text;
+    const d = `${fmtNum(Math.round(shift * 100) / 100)}pt`;
+    if (axis === 'x') return `\\raisebox{${place.x === 'high' ? '' : '-'}${d}}[\\height][\\depth]{${text}}`;
+    return place.y === 'high' ? `\\kern${d}${text}` : `${text}\\kern${d}`;
 }
 
 /** 6.1: the marked points and function curves of the picture, in the plot's pt (y down), for the numbers to keep clear of. */
@@ -986,10 +1017,12 @@ function curveDrawable(info: FunctionInfo, lo: number, hi: number, view: View): 
  * would split the legend's own cells and shift every later entry. Such
  * text is typeset into a save box before the axis instead (allocated once
  * per document, so a snippet may be pasted twice); the box is raised by its
- * depth because legend nodes have a fixed text depth.
+ * depth because legend nodes have a fixed text depth. 6.2.1: pgfplots
+ * keeps the entries in lists whose items end at `\to`, so an entry with
+ * `\to` (`$f(x) \to \min$`) stopped pdflatex; such an entry goes in braces.
  */
 function legendEntry(text: string, layers: Layers): string {
-    if (!/(^|[^\\])&|\\\\/.test(text)) return text;
+    if (!/(^|[^\\])&|\\\\/.test(text)) return /\\to(?![A-Za-z])/.test(text) ? `{${text}}` : text;
     let n = layers.boxes.length / 2;
     let suffix = '';
     do {
@@ -1225,21 +1258,71 @@ function haloOptions(under: HaloTint[] | undefined, colors: ColorSet): string {
     return `fill=${colors.use(top.color)}!${pct}!white, ${HALO_ON_FILL}`;
 }
 
-/** Layer 8, user labels: positions and text through the context like the preview; halo when on a fill. */
-function addAnnotations2D(layers: Layers, config: RendererConfig, ctx: MathContext, items: SceneItem2D[], colors: ColorSet, view: View): void {
+/**
+ * Layer 8, user labels: positions and text through the context like the
+ * preview; halo when on a fill. 6.2.1: a text written near the edge of the
+ * plot moves back inside its frame, as the preview moves it.
+ */
+function addAnnotations2D(layers: Layers, config: RendererConfig, ctx: MathContext, items: SceneItem2D[], colors: ColorSet, view: View, metrics: LabelMetrics): void {
     const fills: FillPrim[] = [];
     for (const item of items) fills.push(...(item.fills || []));
     const lines: string[] = [];
     (config.annotations || []).forEach((a) => {
         if (!a || a.hidden) return;
-        const text = labelText(ctx.formatTemplate(String(a.text ?? '')));
+        const typed = ctx.formatTemplate(String(a.text ?? ''));
+        const text = labelText(typed);
         if (!text) return;
         const p = { x: ctx.value(a.x), y: ctx.value(a.y) };
         if (!finitePt(p) || !inView(p, view, TEXT_SLACK)) return;
         const under = tintsAt(p, fills); // 6.2.1
-        lines.push(nodeCmd(colors.use(a.color), ANCHOR[a.anchor] || 'center', a.size, under.length ? haloOptions(under, colors) : false, axisCs(p, view), text));
+        const anchor: TextAnchor = ANCHOR[a.anchor] ? a.anchor : 'center';
+        const size = a.size || 'normal';
+        const inside = textInside({ x: p.x, y: p.y, text: typed, anchor, size }, view, metrics, !!config.equalScale || config.coordinateSystem === 'polar');
+        const place = insidePlacement(p, ANCHOR[anchor], inside, view, INSIDE_EM * (metrics.em[size] || metrics.em.normal));
+        lines.push(nodeCmd(colors.use(a.color), place.anchor, a.size, under.length ? haloOptions(under, colors) : false, axisCs(place.at, view), text, undefined, place.offset));
     });
     if (lines.length) layers.labels.push('% labels', ...lines);
+}
+
+/**
+ * 6.2.1: where a written text that would cross the plot's edge goes in the
+ * export: on that edge, anchored on that side of the text, `margin` pt in
+ * (centred on the plot when it is larger than it). Anchoring at the edge
+ * keeps it inside however large pgfplots makes the plot; the preview moves
+ * the text by its measured box to the same place.
+ */
+function insidePlacement(p: Pt, anchor: string, inside: { x: InsideSide; y: InsideSide }, view: View, margin: number): { at: Pt; anchor: string; offset: Pt } {
+    const parts = anchor.split(' ');
+    let v = parts.find((w) => w === 'north' || w === 'south') ?? 'center';
+    let h = parts.find((w) => w === 'east' || w === 'west') ?? 'center';
+    const at = { ...p };
+    const offset = { x: 0, y: 0 };
+    if (inside.x === 'both') {
+        h = 'center';
+        at.x = (view.xmin + view.xmax) / 2;
+    } else if (inside.x === 'high') {
+        h = 'east';
+        at.x = view.xmax;
+        offset.x = -margin;
+    } else if (inside.x === 'low') {
+        h = 'west';
+        at.x = view.xmin;
+        offset.x = margin;
+    }
+    if (inside.y === 'both') {
+        v = 'center';
+        at.y = (view.ymin + view.ymax) / 2;
+    } else if (inside.y === 'high') {
+        v = 'north';
+        at.y = view.ymax;
+        offset.y = -margin;
+    } else if (inside.y === 'low') {
+        v = 'south';
+        at.y = view.ymin;
+        offset.y = margin;
+    }
+    const name = v === 'center' ? h : h === 'center' ? v : `${v} ${h}`;
+    return { at, anchor: name, offset };
 }
 
 // ----------------------------------------------------------------- 3D

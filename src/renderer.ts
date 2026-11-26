@@ -14,8 +14,8 @@ import { AnnotationSize, FillPattern, FunctionParameters, MarkerSize, RendererCo
 import { COLOR_MAP, THICKNESS_MAP, mixHex, resolveCssColor } from './colors';
 import { marchingGrid, sampleCurve, stripLatex, tickValues } from './util';
 import { AxisTicks, Tick, autoTickSteps, axisTicks } from './ticks';
-import { ensureMathJax, extractMathSource, renderMathLabel, flushMathRenders } from './mathlabel';
-import { FunctionInfo, FunctionKind, MathContext, labelDisplayText } from './mathcontext';
+import { ensureMathJax, extractMathSource, renderMathLabel, renderMixedLabel, flushMathRenders } from './mathlabel';
+import { FunctionInfo, FunctionKind, MathContext, labelDisplayText, labelParts } from './mathcontext';
 // 6.0 A
 import { valueDefinitions } from './values/defs';
 import {
@@ -32,6 +32,8 @@ import {
     TextAnchor,
     TextPrim,
     computeScene2D,
+    INSIDE_EM,
+    insideShift,
     labelMetricsFor,
     tintsAt,
 } from './scene';
@@ -43,6 +45,7 @@ import type { LiveLayer } from './motion6/live'; // 6.0 F4
 import { themedColor } from './motion6/liveprims'; // 6.0 F4
 // 6.0 entrances
 import { EntranceKind, StepEntrance, clipLines, clipSegment, grownLine, labelStart, middleOf, nearestOn, partialLines, popDelay, riseAt, rippleStops, toolKind } from './motion6/entrances';
+import { LegendCorner, legendCorner, legendLabelOf, legendObstacles } from './legend'; // 6.2.1
 // 6.1 clean look
 import { AxisPlace, CLEAN_AXIS_PX, CLEAN_GRID_ALPHA, CLEAN_LINE_PX, CLEAN_TICK_PT, CLEAN_VARS, CleanAxisFrame, TickObstacles, axisPlace, cleanTickSpots } from './look';
 
@@ -269,13 +272,16 @@ interface DrawnLabel {
 
 /** 6.1: a canvas to measure plain label text with (the pill of a value label fits its text). */
 let measureCanvas: CanvasRenderingContext2D | null | undefined;
+/** 6.2.1: the theme's text font, read once per render (render() clears it). */
+let measureFamily: string | null = null;
 
 /** 6.1: the width of a plain text at `fs` px in the theme's text font, or null where nothing can measure it. */
 function measuredWidth(text: string, fs: number, weight: string | null): number | null {
     try {
         if (measureCanvas === undefined) measureCanvas = createEl('canvas').getContext('2d');
         if (!measureCanvas || typeof activeDocument === 'undefined') return null;
-        const family = getComputedStyle(activeDocument.body).getPropertyValue('--font-text').trim() || 'sans-serif';
+        if (measureFamily === null) measureFamily = getComputedStyle(activeDocument.body).getPropertyValue('--font-text').trim() || 'sans-serif';
+        const family = measureFamily;
         measureCanvas.font = `${weight || '400'} ${fs}px ${family}`;
         const w = measureCanvas.measureText(text).width;
         return Number.isFinite(w) && w > 0 ? w : null;
@@ -484,6 +490,7 @@ export class SVGRenderer {
     render(): SVGElement {
         const cfg = this.config;
         this.ids = `etz-${++renderCount}-`;
+        measureFamily = null;
         this.patterns.clear();
         this.arrows.clear();
         this.usedMath = false;
@@ -555,7 +562,7 @@ export class SVGRenderer {
         this.drawBraces(svg, items);
         this.drawTexts(svg, items);
         this.drawAnnotations(svg, items);
-        this.drawLegend(svg, legend);
+        this.drawLegend(svg, legend, this.legendPlace(items, legend));
         this.drawTitle(svg);
         this.mathSettled = this.usedMath ? flushMathRenders() : null;
         // 6.2.1: a label that fell back because MathJax was not loaded yet: load it, then draw again.
@@ -1043,10 +1050,12 @@ export class SVGRenderer {
 
     /**
      * Draw `text` at (x, y) in viewBox units: real LaTeX via Obsidian's
-     * MathJax when it is a single `$...$` or `\(...\)` expression, else the
-     * text read the way the export reads it (labelDisplayText: text as
-     * typed, LaTeX commands resolved, math through the `stripLatex()`
-     * Unicode approximation). MathJax output lives in a
+     * MathJax when it is a single `$...$` or `\(...\)` expression; 6.2.1:
+     * words and math in one line when it mixes them (the words in the text
+     * font, the math from MathJax); else the text read the way the export
+     * reads it (labelDisplayText: text as typed, LaTeX commands resolved,
+     * math through the `stripLatex()` Unicode approximation), which is also
+     * the fallback while MathJax is not loaded. MathJax output lives in a
      * `<foreignObject>`; its data-export-* attributes let the SVG / PNG copy
      * path swap it for a plain `<text>` (MathJax only renders inside the
      * app document). Returns null for blank text.
@@ -1057,9 +1066,10 @@ export class SVGRenderer {
         // Baseline for <text>: 'above' puts the text's bottom at y, 'below' its top, 'middle' its centre.
         const baseline = o.vAnchor === 'above' ? y - 0.22 * fs : o.vAnchor === 'below' ? y + 0.78 * fs : y + 0.35 * fs;
         const mathSource = extractMathSource(text);
-        if (mathSource !== null) {
+        const parts = mathSource === null ? labelParts(text, stripLatex) : null;
+        if (mathSource !== null || parts) {
             try {
-                const { el, width, height } = renderMathLabel(mathSource, o.color, fs);
+                const { el, width, height } = parts ? renderMixedLabel(parts, o.color, fs, o.weight) : renderMathLabel(mathSource ?? '', o.color, fs);
                 this.usedMath = true;
                 const w = Math.max(width, 1);
                 const h = Math.max(height, 1);
@@ -1079,6 +1089,11 @@ export class SVGRenderer {
                     'data-export-fill': o.color,
                     'data-export-font-size': String(fs),
                 });
+                if (parts) {
+                    // A copy writes the words and the math as one plain text, read as the fallback reads it.
+                    fo.setAttribute('data-export-plain', labelDisplayText(text, stripLatex));
+                    if (o.weight) fo.setAttribute('font-weight', o.weight);
+                }
                 // 6.2.1: a stroke cannot reach into HTML, so the halo of a math label is a ring of text
                 // shadows in the colour under it: shaped like the glyphs, not a box.
                 if (o.halo) {
@@ -1120,7 +1135,8 @@ export class SVGRenderer {
         const t = this.el('text', { ...attrs, ...(o.attrs || {}) });
         t.textContent = plain;
         parent.appendChild(t);
-        const tw = plain.length * fs * CHAR_WIDTH_EM;
+        // 6.2.1: its real width where the theme's font can be measured (the legend box, keeping texts inside), else the estimate.
+        const tw = measuredWidth(plain, fs, o.weight ?? null) ?? plain.length * fs * CHAR_WIDTH_EM;
         return { el: t, width: tw, height: fs * 1.2, x0: o.hAnchor === 'middle' ? x - tw / 2 : o.hAnchor === 'end' ? x - tw : x, y0: baseline - 0.95 * fs };
     }
 
@@ -1618,7 +1634,8 @@ export class SVGRenderer {
         for (const item of items) {
             for (const m of item.markers || []) {
                 if (!finitePt(m) || !this.inView(m.x, m.y, 0)) continue;
-                dots.push({ x: this.sx(m.x), y: this.sy(m.y), r: CLEAN_MARKER_RADIUS[m.size] || CLEAN_MARKER_RADIUS.normal });
+                // 6.2.1: with the half of its 2 px rim that lies outside the dot.
+                dots.push({ x: this.sx(m.x), y: this.sy(m.y), r: (CLEAN_MARKER_RADIUS[m.size] || CLEAN_MARKER_RADIUS.normal) + 1 });
             }
         }
         const lines: TickObstacles['lines'] = [];
@@ -1776,12 +1793,7 @@ export class SVGRenderer {
 
     /** Custom legend text, else the expression typeset like the export's `\( tex(expr) \)`. */
     private legendLabel(info: FunctionInfo, f: FunctionParameters): string {
-        const custom = String(f.legendLabel ?? '').trim();
-        if (custom) return custom;
-        const tex = (src: string | undefined) => this.math.tex(String(src ?? ''));
-        if (info.kind === 'parametric') return `$\\left(${tex(f.expression)},\\ ${tex(f.expressionY)}\\right)$`;
-        if (info.kind === 'polar') return `$r = ${tex(f.expression)}$`;
-        return `$${tex(f.expression)}$`;
+        return legendLabelOf(info, f, this.math);
     }
 
     /** Layer 5: curves, segments, outlines, constraint lines, tangents. */
@@ -2021,6 +2033,8 @@ export class SVGRenderer {
                     offset,
                     attrs: t.still ? this.stillAttrs(t, {}) : undefined, // 6.0 ML: a frame(t) text the live canvas draws
                 });
+                // 6.2.1: a text the placer measured narrower than it is drawn stays on the picture.
+                if (drawnText) this.keepInside(drawnText, this.canvasBounds(t.size));
                 if (pill && drawnText) this.pillBehind(g, at, drawnText, this.fontPx(FONT_PT[t.size || 'normal'] || FONT_PT.normal));
             }
             this.tag(g, from, item.source);
@@ -2082,17 +2096,51 @@ export class SVGRenderer {
             const attrs: Record<string, string> = { 'data-annotation-idx': String(idx), 'data-etz-item': source, 'pointer-events': 'bounding-box' };
             const from = g.children.length;
             const under = tintsAt({ x, y }, fills); // 6.2.1
-            this.drawPlaced(g, this.math.formatTemplate(text), x, y, a.anchor, a.size, {
+            const drawnText = this.drawPlaced(g, this.math.formatTemplate(text), x, y, a.anchor, a.size, {
                 color: this.css(a.color),
                 halo: under.length > 0,
                 haloInk: this.haloInk(under),
                 weight: '500',
                 attrs,
             });
+            // 6.2.1: a text written near the edge stays inside the plot frame (the export anchors it at that
+            // edge: textInside); one whose point lies outside the view stays on the picture.
+            if (drawnText) this.keepInside(drawnText, this.inView(x, y, 0) ? this.plotBounds(a.size) : this.canvasBounds(a.size));
             // 6.0 entrances: a label of the step rises in just after the step's other objects.
             if (this.ent && this.ent.moves(a)) this.riseEls(kidsFrom(g, from), this.ent.labels);
         });
         this.attach(svg, g);
+    }
+
+    /** 6.2.1: the plot rectangle less a margin of INSIDE_EM: where a text written in the view stays. */
+    private plotBounds(size: AnnotationSize | undefined): { x0: number; y0: number; x1: number; y1: number } {
+        const e = INSIDE_EM * this.fontPx(FONT_PT[size || 'normal'] || FONT_PT.normal);
+        const { x, y, w, h } = this.plot;
+        return { x0: x + e, y0: y + e, x1: x + w - e, y1: y + h - e };
+    }
+
+    /** 6.2.1: the canvas less the edge: where every text stays. */
+    private canvasBounds(size: AnnotationSize | undefined): { x0: number; y0: number; x1: number; y1: number } {
+        const e = INSIDE_EM * this.fontPx(FONT_PT[size || 'normal'] || FONT_PT.normal);
+        return { x0: e, y0: e, x1: this.width - e, y1: this.height - e };
+    }
+
+    /** 6.2.1: move a drawn label by the least shift that brings its box inside `bounds` (insideShift). */
+    private keepInside(label: DrawnLabel, bounds: { x0: number; y0: number; x1: number; y1: number }): void {
+        const d = insideShift({ x0: label.x0, y0: label.y0, x1: label.x0 + label.width, y1: label.y0 + label.height }, bounds);
+        if (Math.abs(d.x) < 0.01 && Math.abs(d.y) < 0.01) return;
+        const el = label.el;
+        const add = (name: string, by: number) => {
+            const v = Number(el.getAttribute(name));
+            if (el.hasAttribute(name) && Number.isFinite(v)) el.setAttribute(name, num(v + by));
+        };
+        // A <text> at its anchor and baseline; a MathJax label at its box, and the plain text a copy draws (svgExport).
+        add('x', d.x);
+        add('y', d.y);
+        add('data-export-x', d.x);
+        add('data-export-y', d.y);
+        label.x0 += d.x;
+        label.y0 += d.y;
     }
 
     /** A label coordinate, or NaN after reporting why (unless it waits on a derived name, whose tool reports). */
@@ -2104,8 +2152,22 @@ export class SVGRenderer {
         return NaN;
     }
 
-    /** Legend box in the top-right corner of the plot, sized to its widest entry; \footnotesize like the export. */
-    private drawLegend(svg: SVGElement, entries: LegendEntry[]): void {
+    /**
+     * 6.2.1: the corner of the legend: the top right one unless it would
+     * cover a label, a written text, a marked point or numbers (legendCorner,
+     * with the export's estimates, so the PDF has it in the same corner).
+     */
+    private legendPlace(items: SceneItem2D[], entries: LegendEntry[]): LegendCorner {
+        if (!entries.length || this.compact) return 'north east';
+        const cfg = this.config;
+        const metrics = labelMetricsFor(cfg.paperWidthCm ?? 10, cfg.paperHeightCm ?? 10);
+        const input = { functions: cfg.functions || [], annotations: cfg.annotations, axisStyle: cfg.axisStyle, clean: this.clean };
+        const labels = entries.map((e) => e.label);
+        return legendCorner(labels, legendObstacles(input, this.math, items, { ...this.view }, metrics), metrics);
+    }
+
+    /** Legend box in a corner of the plot (6.2.1: `corner`), sized to its widest entry; \footnotesize like the export. */
+    private drawLegend(svg: SVGElement, entries: LegendEntry[], corner: LegendCorner = 'north east'): void {
         if (!entries.length || this.compact) return;
         const g = this.el('g', { class: 'etz-legend' });
         const fs = this.fontPx(LEGEND_PT);
@@ -2153,7 +2215,9 @@ export class SVGRenderer {
             }),
             g.firstChild
         );
-        g.setAttribute('transform', `translate(${num(this.plot.x + this.plot.w - inset - boxWidth)}, ${num(this.plot.y + inset / 2)})`);
+        const left = corner.endsWith('east') ? this.plot.x + this.plot.w - inset - boxWidth : this.plot.x + inset;
+        const top = corner.startsWith('north') ? this.plot.y + inset / 2 : this.plot.y + this.plot.h - inset / 2 - boxHeight;
+        g.setAttribute('transform', `translate(${num(left)}, ${num(top)})`);
         svg.appendChild(g);
     }
 

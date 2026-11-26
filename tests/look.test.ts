@@ -302,7 +302,11 @@ test('tickClear and cleanTickSpots: a number on a dot or under a curve is left o
     assert.equal(tickClear({ x0: 10, x1: 20, y0: 30, y1: 40 }, { dots: [], lines: obstacles.lines }, 0), true);
     const frame = { sx: (v: number) => 50 + v * 10, sy: (v: number) => 50 - v * 10, ox: 50, oy: 50, place: { x: 'zero' as const, y: 'zero' as const }, fs: 8, gap: 3, charEm: 0.56 };
     const spots = cleanTickSpots('x', [-2, -1, 0, 1, 2].map((value) => ({ value })), (t) => String(t.value), { step: 1, listed: false, frame, obstacles: { dots: [{ x: 70, y: 50, r: 4 }], lines: [] } });
-    assert.deepEqual(spots.map((s) => s.show), [true, true, false, true, false]);
+    // 6.2.1: a dot on the axis beside a number moves it a little away from the axis; one on its digits hides it.
+    assert.deepEqual(spots.map((s) => s.show), [true, true, false, true, true]);
+    assert.ok(spots[4].shift > 0 && spots[4].y > spots[3].y, 'the 2 moved down');
+    const covered = cleanTickSpots('x', [{ value: 2 }], () => '2', { step: 1, listed: false, frame, obstacles: { dots: [{ x: 70, y: 57, r: 4 }], lines: [] } });
+    assert.equal(covered[0].show, false);
     // A listed 0 (x numbers at ...) shows.
     const listed = cleanTickSpots('x', [{ value: 0 }], () => '0', { step: 1, listed: true, frame, obstacles: { dots: [], lines: [] } });
     assert.equal(listed[0].show, true);
