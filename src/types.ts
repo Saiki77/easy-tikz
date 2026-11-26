@@ -915,6 +915,8 @@ export interface RendererConfig {
     xLabel: string;
     yLabel: string;
     showAxisLabels: boolean;
+    /** Draw the axes, their numbers and names (chart field showAxis; `no axes` sets false). Absent: true. */
+    showAxis?: boolean;
     axisStyle: AxisStyle;
     gridMajor: boolean;
     gridMinor: boolean;

@@ -60,13 +60,14 @@ export function storedAxisStyle(v: unknown): AxisStyle | 'auto' {
  * gets. Polar and 3D charts keep their own (Classic) look; a chart that asks
  * for axes in a box draws wholly as Classic, so it looks as it always did.
  */
-export function resolveLook(look: ChartLook, stored: { axisStyle: unknown; grid: unknown; polar: boolean; is3D: boolean }): { look: ChartLook; axisStyle: AxisStyle; gridMajor: boolean } {
+export function resolveLook(look: ChartLook, stored: { axisStyle: unknown; grid: unknown; polar: boolean; is3D: boolean; showAxis?: boolean }): { look: ChartLook; axisStyle: AxisStyle; gridMajor: boolean } {
     const style = storedAxisStyle(stored.axisStyle);
     const clean = look === 'clean' && !stored.polar && !stored.is3D && style !== 'box';
     return {
         look: clean ? 'clean' : 'classic',
         axisStyle: style === 'auto' ? (clean ? 'middle' : 'box') : style,
-        gridMajor: stored.grid === true || (stored.grid !== false && clean),
+        // 6.2: a chart with `no axes` (a diagram) gets no grid unless it asks for one.
+        gridMajor: stored.grid === true || (stored.grid !== false && clean && stored.showAxis !== false),
     };
 }
 

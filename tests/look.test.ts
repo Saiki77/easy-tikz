@@ -306,3 +306,20 @@ test('tickClear and cleanTickSpots: a number on a dot or under a curve is left o
     const listed = cleanTickSpots('x', [{ value: 0 }], () => '0', { step: 1, listed: true, frame, obstacles: { dots: [], lines: [] } });
     assert.equal(listed[0].show, true);
 });
+
+test('no axes: no axis lines, numbers or names on screen and in the export; no automatic grid (6.2)', () => {
+    const text = 'show x from -2 to 2 and y from -1 to 3\nno axes\nplot f(x) = x^2';
+    for (const look of ['clean', 'classic'] as ChartLook[]) {
+        withLook(look, () => {
+            const s = settings(text);
+            assert.equal(s.toRendererConfig().showAxis, false, `${look}: the renderer gets showAxis false`);
+            assert.equal(s.resolvedLook().gridMajor, false, `${look}: no grid unless the chart asks for one`);
+        });
+        const code = tikz(text, look);
+        assert.ok(code.includes('hide axis'), `${look}: the export hides the axes`);
+        assert.ok(!/axis lines=|axis x line=|axis y line=/.test(code), `${look}: no axis lines in the export`);
+    }
+    // A chart with axes keeps them; `no axes` with an explicit grid keeps the grid.
+    withLook('clean', () => assert.equal(settings('plot f(x) = x^2').toRendererConfig().showAxis, true));
+    withLook('clean', () => assert.equal(settings('no axes\nwith a grid\nplot f(x) = x^2').resolvedLook().gridMajor, true));
+});

@@ -518,9 +518,11 @@ export class SVGRenderer {
         this.dark = typeof activeDocument !== 'undefined' && !!activeDocument.body && activeDocument.body.hasClass('theme-dark'); // 6.0 F4
         this.drawGrid(svg);
         this.drawFills(svg, items);
-        // 6.1: the clean look's axes and numbers.
-        if (this.clean) this.drawCleanAxes(svg, fns, items);
-        else this.drawAxes(svg);
+        // 6.1: the clean look's axes and numbers. 6.2: `no axes` draws none of them.
+        if (this.config.showAxis !== false) {
+            if (this.clean) this.drawCleanAxes(svg, fns, items);
+            else this.drawAxes(svg);
+        }
         const curves: DrawnCurve[] = [];
         const legend = this.drawCurves(svg, fns, curves);
         this.drawn = { items, curves };

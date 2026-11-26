@@ -633,7 +633,10 @@ function tikz2D(settings: SettingsManager, ctx: MathContext, config: RendererCon
     // Middle axes: the labels sit just beyond the arrow tips (x right of its
     // tip, y above its tip), where they cannot collide with the plot, as in
     // the preview. pgfplots' default puts them inside the plot next to the tips.
-    if (cleanNow) {
+    if (config.showAxis === false) {
+        // 6.2: `no axes`: no axis lines, numbers or names, as the preview draws it.
+        opts.push('hide axis');
+    } else if (cleanNow) {
         // 6.1: the clean look's axes, grid and numbers.
         opts.push(...cleanOptions(config, ctx, view, settings.paperSize(), items, colors));
     } else {

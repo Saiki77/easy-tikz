@@ -785,6 +785,17 @@ if (started) {
             // The changed line is written in words.
             assert(/^slider a from 0 to 2, starting at 1\.5\b/.test(lines[2]), `slider line: ${lines[2]}`);
         });
+        await check('no axes: the chart draws no axis lines, numbers or names (6.2)', async () => {
+            const noAxesNote = 'No axes';
+            const block = (lines) => '```easy-tikz\n' + lines.join('\n') + '\n```\n';
+            await obs.writeNote(noAxesNote, block(['show x from -2 to 2 and y from -1 to 3', 'no axes', 'plot f(x) = x^2']) + '\n' + block(['show x from -2 to 2 and y from -1 to 3', 'plot g(x) = x^2']));
+            await obs.openNote(noAxesNote, { mode: 'reading' });
+            const charts = await obs.noteCharts();
+            assert(charts.length === 2 && charts.every((c) => c.drawn && c.issues === null), `rendered charts: ${JSON.stringify(charts)}`);
+            const axes = await obs.call(() => Array.from(document.querySelectorAll('.workspace-leaf.mod-active .block-language-easy-tikz')).map((b) => b.querySelectorAll('.etz-axes').length));
+            assert(axes[0] === 0 && axes[1] > 0, `axes groups per chart: ${JSON.stringify(axes)}`);
+            return `axes groups: ${axes.join(', ')}`;
+        });
         // 5.0: every formula is a chart, connected sliders, charts as SVG files.
         const formulaNote = 'Formulas';
         await check('formulas: resting on a formula opens its chart with a slider per letter, and Insert chart writes the block', async () => {

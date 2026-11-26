@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.2.0] - 2026-11-26
+
+The hover knows which formulas are charts.
+
+### Added
+
+- **Smart formula recognition:** a small network decides whether a formula in a note gets a hover card (and the dotted mark) and which kind. It reads the formula and a few words around it and the note's own definitions, entirely offline (0.03 ms per formula). Its 650 weights were designed and explained by hand, not trained. On 2,959 formulas from study notes it never saw, it makes 5 times fewer mistakes than the rules of 6.1 (83 against 430) and 8 times fewer wrong cards (33 against 282): no more cards on terms like $\frac{1}{m-1}$, $\lVert w\rVert$ or $y = +1$, and new cards for $x(t) = x_0 e^{at}$, a covariance matrix $\Sigma = \begin{pmatrix} 3 & 1 \\ 1 & 3 \end{pmatrix}$ or a transfer function $G(s)$. Formulas with words, conditions and several parts (`$f(x) = x^2,\quad x \in [0, 3]$`, `\text{für } t \ge 0`), unusual names (`K_{\text{fix}}(q)`, `\hat{y}_\theta(x)`), odd spacing and Unicode (`x²`, `≤`) are read too.
+- Setting **Formula recognition**: Smart (the default) or Rules (the behaviour of 6.1).
+
+### Fixed
+
+- Money in the text: dollar signs now pair the way Obsidian pairs them, so a price like `5$` or `$2.50` before a formula no longer gives that formula another formula's card in Reading view.
+- `no axes` draws no axis lines, numbers or names, and the LaTeX export writes `hide axis`. Before, the axes were drawn anyway (in the clean look as grey lines at the edges). A chart with `no axes` also gets no automatic grid; `with a grid` still draws one.
+
 ## [6.1.0] - 2026-11-26
 
 Charts and hover cards look like the 6.0 film by default.

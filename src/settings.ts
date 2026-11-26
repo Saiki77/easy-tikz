@@ -416,6 +416,7 @@ export class SettingsManager {
             xLabel,
             yLabel,
             showAxisLabels: this.getValue('show_axis_label') !== false,
+            showAxis: this.getValue('showAxis') !== false, // 6.2: `no axes` draws no axis lines, numbers or names
             axisStyle: look.axisStyle, // 6.1: or the look's, when the chart leaves it open
             gridMajor: look.gridMajor,
             look: look.look, // 6.1
@@ -457,6 +458,7 @@ export class SettingsManager {
             grid: this.getValue('showLargeGrid'),
             polar: this.getValue('coordinateSystem') === 'polar',
             is3D: this.getValue('dimension') === true,
+            showAxis: this.getValue('showAxis') !== false,
         });
     }
 
