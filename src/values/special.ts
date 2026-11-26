@@ -33,6 +33,23 @@ export function gamma(x: number): number {
     return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * a;
 }
 
+/**
+ * 6.2.1: ln Γ(x) for x > 0 (NaN otherwise), about 15 correct digits, also
+ * where Γ(x) itself is more than a double holds (the densities of the t,
+ * chi-square, gamma and beta distributions with large parameters).
+ */
+export function lnGamma(x: number): number {
+    if (!(x > 0)) return NaN;
+    if (x === Infinity) return Infinity;
+    // Below 0.5 by the reflection formula, as gamma does.
+    if (x < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * x)) - lnGamma(1 - x);
+    const z = x - 1;
+    let a = LANCZOS[0];
+    const t = z + 7.5;
+    for (let i = 1; i < 9; i++) a += LANCZOS[i] / (z + i);
+    return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(a);
+}
+
 /** n!: exact for whole n up to 170, Γ(n + 1) between them, NaN for negative whole n. */
 export function factorial(n: number): number {
     if (Number.isInteger(n)) {

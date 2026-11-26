@@ -31,7 +31,7 @@
 import type { Affine, IssueFix } from './mathcontext';
 import { Language, language, t as msg } from './i18n';
 import { latexToPlain } from './latex';
-import { binom, factorial, termRange } from './values/special';
+import { binom, factorial, gamma, termRange } from './values/special';
 import { isGeoGebraFormula } from './geogebra/syntax'; // 6.0 G
 
 /**
@@ -106,6 +106,17 @@ const BUILTINS: Record<string, Builtin> = {
     // 6.0 A: n! and \binom{n}{k} (src/values/special.ts).
     factorial: unary(factorial),
     binom: binary(binom),
+};
+
+/**
+ * 6.2.1: functions that are a function only when called and the chart has
+ * no name of that spelling: gamma(x) (also Gamma(x), as \Gamma(x) reads) is
+ * Γ(x), while a slider called gamma stays a slider (gamma(x + 1) is then a
+ * product, as before). Not reserved: they never take a name from a chart.
+ */
+const SOFT_BUILTINS: Record<string, Builtin> = {
+    gamma: unary(gamma),
+    Gamma: unary(gamma),
 };
 
 const MATH_CONSTANTS: Record<string, number> = {
@@ -1193,8 +1204,12 @@ function resolveCall(node: CallNode, env: Env, src: string): CallTarget {
         }
         return { k: 'mul', res };
     }
+    // 6.2.1: gamma(x) when the chart has nothing called gamma.
+    const soft = own(SOFT_BUILTINS, node.name);
+    if (soft) return { k: 'builtin', b: soft, name: 'gamma' };
     throw unknownFunction(node, env, src);
 }
+
 
 /**
  * `node` is written like a call but compiles as implicit multiplication in
@@ -2640,7 +2655,8 @@ class PgfPrinter {
         const target = resolveCall(n, this.env, '');
         if (target.k === 'fn') return this.inline(target.ref, this.print(n.args[0]));
         // 6.0 A: n! and \binom{n}{k} are numbers in the export (pgfmath's factorial stops at 7!); of a variable they have no pgfmath form.
-        if (target.k === 'builtin' && (target.name === 'factorial' || target.name === 'binom')) {
+        // 6.2.1: gamma(x) too (pgfmath has no gamma function): a number, or the curve as coordinates.
+        if (target.k === 'builtin' && (target.name === 'factorial' || target.name === 'binom' || target.name === 'gamma')) {
             if (!n.args.every((a) => variableFree(a, this.env))) throw new ExprError(msg('values.problem.noPgf', { what: `${target.name}(...)` }));
             return this.num(compile(n, this.env, '')(NaN, NaN));
         }
@@ -2810,6 +2826,13 @@ function texBuiltin(n: CallNode): boolean {
 }
 
 class TexPrinter {
+    /** 6.2.1: `taken(name)`: the chart has a value or function of that name (gamma(x) is then not Γ). */
+    private readonly taken: (name: string) => boolean;
+
+    constructor(taken?: (name: string) => boolean) {
+        this.taken = taken ?? (() => false);
+    }
+
     print(n: Node): Tex {
         switch (n.t) {
             case 'num':
@@ -2914,6 +2937,8 @@ class TexPrinter {
         if (!n.math && n.name === 'binom' && n.args.length === 2) {
             return { s: `{${this.print(n.args[0]).s} \\choose ${this.print(n.args[1]).s}}`, p: P_ATOM };
         }
+        // 6.2.1: the gamma function.
+        if (!n.math && own(SOFT_BUILTINS, n.name) && n.args.length === 1 && !this.taken(n.name)) return { s: `\\Gamma(${this.print(n.args[0]).s})`, p: P_ATOM };
         const args = n.args.map((a) => this.print(a).s);
         if (!texBuiltin(n)) {
             return { s: `${texName(n.name)}(${args.join(', ')})`, p: P_ATOM };
@@ -2954,6 +2979,6 @@ class TexPrinter {
  * LaTeX math source (no delimiters) for `ast`. Uses kernel LaTeX only
  * (no amsmath), so legend entries compile in a bare pgfplots document.
  */
-export function toTex(ast: Node): string {
-    return new TexPrinter().print(ast).s;
+export function toTex(ast: Node, taken?: (name: string) => boolean): string {
+    return new TexPrinter(taken).print(ast).s;
 }
