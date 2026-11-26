@@ -18,7 +18,7 @@ export const plugin = {
     'plugin.formula.insert': 'Insert chart',
     'plugin.formula.open': 'Open in the editor',
     'plugin.formula.cannotDraw': 'This chart cannot be drawn.',
-    'plugin.formula.dialog': 'Chart of the formula',
+    'plugin.formula.dialogKind': 'Chart of the formula ({kind})',
     'plugin.formula.kind.function': 'Function',
     'plugin.formula.kind.surface': 'Surface',
     'plugin.formula.kind.polar': 'Polar curve',

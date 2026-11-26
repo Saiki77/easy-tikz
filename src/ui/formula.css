@@ -1,19 +1,24 @@
 /* The chart of a formula (src/ui/formulaHover.ts): a card next to the
-   formula under the pointer. The formula on top with what it is and close,
-   the chart, the sliders of its letters, and the two buttons. Theme colours
-   only; a short fade in, none with reduced motion. */
+   formula under the pointer (6.0.1, clean look). The chart, the sliders of
+   its letters, one grey line with the n = 1 / n = 2 switch, and the two
+   buttons small at the bottom right; close (x) over the chart's corner on
+   hover or focus, always on touch screens. Theme colours only, so the dark
+   theme follows; a short fade in, none with reduced motion. */
 .etz-formula-pop {
     position: fixed;
     z-index: var(--layer-popover);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
     width: min(380px, calc(100vw - 16px));
-    padding: 12px;
+    padding: 8px;
     border: 1px solid var(--background-modifier-border);
-    border-radius: var(--radius-l);
+    border-radius: 14px;
     background-color: var(--background-primary);
-    box-shadow: var(--shadow-l);
+    box-shadow:
+        0 14px 36px -12px color-mix(in srgb, var(--background-modifier-box-shadow, rgba(0, 0, 0, 0.3)) 75%, transparent),
+        0 2px 6px color-mix(in srgb, var(--background-modifier-box-shadow, rgba(0, 0, 0, 0.3)) 20%, transparent);
+    color: var(--text-normal);
     animation: etz-formula-in 140ms ease-out;
 }
 
@@ -40,45 +45,65 @@
     .etz-formula-pop.is-above {
         animation: none;
     }
+
+    .etz-formula-pop button.etz-formula-close {
+        transition: none;
+    }
 }
 
-.etz-formula-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-}
-
-.etz-formula-tex {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow-x: auto;
-    color: var(--text-normal);
-    font-size: 1.05em;
-}
-
-.etz-formula-kind {
-    flex: 0 0 auto;
-    padding: 2px 8px;
-    border-radius: var(--radius-s);
-    background-color: var(--background-modifier-hover);
+/* Close: over the chart's top right corner, shown on hover or keyboard focus, always where nothing hovers. */
+.etz-formula-pop button.etz-formula-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background-color: color-mix(in srgb, var(--background-primary) 90%, transparent);
+    box-shadow: none;
     color: var(--text-muted);
-    font-size: var(--font-ui-smaller);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 150ms ease;
 }
 
-.etz-formula-close {
-    flex: 0 0 auto;
+.etz-formula-pop:hover button.etz-formula-close,
+.etz-formula-pop:focus-within button.etz-formula-close,
+.etz-formula-pop.is-touch button.etz-formula-close {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .etz-formula-pop button.etz-formula-close {
+        opacity: 1;
+    }
+}
+
+.etz-formula-pop button.etz-formula-close:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.etz-formula-close-icon {
+    display: inline-flex;
+}
+
+.etz-formula-close-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2px;
 }
 
 .etz-formula-chart {
     overflow: hidden;
     cursor: grab;
     touch-action: none;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--radius-m);
+    border-radius: 7px;
 }
 
 .etz-formula-chart svg {
@@ -92,32 +117,133 @@
     aspect-ratio: 4 / 3;
 }
 
+.etz-formula-chart:active {
+    cursor: grabbing;
+}
+
+/* The sliders of the formula's letters: as the strip under a chart in a note (inline.css). */
 .etz-formula-sliders {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
+    padding: 0 6px;
 }
 
 .etz-formula-slider {
     display: grid;
-    grid-template-columns: 1.8em minmax(0, 1fr);
-    gap: 8px;
+    grid-template-columns: minmax(1.2em, auto) minmax(0, 1fr);
+    gap: 10px;
     align-items: center;
-    font-size: var(--font-ui-smaller);
+}
+
+.etz-formula-slider .etz-slider {
+    height: 26px;
 }
 
 .etz-formula-name {
     color: var(--text-normal);
-    font-family: var(--font-text);
-    font-size: var(--font-ui-small);
+    font-family: 'STIX Two Text', STIXGeneral, 'Latin Modern Roman', 'Cambria Math', Cambria, 'Times New Roman', serif;
+    font-size: 15px;
     font-style: italic;
     text-align: center;
 }
 
+/* One grey line, with the n switch at its left. */
 .etz-formula-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 10px;
+    padding: 2px 4px 0;
+}
+
+.etz-formula-from {
+    flex: 1 1 12em;
+    min-width: 0;
+    color: var(--text-faint);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.etz-formula-switch + .etz-formula-from {
+    text-align: right;
+}
+
+.etz-formula-from-math mjx-container {
+    color: var(--text-muted);
+}
+
+.etz-formula-switch {
+    display: inline-flex;
+    flex: 0 0 auto;
+    padding: 2px;
+    border-radius: 7px;
+    background-color: var(--background-modifier-hover);
+}
+
+.etz-formula-switch button.etz-formula-n {
+    height: 22px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 5px;
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.etz-formula-switch button.etz-formula-n[aria-pressed='true'] {
+    background-color: var(--background-primary);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--background-modifier-box-shadow, rgba(0, 0, 0, 0.3)) 50%, transparent);
+    color: var(--text-normal);
+}
+
+/* Open in the editor (quiet) and Insert chart (the accent, soft). */
+.etz-formula-acts {
     display: flex;
     justify-content: flex-end;
     gap: 6px;
+    padding: 2px 4px 2px;
+}
+
+.etz-formula-acts button.etz-btn.mod-sm {
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 7px;
+    box-shadow: none;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.etz-formula-acts button.etz-btn.mod-ghost {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.etz-formula-acts button.etz-btn.mod-ghost:hover {
+    background-color: var(--background-modifier-active-hover, var(--background-modifier-hover));
+}
+
+.etz-formula-acts button.etz-btn.mod-cta {
+    background-color: var(--etz-accent-tint);
+    color: var(--text-accent);
+}
+
+.etz-formula-acts button.etz-btn.mod-cta:hover {
+    background-color: color-mix(in srgb, var(--interactive-accent) 22%, transparent);
+    color: var(--text-accent-hover, var(--text-accent));
+}
+
+.etz-formula-pop button.etz-formula-close:focus-visible,
+.etz-formula-switch button.etz-formula-n:focus-visible,
+.etz-formula-acts button.etz-btn:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
+    box-shadow: none;
 }
 
 /* Formulas with a chart in notes (setting Highlight formulas in notes, a
@@ -141,8 +267,4 @@ body.etz-formula-marks .math[data-etz-mark='rows'] :is(mjx-mtr, mjx-mlabeledtr)[
 body.etz-formula-marks :is(mjx-mtr, mjx-mlabeledtr).etz-formula-open > mjx-mtd {
     border-radius: var(--radius-s);
     background-color: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
-}
-
-.etz-formula-chart:active {
-    cursor: grabbing;
 }
