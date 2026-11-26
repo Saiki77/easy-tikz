@@ -794,6 +794,78 @@ if (started) {
             return 'condition (2) back to x + 3y <= 6 both times';
         });
 
+        // 6.2.2: a pan or a zoom keeps the plot where it is (the room around it no longer follows the numbers at its edges frame by frame).
+        /** The plot rectangle (viewBox units), the client point of the math point (x, y) and the render count. */
+        const plotAt = (x, y) =>
+            obs.call(
+                (a, b) => {
+                    const m = window.__etzMedia.requireEditor();
+                    return { plot: { ...m.layout.plot }, p: window.__etzMedia.mathToClient(a, b), version: m.renderVersion };
+                },
+                x,
+                y
+            );
+        /** Wait until the editor drew a frame after `version`. */
+        const nextFrame = async (version) => {
+            await obs.waitFor(() => obs.call((v) => window.__etzMedia.requireEditor().renderVersion !== v, version), { timeout: 5000, interval: 10, message: 'a new frame of the preview' });
+            await obs.frames(1);
+        };
+        const samePlot = (a, b) => ['x', 'y', 'w', 'h'].every((k) => Math.abs(a[k] - b[k]) < 0.01);
+        const panCharts = () => [
+            ['clean, axes in the middle', { ...TEXT.parseChartText('show x from -0.5 to 10 and y from -0.5 to 5\naxes in the middle\nplot f(x) = sin(x) + 2').data, look: 'clean' }],
+            ['classic box', { ...TEXT.parseChartText('show x from -0.5 to 10 and y from -0.5 to 5\nplot f(x) = sin(x) + 2').data, look: 'classic', axis_style: 'box' }],
+        ];
+        await check('pan (6.2.2): 20 small steps keep the plot rectangle, a fixed math point moves by the pan each step, and letting go moves nothing', async () => {
+            const out = [];
+            for (const [name, chart] of panCharts()) {
+                await loadClean(chart, false);
+                // A new grid line comes in at the left and one leaves at the right: in 6.2.1 the plot shrank and shifted there.
+                const start = await obs.point([5, 4.4]);
+                const first = await plotAt(5, 2.25);
+                await obs.mouse.move(start);
+                await obs.mouse.down();
+                let version = first.version;
+                for (let i = 1; i <= 20; i++) {
+                    await obs.mouse.move({ x: start.x + 7 * i, y: start.y });
+                    await nextFrame(version);
+                    const now = await plotAt(5, 2.25);
+                    version = now.version;
+                    assert(samePlot(now.plot, first.plot), `${name}, step ${i}: the plot moved from ${JSON.stringify(first.plot)} to ${JSON.stringify(now.plot)}`);
+                    const dx = now.p.x - first.p.x;
+                    assert(Math.abs(dx - 7 * i) < 0.25 && Math.abs(now.p.y - first.p.y) < 0.25, `${name}, step ${i}: the point (5, 2.25) moved by ${dx.toFixed(2)}, ${(now.p.y - first.p.y).toFixed(2)} px, the hand by ${7 * i}, 0`);
+                }
+                await obs.mouse.up();
+                await obs.waitForRender();
+                const after = await plotAt(5, 2.25);
+                assert(samePlot(after.plot, first.plot), `${name}: letting go moved the plot from ${JSON.stringify(first.plot)} to ${JSON.stringify(after.plot)}`);
+                assert(Math.abs(after.p.x - first.p.x - 140) < 0.25, `${name}: after letting go the point moved by ${(after.p.x - first.p.x).toFixed(2)} px, the hand by 140`);
+                out.push(name);
+            }
+            return `${out.join(' and ')}: 20 steps of 7 px`;
+        });
+        await check('wheel zoom (6.2.2): the plot rectangle stays while the wheel turns, the point under the pointer stays under it, and the room settles after', async () => {
+            const [name, chart] = panCharts()[0];
+            await loadClean(chart, false);
+            const at = await obs.point([5, 4.4]);
+            const under = await obs.clientToMath(at.x, at.y);
+            const first = await plotAt(under.x, under.y);
+            let version = first.version;
+            for (let i = 1; i <= 8; i++) {
+                await obs.mouse.wheel(at, -60);
+                await nextFrame(version);
+                const now = await plotAt(under.x, under.y);
+                version = now.version;
+                assert(samePlot(now.plot, first.plot), `${name}, notch ${i}: the plot moved from ${JSON.stringify(first.plot)} to ${JSON.stringify(now.plot)}`);
+                assert(Math.hypot(now.p.x - at.x, now.p.y - at.y) < 0.5, `${name}, notch ${i}: the point under the pointer moved ${Math.hypot(now.p.x - at.x, now.p.y - at.y).toFixed(2)} px away from it`);
+            }
+            // Zoomed in, the y-axis came to the left edge: its numbers need room there, and the room eases to it.
+            await obs.waitForRender();
+            const rest = await plotAt(under.x, under.y);
+            const easing = await obs.call(() => window.__etzMedia.requireEditor().roomHold.easing());
+            assert(!easing, 'the room is still easing after the preview went idle');
+            return `8 notches, plot ${JSON.stringify(first.plot)}; at rest x ${rest.plot.x.toFixed(1)}, w ${rest.plot.w.toFixed(1)}`;
+        });
+
         await check('typing a formula adds a function', async () => {
             await obs.openEditor();
             await obs.mouse.click({ selector: '.modal.tikz-modal .etz-build-start input, .modal.tikz-modal .etz-build-start textarea' });

@@ -48,6 +48,7 @@ import { EntranceKind, StepEntrance, clipLines, clipSegment, grownLine, labelSta
 import { LegendCorner, legendCorner, legendLabelOf, legendObstacles } from './legend'; // 6.2.1
 // 6.1 clean look
 import { AxisLook, AxisPlace, CLEAN_AXIS_PX, CLEAN_GRID_ALPHA, CLEAN_LINE_PX, CLEAN_VARS, CleanAxisFrame, LOOK_AXES, NUMBER_PT, TickObstacles, axisPlace, cleanTickSpots } from './look';
+import { Room, usableRoom } from './room'; // 6.2.2
 
 /** 6.0 entrances: how a scene item whose step comes in enters (its object's kind, its start, where its points start popping). */
 interface ItemEntrance {
@@ -83,6 +84,14 @@ export interface SVGRendererOptions {
      * (the export, SVG files): the still frame shows.
      */
     live?: LiveLayer;
+    // 6.2.2
+    /**
+     * The room around the plot to draw with instead of the chart's own (the
+     * editor holds it while a hand moves the view, src/room.ts): the plot
+     * keeps its size and place. Numbers and names that do not fit in it are
+     * left out. Absent: the chart's own room.
+     */
+    room?: Room;
 }
 
 /** CONTRACT (v4): where the plot area ended up, for mapping pointer positions to math coordinates. */
@@ -398,6 +407,10 @@ export class SVGRenderer {
     private readonly ptPx: number;
     /** Padding around the plot rectangle (before equal-scale letterboxing). */
     private readonly pad: Padding;
+    /** 6.2.2: the padding is a held room (SVGRendererOptions.room), not the chart's own: what does not fit in it is left out. */
+    private readonly held: boolean;
+    /** 6.2.2: the room this renderer draws with and the chart's own room at this view (the editor decides with it whether to keep a held room). */
+    readonly room: { used: Room; own: Room };
     /** Baseline region of the title: its bottom edge, in viewBox units. */
     private readonly titleBottom: number;
     /** Text colour resolved to a concrete value, for bold label ink (once per render). */
@@ -484,7 +497,13 @@ export class SVGRenderer {
         this.view = { xmin, xmax, ymin, ymax };
         this.viewFallback = badX || badY;
         this.ptPx = this.textScale();
-        [this.pad, this.titleBottom] = this.padding();
+        const [own, titleBottom] = this.padding();
+        this.titleBottom = titleBottom;
+        // 6.2.2: a room held while a hand moves the view.
+        const room = opts?.room;
+        this.held = !this.compact && usableRoom(room, this.width, this.height);
+        this.pad = this.held && room ? { top: room.top, right: room.right, bottom: room.bottom, left: room.left } : own;
+        this.room = { used: { ...this.pad }, own: { ...own } };
         this.plot = this.plotRect();
         // ~3 / ~6 on-screen px marching-squares cells over the plot rectangle.
         this.grid = marchingGrid(this.plot.w, this.plot.h, opts && opts.pixelScale, this.quality);
@@ -709,6 +728,11 @@ export class SVGRenderer {
     /** 6.1: the gap between an axis line and its numbers in the clean look. */
     private cleanGap(): number {
         return TICK_GAP_PT * this.ptPx + 2;
+    }
+
+    /** 6.1: a box (viewBox units) lies inside the chart, half a unit in from its edges. */
+    private inChart(b: { x0: number; x1: number; y0: number; y1: number }): boolean {
+        return b.x0 >= 0.5 && b.x1 <= this.width - 0.5 && b.y0 >= 0.5 && b.y1 <= this.height - 0.5;
     }
 
     /**
@@ -1530,8 +1554,15 @@ export class SVGRenderer {
         const axisLine = (x1: number, y1: number, x2: number, y2: number) => this.axisLine(g, x1, y1, x2, y2, ink);
         const tick = (x1: number, y1: number, x2: number, y2: number) => g.appendChild(this.line(x1, y1, x2, y2, tickAttrs));
         // x tick labels hang below (x, y); y tick labels end at (x, y), centred on it.
-        const xTickLabel = (k: Tick, x: number, y: number) => this.tickLabel(g, tickText(k), x, y + 0.78 * tickFs, 'middle', tickFs);
-        const yTickLabel = (k: Tick, x: number, y: number) => this.tickLabel(g, tickText(k), x, y + 0.35 * tickFs, 'end', tickFs);
+        // 6.2.2: in a held room, a number that would leave the chart is left out until it fits.
+        const xTickLabel = (k: Tick, x: number, y: number) => {
+            const tw = tickText(k).length * tickFs * CHAR_WIDTH_EM;
+            if (!this.held || this.inChart({ x0: x - tw / 2, x1: x + tw / 2, y0: y, y1: y + tickFs })) this.tickLabel(g, tickText(k), x, y + 0.78 * tickFs, 'middle', tickFs);
+        };
+        const yTickLabel = (k: Tick, x: number, y: number) => {
+            const tw = tickText(k).length * tickFs * CHAR_WIDTH_EM;
+            if (!this.held || this.inChart({ x0: x - tw, x1: x, y0: y - 0.5 * tickFs, y1: y + 0.5 * tickFs })) this.tickLabel(g, tickText(k), x, y + 0.35 * tickFs, 'end', tickFs);
+        };
         // At the origin of middle axes the axes cross: no 0 there, unless the chart lists it (At).
         const atOrigin = (k: Tick, step: number, t: AxisTicks) => t.mode !== 'at' && Math.abs(k.value) < step * 0.01;
 
@@ -1694,10 +1725,9 @@ export class SVGRenderer {
             const fs = this.fontPx(this.tickPt()); // 6.2.1: small, or large (Axis numbers)
             const frame: CleanAxisFrame = { sx: (v) => this.sx(v), sy: (v) => this.sy(v), ox, oy, place, fs, gap: this.cleanGap(), charEm: CHAR_WIDTH_EM };
             const obstacles = this.tickObstacles(fns, items);
-            const inCanvas = (b: { x0: number; x1: number; y0: number; y1: number }) => b.x0 >= 0.5 && b.x1 <= this.width - 0.5 && b.y0 >= 0.5 && b.y1 <= this.height - 0.5;
             for (const [axis, t, step] of [['x', xT, stepX], ['y', yT, stepY]] as const) {
                 for (const spot of cleanTickSpots(axis, t.ticks, tickText, { step, listed: t.mode === 'at', frame, obstacles })) {
-                    if (spot.show && inCanvas(spot.box)) this.tickLabel(g, spot.text, spot.x, spot.y, spot.anchor, fs, CLEAN_VARS.tick);
+                    if (spot.show && this.inChart(spot.box)) this.tickLabel(g, spot.text, spot.x, spot.y, spot.anchor, fs, CLEAN_VARS.tick);
                 }
             }
             if (cfg.showAxisLabels) {
@@ -1707,19 +1737,31 @@ export class SVGRenderer {
                 const label = (hAnchor: HAnchor, vAnchor: VAnchor, axis: 'x' | 'y'): LabelOptions => ({ color: TEXT_NORMAL, fontSize: axisFs, hAnchor, vAnchor, weight: '500', attrs: { 'data-etz-axis-name': axis } });
                 const xName = String(cfg.xLabel ?? '');
                 const yName = String(cfg.yLabel ?? '');
+                const nameH = axisFs * 1.2;
+                // 6.2.2: in a held room, a name with no room on its side (its axis came to an edge) is left out until there is.
+                const room = (ok: boolean) => !this.held || ok;
                 // An axis through 0: its name beyond its end. An axis at an edge: its name beside its numbers, as in a box.
-                if (place.x === 'zero') this.drawLabel(g, xName, right + lgap, oy, label('start', 'middle', 'x'));
-                else if (place.x === 'low') this.drawLabel(g, xName, left + w / 2, bottom + gap + fs * 1.1 + lgap, label('middle', 'below', 'x'));
-                else this.drawLabel(g, xName, left + w / 2, top - gap - fs * 1.1 - lgap, label('middle', 'above', 'x'));
-                if (place.y === 'zero') this.drawLabel(g, yName, ox, top - lgap, label('middle', 'above', 'y'));
-                else if (yName.trim()) {
+                if (place.x === 'zero') {
+                    if (room(right + lgap + this.textWidth(xName, axisFs) <= this.width - 0.5)) this.drawLabel(g, xName, right + lgap, oy, label('start', 'middle', 'x'));
+                } else if (place.x === 'low') {
+                    const y = bottom + gap + fs * 1.1 + lgap;
+                    if (room(y + nameH <= this.height - 0.5)) this.drawLabel(g, xName, left + w / 2, y, label('middle', 'below', 'x'));
+                } else {
+                    const y = top - gap - fs * 1.1 - lgap;
+                    if (room(y - nameH >= 0.5)) this.drawLabel(g, xName, left + w / 2, y, label('middle', 'above', 'x'));
+                }
+                if (place.y === 'zero') {
+                    if (room(top - lgap - nameH >= 0.5)) this.drawLabel(g, yName, ox, top - lgap, label('middle', 'above', 'y'));
+                } else if (yName.trim()) {
                     const yTickW = yT.ticks.reduce((m, k) => Math.max(m, tickText(k).length * fs * CHAR_WIDTH_EM), 0);
                     const reach = gap + yTickW + lgap + axisFs * 0.6;
                     const cx = place.y === 'low' ? Math.max(axisFs * 0.6, left - reach) : Math.min(this.width - axisFs * 0.6, right + reach);
-                    const cy = top + h / 2;
-                    const rotated = this.el('g', { transform: `rotate(-90, ${num(cx)}, ${num(cy)})` });
-                    this.drawLabel(rotated, yName, cx, cy, label('middle', 'middle', 'y'));
-                    this.attach(g, rotated);
+                    if (room(place.y === 'low' ? left - reach >= axisFs * 0.6 - 0.5 : right + reach <= this.width - axisFs * 0.6 + 0.5)) {
+                        const cy = top + h / 2;
+                        const rotated = this.el('g', { transform: `rotate(-90, ${num(cx)}, ${num(cy)})` });
+                        this.drawLabel(rotated, yName, cx, cy, label('middle', 'middle', 'y'));
+                        this.attach(g, rotated);
+                    }
                 }
             }
         }

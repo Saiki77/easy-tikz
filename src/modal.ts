@@ -41,6 +41,7 @@ import type { BlockFormat } from './blockjson';
 import { isChartText } from './text/parse';
 import { printChartText, writeChartText } from './text/print';
 import { PopIn, drawnNames, reducedMotion } from './motion';
+import { Room, RoomHold, roomKey, sameRoom } from './room'; // 6.2.2
 import { FieldHandle, PanelHost, PluginHost } from './ui/host';
 import type {
     Chip,
@@ -552,6 +553,13 @@ export class TikzModal extends Modal implements PanelHost {
     private wheelAnchor: { fx: number; fy: number } | null = null;
     /** Unrounded view written by the last wheel frame, with the range text it was written as. */
     private wheelView: { view: View; text: string } | null = null;
+    // 6.2.2
+    /** The plot's room held while a hand moves the view (pan, wheel, arrow keys), so the plot keeps its size and place (src/room.ts). */
+    private readonly roomHold = new RoomHold();
+    /** The room the last 2D frame drew with and the chart's own room there, with that frame's room key and range. */
+    private lastRoom: { used: Room; own: Room; key: string; range: string } | null = null;
+    /** The animation frame of the room easing to the chart's own after a gesture. */
+    private roomRaf: number | null = null;
     private panLocked = false;
     private isOpen = false;
     /** onOpen finished: from now on every change request counts as an edit. */
@@ -1118,6 +1126,10 @@ export class TikzModal extends Modal implements PanelHost {
             if (id !== null) window.clearTimeout(id);
         }
         this.announceTimer = this.chipTimer = null;
+        // 6.2.2
+        this.stopRoomEase();
+        this.roomHold.drop();
+        this.lastRoom = null;
         this.unbindDragKeys();
         this.unbindPaste(); // 6.2.1
         this.dragLayer?.destroy();
@@ -1541,6 +1553,51 @@ export class TikzModal extends Modal implements PanelHost {
         this.setIssues(issues);
         this.updatePill();
         this.scheduleCodeRefresh();
+        // 6.2.2: the full frame after a wheel or an arrow key (or a pan let go): keep the held room, or ease to the chart's own.
+        if (!(this.drag && this.drag.kind === 'pan')) this.releaseRoom();
+    }
+
+    // ------------------------------------------------------ 6.2.2: the room held while the view moves
+
+    /** A hand starts to move the view (pan, wheel, arrow key): the plot keeps the room of the frame drawn last. */
+    private holdRoom() {
+        this.stopRoomEase();
+        const last = this.lastRoom;
+        if (this.is3D() || !last) return;
+        this.roomHold.grab(last.used, last.key, this.rangeText());
+    }
+
+    /**
+     * The hand let go of the view. With the frame of the view it left drawn,
+     * the held room stays when the chart's own room fits in it, else it eases
+     * there; with that frame still to come, its full render decides.
+     */
+    private releaseRoom() {
+        const last = this.lastRoom;
+        if (!this.roomHold.holding() || this.roomHold.easing() || !last || last.range !== this.rangeText() || this.frameRaf !== null) return;
+        if (this.roomHold.release(last.own, reducedMotion())) this.easeRoom();
+        // Dropped with less motion asked for: the chart's own room in the next frame.
+        else if (!this.roomHold.holding() && !sameRoom(last.used, last.own)) this.scheduleUpdate();
+    }
+
+    /** Ease the room to the chart's own, one frame per animation frame (on its time, so the media toolkit's film clock steps it). */
+    private easeRoom() {
+        if (this.roomRaf !== null) return;
+        const step = (now: number) => {
+            this.roomRaf = null;
+            if (!this.isOpen || !this.roomHold.easing()) return;
+            const fresh = this.roomHold.pending(now);
+            if (this.roomHold.step(now)) {
+                if (fresh) this.renderNow('draft');
+                this.roomRaf = window.requestAnimationFrame(step);
+            } else this.renderNow('full');
+        };
+        this.roomRaf = window.requestAnimationFrame(step);
+    }
+
+    private stopRoomEase() {
+        if (this.roomRaf !== null) window.cancelAnimationFrame(this.roomRaf);
+        this.roomRaf = null;
     }
 
     // ------------------------------------------------------ 6.0 C: motion
@@ -1633,7 +1690,12 @@ export class TikzModal extends Modal implements PanelHost {
         }
         const pixelScale = fitPixelScale(this.chartBox.w, this.chartBox.h, config.width, config.height);
         this.gridScale = pixelScale;
-        const renderer = new SVGRenderer(config, { math, cache: this.sceneCache, quality, pixelScale, live: this.liveLayer ?? undefined }); // 6.0 F4: live
+        // 6.2.2: the room held while a hand moves the view (null: the chart's own).
+        const key = roomKey(config);
+        const range = this.rangeText();
+        const room = this.roomHold.roomFor(key, range) ?? undefined;
+        const renderer = new SVGRenderer(config, { math, cache: this.sceneCache, quality, pixelScale, live: this.liveLayer ?? undefined, room }); // 6.0 F4: live
+        this.lastRoom = { used: renderer.room.used, own: renderer.room.own, key, range };
         const svg = renderer.render();
         svg.addClass('etz-chart-svg');
         if (this.chartSvg && this.chartSvg.parentElement === chart) this.chartSvg.replaceWith(svg);
@@ -1969,6 +2031,7 @@ export class TikzModal extends Modal implements PanelHost {
         const panX = this.axisFree('x');
         const panY = this.axisFree('y');
         if (this.panLocked || !layout || !box || (!panX && !panY)) return false;
+        this.holdRoom(); // 6.2.2
         this.drag = {
             kind: 'pan',
             pointerId: e.pointerId,
@@ -2055,6 +2118,7 @@ export class TikzModal extends Modal implements PanelHost {
         this.drag = null;
         this.releaseCapture(e.pointerId);
         this.chartEl?.removeClass('is-dragging');
+        if (drag.kind === 'pan') this.releaseRoom(); // 6.2.2
         // A turn ends on whole degrees: the chart keeps round numbers (5.2.2).
         if (drag.kind === 'rotate') this.applyRotation(Math.round(num(this.settings.getValue('rotationZ'), 45)) % 360, Math.round(num(this.settings.getValue('rotationX'), 30)));
         if (drag.kind === 'rotate' && this.player) this.turn.hold(false, this.player.frame().time); // 6.0 F4: the turn goes on from here
@@ -3425,6 +3489,7 @@ export class TikzModal extends Modal implements PanelHost {
         const p = this.toMath(e.clientX, e.clientY);
         if (!p || p.fx < -0.05 || p.fx > 1.05 || p.fy < -0.05 || p.fy > 1.05) return;
         e.preventDefault();
+        if (!this.roomHold.holding() || this.roomHold.easing()) this.holdRoom(); // 6.2.2
         this.wheelSteps += wheelZoomSteps(e);
         this.wheelAnchor = { fx: p.fx, fy: p.fy };
         this.requestFrame();
@@ -3524,6 +3589,7 @@ export class TikzModal extends Modal implements PanelHost {
         const sign = e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 1;
         const dx = horizontal ? sign * (view.xmax - view.xmin) * KEYBOARD_PAN_FRACTION : 0;
         const dy = horizontal ? 0 : sign * (view.ymax - view.ymin) * KEYBOARD_PAN_FRACTION;
+        if (!this.roomHold.holding() || this.roomHold.easing()) this.holdRoom(); // 6.2.2
         this.writeView({ xmin: view.xmin + dx, xmax: view.xmax + dx, ymin: view.ymin + dy, ymax: view.ymax + dy }, horizontal, !horizontal);
     }
 
@@ -3557,6 +3623,8 @@ export class TikzModal extends Modal implements PanelHost {
             changed = true;
         }
         if (changed) this.chartPanel?.syncView();
+        // 6.2.2: pan, wheel and arrow keys write the view here: the held room goes with the range they wrote.
+        if (changed) this.roomHold.moved(this.rangeText());
         return changed;
     }
 
