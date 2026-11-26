@@ -28,6 +28,11 @@ export const plugin = {
     'plugin.formula.defaultSaved': 'Saved: charts of formulas now look like this one.',
     'plugin.settings.formulaMarks.name': 'Highlight formulas in notes',
     'plugin.settings.formulaMarks.desc': 'A dotted line under each formula that has a chart, and a tint under the pointer. Off: formulas look as usual; their chart still opens.',
+    'plugin.settings.formulaRecognition.name': 'Formula recognition',
+    'plugin.settings.formulaRecognition.desc':
+        'Which formulas open a chart and which kind. Smart (default): a small network reads each formula with the words around it, the name of the note and its other formulas, so notation such as 1/(m - 1) in a statistics note gets none and x(t) = x_0 e^{at} gets its curve. Rules: the checks of version 6.1, which chart every formula they can draw.',
+    'plugin.settings.formulaRecognition.smart': 'Smart',
+    'plugin.settings.formulaRecognition.rules': 'Rules',
     'plugin.settings.formulaSliders.name': 'Sliders in formula charts',
     'plugin.settings.formulaSliders.desc': 'A slider for each letter of the formula (a, b, k) in the chart that opens next to it.',
     'plugin.settings.formulaDefault.name': 'Default chart for formulas',

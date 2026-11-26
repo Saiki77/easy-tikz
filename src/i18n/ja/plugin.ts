@@ -31,6 +31,11 @@ export const plugin: Messages<typeof en> = {
     'plugin.formula.defaultSaved': '保存しました。数式のグラフはこの見た目になります。',
     'plugin.settings.formulaMarks.name': 'ノートの数式をハイライト',
     'plugin.settings.formulaMarks.desc': 'グラフにできる数式の下に点線を引き、ポインタを置くと色を付けます。オフにすると数式はいつもどおりの見た目で、グラフはそのまま開きます。',
+    'plugin.settings.formulaRecognition.name': '数式の認識',
+    'plugin.settings.formulaRecognition.desc':
+        'どの数式でグラフを開き、どの種類にするかを決めます。スマート（デフォルト）：小さなネットワークが、数式とその前後の言葉、ノートの名前、ノートのほかの数式を読みます。統計のノートの 1/(m - 1) のような記号はグラフにせず、x(t) = x_0 e^{at} は曲線にします。ルール：バージョン 6.1 の判定で、描ける数式はすべてグラフにします。',
+    'plugin.settings.formulaRecognition.smart': 'スマート',
+    'plugin.settings.formulaRecognition.rules': 'ルール',
     'plugin.settings.formulaSliders.name': '数式のグラフのスライダー',
     'plugin.settings.formulaSliders.desc': '数式の横に開くグラフに、数式の文字（a、b、k）ごとのスライダーを付けます。',
     'plugin.settings.formulaDefault.name': '数式のグラフの既定',

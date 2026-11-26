@@ -25,6 +25,7 @@ import { printChartText, writeChartText } from './src/text/print';
 import { applyFormulaDefault, formulaAt, formulaBlock, formulaChart } from './src/formula';
 import { parseChartText } from './src/text/parse';
 import { FormulaHover } from './src/ui/formulaHover';
+import { recognitionSetting } from './src/notes6/recognize/decide';
 import { SvgFiles } from './src/svgFiles';
 import { GLIDE_MS, PopIn, PopInState, drawnNames, ease, glides, mixCharts, reducedMotion } from './src/motion';
 import { LiveHost, editingCharts } from './src/live';
@@ -360,6 +361,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             chartLanguage: stored?.chartLanguage === 'full' ? 'full' : 'words',
             interfaceLanguage: languageSetting(stored?.interfaceLanguage),
             chartLook: lookSetting(stored?.chartLook), // 6.1
+            formulaRecognition: recognitionSetting(stored?.formulaRecognition), // 6.2
         };
         // The interface in the reader's language (src/i18n): Obsidian's, unless the setting fixes one. Set before
         // anything is built, so every text the plugin makes from here on is in it.
@@ -441,8 +443,10 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             sliders: () => this.data.formulaSliders !== false,
             formulaDefault: () => this.data.formulaDefault ?? null,
             invertDrag3D: () => !!this.data.invertDrag3D,
+            recognition: () => this.data.formulaRecognition, // 6.2
             openChart: (data, file) => new TikzModal(this.app, this, { data, sourceFile: file }).open(),
         });
+        this.formulaHover = hover;
         this.registerMarkdownPostProcessor((el, ctx) => hover.tag(el, ctx));
         this.registerEditorExtension(hover.editorMarks());
         // The highlight under formulas with a chart: a class on the body of each window.
@@ -658,6 +662,14 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
     /** Documents (main window, popouts) that carry the chart colour class. */
     private colourDocs = new Set<Document>();
     private markDocs = new Set<Document>();
+
+    /** The hover of formulas in notes (5.0), once loaded. */
+    formulaHover: FormulaHover | null = null;
+
+    /** 6.2: the setting Formula recognition changed: the formulas of every window are marked anew. */
+    refreshFormulaMarks() {
+        for (const d of this.markDocs) this.formulaHover?.refresh(d);
+    }
 
     /** The setting Highlight formulas in notes (with Charts for formulas on): a dotted line under formulas with a chart. */
     applyFormulaMarks(doc?: Document) {
@@ -2245,6 +2257,17 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 control: { type: 'toggle', key: 'formulaHover', defaultValue: true },
             },
             {
+                name: t('plugin.settings.formulaRecognition.name'),
+                desc: t('plugin.settings.formulaRecognition.desc'),
+                aliases: ['recognition', 'smart', 'rules', 'network', 'formula', 'card', '認識', 'スマート', 'ルール', '数式'],
+                control: {
+                    type: 'dropdown',
+                    key: 'formulaRecognition',
+                    options: { smart: t('plugin.settings.formulaRecognition.smart'), rules: t('plugin.settings.formulaRecognition.rules') },
+                    defaultValue: 'smart',
+                },
+            },
+            {
                 name: t('plugin.settings.formulaMarks.name'),
                 desc: t('plugin.settings.formulaMarks.desc'),
                 aliases: ['highlight', 'underline', 'mark', 'formula', 'ハイライト', '下線', '数式'],
@@ -2471,6 +2494,10 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 break;
             case 'formulaSliders':
                 this.plugin.data.formulaSliders = Boolean(value);
+                break;
+            case 'formulaRecognition': // 6.2
+                this.plugin.data.formulaRecognition = recognitionSetting(value);
+                this.plugin.refreshFormulaMarks();
                 break;
             case 'liveChart':
                 this.plugin.data.liveChart = Boolean(value);

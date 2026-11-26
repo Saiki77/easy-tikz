@@ -13,11 +13,15 @@
  * rendered formula (tag), Live Preview asks the editor where it sits.
  * Formulas that have a chart carry data-etz-mark="1": with the setting
  * Highlight formulas in notes, a dotted line goes under them (formula.css).
+ * 6.2: the setting Formula recognition decides which formulas have one:
+ * Smart (default), a hand-designed network that reads the formula, the
+ * words around it and the note's other formulas (src/notes6/recognize), or
+ * Rules, the builders' own checks as in 6.1.
  */
-import { App, MarkdownPostProcessorContext, Platform, TFile, finishRenderMath, renderMath, setIcon } from 'obsidian';
+import { App, MarkdownPostProcessorContext, Platform, TFile, editorInfoField, finishRenderMath, renderMath, setIcon } from 'obsidian';
 import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import type { Extension, Text } from '@codemirror/state';
-import { FormulaKind, applyFormulaDefault, chartable, formulaChart, formulaLines, formulaRows, formulasIn } from '../formula';
+import { FormulaKind, applyFormulaDefault, chartable, formulaRows, formulasIn } from '../formula';
 import { parseChartText } from '../text/parse';
 import { printChartText } from '../text/print';
 import { SettingsManager } from '../settings';
@@ -28,13 +32,18 @@ import { cloneData } from '../util';
 import { liveSlider, textButton, uniqueId, visuallyHidden } from './kit';
 import { MessageKey, t } from '../i18n';
 // 6.0 B: sets, maps, conditions, intervals, Jensen and epigraphs (src/notes6/hover.ts).
-import { HoverCard, HoverKind, hoverCard, hoverKind, noteDefinitions } from '../notes6/hover';
+import { HoverCard, HoverKind, NoteDefinition, hoverCard, hoverKind, noteDefinitions } from '../notes6/hover';
 // 6.0.1, clean look: the view framed on what matters, and the dots of roots and extrema.
 import { frameChart, keyDots } from '../notes6/frame';
 // 6.0 D: matrices, A v, det A and A v = λ v (src/linear/hover.ts).
-import { LinearHoverKind, linearHoverCard, linearHoverKind, noteValues } from '../linear/hover';
+import { LinearHoverCard, LinearHoverKind, linearHoverCard, linearHoverKind, noteValues } from '../linear/hover';
 // 6.0 E: recurrences, sums and functions of z (src/iterate/hover.ts).
-import { IterateHoverKind, iterateHoverCard, iterateHoverKind } from '../iterate/hover';
+import { IterateHoverCard, IterateHoverKind, iterateHoverCard } from '../iterate/hover';
+// 6.2: formula recognition, the network that decides which card a formula opens (src/notes6/recognize).
+import { recognizeCached } from '../notes6/recognize';
+import { NoteContext, formulaContext, noteFacts } from '../notes6/recognize/context';
+import { groupOf } from '../notes6/recognize/adapt';
+import { ChartCard, RecognitionMode, chartCard, rulesMark, smartChart, smartIterate, smartLinear, smartMark, smartNotes6 } from '../notes6/recognize/decide';
 
 export interface FormulaHoverHost {
     /** The setting Charts for formulas. */
@@ -45,6 +54,8 @@ export interface FormulaHoverHost {
     formulaDefault(): Record<string, unknown> | null;
     /** The setting Invert vertical drag in 3D: a drag in the card turns a surface as the editor's preview does. */
     invertDrag3D(): boolean;
+    /** 6.2: the setting Formula recognition: Smart (the network) or Rules (as 6.1). */
+    recognition(): RecognitionMode;
     /** Open the editor on this chart. */
     openChart(data: Record<string, unknown>, file: TFile | null): void;
 }
@@ -56,7 +67,23 @@ interface Found {
     file: TFile | null;
     /** 6.0 B: the note's text, for the definitions a formula uses (g(x) = ... elsewhere in the note). */
     note(): Promise<string>;
+    /** 6.2: what formula recognition reads around it (the words around it, the note's name and definitions). */
+    ctx?: NoteContext;
 }
+
+/** Where a card opens: the formula, the row under the pointer, the row picked, the rows MathJax drew. */
+interface Place {
+    math: HTMLElement;
+    row: number | undefined;
+    pick: number | undefined;
+    drawnRows: HTMLElement[];
+}
+
+/** How a card that needs the note's text ended: shown, none to show, or the pointer moved on meanwhile. */
+type Opened = 'shown' | 'none' | 'stale';
+
+/** 6.2, Reading view: what formula recognition reads around each drawn formula (set when the section is drawn). */
+const mathContexts = new WeakMap<HTMLElement, NoteContext>();
 
 /** 6.0 B: what a card shows besides its chart: one grey line (where g comes from, or what to move), the n = 2 chart. */
 interface CardExtra {
@@ -162,19 +189,27 @@ export class FormulaHover {
         if (!maths.length) return;
         const info = ctx.getSectionInfo(el);
         if (!info) return;
-        const text = info.text.split('\n').slice(info.lineStart, info.lineEnd + 1).join('\n');
+        const lines = info.text.split('\n');
+        const text = lines.slice(info.lineStart, info.lineEnd + 1).join('\n');
         const found = formulasIn(text);
+        // 6.2: where the section starts in the note, for the words around each formula; the note's definitions.
+        let offset = 0;
+        for (let k = 0; k < info.lineStart; k++) offset += lines[k].length + 1;
+        const facts = noteFacts(ctx.sourcePath, info.text);
+        const mode = this.host.recognition();
         maths.forEach((m, i) => {
             if (!found[i]) return;
             m.dataset.etzTex = found[i].tex;
             m.dataset.etzLine = String(info.lineEnd);
             m.dataset.etzPath = ctx.sourcePath;
-            markMath(m, found[i].tex);
+            const around = formulaContext(facts, info.text, offset + found[i].start, offset + found[i].end, found[i].tex);
+            mathContexts.set(m, around);
+            markMath(m, found[i].tex, around, mode);
         });
         // MathJax may draw a formula after this (its first load): mark it again then.
         if (maths.some((m) => !m.querySelector('mjx-math'))) {
             window.setTimeout(() => {
-                for (const m of maths) if (m.dataset.etzTex !== undefined && m.dataset.etzSeen !== drawnAs(m)) markMath(m, m.dataset.etzTex);
+                for (const m of maths) if (m.dataset.etzTex !== undefined && m.dataset.etzSeen !== drawnAs(m)) markMath(m, m.dataset.etzTex, mathContexts.get(m), this.host.recognition());
             }, 1500);
         }
     }
@@ -186,6 +221,7 @@ export class FormulaHover {
      * draws it anew (it may draw a block's rows after the mark was set).
      */
     editorMarks(): Extension {
+        const mode = () => this.host.recognition();
         return ViewPlugin.fromClass(
             class {
                 private frame = 0;
@@ -212,12 +248,28 @@ export class FormulaHover {
                         for (const math of Array.from(this.view.contentDOM.querySelectorAll<HTMLElement>('.math'))) {
                             if (!all && math.dataset.etzMark !== undefined && math.dataset.etzSeen === drawnAs(math)) continue;
                             const found = formulaInEditor(this.view, math);
-                            markMath(math, found ? found.tex : null);
+                            markMath(math, found ? found.tex : null, found?.ctx, mode());
                         }
                     });
                 }
             }
         );
+    }
+
+    /** 6.2: the setting Formula recognition changed: every drawn formula of this window is marked anew. */
+    refresh(doc: Document): void {
+        this.close();
+        const mode = this.host.recognition();
+        for (const math of Array.from(doc.querySelectorAll<HTMLElement>('.math'))) {
+            if (math.dataset.etzTex !== undefined) {
+                markMath(math, math.dataset.etzTex, mathContexts.get(math), mode);
+                continue;
+            }
+            const view = editorOf(math);
+            if (!view) continue;
+            const found = formulaInEditor(view, math);
+            markMath(math, found ? found.tex : null, found?.ctx, mode);
+        }
     }
 
     /** The pointer moved: open the chart of the formula under it after a short rest, or start closing. */
@@ -294,6 +346,7 @@ export class FormulaHover {
             return {
                 tex: math.dataset.etzTex,
                 file,
+                ctx: mathContexts.get(math),
                 note: () => this.app.vault.cachedRead(file),
                 insert: (b) =>
                     this.app.vault.process(file, (data) => {
@@ -305,20 +358,18 @@ export class FormulaHover {
         }
         // A table's cells have editors of their own: the note's editor is the one around the table. A formula
         // in a callout is no part of the editor itself: its editor is the one around it.
-        const table = math.closest('table');
-        const host = (table ?? math).closest<HTMLElement>('.cm-editor');
-        const view = host ? EditorView.findFromDOM(host) : EditorView.findFromDOM(math);
+        const view = editorOf(math);
         if (!view) return null;
         const found = formulaInEditor(view, math);
         if (!found) return null;
-        const { tex, end } = found;
+        const { tex, end, ctx } = found;
         const doc = view.state.doc;
         // Under the paragraph: the first empty line after the formula, or the end of the note.
         let line = doc.lineAt(end);
         while (line.number < doc.lines && doc.line(line.number + 1).text.trim() !== '') line = doc.line(line.number + 1);
         const at = line.to;
         const file = this.app.workspace.getActiveFile();
-        return { tex, file, note: () => Promise.resolve(doc.toString()), insert: (b) => view.dispatch({ changes: { from: at, insert: `\n\n${b}` } }) };
+        return { tex, file, ctx, note: () => Promise.resolve(doc.toString()), insert: (b) => view.dispatch({ changes: { from: at, insert: `\n\n${b}` } }) };
     }
 
     private open(math: HTMLElement, row?: number) {
@@ -329,6 +380,17 @@ export class FormulaHover {
         const byRow = rows.length > 1 && drawnRows.length === rows.length;
         // A block of rows opens the chart of the row under the pointer, never all rows at once.
         const pick = byRow && row !== undefined && rows[row] !== undefined ? row : undefined;
+        const at: Place = { math, row, pick, drawnRows };
+        if (!found || (byRow && pick === undefined) || this.host.recognition() === 'rules') {
+            this.openRules(at, found, byRow, rows);
+            return;
+        }
+        this.openSmart(at, found, byRow, rows);
+    }
+
+    /** Rules (6.1, the setting Formula recognition): the first card a builder takes the formula for, chart first. */
+    private openRules(at: Place, found: Found | null, byRow: boolean, rows: string[]) {
+        const { math, pick } = at;
         if (!found || (byRow && pick === undefined) || !chartable(found.tex, pick)) {
             // 6.0 B: a set, a map, a condition, an interval, Jensen's inequality, an epigraph: its card, with the note's definitions.
             const tex = found ? (pick !== undefined ? rows[pick] : found.tex) : '';
@@ -337,37 +399,90 @@ export class FormulaHover {
             if (found && iterate) {
                 const parsed = parseChartText(iterate.lines.join('\n'));
                 if (!parsed.problems.length) {
-                    this.show(math, row, pick, drawnRows, found, t(ITERATE_KIND[iterate.kind]), parsed.data, { note: t(iterate.note), two: null });
+                    this.showIterate(at, found, iterate);
                     return;
                 }
             }
             if (found && !(byRow && pick === undefined) && hoverKind(tex)) {
-                void this.openNotes6(math, row, pick, drawnRows, found, tex);
+                void this.openNotes6(at, found, (defs) => hoverCard(tex, defs));
                 return;
             }
             // 6.0 D: a matrix, A v, det A, A v = λ v.
             if (found && !(byRow && pick === undefined) && linearHoverKind(tex)) {
-                void this.openLinear(math, row, pick, drawnRows, found, tex);
+                void this.openLinear(at, found, (values) => linearHoverCard(tex, values));
                 return;
             }
             // A row without a chart: the card of another row of the block closes.
             if (this.pop && this.target === math) this.scheduleClose();
             return;
         }
-        const formula = formulaLines(found.tex, pick);
-        const kind = formula?.kind;
-        const lines = formulaChart(found.tex, pick);
-        if (!lines || !kind) return;
-        const parsed = parseChartText(lines.join('\n'));
-        if (parsed.problems.length) return;
-        // 6.0.1: a function's card is framed on its roots, extrema and y-intercept, with their dots (not a sequence: it keeps 0 to 20).
-        const fn = kind === 'function' && !(formula?.axis && INDEX_AXES.has(formula.axis));
-        const chart = (fn ? frameChart(parsed.data) : null) ?? parsed.data;
-        this.show(math, row, pick, drawnRows, found, t(KIND_LABEL[kind]), chart, null, { dots: fn });
+        const card = chartCard(found.tex, pick);
+        if (card) this.showChart(at, found, card);
     }
 
-    /** 6.0 B: the card of a formula of src/notes6/hover.ts, once the note is read. */
-    private async openNotes6(math: HTMLElement, row: number | undefined, pick: number | undefined, drawnRows: HTMLElement[], found: Found, tex: string) {
+    /**
+     * 6.2, Smart: the network decides (src/notes6/recognize). The rule:
+     *   1. Its label is none: no card (and no dotted mark, see markMath).
+     *   2. A card kind: the builder of that kind, on the formula and on its
+     *      spellings for that builder (src/notes6/recognize/adapt.ts):
+     *      formulaLines and formulaChart for function, surface, polar,
+     *      implicit and region; hoverCard for set, map, condition, interval,
+     *      jensen and epigraph; the linear card for matrix, product, det and
+     *      eigen; the iterate card for recurrence, sum and domain.
+     *   3. That builder builds nothing: the rules decide (openRules). The
+     *      network said "a card", so the formula gets the rules' card when
+     *      the rules have one ("card" both times), and none when they have
+     *      none.
+     */
+    private openSmart(at: Place, found: Found, byRow: boolean, rows: string[]) {
+        const { math, pick } = at;
+        const tex = pick !== undefined ? rows[pick] : found.tex;
+        const label = recognizeCached(tex, found.ctx ?? {}, found.ctx?.key ?? '');
+        const fallBack = () => this.openRules(at, found, byRow, rows);
+        switch (groupOf(label)) {
+            case null:
+                if (this.pop && this.target === math) this.scheduleClose();
+                return;
+            case 'chart': {
+                const card = smartChart(found.tex, pick, tex, label);
+                if (card) this.showChart(at, found, card);
+                else fallBack();
+                return;
+            }
+            case 'iterate': {
+                const card = smartIterate(tex, label);
+                if (card) this.showIterate(at, found, card);
+                else fallBack();
+                return;
+            }
+            case 'notes6':
+                void this.openNotes6(at, found, (defs) => smartNotes6(tex, label, defs)).then((r) => r === 'none' && fallBack());
+                return;
+            case 'linear':
+                void this.openLinear(at, found, (values) => smartLinear(tex, label, values)).then((r) => r === 'none' && fallBack());
+                return;
+        }
+    }
+
+    /** A chart of src/formula.ts: 6.0.1, a function's card is framed on its roots, extrema and y-intercept, with their dots (not a sequence: it keeps 0 to 20). */
+    private showChart(at: Place, found: Found, card: ChartCard) {
+        const parsed = parseChartText(card.lines.join('\n'));
+        if (parsed.problems.length) return;
+        const fn = card.kind === 'function' && !(card.axis && INDEX_AXES.has(card.axis));
+        const chart = (fn ? frameChart(parsed.data) : null) ?? parsed.data;
+        this.show(at.math, at.row, at.pick, at.drawnRows, found, t(KIND_LABEL[card.kind]), chart, null, { dots: fn });
+    }
+
+    /** 6.0 E: the card of a recurrence, a sum or a function of z. */
+    private showIterate(at: Place, found: Found, card: IterateHoverCard) {
+        const parsed = parseChartText(card.lines.join('\n'));
+        if (parsed.problems.length) return;
+        this.show(at.math, at.row, at.pick, at.drawnRows, found, t(ITERATE_KIND[card.kind]), parsed.data, { note: t(card.note), two: null });
+    }
+
+    /** 6.0 B: the card of a formula of src/notes6/hover.ts, once the note is read (build: the card, from the note's definitions). */
+    private async openNotes6(at: Place, found: Found, build: (defs: Map<string, NoteDefinition>) => HoverCard | null): Promise<Opened> {
+        const { math } = at;
         let note = '';
         try {
             note = await found.note();
@@ -375,36 +490,39 @@ export class FormulaHover {
             note = '';
         }
         // The pointer may have moved on meanwhile.
-        if (!math.isConnected || (this.pop && this.target !== math && this.held)) return;
+        if (!math.isConnected || (this.pop && this.target !== math && this.held)) return 'stale';
         const defs = noteDefinitions(formulasIn(note).map((f) => f.tex).filter((f) => f !== found.tex));
-        const card = hoverCard(tex, defs);
-        if (!card) return;
+        const card = build(defs);
+        if (!card) return 'none';
         const read = (lines: string[]) => {
             const parsed = parseChartText(lines.join('\n'));
             return parsed.problems.length ? null : parsed.data;
         };
         const read1 = read(card.lines);
-        if (!read1) return;
+        if (!read1) return 'none';
         // 6.0.1: a set or a condition over the graph of g is framed as g's card is (no dots: the set has its own ends).
         const one = (FRAMED_NOTES6.has(card.kind) && card.fn ? frameChart(read1) : null) ?? read1;
-        this.show(math, row, pick, drawnRows, found, t(NOTES6_KIND[card.kind]), one, { note: '', two: card.lines2 ? read(card.lines2) : null, ...cardExtra(card) });
+        this.show(math, at.row, at.pick, at.drawnRows, found, t(NOTES6_KIND[card.kind]), one, { note: '', two: card.lines2 ? read(card.lines2) : null, ...cardExtra(card) });
+        return 'shown';
     }
 
-    /** 6.0 D: the card of a formula of src/linear/hover.ts, with the note's matrices and vectors. */
-    private async openLinear(math: HTMLElement, row: number | undefined, pick: number | undefined, drawnRows: HTMLElement[], found: Found, tex: string) {
+    /** 6.0 D: the card of a formula of src/linear/hover.ts, with the note's matrices and vectors (build: the card, from them). */
+    private async openLinear(at: Place, found: Found, build: (values: Map<string, string>) => LinearHoverCard | null): Promise<Opened> {
+        const { math } = at;
         let note = '';
         try {
             note = await found.note();
         } catch {
             note = '';
         }
-        if (!math.isConnected || (this.pop && this.target !== math && this.held)) return;
-        const card = linearHoverCard(tex, noteValues(formulasIn(note).map((f) => f.tex).filter((f) => f !== found.tex)));
-        if (!card) return;
+        if (!math.isConnected || (this.pop && this.target !== math && this.held)) return 'stale';
+        const card = build(noteValues(formulasIn(note).map((f) => f.tex).filter((f) => f !== found.tex)));
+        if (!card) return 'none';
         const parsed = parseChartText(card.lines.join('\n'));
-        if (parsed.problems.length) return;
+        if (parsed.problems.length) return 'none';
         const text = [card.example ? t('linear.hover.note.example', { name: card.name }) : '', t('linear.hover.note.t', { name: card.name })].filter((x) => x).join(' ');
-        this.show(math, row, pick, drawnRows, found, t(LINEAR_KIND[card.kind]), parsed.data, { note: text, two: null });
+        this.show(math, at.row, at.pick, at.drawnRows, found, t(LINEAR_KIND[card.kind]), parsed.data, { note: text, two: null });
+        return 'shown';
     }
 
     /**
@@ -707,31 +825,57 @@ function rowAt(el: Element | null, math: HTMLElement): number | undefined {
  * Mark a formula that has a chart (data-etz-mark="1"). In a block of rows
  * that MathJax draws as rows, the rows with a chart are marked instead
  * ("rows" on the formula), so the line runs only under rows that open one.
+ * 6.2: Rules marks what a builder takes (as 6.1); Smart marks what the
+ * network gives a card and its builder, or the rules, can build (the same
+ * rule as openSmart, without the parse checks), never a formula it calls none.
  */
-function markMath(math: HTMLElement, tex: string | null): void {
+function markMath(math: HTMLElement, tex: string | null, ctx: NoteContext | undefined, mode: RecognitionMode): void {
     math.dataset.etzSeen = drawnAs(math);
     if (!tex) {
         math.dataset.etzMark = '0';
         return;
     }
+    const has = (row: number | undefined, rowTex: string) => (mode === 'rules' ? rulesMark(tex, row, rowTex) : smartMark(tex, row, rowTex, recognizeCached(rowTex, ctx ?? {}, ctx?.key ?? '')));
     const rows = formulaRows(tex);
     const drawn = rows.length > 1 ? rowsOf(math) : [];
     if (rows.length > 1 && drawn.length === rows.length) {
         let any = false;
         drawn.forEach((tr, i) => {
-            const ok = chartable(tex, i) || !!hoverKind(rows[i]) || !!linearHoverKind(rows[i]) || !!iterateHoverKind(rows[i]); // 6.0 B, D, E
+            const ok = has(i, rows[i]); // 6.0 B, D, E
             tr.dataset.etzMark = ok ? '1' : '0';
             any = any || ok;
         });
         math.dataset.etzMark = any ? 'rows' : '0';
         return;
     }
-    // 6.0 B: sets, maps, conditions, intervals, Jensen and epigraphs open a card too.
-    math.dataset.etzMark = chartable(tex) || hoverKind(tex) || linearHoverKind(tex) || iterateHoverKind(tex) ? '1' : '0'; // 6.0 D: matrices; 6.0 E: recurrences, sums, functions of z
+    // 6.0 B: sets, maps, conditions, intervals, Jensen and epigraphs open a card too; 6.0 D: matrices; 6.0 E: recurrences, sums and functions of z.
+    math.dataset.etzMark = has(undefined, tex) ? '1' : '0';
+}
+
+/** The editor of a formula in Live Preview: a table's cells and a callout have editors of their own, the note's editor is the one around them. */
+function editorOf(math: HTMLElement): EditorView | null {
+    const table = math.closest('table');
+    const host = (table ?? math).closest<HTMLElement>('.cm-editor');
+    return host ? EditorView.findFromDOM(host) : EditorView.findFromDOM(math);
+}
+
+/** The text of an editor's note, once per version of it (the editor's text never changes in place). */
+const docTexts = new WeakMap<Text, string>();
+
+/** 6.2: what formula recognition reads around the formula at doc[start, end) of an editor (its note's path from the editor). */
+function editorContext(view: EditorView, start: number, end: number, tex: string): NoteContext {
+    const doc = view.state.doc;
+    let text = docTexts.get(doc);
+    if (text === undefined) {
+        text = doc.toString();
+        docTexts.set(doc, text);
+    }
+    const path = view.state.field(editorInfoField, false)?.file?.path ?? '';
+    return formulaContext(noteFacts(path, text), text, start, end, tex);
 }
 
 /** The formula a rendered formula of the editor shows: its TeX, and the end of the line where it ends. */
-function formulaInEditor(view: EditorView, math: HTMLElement): { tex: string; end: number } | null {
+function formulaInEditor(view: EditorView, math: HTMLElement): { tex: string; end: number; ctx: NoteContext } | null {
     // Live Preview draws a table or a callout as one widget: every place in it is the widget's start. The
     // formula is the one at the same place among the formulas of the widget's lines.
     const table = math.closest('table');
@@ -750,15 +894,26 @@ function formulaInEditor(view: EditorView, math: HTMLElement): { tex: string; en
         while (first.number > 1 && inside.test(doc.line(first.number - 1).text)) first = doc.line(first.number - 1);
         let last = first;
         while (last.number < doc.lines && inside.test(doc.line(last.number + 1).text)) last = doc.line(last.number + 1);
-        // Without the > of a callout, so a $$ block over its lines reads as one formula.
-        const text = doc
-            .sliceString(first.from, last.to)
-            .split('\n')
-            .map((l) => l.replace(/^\s*(?:>\s?)*/, ''))
-            .join('\n');
+        // Without the > of a callout, so a $$ block over its lines reads as one formula; 6.2: with where each line starts in the note.
+        const starts: Array<{ at: number; from: number }> = [];
+        let acc = 0;
+        const parts: string[] = [];
+        for (let n = first.number; n <= last.number; n++) {
+            const l = doc.line(n);
+            const cut = (/^\s*(?:>\s?)*/.exec(l.text) ?? [''])[0].length;
+            starts.push({ at: acc, from: l.from + cut });
+            parts.push(l.text.slice(cut));
+            acc += l.text.length - cut + 1;
+        }
+        const text = parts.join('\n');
+        const toDoc = (o: number) => {
+            let k = starts.length - 1;
+            while (k > 0 && starts[k].at > o) k--;
+            return starts[k].from + (o - starts[k].at);
+        };
         const index = Array.from(widget.querySelectorAll('.math')).indexOf(math);
         const found = formulasIn(text)[index];
-        return found ? { tex: found.tex, end: last.to } : null;
+        return found ? { tex: found.tex, end: last.to, ctx: editorContext(view, toDoc(found.start), toDoc(found.end), found.tex) } : null;
     }
     let pos: number;
     try {
@@ -770,7 +925,7 @@ function formulaInEditor(view: EditorView, math: HTMLElement): { tex: string; en
     // in two, and the $$ would then pair up wrong.
     const doc = view.state.doc;
     for (const f of formulasOfDoc(doc)) {
-        if (f.start <= pos && pos <= f.end) return { tex: f.tex, end: doc.lineAt(Math.min(doc.length, f.end)).to };
+        if (f.start <= pos && pos <= f.end) return { tex: f.tex, end: doc.lineAt(Math.min(doc.length, f.end)).to, ctx: editorContext(view, f.start, f.end, f.tex) };
     }
     return null;
 }

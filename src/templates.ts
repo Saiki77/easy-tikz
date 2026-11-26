@@ -135,6 +135,8 @@ export interface PluginData {
     formulaMarks: boolean;
     /** A slider for each letter of the formula in its chart (5.0). */
     formulaSliders: boolean;
+    /** Which formulas get a chart (6.2): smart, the formula recognition network (default); rules, the checks of 6.1. */
+    formulaRecognition: 'smart' | 'rules';
     /** The default chart for formulas, set up in the editor: its look is every formula chart's (5.0). */
     formulaDefault: Record<string, unknown> | null;
     /** Setting "Chart language": new charts in words with LaTeX math in $...$ (default) or in Full LaTeX (src/text/full.ts, 5.0). */
@@ -171,6 +173,7 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     formulaHover: true,
     formulaMarks: true,
     formulaSliders: true,
+    formulaRecognition: 'smart',
     formulaDefault: null,
     chartLanguage: 'words',
     liveChart: true,

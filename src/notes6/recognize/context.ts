@@ -88,7 +88,16 @@ export function definingFormulas(text: string): string[] {
 export interface NoteFacts {
     note: string;
     defs: string[];
+    /** Which version of which note (for the caches of formula recognition). */
+    id: number;
 }
+
+/** What the network reads around a formula, and a key for its cache (the note's version and the formula's block). */
+export interface NoteContext extends RecognizeContext {
+    key: string;
+}
+
+let versions = 0;
 
 const facts = new Map<string, { text: string; facts: NoteFacts }>();
 
@@ -96,13 +105,13 @@ const facts = new Map<string, { text: string; facts: NoteFacts }>();
 export function noteFacts(path: string, text: string): NoteFacts {
     const hit = facts.get(path);
     if (hit && hit.text === text) return hit.facts;
-    const made = { note: noteId(path), defs: definingFormulas(text) };
+    const made = { note: noteId(path), defs: definingFormulas(text), id: ++versions };
     if (facts.size > 32) facts.clear();
     facts.set(path, { text, facts: made });
     return made;
 }
 
 /** What the network reads around the formula at text[start, end) (dollars included), whose block's TeX is blockTex. */
-export function formulaContext(facts: NoteFacts, text: string, start: number, end: number, blockTex: string): RecognizeContext {
-    return { defs: facts.defs.filter((d) => d !== blockTex), context: contextOf(text, start, end), note: facts.note };
+export function formulaContext(facts: NoteFacts, text: string, start: number, end: number, blockTex: string): NoteContext {
+    return { defs: facts.defs.filter((d) => d !== blockTex), context: contextOf(text, start, end), note: facts.note, key: `${facts.id}\u0000${blockTex}` };
 }
