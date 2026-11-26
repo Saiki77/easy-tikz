@@ -425,7 +425,10 @@ function multipleOf(value: string, lets: Lets, sliders: readonly string[]): { k:
 const inMath = (v: string) => (/[\\{}|]/.test(v) ? `$${v}$` : v);
 
 /** A label with the formula's own TeX for a name, or the written vector. */
-const labelOf = (tex: string) => `labelled "$${tex.replace(/"/g, '')}$"`;
+const labelOf = (tex: string) => `labelled "$${braced(tex.replace(/"/g, ''))}$"`;
+
+/** A decoration over one letter in braces (\vec n is \vec{n}): the labels of a 3D chart read only that form (as \vec{n}, n with an arrow). */
+const braced = (tex: string) => tex.replace(/\\(vec|hat|bar|tilde|dot|mathbf|boldsymbol|bm)\s*(?![{\s])(\\[A-Za-z]+|[A-Za-z0-9])/g, '\\$1{$2}');
 
 /** The view around the points (with the origin): 2D with equal scale, 3D as a box. */
 function viewLines(points: number[][], dim: 2 | 3): string[] {

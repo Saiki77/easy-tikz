@@ -50,7 +50,7 @@ test('vector card: a written vector is one arrow from the origin, with let lines
     const { card: c, scene } = card('\\vec v = \\begin{pmatrix} 2 \\\\ 1 \\end{pmatrix}');
     assert.equal(c.shape, 'one');
     assert.equal(c.dim, 2);
-    assert.deepEqual(c.lines.slice(2), ['let v = (2, 1)', 'draw v as an arrow in blue, labelled "$\\vec v$"']);
+    assert.deepEqual(c.lines.slice(2), ['let v = (2, 1)', 'draw v as an arrow in blue, labelled "$\\vec{v}$"']);
     assert.ok(/^show x from -?\d+ to \d+ and y from -?\d+ to \d+$/.test(c.lines[0]) && c.lines[1] === 'equal scale', c.lines.join(' / '));
     assert.deepEqual(arrows2D(scene as Scene2D), [
         [
@@ -60,7 +60,7 @@ test('vector card: a written vector is one arrow from the origin, with let lines
     ]);
     // Insert chart writes the let line and the arrow line back as they are.
     const printed = printChartText(parseChartText(c.lines.join('\n')).data);
-    assert.ok(/^let v = \(2, 1\)$/m.test(printed) && /^draw v as an arrow, labelled "\$\\vec v\$"$/m.test(printed), printed);
+    assert.ok(/^let v = \(2, 1\)$/m.test(printed) && /^draw v as an arrow, labelled "\$\\vec\{v\}\$"$/m.test(printed), printed);
 });
 
 test('vector card: every spelling of round 3 reads (transposed, bars, \\binom, angle brackets, bold, units, arrays in brackets)', () => {
@@ -135,7 +135,7 @@ test('vector card: a name the note gives another value does not draw a wrong sum
     // a and b are vectors in space in the note; the formula's own result is in the plane.
     const { card: c } = card('\\vec a + \\vec b = (4, 1)', ['\\vec a = (1, 2, 3)', '\\vec b = (4, -5, 6)']);
     assert.equal(c.shape, 'one');
-    assert.deepEqual(c.lines.slice(2), ['let u = (4, 1)', 'draw u as an arrow in blue, labelled "$\\vec a + \\vec b$"']);
+    assert.deepEqual(c.lines.slice(2), ['let u = (4, 1)', 'draw u as an arrow in blue, labelled "$\\vec{a} + \\vec{b}$"']);
     assert.deepEqual(c.fromNote, []);
 });
 
