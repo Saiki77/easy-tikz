@@ -457,7 +457,10 @@ export class FormulaHover {
             const view = cloneData(data);
             Object.assign(view, { previewSize: 340, parameters: params, size_x_cm: 8, size_y_cm: is3D ? 6 : 5.5 });
             // 6.0.1: the roots and extrema of the view at the slider values now, as dots (the card only: Insert chart leaves them out).
-            if (dots) view.tools = [...(Array.isArray(view.tools) ? view.tools : []), ...keyDots(view)];
+            if (dots) {
+                const own: unknown[] = Array.isArray(view.tools) ? (view.tools as unknown[]) : [];
+                view.tools = [...own, ...keyDots(view)];
+            }
             const settings = SettingsManager.fromJSON(view);
             const ctx = settings.createMathContext({ memo: false });
             ctx.setParams(params);
