@@ -1332,6 +1332,110 @@ if (started) {
             await obs.mouse.move({ x: 5, y: 5 });
             return card;
         });
+        await check('formula card pan (6.2.4): a function card and a sequence card (y follows what is drawn) dragged 20 steps left, right, up and down keep the plot rectangle, a fixed math point follows the pointer within 1 px, a vertical drag moves y, and a double click goes home', async () => {
+            const panNote = 'Card pan';
+            await obs.writeNote(panNote, 'A parabola $f(x) = x^2$ here.\n\nA sequence $a_n = \\frac{1}{n}$ there.\n');
+            await obs.openNote(panNote, { mode: 'reading' });
+            await obs.sleep(800);
+            /** The card's 2D frame drawn last: its plot in client px, its view, where math point P is on screen, and whether it is new. */
+            const cardState = (P) =>
+                obs.call((px, py) => {
+                    const L = app.plugins.plugins['easy-tikz'].formulaHover.cardLayout;
+                    const svg = document.querySelector('.etz-formula-pop .etz-formula-chart > svg');
+                    if (!L || !svg) return null;
+                    const r = svg.getBoundingClientRect();
+                    const s = r.width / L.width;
+                    const v = L.view;
+                    const x = px ?? (v.xmin + v.xmax) / 2;
+                    const y = py ?? (v.ymin + v.ymax) / 2;
+                    const fresh = window.__etzCardSeen !== L;
+                    window.__etzCardSeen = L;
+                    return {
+                        plot: { x: r.left + L.plot.x * s, y: r.top + L.plot.y * s, w: L.plot.w * s, h: L.plot.h * s },
+                        view: { ...v },
+                        P: { x, y },
+                        p: { x: r.left + (L.plot.x + ((x - v.xmin) / (v.xmax - v.xmin)) * L.plot.w) * s, y: r.top + (L.plot.y + ((v.ymax - y) / (v.ymax - v.ymin)) * L.plot.h) * s },
+                        fresh,
+                    };
+                }, P ? P.x : null, P ? P.y : null);
+            const nextCardFrame = async () => {
+                for (let i = 0; i < 40; i++) {
+                    await obs.frames(1);
+                    if (await obs.call(() => window.__etzCardSeen !== app.plugins.plugins['easy-tikz'].formulaHover.cardLayout)) return;
+                }
+                throw new Error('the card drew no new frame for a move');
+            };
+            const openCard = async (tex) => {
+                await obs.call(() => app.plugins.plugins['easy-tikz'].formulaHover.close());
+                await obs.mouse.move({ x: 5, y: 5 });
+                await obs.sleep(300);
+                const at = await obs.call((t) => {
+                    const el = Array.from(document.querySelectorAll('.workspace-leaf.mod-active .markdown-reading-view .math')).find((m) => m.dataset.etzTex === t);
+                    if (!el) return null;
+                    const r = el.getBoundingClientRect();
+                    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+                }, tex);
+                assert(at, `the note shows no formula ${tex}`);
+                // Rest on the formula once recognition has marked it.
+                await obs.waitFor(() => obs.call((t) => Array.from(document.querySelectorAll('.workspace-leaf.mod-active .markdown-reading-view .math')).some((m) => m.dataset.etzTex === t && m.dataset.etzMark === '1'), tex), { timeout: 8000, message: `the mark of ${tex}` });
+                await obs.mouse.move(at, { steps: 3 });
+                await obs.waitFor(() => obs.call(() => !!document.querySelector('.etz-formula-pop .etz-formula-chart > svg')), { timeout: 4000, message: `the card of ${tex}` });
+                await obs.sleep(300);
+                const st = await cardState(null);
+                assert(st, `the card of ${tex} has no 2D layout`);
+                const centre = { x: st.plot.x + st.plot.w / 2, y: st.plot.y + st.plot.h / 2 };
+                await obs.mouse.move(centre, { steps: 4 });
+                await obs.sleep(100);
+                return centre;
+            };
+            const out = [];
+            const samePlot = (a, b) => ['x', 'y', 'w', 'h'].every((k) => Math.abs(a[k] - b[k]) < 0.01);
+            try {
+                for (const tex of ['f(x) = x^2', 'a_n = \\frac{1}{n}']) {
+                    const errs = [];
+                    for (const [dir, d] of [['left', [-1, 0]], ['right', [1, 0]], ['up', [0, -1]], ['down', [0, 1]]]) {
+                        const start = await openCard(tex);
+                        const first = await cardState(null);
+                        const P = first.P;
+                        await obs.mouse.down();
+                        await obs.frames(2);
+                        let worst = 0;
+                        for (let i = 1; i <= 20; i++) {
+                            await obs.mouse._send('mouseMoved', start.x + d[0] * 5 * i, start.y + d[1] * 5 * i);
+                            await nextCardFrame();
+                            const now = await cardState(P);
+                            assert(samePlot(now.plot, first.plot), `${tex}, ${dir}, step ${i}: the plot moved from ${JSON.stringify(first.plot)} to ${JSON.stringify(now.plot)}`);
+                            const ex = now.p.x - first.p.x - d[0] * 5 * i;
+                            const ey = now.p.y - first.p.y - d[1] * 5 * i;
+                            worst = Math.max(worst, Math.abs(ex), Math.abs(ey));
+                            assert(Math.abs(ex) < 1 && Math.abs(ey) < 1, `${tex}, ${dir}, step ${i}: the point moved ${(now.p.x - first.p.x).toFixed(2)}, ${(now.p.y - first.p.y).toFixed(2)} px, the hand ${d[0] * 5 * i}, ${d[1] * 5 * i}`);
+                        }
+                        await obs.mouse.up();
+                        await obs.frames(30);
+                        const after = await cardState(P);
+                        const uy = (first.view.ymax - first.view.ymin) / first.plot.h;
+                        if (d[1] !== 0) {
+                            // The content follows the hand: a drag up shows lower y (the view goes down by 100 px of y).
+                            const dy = after.view.ymin - first.view.ymin;
+                            assert(Math.abs(dy - d[1] * 100 * uy) < 0.02 * (first.view.ymax - first.view.ymin), `${tex}, ${dir}: y went from ${first.view.ymin}..${first.view.ymax} to ${after.view.ymin}..${after.view.ymax}`);
+                        } else assert(Math.abs(after.view.ymax - after.view.ymin - (first.view.ymax - first.view.ymin)) < 1e-6, `${tex}, ${dir}: a sideways drag changed the y span from ${first.view.ymin}..${first.view.ymax} to ${after.view.ymin}..${after.view.ymax}`);
+                        if (dir === 'down') {
+                            // A double click goes back to the card's home view (y following what is drawn again for the sequence).
+                            await obs.mouse.click(start, { count: 2 });
+                            await obs.frames(30);
+                            const home = await cardState(P);
+                            assert(['xmin', 'xmax', 'ymin', 'ymax'].every((k) => Math.abs(home.view[k] - first.view[k]) < 1e-6), `${tex}: the double click went to ${JSON.stringify(home.view)}, not ${JSON.stringify(first.view)}`);
+                        }
+                        errs.push(`${dir} ${worst.toFixed(2)}`);
+                    }
+                    out.push(`${tex}: max px off ${errs.join(', ')}`);
+                }
+            } finally {
+                await obs.call(() => app.plugins.plugins['easy-tikz'].formulaHover.close());
+                await obs.mouse.move({ x: 5, y: 5 });
+            }
+            return out.join('; ');
+        });
         await check('formulas (6.2.1): a 3D card takes the default 3D chart set up in the editor, and Insert chart writes its look', async () => {
             const surfaceNote = 'Surface';
             const tex = 'f(x, y) = x^2 + y^2';

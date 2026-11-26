@@ -27,7 +27,9 @@ import { FormulaKind, applyFormulaDefault, chartable, formulaRows, formulasIn } 
 import { parseChartText } from '../text/parse';
 import { printChartText } from '../text/print';
 import { SettingsManager } from '../settings';
-import { SVGRenderer } from '../renderer';
+import { RenderLayout, SVGRenderer } from '../renderer';
+import { Room, RoomHold, roomKey, sameRoom } from '../room'; // 6.2.4
+import { reducedMotion } from '../motion';
 import { SVG3DRenderer } from '../renderer3d';
 import { Parameter } from '../types';
 import { cloneData } from '../util';
@@ -107,6 +109,47 @@ interface CardExtra {
 interface CardDraw {
     /** The dots of the roots and extrema (function cards). */
     dots?: boolean;
+}
+
+/** 6.2.4: the room of a card's 2D chart drawn last (src/room.ts): the room it drew with, its own room, and what they belong to. */
+interface CardRoom {
+    used: Room;
+    own: Room;
+    key: string;
+    range: string;
+}
+
+/** 6.2.4: what the card's pan and zoom use of its chart. */
+interface CardChart {
+    /** Draw the chart now. */
+    draw: () => void;
+    /** The room held while a hand moves the view (src/room.ts, as in the editor). */
+    room: RoomHold;
+    /** The room of the 2D frame drawn last, null before the first. */
+    drawn: () => CardRoom | null;
+    /** The layout of the 2D frame drawn last (plot and view), null before the first. */
+    layout: () => RenderLayout | null;
+}
+
+/** 6.2.4: how long the wheel rests before the room held during a zoom settles (the editor's full frame comes as late). */
+const WHEEL_REST_MS = 150;
+
+/** 6.2.4: the view of a card's chart as one string (with fitY): a held room belongs to the view the hand wrote. */
+function viewText(data: Record<string, unknown>): string {
+    return [String(data.xmin), String(data.xmax), String(data.ymin), String(data.ymax), String(data.fitY === true)].join(',');
+}
+
+/** 6.2.4: a bound of the view rounded to 5 digits of its span (no rounding steps when zoomed far in, short numbers for Insert chart). */
+function bound(v: number, span: number): number {
+    const digits = Math.max(0, Math.min(12, 4 - Math.floor(Math.log10(Math.max(span, 1e-12)))));
+    return Number(v.toFixed(digits));
+}
+
+/** 6.2.4: zoom steps of a wheel event, proportional to its delta as in the editor: a 100 px mouse notch is one step, a trackpad's stream of small events adds up to the same. */
+function wheelSteps(e: WheelEvent): number {
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    const px = e.deltaY * unit * (e.ctrlKey ? 10 : 1);
+    return Math.max(-3, Math.min(3, px / 100));
 }
 
 const NOTES6_KIND: Record<HoverKind, MessageKey> = {
@@ -196,6 +239,8 @@ export class FormulaHover {
     private held = false;
     private openTimer: number | null = null;
     private closeTimer: number | null = null;
+    /** 6.2.4: the layout of the card's 2D chart drawn last (plot and view; the media toolkit measures pans with it), null for none. */
+    cardLayout: RenderLayout | null = null;
 
     constructor(
         private readonly app: App,
@@ -614,6 +659,10 @@ export class FormulaHover {
         // 6.0 F1: a new $...$ label is measured before MathJax styled it: draw once more when it has (at most twice).
         let redraws = 0;
         let drawn = 0;
+        // 6.2.4: the room held while a hand moves the view (as in the editor), and the room and layout of the 2D frame drawn last.
+        const room = new RoomHold();
+        let lastRoom: CardRoom | null = null;
+        let layout: RenderLayout | null = null;
         const draw = () => {
             const pass = ++drawn;
             chartBox.empty();
@@ -630,22 +679,29 @@ export class FormulaHover {
             const config = settings.toRendererConfig(ctx);
             try {
                 if (is3D) {
+                    layout = null;
                     const r = new SVG3DRenderer();
                     chartBox.appendChild(r.getElement());
                     r.renderCanvas(config, { math: ctx });
                 } else {
-                    const renderer = new SVGRenderer(config, { math: ctx });
+                    const key = roomKey(config);
+                    const range = viewText(data);
+                    const renderer = new SVGRenderer(config, { math: ctx, room: room.roomFor(key, range) ?? undefined });
                     chartBox.appendChild(renderer.render());
+                    lastRoom = { used: renderer.room.used, own: renderer.room.own, key, range };
+                    layout = renderer.layout;
                     void renderer.mathSettled?.then((again) => {
                         if (again && pass === drawn && pop.isConnected && redraws++ < 2) draw();
                     });
                 }
             } catch {
+                layout = null;
                 chartBox.setText(t('plugin.formula.cannotDraw'));
             }
+            this.cardLayout = layout;
         };
         draw();
-        this.movable(chartBox, data, is3D, draw);
+        this.movable(chartBox, data, is3D, { draw, room, drawn: () => lastRoom, layout: () => layout });
 
         // A slider for every letter of the formula (the setting may hide them): the chart follows.
         if (params.length && this.host.sliders()) {
@@ -734,57 +790,146 @@ export class FormulaHover {
      * The chart of the card moves under the pointer: a drag pans it (2D) or
      * turns it (3D), the wheel zooms (about the pointer in 2D), a double click
      * goes back to where it started. Insert chart then writes this view.
+     *
+     * 6.2.4, in 2D as in the editor's preview: the first move of a pan or a
+     * zoom ends fitY (the y drawn then is written, so up and down pan and
+     * zoom too, and y is not fitted again on every frame); the content follows
+     * the pointer exactly (pixels to units with the plot of the frame drawn
+     * at the start, not the card's box); and the plot keeps the room of the
+     * frame before the gesture (src/room.ts), so it does not shrink and shift
+     * when a number comes in or leaves. Letting go keeps that room while the
+     * chart's own fits in it, else the room eases to it (ROOM_EASE_MS).
      */
-    private movable(box: HTMLElement, data: Record<string, unknown>, is3D: boolean, draw: () => void) {
+    private movable(box: HTMLElement, data: Record<string, unknown>, is3D: boolean, chart: CardChart) {
         const win = box.ownerDocument.defaultView ?? window;
         const num = (v: unknown, d: number) => {
             const n = Number(v);
             return Number.isFinite(n) ? n : d;
         };
         const round = (v: number) => Math.round(v * 1e4) / 1e4;
-        const home = { xmin: data.xmin, xmax: data.xmax, ymin: data.ymin, ymax: data.ymax, rotationX: data.rotationX, rotationZ: data.rotationZ, zoom3D: data.zoom3D };
+        const home = { xmin: data.xmin, xmax: data.xmax, ymin: data.ymin, ymax: data.ymax, fitY: data.fitY, rotationX: data.rotationX, rotationZ: data.rotationZ, zoom3D: data.zoom3D };
+        const hold = chart.room;
         let frame = 0;
+        let easing = 0;
+        let rest = 0;
+        // The hand let go: settle the room once the frame of the view it left is drawn.
+        let letGo = false;
+        /** Keep the held room, or ease it to the chart's own (as the editor's releaseRoom). */
+        const settle = () => {
+            const last = chart.drawn();
+            if (is3D || !hold.holding() || hold.easing() || !last || last.range !== viewText(data)) return;
+            if (hold.release(last.own, reducedMotion())) {
+                const step = (now: number) => {
+                    easing = 0;
+                    if (!box.isConnected || !hold.easing()) return;
+                    const fresh = hold.pending(now);
+                    if (hold.step(now)) {
+                        if (fresh) chart.draw();
+                        easing = win.requestAnimationFrame(step);
+                    } else chart.draw();
+                };
+                if (!easing) easing = win.requestAnimationFrame(step);
+            } else if (!hold.holding() && !sameRoom(last.used, last.own)) redraw();
+        };
+        /** The wheel stopped for WHEEL_REST_MS (as the editor's full frame after a zoom): settle the room. */
+        const settleSoon = () => {
+            if (rest) win.clearTimeout(rest);
+            rest = win.setTimeout(() => {
+                rest = 0;
+                if (press?.pan || !box.isConnected) return;
+                if (frame) letGo = true;
+                else settle();
+            }, WHEEL_REST_MS);
+        };
         const redraw = () => {
             if (frame) return;
             frame = win.requestAnimationFrame(() => {
                 frame = 0;
-                if (box.isConnected) draw();
+                if (!box.isConnected) return;
+                chart.draw();
+                if (letGo) {
+                    letGo = false;
+                    settle();
+                }
             });
+        };
+        /** The plot of the 2D frame drawn last in client px, and its view; null before the first. */
+        const plotNow = () => {
+            const L = chart.layout();
+            const svg = box.querySelector(':scope > svg');
+            if (!L || !svg) return null;
+            const r = svg.getBoundingClientRect();
+            const s = r.width / L.width;
+            if (!(s > 0) || !(L.plot.w > 0) || !(L.plot.h > 0)) return null;
+            return { left: r.left + L.plot.x * s, top: r.top + L.plot.y * s, w: L.plot.w * s, h: L.plot.h * s, view: L.view };
+        };
+        /**
+         * A hand starts to move the 2D view: the view drawn now as numbers (a
+         * y that followed what is drawn stops following: fitY off), and the
+         * plot holds the room of the frame drawn last. Null when nothing is drawn.
+         */
+        const grab = () => {
+            const p = plotNow();
+            if (!p) return null;
+            const v = p.view;
+            if (data.fitY === true || [data.xmin, data.xmax, data.ymin, data.ymax].some((b) => typeof b !== 'number')) Object.assign(data, { xmin: v.xmin, xmax: v.xmax, ymin: v.ymin, ymax: v.ymax, fitY: false });
+            if (easing) win.cancelAnimationFrame(easing);
+            easing = 0;
+            const last = chart.drawn();
+            if (!hold.holding() || hold.easing()) hold.grab(last?.used, last?.key, viewText(data));
+            return p;
+        };
+        /** Write a 2D view and draw it in the next frame. */
+        const write = (v: { xmin: number; xmax: number; ymin: number; ymax: number }) => {
+            const sx = v.xmax - v.xmin;
+            const sy = v.ymax - v.ymin;
+            if (!(sx > 0) || !(sy > 0) || ![v.xmin, v.xmax, v.ymin, v.ymax].every(Number.isFinite)) return;
+            Object.assign(data, { xmin: bound(v.xmin, sx), xmax: bound(v.xmax, sx), ymin: bound(v.ymin, sy), ymax: bound(v.ymax, sy) });
+            hold.moved(viewText(data));
+            redraw();
         };
         box.addEventListener(
             'wheel',
             (e) => {
                 e.preventDefault();
-                const k = e.deltaY > 0 ? 1.15 : 1 / 1.15;
                 if (is3D) {
+                    const k = e.deltaY > 0 ? 1.15 : 1 / 1.15;
                     data.zoom3D = round(Math.min(4, Math.max(0.3, num(data.zoom3D, 1) / k)));
-                } else {
-                    const r = box.getBoundingClientRect();
-                    const fx = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-                    const fy = Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height));
-                    const [x0, x1, y0, y1] = [num(data.xmin, -5), num(data.xmax, 5), num(data.ymin, -5), num(data.ymax, 5)];
-                    const cx = x0 + fx * (x1 - x0);
-                    const cy = y0 + fy * (y1 - y0);
-                    Object.assign(data, { xmin: round(cx - (cx - x0) * k), xmax: round(cx + (x1 - cx) * k) });
-                    // 6.0 B: a chart whose y follows what is drawn zooms x only (y follows).
-                    if (data.fitY !== true) Object.assign(data, { ymin: round(cy - (cy - y0) * k), ymax: round(cy + (y1 - cy) * k) });
+                    redraw();
+                    return;
                 }
-                redraw();
+                const steps = wheelSteps(e);
+                const p = steps !== 0 ? grab() : null;
+                if (!p) return;
+                const k = Math.pow(1.15, steps);
+                // The math point under the pointer stays there (fractions of the plot, not of the card's box).
+                const fx = Math.min(1, Math.max(0, (e.clientX - p.left) / p.w));
+                const fy = Math.min(1, Math.max(0, (e.clientY - p.top) / p.h));
+                const v = { xmin: num(data.xmin, p.view.xmin), xmax: num(data.xmax, p.view.xmax), ymin: num(data.ymin, p.view.ymin), ymax: num(data.ymax, p.view.ymax) };
+                const cx = v.xmin + fx * (v.xmax - v.xmin);
+                const cy = v.ymax - fy * (v.ymax - v.ymin);
+                const xmin = cx - fx * (v.xmax - v.xmin) * k;
+                const ymax = cy + fy * (v.ymax - v.ymin) * k;
+                write({ xmin, xmax: xmin + (v.xmax - v.xmin) * k, ymin: ymax - (v.ymax - v.ymin) * k, ymax });
+                settleSoon();
             },
             { passive: false }
         );
+        // Where a drag started; for a pan in 2D, the view and the units per px of its first move.
+        let press: { x: number; y: number; pan: { view: { xmin: number; xmax: number; ymin: number; ymax: number }; ux: number; uy: number } | null } | null = null;
         let last: { x: number; y: number } | null = null;
         // The angles of a turn, in fractions of a degree while it runs (smooth at any speed, no step lost); whole degrees at the end.
         let turn: { z: number; x: number } | null = null;
         box.addEventListener('pointerdown', (e) => {
             if (e.button !== 0) return;
             last = { x: e.clientX, y: e.clientY };
+            press = { x: e.clientX, y: e.clientY, pan: null };
             turn = { z: num(data.rotationZ, 45), x: num(data.rotationX, 30) };
             box.setPointerCapture(e.pointerId);
             e.preventDefault();
         });
         box.addEventListener('pointermove', (e) => {
-            if (!last) return;
+            if (!last || !press) return;
             const dx = e.clientX - last.x;
             const dy = e.clientY - last.y;
             last = { x: e.clientX, y: e.clientY };
@@ -796,18 +941,26 @@ export class FormulaHover {
                 turn.x = Math.min(90, Math.max(0, turn.x + tilt * 0.3));
                 data.rotationZ = turn.z;
                 data.rotationX = turn.x;
-            } else {
-                const r = box.getBoundingClientRect();
-                const ux = (num(data.xmax, 5) - num(data.xmin, -5)) / Math.max(1, r.width);
-                const uy = (num(data.ymax, 5) - num(data.ymin, -5)) / Math.max(1, r.height);
-                Object.assign(data, { xmin: round(num(data.xmin, -5) - dx * ux), xmax: round(num(data.xmax, 5) - dx * ux) });
-                // 6.0 B: a chart whose y follows what is drawn pans x only (y follows).
-                if (data.fitY !== true) Object.assign(data, { ymin: round(num(data.ymin, -5) + dy * uy), ymax: round(num(data.ymax, 5) + dy * uy) });
+                redraw();
+                return;
             }
-            redraw();
+            if (!press.pan) {
+                if (e.clientX === press.x && e.clientY === press.y) return;
+                const p = grab();
+                if (!p) return;
+                const view = { xmin: num(data.xmin, p.view.xmin), xmax: num(data.xmax, p.view.xmax), ymin: num(data.ymin, p.view.ymin), ymax: num(data.ymax, p.view.ymax) };
+                press.pan = { view, ux: (view.xmax - view.xmin) / p.w, uy: (view.ymax - view.ymin) / p.h };
+            }
+            // From the start of the pan: the math point under the pointer at the start stays under it (no step lost to rounding).
+            const { view, ux, uy } = press.pan;
+            const mx = (e.clientX - press.x) * ux;
+            const my = (e.clientY - press.y) * uy;
+            write({ xmin: view.xmin - mx, xmax: view.xmax - mx, ymin: view.ymin + my, ymax: view.ymax + my });
         });
         const end = (e: PointerEvent) => {
+            const panned = !!press?.pan;
             last = null;
+            press = null;
             if (box.hasPointerCapture(e.pointerId)) box.releasePointerCapture(e.pointerId);
             if (is3D && turn) {
                 data.rotationZ = Math.round(turn.z) % 360;
@@ -815,11 +968,18 @@ export class FormulaHover {
                 redraw();
             }
             turn = null;
+            if (panned) {
+                if (frame) letGo = true;
+                else settle();
+            }
         };
         box.addEventListener('pointerup', end);
         box.addEventListener('pointercancel', end);
         box.addEventListener('dblclick', () => {
             Object.assign(data, home);
+            hold.drop();
+            if (easing) win.cancelAnimationFrame(easing);
+            easing = 0;
             redraw();
         });
     }
