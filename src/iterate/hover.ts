@@ -103,24 +103,35 @@ export function iterateHoverCard(texIn: string): IterateHoverCard | null {
             lines: ['show x from 0 to 1 and y from 0 to 1', ...sliders, `draw the cobweb of $${tex}$ from 0.2, 40 steps`],
         };
     }
-    const sum = sumParts(tex);
-    if (sum) {
-        const letters = freeLetters(sum.body, [sum.k, 'x']).filter((l) => l !== sum.hi);
-        const extra = letters.map((l) => `slider ${l} from -2 to 2, starting at 1`);
+    const whole = sumParts(tex);
+    if (whole) {
+        // 6.2.3: a sum with its value (`= \frac{n(n+1)}{2}`): the terms are the left side only, and the value is
+        // drawn too, dashed, so the partial sums can be seen to lie on it. Before, the value stayed in the
+        // terms and the chart line was invalid ("Use == to compare").
+        const eqAt = topEquals(whole.body);
+        const sum = eqAt >= 0 ? { ...whole, body: whole.body.slice(0, eqAt).trim() } : whole;
+        const value = eqAt >= 0 ? whole.body.slice(eqAt + 1).trim() : '';
         const n = /^[A-Za-z]$/.test(sum.hi) && !['x', sum.k].includes(sum.hi) ? sum.hi : 'n';
+        const letters = Array.from(new Set([...freeLetters(sum.body, [sum.k, 'x']), ...(value ? freeLetters(value, [sum.k, 'x', n]) : [])])).filter((l) => l !== sum.hi && l !== n);
+        // 0.5, not 1: a value such as (1 - q^{n+1}) / (1 - q) has no value at q = 1.
+        const extra = letters.map((l) => `slider ${l} from -2 to 2, starting at 0.5`);
         const slider = `slider ${n} from 1 to 30, starting at 5, in steps of 1`;
         if (readsLetter(sum.body, 'x')) {
+            const closed = value && !readsLetter(value, sum.k) ? [`plot $F(x) = ${value}$ in red, dashed`] : [];
             return {
                 kind: 'sum',
                 note: 'iterate.hover.sumNote',
-                lines: ['show x from -7 to 7', slider, ...extra, `plot $S(x) = \\sum_{${sum.k}=${sum.lo}}^{${n}} ${sum.body}$ in blue, thick`],
+                lines: ['show x from -7 to 7', slider, ...extra, `plot $S(x) = \\sum_{${sum.k}=${sum.lo}}^{${n}} ${sum.body}$ in blue, thick`, ...closed],
             };
         }
         const m = n === 'm' ? 'j' : 'm';
+        // The value as a curve over the upper bound (n read as x), when it is a formula in n and sliders only.
+        const overN = value && !readsLetter(value, 'x') && !readsLetter(value, sum.k) ? value.replace(new RegExp(String.raw`(?<![A-Za-z\\])${n}(?![A-Za-z])`, 'g'), 'x') : '';
+        const closed = overN && overN !== value ? [`plot $F(x) = ${overN}$ from x = 0 to ${n} + 1 in red, dashed`] : [];
         return {
             kind: 'sum',
             note: 'iterate.hover.sumNote',
-            lines: [`show x from 0 to ${n} + 1`, slider, ...extra, `mark the points $\\{(${m}, \\sum_{${sum.k}=${sum.lo}}^{${m}} ${sum.body}) : ${m} = 1, \\dots, ${n}\\}$`],
+            lines: [`show x from 0 to ${n} + 1`, slider, ...extra, `mark the points $\\{(${m}, \\sum_{${sum.k}=${sum.lo}}^{${m}} ${sum.body}) : ${m} = 1, \\dots, ${n}\\}$`, ...closed],
         };
     }
     // A function of z: f(z) = ..., or a formula in z alone.

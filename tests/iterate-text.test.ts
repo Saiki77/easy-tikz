@@ -251,3 +251,20 @@ test('hover cards: a sum with the upper bound written first, with \\displaystyle
         assert.ok(card.lines.some((l) => /\\sum_\{k=[01]\}\^/.test(l)), card.lines.join('\n'));
     }
 });
+
+test('hover cards: a sum with its value draws the partial sums and the value, a valid chart (6.2.3)', () => {
+    for (const tex of ['\\sum^n_{k=0}q^k = \\frac{1-q^{n+1}}{1-q}', '\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}']) {
+        const card = iterateHoverCard(tex);
+        assert.ok(card && card.kind === 'sum', tex);
+        const text = card.lines.join('\n');
+        const r = parseChartText(text);
+        assert.deepEqual(r.problems, [], text);
+        // The terms are the left side only; the value is its own dashed curve over n.
+        assert.ok(/\\sum_\{k=[01]\}\^\{m\} [^)=]*\) : m = 1/.test(text), text);
+        assert.ok(card.lines.some((l) => l.startsWith('plot $F(x) = ') && l.includes('dashed')), text);
+        assert.ok(!card.lines.some((l) => /starting at 1$/.test(l) && /^slider q /.test(l)), text);
+    }
+    // A series in x with its value (exp): both curves.
+    const exp = iterateHoverCard('\\sum_{i=0}^{n} \\frac{x^i}{i!} = e^x');
+    assert.ok(exp && exp.lines.some((l) => l.startsWith('plot $F(x) = e^x$')), exp && exp.lines.join('\n'));
+});
