@@ -84,8 +84,8 @@ The short forms of version 4.4 still work and mean the same: `view x -3..3, y -4
 | Line | Means |
 | --- | --- |
 | `show x from -3 to 3 and y from -4 to 4` (3D: `show x from -2 to 2, y from -2 to 2 and z from 0 to 8`) | The visible range. Formulas allowed: `x from -a to a`, `x from 0 to 2pi`. Always write it. |
-| `axes in the middle`, `axes in a box`, `axes on the edges`, `no axes` | Axes through the origin (school style), a frame with ticks (the default), axes along the left and bottom edges (optimisation charts), or none. |
-| `with a grid`, `with a minor grid`, `with a fine grid` | Major grid, minor grid, both. In 3D the grid lies on the floor and the back walls of the box. |
+| `axes in the middle`, `axes in a box`, `axes on the edges`, `no axes` | Axes through the origin (school style), a frame with ticks, axes along the left and bottom edges (optimisation charts), or none. Without the line the setting **Chart look** decides: Clean (the default) draws axes through the origin, Classic a frame with ticks. `axes in a box` draws the whole chart in the Classic look. |
+| `with a grid`, `with a minor grid`, `with a fine grid`, `no grid` | Major grid, minor grid, both, or no grid. Without a line the Chart look decides (Clean: a light major grid; Classic: none). In 3D the grid lies on the floor and the back walls of the box. |
 | `grid opacity 0.3` | How strong the grid lines are, from 0 to 1 (without the line: 0.5). Minor lines are drawn at half of it. |
 | `x numbers every pi/2` | The numbers on an axis (x, y or z): `every` a step (a formula; a step in pi prints in π), `at` chosen values each with an optional label in quotes (`x numbers at a "a", b "b"`), or `x numbers off` (no numbers, no tick marks; the grid stays). Without the line: automatic. |
 | `title ...`, `xlabel ...`, `ylabel ...`, `zlabel ...` | Title (a template) and axis names (plain text). Quote them when they hold a `|`. |
@@ -393,7 +393,7 @@ The linear program of the first section, in Full LaTeX:
 | --- | --- |
 | `show x from 0 to 5 and y from 0 to 4.5` (3D: `and z from 0 to 8`) | `\axis[xmin=0, xmax=5, ymin=0, ymax=4.5]` (`zmin`, `zmax`) |
 | `axes on the edges`, `axes in the middle`, `axes in a box`, `no axes` | `axis lines=left`, `axis lines=middle`, `axis lines=box`, `hide axis` |
-| `with a grid`, `with a minor grid`, `with a fine grid`, `grid opacity 0.3` | `grid=major`, `grid=minor`, `grid=both`, `grid opacity=0.3` |
+| `with a grid`, `with a minor grid`, `with a fine grid`, `no grid`, `grid opacity 0.3` | `grid=major`, `grid=minor`, `grid=both`, `grid=none`, `grid opacity=0.3` |
 | `x numbers every pi/2`, `x numbers at a "a", b "b"`, `x numbers off` | `xtick distance=pi/2`, `xtick={a "a", b "b"}`, `xtick=\empty` (`ytick`, `ztick`) |
 | `title ...`, `xlabel ...`, `ylabel ...`, `zlabel ...` | `title={...}`, `xlabel={...}`, `ylabel={...}`, `zlabel={...}` |
 | `size 12 x 6`, `equal scale` | `width=12cm, height=6cm`, `axis equal` |
@@ -454,6 +454,10 @@ The linear program of the first section, in Full LaTeX:
 | `c = Circle(A, 3) in red, dashed`, `IterationList(z^2 + c, z, {0}, 20)`, `a = Slider(0, 5)` | `\geogebra[red, dashed]{c = Circle(A, 3)}`, `\geogebra{IterationList(z^2 + c, z, {0}, 20)}`, `\geogebra{a = Slider(0, 5)}` (the GeoGebra line as it is) |
 | `python:` and its indented lines | `\begin{python}`, the lines, `\end{python}` |
 
+## The chart look
+
+The person's setting **Chart look** fills in what a chart leaves open. **Clean** (the default): axes through the origin without arrowheads, thin and light grey (an axis whose 0 is outside the view lies at the near edge), a light major grid, small grey numbers without the 0 where the axes cross and left out where they would sit on a marked point or a curve, no axis letters x and y unless the chart names its axes, functions a little thicker than `thin`, dots for extrema without the words min and max, and the values the plugin writes (`labelled` without a text of its own) in white pills. **Classic** is the look of version 6.0. The LaTeX export draws the same look. What a chart sets wins: `axes in a box` (the whole chart in the Classic look), `axes on the edges`, `axes in the middle`, `with a grid`, `no grid`, `grid opacity`, axis names, a thickness. So leave the axes, the grid and the thickness out unless the chart needs them; the text of a chart is the same in both looks.
+
 ## Fields
 
 The options above set these fields. A `set` line or a `key=value` option can set any of them, and a JSON block uses them directly.
@@ -463,12 +467,13 @@ The options above set these fields. A `set` line or a `key=value` option can set
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `xmin` `xmax` `ymin` `ymax` | `"-0.5"` `"10"` `"-0.5"` `"5"` | The visible range. Formulas allowed (`"-a"`, `"2pi"`). Always set them. |
-| `axis_style` | `"box"` | `"box"` (frame with ticks), `"middle"` (axes through the origin, school style), `"axes"` (axes along the left and bottom edges, as for optimisation charts). |
+| `axis_style` | `"auto"` | `"box"` (frame with ticks; the chart then draws in the Classic look), `"middle"` (axes through the origin, school style), `"axes"` (axes along the left and bottom edges, as for optimisation charts). `"auto"`: the setting Chart look decides (Clean: `"middle"`, Classic: `"box"`). |
 | `title` | `""` | Text above the chart, a template: `"slope at x = {a}: {3a^2 - 3:2}"`. |
-| `show_axis_label` `axis_label_x` `axis_label_y` | `true` `"x"` `"y"` | Axis names, plain text (no `{...}` values). |
+| `show_axis_label` `axis_label_x` `axis_label_y` | `true` `"x"` `"y"` | Axis names, plain text (no `{...}` values). The Clean look writes only names other than the letters `x` and `y` (and the headers of `use the table above`); Classic writes `x` and `y` too. |
 | `showAxis` | `true` | Draw the axes. |
-| `showLargeGrid` `showSmallGrid` `gridSize` | `false` `false` `5` | Major grid, minor grid, minor ticks per major step. |
-| `gridOpacity` | `0.5` | Opacity of the major grid lines, 0 to 1 (the line `grid opacity 0.3`); minor lines at half of it. |
+| `showLargeGrid` `showSmallGrid` `gridSize` | `"auto"` `false` `5` | Major grid (`true`, `false`, or `"auto"`: the Chart look decides, Clean draws one), minor grid, minor ticks per major step. |
+| `gridOpacity` | `0.5` | Opacity of the major grid lines, 0 to 1 (the line `grid opacity 0.3`); minor lines at half of it. The Clean look draws its grid in a light ink, about `#eceef3` on white at 0.5. |
+| `look` | `"auto"` | `"clean"` or `"classic"` draws this chart in that look whatever the setting Chart look says; `"auto"` follows the setting. Usually leave it out. |
 | `numbers_x` `numbers_step_x` `numbers_at_x` | `"auto"` `""` `""` | The numbers on x (and `_y`, `_z`): `"auto"`, `"every"` (with the step's formula), `"at"` (with the values) or `"off"` (the line `x numbers ...`). |
 | `size_x_cm` `size_y_cm` | `10` `10` | Size of the exported figure in cm. It also sets the shape of the chart in the note: `12` by `6` gives a wide chart. |
 | `equalScale` | `false` | Same unit on both axes, so circles stay round. |
@@ -502,11 +507,11 @@ Give all five fields (and `"connected": true` for a slider that moves with the s
 | `name` | `"f1"`, `"f2"`, ... | Other formulas call it: `f1(2)`, `f1(x - 1)`, or bare `f1` for `f1(x)`. Functions are drawn in list order. |
 | `expression` | `""` | y = f(x), in `x`. |
 | `domain` | `""` | `"min:max"`, such as `"0:2pi"` or `"-a:a"`. Empty: drawn over the visible x range, and calls such as `f1(4)` work at any x. With a domain the function has no value outside it. |
-| `color` `thickness` `dashed` | `"black"` `"thin"` `false` | Thickness: `"very thin"`, `"thin"`, `"thick"`, `"very thick"`. |
+| `color` `thickness` `dashed` | `"black"` `""` `false` | Thickness: `"very thin"`, `"thin"`, `"thick"`, `"very thick"`. `""` (none set): the Chart look's line, a little thicker than thin in the Clean look (`semithick` in the export), thin in Classic. |
 | `showLegend` `legendLabel` | `false` (unset) | Legend entry; the text defaults to the formula. |
 | `fill` `fillOpacity` `fillPattern` | `false` `0.2` `"solid"` | Shade between the curve and the x-axis. For other areas use a region. |
 | `tangent` `tangentPoint` | `false` `""` | A dashed tangent in the function's colour with a dot where it touches, at a number, a formula, a slider (`"a"`) or a keyword: `"min"`, `"max"`, `"min2"`, `"max3"` (first local minimum, first local maximum, ...). |
-| `extrema` | `false` | Dots labelled `max` and `min` at the local extrema in the view. |
+| `extrema` | `false` | Dots at the local extrema in the view (Classic labels them `max` and `min`; the Clean look draws the dots alone). |
 | `parametric` `expressionY` | `false` `""` | Parametric curve: `expression` is x(t), `expressionY` is y(t), `domain` is the t range (default `0:2*pi`). |
 | `hidden` | `false` | Not drawn, but other formulas can still use it (a tangent or an antiderivative used in a region or label). |
 

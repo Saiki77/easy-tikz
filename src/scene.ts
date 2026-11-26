@@ -2693,8 +2693,8 @@ function movingNodes(nodes: SceneNode[], math: MathContext): Set<SceneNode> {
  */
 /** 6.1: the node's tool writes its value (`labelled` without a text of its own): its texts are values (TextPrim.value). */
 function valueLabelled(node: SceneNode): boolean {
-    const t = node.tool as (Tool & { valueLabel?: unknown; label?: unknown }) | undefined;
-    return !!t && t.valueLabel === true && !str(t.label).trim();
+    const t = node.tool;
+    return !!t && 'valueLabel' in t && t.valueLabel === true && !str('label' in t ? t.label : '').trim();
 }
 
 function labelRank(node: SceneNode): number {

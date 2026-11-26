@@ -136,7 +136,7 @@ const DIM_OPACITY = 0.45;
  */
 const HALO = 'fill=white, fill opacity=0.7, text opacity=1, inner sep=1pt, rounded corners=1pt, outer sep=2pt';
 /** 6.1: a value label of the clean look: a soft white pill with a thin line, as in the preview. */
-const PILL = 'fill=white, draw=etzPill, line width=0.4pt, rounded corners=4pt, inner xsep=3.5pt, inner ysep=1.5pt, outer sep=1pt';
+const PILL = 'fill=white, draw=etzPill, line width=0.4pt, rounded corners=4pt, inner xsep=3.5pt, inner ysep=1.5pt, outer sep=2.5pt';
 /** Bold labels (region names) are drawn in a darker shade of their colour. */
 const BOLD_INK = '!70!black';
 
