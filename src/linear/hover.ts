@@ -12,6 +12,7 @@
  * slider s moves the grid from I (s = 0) to A (s = 1): (1 - s)I + sA.
  * Pure: no DOM, no Obsidian.
  */
+import type { LinearParse } from '../readers/types';
 
 export type LinearHoverKind = 'matrix' | 'product' | 'det' | 'eigen';
 
@@ -59,16 +60,27 @@ function shapeOfMatrix(body: string): { rows: number; cols: number } | null {
     return { rows: rows.length, cols: cols[0] };
 }
 
-interface Parsed {
-    kind: LinearHoverKind;
-    /** The matrix's name (A), and the written matrix when the formula holds it. */
-    name: string;
-    matrix?: string;
-    /** The vector's name (product). */
-    vector?: string;
+/** The entries of a written matrix's body, row by row (empty rows out). */
+function entriesOf(body: string): string[][] {
+    return body
+        .split(/\\\\/)
+        .map((r) => r.trim())
+        .filter((r) => r)
+        .map((r) => r.split('&').map((c) => c.trim()));
 }
 
-function parse(texIn: string): Parsed | null {
+/** 6.2.2: a matrix of entries as the cards write it: a pmatrix; null unless it is square, 2 x 2 or 3 x 3. */
+export function matrixTex(entries: readonly (readonly string[])[]): string | null {
+    const n = entries.length;
+    if ((n !== 2 && n !== 3) || entries.some((r) => r.length !== n)) return null;
+    return `\\begin{pmatrix} ${entries.map((r) => r.join(' & ')).join(' \\\\ ')} \\end{pmatrix}`;
+}
+
+/**
+ * 6.2.2, reader 0 of this part: what a formula says (src/readers/types.ts):
+ * a written matrix, \det A, A v = \lambda v, A v; null for any other formula.
+ */
+export function readLinear(texIn: string): LinearParse | null {
     const tex = normalize(texIn);
     if (!tex) return null;
     const m = MATRIX.exec(tex);
@@ -76,21 +88,21 @@ function parse(texIn: string): Parsed | null {
         const whole = /^(?:([A-Z])\s*(?::=|=)\s*)?\\begin\s*\{\s*([pbvB]?matrix)\s*\}[\s\S]*?\\end\s*\{\s*\2\s*\}$/.exec(tex);
         const shape = shapeOfMatrix(m[2]);
         if (!whole || !shape || shape.rows !== shape.cols || (shape.rows !== 2 && shape.rows !== 3) || m[1] === 'vmatrix') return null;
-        return { kind: 'matrix', name: whole[1] ?? 'A', matrix: m[0] };
+        return { kind: 'matrix', ...(whole[1] ? { name: whole[1] } : {}), entries: entriesOf(m[2]) };
     }
     const det = /^\\det\s*\(?\s*([A-Z])\s*\)?$/.exec(tex);
-    if (det) return { kind: 'det', name: det[1] };
+    if (det) return { kind: 'det', matrix: det[1] };
     const eig = /^([A-Z])\s*([a-z])\s*=\s*\\lambda\s*\2$/.exec(tex);
-    if (eig) return { kind: 'eigen', name: eig[1], vector: eig[2] };
+    if (eig) return { kind: 'eigen', matrix: eig[1], vector: eig[2] };
     const product = /^([A-Z])\s*(?:\\cdot\s*)?([a-z])$/.exec(tex);
-    if (product) return { kind: 'product', name: product[1], vector: product[2] };
+    if (product) return { kind: 'product', matrix: product[1], vector: product[2] };
     return null;
 }
 
 /** Is this a formula with a card of this part? */
 export function linearHoverKind(tex: string): LinearHoverKind | null {
     try {
-        return parse(tex)?.kind ?? null;
+        return readLinear(tex)?.kind ?? null;
     } catch {
         return null;
     }
@@ -118,22 +130,31 @@ function dimOf(matrix: string): 2 | 3 {
     return shape && shape.rows === 3 ? 3 : 2;
 }
 
-/** The chart of a formula of this part, with the note's matrices and vectors; null when it has none. */
+/** The chart of a formula of this part, with the note's matrices and vectors; null when it has none. 6.2.2: reader 0 (readLinear), then the builder (buildLinear). */
 export function linearHoverCard(tex: string, defs: Map<string, string>): LinearHoverCard | null {
-    let p: Parsed | null;
+    let p: LinearParse | null;
     try {
-        p = parse(tex);
+        p = readLinear(tex);
     } catch {
         p = null;
     }
-    if (!p) return null;
+    return p ? buildLinear(p, defs) : null;
+}
+
+/** 6.2.2: the card of a parse of this part, with the note's matrices and vectors (name to LaTeX); null when it has none. */
+export function buildLinear(p: LinearParse, defs: ReadonlyMap<string, string>): LinearHoverCard | null {
+    // The matrix the formula writes (a matrix, maybe a multiple of one; a det, a product or an eigen equation of a written matrix), else its name.
+    let written = p.entries ? matrixTex(p.entries) : undefined;
+    if (written === null) return null;
+    if (written && p.kind === 'matrix' && p.factor?.trim()) written = `${p.factor.trim()} \\cdot ${written}`;
+    const named = p.kind === 'matrix' ? p.name ?? 'A' : p.matrix ?? 'A';
     // A name that is the slider's: the card calls it A.
-    const name = p.name === S ? 'A' : p.name;
+    const name = named === S ? 'A' : named;
     let example = false;
-    let matrix = p.matrix ?? defs.get(p.name);
+    let matrix = written ?? defs.get(named);
     if (!matrix || !MATRIX.test(matrix)) {
-        matrix = p.kind === 'det' || p.kind === 'matrix' ? EXAMPLE_MATRIX : EXAMPLE_MATRIX;
-        example = !p.matrix;
+        matrix = EXAMPLE_MATRIX;
+        example = !written;
     }
     const dim = dimOf(matrix);
     if (dim === 3 && (p.kind === 'product' || p.kind === 'eigen')) return null;
@@ -143,7 +164,7 @@ export function linearHoverCard(tex: string, defs: Map<string, string>): LinearH
         dim === 3
             ? ['3d', 'show x from -3 to 3 and y from -3 to 3 and z from -3 to 3', slider, `let $${name} = ${matrix}$`]
             : ['show x from -4 to 4 and y from -3 to 3', 'equal scale', slider, `let $${name} = ${matrix}$`];
-    const card = (lines: string[]): LinearHoverCard => ({ kind: p ? p.kind : 'matrix', lines: [...head, ...lines], name, example });
+    const card = (lines: string[]): LinearHoverCard => ({ kind: p.kind, lines: [...head, ...lines], name, example });
     switch (p.kind) {
         case 'matrix':
         case 'det':
@@ -152,14 +173,17 @@ export function linearHoverCard(tex: string, defs: Map<string, string>): LinearH
             return card(['draw the grid', 'draw the basis vectors', moving, `draw the eigenvectors of ${name}, labelled`]);
         case 'product': {
             // 6.2.1: a vector named x, y, z or t (A\vec x) is v in the chart: those names are the axes'.
-            const v = p.vector && p.vector !== S && p.vector !== name && !/^[xyzt]$/.test(p.vector) ? p.vector : 'v';
-            let vector = p.vector ? defs.get(p.vector) : undefined;
+            const own = p.vector ?? 'v';
+            const v = own !== S && own !== name && !/^[xyzt]$/.test(own) && /^[a-z]$/.test(own) ? own : 'v';
+            // 6.2.2: a written vector (its entries), else the note's.
+            if (p.components && p.components.length !== dim) return null;
+            let vector = p.components ? `(${p.components.map((c) => c.trim()).join(', ')})` : p.vector ? defs.get(p.vector) : undefined;
             if (!vector) {
                 vector = EXAMPLE_VECTOR;
                 example = true;
             }
             return {
-                ...card(['draw the grid', moving, `draw ${v} as an arrow in blue, labelled`, `draw $(1 - ${S}) ${v} + ${S} ${name} ${v}$ as an arrow in red, labelled "$${name}\\vec{${v}}$"`]),
+                ...card([]),
                 lines: [...head, `let $${v} = ${vector}$`, 'draw the grid', moving, `draw ${v} as an arrow in blue, labelled`, `draw $(1 - ${S}) ${v} + ${S} ${name} ${v}$ as an arrow in red, labelled "$${name}\\vec{${v}}$"`],
                 example,
             };

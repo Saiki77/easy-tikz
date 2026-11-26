@@ -15,6 +15,8 @@ import { BUILTIN_FUNCTION_NAMES, CONSTANT_NAMES } from '../expr';
 import { readRecurrence } from '../values';
 import { readsLetter } from './forms';
 import { topEquals } from './tools';
+import type { IterateParse } from '../readers/types';
+import { renameOne } from '../formula';
 
 export type IterateHoverKind = 'recurrence' | 'sum' | 'domain';
 
@@ -74,77 +76,108 @@ export function iterateHoverKind(tex: string): IterateHoverKind | null {
     return iterateHoverCard(tex)?.kind ?? null;
 }
 
-/** The chart of a formula of this part; null when it has none. */
+/** The chart of a formula of this part; null when it has none. 6.2.2: reader 0 (readIterate), then the builder (buildIterate). */
 export function iterateHoverCard(texIn: string): IterateHoverCard | null {
+    const p = readIterate(texIn);
+    return p ? buildIterate(p) : null;
+}
+
+/** A recurrence's step the cards cannot iterate: a gradient, a matrix or a sum in it. */
+const NOT_A_STEP = /\\nabla|\\begin|\\sum/;
+
+/**
+ * 6.2.2, reader 0 of this part: what a formula says (src/readers/types.ts):
+ * a recurrence, a sum or a function of z; null for any other formula.
+ */
+export function readIterate(texIn: string): IterateParse | null {
     const tex = normalize(texIn);
     if (!tex) return null;
     const rec = readRecurrence(tex);
     if (rec) {
-        if (/\\nabla|\\begin|\\sum/.test(rec.formula)) return null;
-        const letters = freeLetters(rec.formula, [rec.state]);
-        if (/^(z|w|zeta)$/.test(rec.state)) {
-            // A complex recurrence: the orbit of 0 with its first letter c = a + bi on two sliders.
-            const c = letters[0];
-            const sliders = c ? ['slider a from -2 to 1, starting at -0.12', 'slider b from -1.5 to 1.5, starting at 0.75'] : [];
-            const rest = letters.slice(1).map((l) => `slider ${l} from -2 to 2, starting at 1`);
-            const given = c ? `, $${c} = a + b i$` : '';
-            // Behind the orbit, faint: the plane of c, each point coloured by its own orbit (the Mandelbrot set for z^2 + c).
-            const plane = c ? [`colour the plane by $${tex}$, $${rec.state}_0 = 0$, $${c} = x + i y$, 100 steps, opacity 0.35`] : [];
-            return {
-                kind: 'recurrence',
-                note: 'iterate.hover.recurrenceNote',
-                lines: ['show x from -2 to 1 and y from -1.5 to 1.5', 'equal scale', ...sliders, ...rest, ...plane, `draw the orbit of $${tex}$, $${rec.state}_0 = 0$${given}, 40 steps`],
-            };
-        }
-        const sliders = letters.map((l, i) => `slider ${l} from 0 to 4, starting at ${i === 0 ? 3.7 : 1}`);
-        return {
-            kind: 'recurrence',
-            note: 'iterate.hover.cobwebNote',
-            lines: ['show x from 0 to 1 and y from 0 to 1', ...sliders, `draw the cobweb of $${tex}$ from 0.2, 40 steps`],
-        };
+        if (NOT_A_STEP.test(rec.formula)) return null;
+        // The state as written: a Greek state keeps its backslash (\theta_{n+1}).
+        return { kind: 'recurrence', state: tex.startsWith('\\') ? `\\${rec.state}` : rec.state, index: rec.index, step: rec.formula };
     }
-    const whole = sumParts(tex);
-    if (whole) {
-        // 6.2.3: a sum with its value (`= \frac{n(n+1)}{2}`): the terms are the left side only, and the value is
-        // drawn too, dashed, so the partial sums can be seen to lie on it. Before, the value stayed in the
-        // terms and the chart line was invalid ("Use == to compare").
-        const eqAt = topEquals(whole.body);
-        const sum = eqAt >= 0 ? { ...whole, body: whole.body.slice(0, eqAt).trim() } : whole;
-        const value = eqAt >= 0 ? whole.body.slice(eqAt + 1).trim() : '';
-        const n = /^[A-Za-z]$/.test(sum.hi) && !['x', sum.k].includes(sum.hi) ? sum.hi : 'n';
-        const letters = Array.from(new Set([...freeLetters(sum.body, [sum.k, 'x']), ...(value ? freeLetters(value, [sum.k, 'x', n]) : [])])).filter((l) => l !== sum.hi && l !== n);
-        // 0.5, not 1: a value such as (1 - q^{n+1}) / (1 - q) has no value at q = 1.
-        const extra = letters.map((l) => `slider ${l} from -2 to 2, starting at 0.5`);
-        const slider = `slider ${n} from 1 to 30, starting at 5, in steps of 1`;
-        if (readsLetter(sum.body, 'x')) {
-            const closed = value && !readsLetter(value, sum.k) ? [`plot $F(x) = ${value}$ in red, dashed`] : [];
-            return {
-                kind: 'sum',
-                note: 'iterate.hover.sumNote',
-                lines: ['show x from -7 to 7', slider, ...extra, `plot $S(x) = \\sum_{${sum.k}=${sum.lo}}^{${n}} ${sum.body}$ in blue, thick`, ...closed],
-            };
-        }
-        const m = n === 'm' ? 'j' : 'm';
-        // The value as a curve over the upper bound (n read as x), when it is a formula in n and sliders only.
-        const overN = value && !readsLetter(value, 'x') && !readsLetter(value, sum.k) ? value.replace(new RegExp(String.raw`(?<![A-Za-z\\])${n}(?![A-Za-z])`, 'g'), 'x') : '';
-        const closed = overN && overN !== value ? [`plot $F(x) = ${overN}$ from x = 0 to ${n} + 1 in red, dashed`] : [];
-        return {
-            kind: 'sum',
-            note: 'iterate.hover.sumNote',
-            lines: [`show x from 0 to ${n} + 1`, slider, ...extra, `mark the points $\\{(${m}, \\sum_{${sum.k}=${sum.lo}}^{${m}} ${sum.body}) : ${m} = 1, \\dots, ${n}\\}$`, ...closed],
-        };
+    const sum = sumParts(tex);
+    if (sum) {
+        // 6.2.2: a closed form after = is the sum's value, no part of its summand (\sum_{k=1}^{n} k = \frac{n(n+1)}{2}).
+        const eq = topEquals(sum.body);
+        const body = eq > 0 ? sum.body.slice(0, eq).trim() : sum.body;
+        const value = eq > 0 ? sum.body.slice(eq + 1).trim() : '';
+        return { kind: 'sum', index: sum.k, lower: sum.lo, upper: sum.hi, body, ...(value ? { value } : {}) };
     }
     // A function of z: f(z) = ..., or a formula in z alone.
     const eq = topEquals(tex);
     const head = eq >= 0 ? /^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(\s*z\s*\)\s*$/.exec(tex.slice(0, eq)) : null;
     const body = head ? tex.slice(eq + 1).trim() : eq < 0 ? tex : '';
-    if (body && readsLetter(body, 'z') && !readsLetter(body, 'x') && !readsLetter(body, 'y') && (head || /\\frac|\^|[*/]|\bi\b/.test(body))) {
-        const letters = freeLetters(body, ['z']);
-        return {
-            kind: 'domain',
-            note: 'iterate.hover.domainNote',
-            lines: ['show x from -2 to 2 and y from -2 to 2', 'equal scale', ...letters.map((l) => `slider ${l} from -2 to 2, starting at 1`), `colour the plane by $${head ? `${head[1]}(z) = ` : ''}${body}$`],
-        };
-    }
+    if (body && readsLetter(body, 'z') && !readsLetter(body, 'x') && !readsLetter(body, 'y') && (head || /\\frac|\^|[*/]|\bi\b/.test(body))) return { kind: 'domain', ...(head ? { name: head[1] } : {}), body };
     return null;
+}
+
+/** 6.2.2: the card of a parse of this part (a recurrence, a sum, a function of z); null when it has none. */
+export function buildIterate(p: IterateParse): IterateHoverCard | null {
+    switch (p.kind) {
+        case 'recurrence': {
+            if (NOT_A_STEP.test(p.step)) return null;
+            const state = p.state.replace(/^\\/, '');
+            const tex = `${p.state}_{${p.index}+1} = ${p.step}`;
+            const letters = freeLetters(p.step, [state]);
+            if (/^(z|w|zeta)$/.test(state)) {
+                // A complex recurrence: the orbit of 0 with its first letter c = a + bi on two sliders.
+                const c = letters[0];
+                const sliders = c ? ['slider a from -2 to 1, starting at -0.12', 'slider b from -1.5 to 1.5, starting at 0.75'] : [];
+                const rest = letters.slice(1).map((l) => `slider ${l} from -2 to 2, starting at 1`);
+                const given = c ? `, $${c} = a + b i$` : '';
+                // Behind the orbit, faint: the plane of c, each point coloured by its own orbit (the Mandelbrot set for z^2 + c).
+                const plane = c ? [`colour the plane by $${tex}$, $${state}_0 = 0$, $${c} = x + i y$, 100 steps, opacity 0.35`] : [];
+                return {
+                    kind: 'recurrence',
+                    note: 'iterate.hover.recurrenceNote',
+                    lines: ['show x from -2 to 1 and y from -1.5 to 1.5', 'equal scale', ...sliders, ...rest, ...plane, `draw the orbit of $${tex}$, $${state}_0 = 0$${given}, 40 steps`],
+                };
+            }
+            const sliders = letters.map((l, i) => `slider ${l} from 0 to 4, starting at ${i === 0 ? 3.7 : 1}`);
+            return {
+                kind: 'recurrence',
+                note: 'iterate.hover.cobwebNote',
+                lines: ['show x from 0 to 1 and y from 0 to 1', ...sliders, `draw the cobweb of $${tex}$ from 0.2, 40 steps`],
+            };
+        }
+        case 'sum': {
+            const n = /^[A-Za-z]$/.test(p.upper) && !['x', p.index].includes(p.upper) ? p.upper : 'n';
+            const value = p.value ?? '';
+            const letters = Array.from(new Set([...freeLetters(p.body, [p.index, 'x']), ...(value ? freeLetters(value, [p.index, 'x', n]) : [])])).filter((l) => l !== p.upper && l !== n);
+            // 6.2.3: 0.5, not 1: a value such as (1 - q^{n+1}) / (1 - q) has no value at q = 1.
+            const extra = letters.map((l) => `slider ${l} from -2 to 2, starting at 0.5`);
+            const slider = `slider ${n} from 1 to 30, starting at 5, in steps of 1`;
+            if (readsLetter(p.body, 'x')) {
+                // 6.2.3: the value as its own dashed curve (\sum x^i / i! = e^x).
+                const closed = value && !readsLetter(value, p.index) ? [`plot $F(x) = ${value}$ in red, dashed`] : [];
+                return {
+                    kind: 'sum',
+                    note: 'iterate.hover.sumNote',
+                    lines: ['show x from -7 to 7', slider, ...extra, `plot $S(x) = \\sum_{${p.index}=${p.lower}}^{${n}} ${p.body}$ in blue, thick`, ...closed],
+                };
+            }
+            const m = n === 'm' ? 'j' : 'm';
+            // 6.2.3: the value as a dashed curve over the upper bound (n read as x), so the partial sums can be seen to lie on it.
+            const overN = value && !readsLetter(value, 'x') && !readsLetter(value, p.index) ? value.replace(new RegExp(String.raw`(?<![A-Za-z\\])${n}(?![A-Za-z])`, 'g'), 'x') : '';
+            const closed = overN && overN !== value ? [`plot $F(x) = ${overN}$ from x = 0 to ${n} + 1 in red, dashed`] : [];
+            return {
+                kind: 'sum',
+                note: 'iterate.hover.sumNote',
+                lines: [`show x from 0 to ${n} + 1`, slider, ...extra, `mark the points $\\{(${m}, \\sum_{${p.index}=${p.lower}}^{${m}} ${p.body}) : ${m} = 1, \\dots, ${n}\\}$`, ...closed],
+            };
+        }
+        case 'domain': {
+            // The complex variable as the chart writes it: z (H(s) = \frac{1}{s + 1} is \frac{1}{z + 1}).
+            const body = p.variable && p.variable.trim() !== 'z' ? renameOne(p.body, p.variable, 'z') : p.body;
+            const letters = freeLetters(body, ['z']);
+            return {
+                kind: 'domain',
+                note: 'iterate.hover.domainNote',
+                lines: ['show x from -2 to 2 and y from -2 to 2', 'equal scale', ...letters.map((l) => `slider ${l} from -2 to 2, starting at 1`), `colour the plane by $${p.name ? `${p.name}(z) = ` : ''}${body}$`],
+            };
+        }
+    }
 }

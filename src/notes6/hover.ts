@@ -22,6 +22,7 @@ import { BUILTIN_FUNCTION_NAMES, CONSTANT_NAMES } from '../expr';
 import { SettingsManager } from '../settings';
 import { parseChartText } from '../text/parse';
 import { compileCondition, solveSet } from './sets';
+import type { IntervalParse, Notes6Parse } from '../readers/types';
 
 export type HoverKind = 'set' | 'map' | 'condition' | 'interval' | 'jensen' | 'epigraph';
 
@@ -137,7 +138,11 @@ function variablePattern(v: string): RegExp {
 /** Replace the variable `v` (a letter or a command such as \lambda, maybe with a subscript: x_1) by `to`, where it stands alone. */
 function renameVariable(tex: string, v: string, to: string): string {
     if (v === to) return tex;
-    return tex.replace(variablePattern(v), to);
+    // 6.2.2: after a command (\lvert), a letter gets a space: \lvert x, not \lvertx.
+    return tex.replace(variablePattern(v), (_m: string, ...rest: unknown[]) => {
+        const at = rest.find((r) => typeof r === 'number') as number;
+        return /^[A-Za-z]/.test(to) && /\\[A-Za-z]+$/.test(tex.slice(0, at)) ? ` ${to}` : to;
+    });
 }
 
 /** A variable as a head writes it: a letter or a command (\lambda), maybe with a subscript (x_1, x_{12}). */
@@ -244,21 +249,22 @@ const inPlane = (cond: string) => renameVariable(cond, 'x', '\\sqrt{x^2 + y^2}')
 
 // ------------------------------------------------------------- recognise
 
-interface Parsed {
-    kind: HoverKind;
-    /** The condition (sets, conditions, intervals), in its own variable. */
-    cond?: string;
-    variable?: string;
-    /** ℝⁿ: a second chart for n = 2. */
-    space?: boolean;
-    /** The function the formula is about. */
-    fn?: string;
-    /** A set of pairs (x, y): a region. */
-    pair?: [string, string];
+/** An interval's ends as the card reads them: [a, b) is [, a, b and ). */
+const ENDS = /([[(])\s*([^,]+?)\s*,\s*([^,]+?)\s*([\])])\s*$/;
+
+/** The interval parse of a variable and an interval as written ([0, 1]), or null when its ends do not read. */
+function intervalOf(variable: string, interval: string): IntervalParse | null {
+    const e = ENDS.exec(interval);
+    if (!e) return null;
+    return { kind: 'interval', variable, left: e[1] as '[' | '(', lower: e[2].trim(), upper: e[3].trim(), right: e[4] as ']' | ')' };
 }
 
-/** What a formula is, for a card of this part; null for any other formula. */
-function parse(texIn: string): Parsed | null {
+/**
+ * 6.2.2, reader 0 of this part: what a formula says (src/readers/types.ts):
+ * a set, a map, a condition, an interval, Jensen's inequality or an
+ * epigraph; null for any other formula.
+ */
+export function readNotes6(texIn: string): Notes6Parse | null {
     const tex = normalize(texIn);
     if (!tex) return null;
     // A map g: R^n -> R.
@@ -266,12 +272,12 @@ function parse(texIn: string): Parsed | null {
     if (map) {
         const from = SPACE.exec(map[2].trim());
         const to = SPACE.exec(map[3].trim());
-        if (from && to) return { kind: 'map', fn: map[1], space: !!from[1] && from[1] !== '1' };
+        if (from && to) return { kind: 'map', name: map[1], domain: map[2].trim(), codomain: map[3].trim() };
         return null;
     }
     // The epigraph: epi g = {(x, t) | g(x) <= t}, or epi g alone.
     const epi = /(?:\\operatorname\s*\{\s*epi\s*\}|\\mathrm\s*\{\s*epi\s*\}|\\text\s*\{\s*epi\s*\}|(?<![A-Za-z\\])epi)\s*\(?\s*([A-Za-z][A-Za-z0-9_]*)/.exec(tex);
-    if (epi) return { kind: 'epigraph', fn: epi[1] };
+    if (epi) return { kind: 'epigraph', name: epi[1] };
     // A set {head | condition}, maybe named: S = {...}.
     // (6.2.1: \mid and \vert as whole commands: \middle is no \mid)
     const set = /(?:^|=\s*)\\\{\s*(.+?)\s*(?:\\mid(?![A-Za-z])|\\vert(?![A-Za-z])|\||:)\s*(.+?)\s*\\\}$/.exec(tex);
@@ -284,30 +290,27 @@ function parse(texIn: string): Parsed | null {
             // {(x, t) | g(x) <= t}: the epigraph of g.
             if (fn && new RegExp(`${fn}\\s*\\(\\s*${pair[1].replace(/\\/g, '\\\\')}\\s*\\)`).test(cond) && REL.test(cond)) {
                 const other = pair[2].replace(/\\/g, '\\\\');
-                if (new RegExp(`(?:\\\\le|<=|\\\\leq)\\s*${other}(?![A-Za-z])|${other}\\s*(?:\\\\ge|>=|\\\\geq)`).test(cond)) return { kind: 'epigraph', fn };
+                if (new RegExp(`(?:\\\\le|<=|\\\\leq)\\s*${other}(?![A-Za-z])|${other}\\s*(?:\\\\ge|>=|\\\\geq)`).test(cond)) return { kind: 'epigraph', name: fn };
             }
-            return { kind: 'set', cond, pair: [pair[1], pair[2]], fn };
+            return { kind: 'set', variables: [pair[1], pair[2]], condition: cond };
         }
         const one = new RegExp(String.raw`^(${VARIABLE})(?:\s*\\in\s*(.+))?$`).exec(head);
         if (!one) return null;
         const space = one[2] ? SPACE.exec(one[2].trim()) : null;
         if (one[2] && !space) return null;
-        return { kind: 'set', cond, variable: canonicalVariable(one[1]), space: !!space && !!space[1] && space[1] !== '1', fn: calledNames(cond)[0] };
+        return { kind: 'set', variables: [canonicalVariable(one[1])], condition: cond, ...(space && space[1] ? { space: space[1] } : {}) };
     }
     // An interval: lambda in [0, 1], x_1 in [0, 4], or [a, b] alone.
     const inInterval = new RegExp(String.raw`^(${VARIABLE})\s*\\in\s*([[(]\s*[^,]+,[^,]+[\])])$`).exec(tex);
-    if (inInterval) {
-        const v = canonicalVariable(inInterval[1]);
-        return { kind: 'interval', cond: `${v} \\in ${inInterval[2]}`, variable: v };
-    }
+    if (inInterval) return intervalOf(canonicalVariable(inInterval[1]), inInterval[2]);
     // A pair of equal or reversed numbers alone, (1,1) or (2, 1), is a point: no interval (an empty one).
     if (isEmptyPair(tex)) return null;
     const bareInterval = /^([[(])\s*(-?[\d.]+|-?\\infty|[A-Za-z])\s*,\s*(-?[\d.]+|\\infty|[A-Za-z])\s*([\])])$/.exec(tex);
-    if (bareInterval) return { kind: 'interval', cond: `x \\in ${tex}`, variable: 'x' };
+    if (bareInterval) return intervalOf('x', tex);
     // Jensen: g(λx + (1 - λ)y) <= λ g(x) + (1 - λ) g(y).
     const lam = /1\s*-\s*(\\lambda|\\theta|\\alpha|\\mu|t)(?![A-Za-z])/.exec(tex);
     const fns = calledNames(tex);
-    if (lam && fns.length && REL.test(tex) && (tex.match(new RegExp(`${fns[0]}\\s*\\(`, 'g')) ?? []).length >= 3) return { kind: 'jensen', fn: fns[0], variable: lam[1] };
+    if (lam && fns.length && REL.test(tex) && (tex.match(new RegExp(`${fns[0]}\\s*\\(`, 'g')) ?? []).length >= 3) return { kind: 'jensen', name: fns[0], weight: lam[1] };
     // A condition in one variable: g(x) <= 0, x > 0, |x| < 1.
     if (REL.test(tex) && !/=/.test(tex.replace(/\\(?:le|ge|leq|geq)|<=|>=/g, ''))) {
         const vars = letters(tex);
@@ -315,7 +318,7 @@ function parse(texIn: string): Parsed | null {
             // The variable as the formula writes it (x_1, \lambda, \alpha_1): the card draws on an axis named after it.
             const v = texVariable(tex, vars[0]);
             if (!v) return null;
-            return { kind: 'condition', cond: tex, variable: v, fn: calledNames(tex)[0] };
+            return { kind: 'condition', variable: v, condition: tex };
         }
     }
     return null;
@@ -324,7 +327,7 @@ function parse(texIn: string): Parsed | null {
 /** Is this a formula of this part (sets, maps, conditions, intervals, Jensen, epigraphs)? */
 export function hoverKind(tex: string): HoverKind | null {
     try {
-        return parse(tex)?.kind ?? null;
+        return readNotes6(tex)?.kind ?? null;
     } catch {
         return null;
     }
@@ -364,16 +367,41 @@ function radialRange(name: string, body: string, r: number): [number, number] | 
     }
 }
 
-/** The chart of a formula of this part, with the note's definitions; null when it has none. */
+/** The chart of a formula of this part, with the note's definitions; null when it has none. 6.2.2: reader 0 (readNotes6), then the builder (buildNotes6). */
 export function hoverCard(texIn: string, defs: Map<string, NoteDefinition>): HoverCard | null {
-    let p: Parsed | null;
+    let p: Notes6Parse | null;
     try {
-        p = parse(texIn);
+        p = readNotes6(texIn);
     } catch {
         p = null;
     }
-    if (!p) return null;
-    const name = p.fn;
+    return p ? buildNotes6(p, defs) : null;
+}
+
+/** The function a parse is about: the one it names (a map, an epigraph, Jensen), else the first one its condition calls. */
+function functionOf(p: Notes6Parse): string | undefined {
+    switch (p.kind) {
+        case 'map':
+        case 'epigraph':
+        case 'jensen':
+            return p.name;
+        case 'set':
+        case 'condition':
+            return calledNames(p.condition)[0];
+        default:
+            return undefined;
+    }
+}
+
+/** The power n of a space ℝⁿ as written (\mathbb{R}^n: n, \mathbb{R}: none); null for anything else. */
+function powerOf(space: string): string | null {
+    const m = SPACE.exec(space.trim());
+    return m ? m[1] ?? '' : null;
+}
+
+/** 6.2.2: the card of a parse of this part, with the note's definitions; null when it has none. */
+export function buildNotes6(p: Notes6Parse, defs: ReadonlyMap<string, NoteDefinition>): HoverCard | null {
+    const name = functionOf(p);
     const def = name ? defs.get(name) : undefined;
     const builtin = !def && p.kind === 'map' && !!name && BUILT_IN_MAPS.has(name);
     const fn = name ? { name, body: def ? def.body : builtin ? `\\${name}(x)` : EXAMPLE_BODY, from: def ? ('note' as const) : builtin ? ('builtin' as const) : ('example' as const) } : undefined;
@@ -382,12 +410,14 @@ export function hoverCard(texIn: string, defs: Map<string, NoteDefinition>): Hov
     const plot = fn ? [...sliders, builtin ? `plot $y = ${fn.body}$ in blue, thick` : `plot $${fn.name}(x) = ${fn.body}$ in blue, thick`] : [];
     const hidden = fn ? [...sliders, `plot $${fn.name}(x) = ${fn.body}$, hidden`] : [];
     const plane = ['show x from -3 to 3 and y from -3 to 3', 'equal scale'];
-    const card = (lines: string[], extra: Partial<HoverCard> = {}): HoverCard => ({ kind: p ? p.kind : 'set', lines, ...(fn ? { fn } : {}), ...extra });
+    const card = (lines: string[], extra: Partial<HoverCard> = {}): HoverCard => ({ kind: p.kind, lines, ...(fn ? { fn } : {}), ...extra });
     switch (p.kind) {
         case 'map': {
             if (!fn) return null;
             const lines = ['show x from -4 to 4', ...plot];
-            if (!p.space) return card(lines);
+            // ℝⁿ (n other than 1): the level curves for n = 2 too.
+            const power = powerOf(p.domain);
+            if (!power || power === '1') return card(lines);
             const range = radialRange(fn.name, fn.body, 3 * Math.SQRT2);
             const levels = range ? levelsBetween(range[0], range[1]) : [0, 1, 2];
             return card(lines, { lines2: [...plane, ...hidden, `draw the level curves of $${fn.name}(\\sqrt{x^2 + y^2})$ at ${levels.join(', ')}`] });
@@ -398,46 +428,47 @@ export function hoverCard(texIn: string, defs: Map<string, NoteDefinition>): Hov
         }
         case 'jensen': {
             if (!fn) return null;
-            return card(['show x from -3.5 to 3.5', 'slider lambda from 0 to 1, starting at 0.3', ...plot, `draw the chord of ${fn.name} from -1.5 to 2.5 at $\\lambda$, labelled`], p.variable ? { variable: p.variable } : {});
+            return card(['show x from -3.5 to 3.5', 'slider lambda from 0 to 1, starting at 0.3', ...plot, `draw the chord of ${fn.name} from -1.5 to 2.5 at $\\lambda$, labelled`], p.weight ? { variable: p.weight } : {});
         }
         case 'set': {
-            if (!p.cond) return null;
-            if (p.pair) {
+            if (!p.condition || !p.variables.length || p.variables.length > 2) return null;
+            if (p.variables.length === 2) {
                 // A set of pairs: a region in the plane, its letters as x and y.
-                const cond = renameVariable(renameVariable(p.cond, p.pair[0], 'x'), p.pair[1], 'y');
+                const cond = renameVariable(renameVariable(p.condition, p.variables[0], 'x'), p.variables[1], 'y');
                 return card(['show x from -4 to 4 and y from -4 to 4', ...hidden, `shade where $${cond}$, outlined`]);
             }
-            const v = p.variable ?? 'x';
-            const cond = renameVariable(p.cond, v, 'x');
+            const v = p.variables[0];
+            const cond = renameVariable(p.condition, v, 'x');
             const label = v !== 'x' ? [`xlabel $${v}$`] : [];
             const lines = [fn ? 'show x from -4 to 4' : setView(cond), ...label, ...plot, `mark where $${cond}$ on the x-axis, labelled`];
-            return card(lines, { ...(p.space ? { lines2: [...plane, ...hidden, `shade where $${inPlane(cond)}$, outlined`] } : {}), ...(v !== 'x' ? { variable: v } : {}) });
+            // ℝⁿ (n other than 1): the set in the plane for n = 2 too.
+            const space = !!p.space && p.space !== '1';
+            return card(lines, { ...(space ? { lines2: [...plane, ...hidden, `shade where $${inPlane(cond)}$, outlined`] } : {}), ...(v !== 'x' ? { variable: v } : {}) });
         }
         case 'interval': {
-            if (!p.cond) return null;
-            const v = p.variable ?? 'x';
-            const m = /([[(])\s*([^,]+?)\s*,\s*([^,]+?)\s*([\])])\s*$/.exec(p.cond);
+            const v = p.variable;
             // The view around the ends, also ends such as -\tfrac12 or \frac{13}{3}.
-            const num = (s: string | undefined, fallback: number) => {
-                const n = endValue(String(s ?? ''));
+            const num = (s: string, fallback: number) => {
+                const n = endValue(s);
                 return Number.isFinite(n) ? n : fallback;
             };
             // Ends that are letters (a, b) become sliders.
-            const ends = [m?.[2]?.trim() ?? '', m?.[3]?.trim() ?? ''];
+            const ends = [p.lower.trim(), p.upper.trim()];
             const sliders = ends.map((e, i) => (/^[A-Za-z]$/.test(e) && e !== 'x' ? `slider ${e} from -5 to 5, starting at ${i === 0 ? -1 : 2}` : '')).filter((l) => l);
-            const a = /^[A-Za-z]$/.test(ends[0]) ? -1 : num(m?.[2], NaN);
-            const b = /^[A-Za-z]$/.test(ends[1]) ? 2 : num(m?.[3], NaN);
+            const a = /^[A-Za-z]$/.test(ends[0]) ? -1 : num(ends[0], NaN);
+            const b = /^[A-Za-z]$/.test(ends[1]) ? 2 : num(ends[1], NaN);
             const lo = Number.isFinite(a) ? a : Number.isFinite(b) ? b - 4 : -4;
             const hi = Number.isFinite(b) ? b : lo + 4;
             const pad = Math.max(0.5, (hi - lo) / 2);
             const label = v !== 'x' ? [`xlabel $${v}$`] : [];
-            return card([`show x from ${Number((lo - pad).toPrecision(6))} to ${Number((hi + pad).toPrecision(6))}`, ...label, ...sliders, `mark where $${renameVariable(p.cond, v, 'x')}$ on the x-axis, labelled`], v !== 'x' ? { variable: v } : {});
+            const cond = `${v} \\in ${p.left}${ends[0]}, ${ends[1]}${p.right}`;
+            return card([`show x from ${Number((lo - pad).toPrecision(6))} to ${Number((hi + pad).toPrecision(6))}`, ...label, ...sliders, `mark where $${renameVariable(cond, v, 'x')}$ on the x-axis, labelled`], v !== 'x' ? { variable: v } : {});
         }
         case 'condition': {
-            if (!p.cond) return null;
-            const v = p.variable ?? 'x';
+            if (!p.condition) return null;
+            const v = p.variable;
             const label = v !== 'x' ? [`xlabel $${v}$`] : [];
-            const cond = renameVariable(p.cond, v, 'x');
+            const cond = renameVariable(p.condition, v, 'x');
             return card([fn ? 'show x from -4 to 4' : setView(cond), ...label, ...plot, `mark where $${cond}$ on the x-axis, labelled`], v !== 'x' ? { variable: v } : {});
         }
     }
