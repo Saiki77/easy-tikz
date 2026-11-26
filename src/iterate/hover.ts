@@ -98,7 +98,13 @@ export function readIterate(texIn: string): IterateParse | null {
         return { kind: 'recurrence', state: tex.startsWith('\\') ? `\\${rec.state}` : rec.state, index: rec.index, step: rec.formula };
     }
     const sum = sumParts(tex);
-    if (sum) return { kind: 'sum', index: sum.k, lower: sum.lo, upper: sum.hi, body: sum.body };
+    if (sum) {
+        // 6.2.2: a closed form after = is the sum's value, no part of its summand (\sum_{k=1}^{n} k = \frac{n(n+1)}{2}).
+        const eq = topEquals(sum.body);
+        const body = eq > 0 ? sum.body.slice(0, eq).trim() : sum.body;
+        const value = eq > 0 ? sum.body.slice(eq + 1).trim() : '';
+        return { kind: 'sum', index: sum.k, lower: sum.lo, upper: sum.hi, body, ...(value ? { value } : {}) };
+    }
     // A function of z: f(z) = ..., or a formula in z alone.
     const eq = topEquals(tex);
     const head = eq >= 0 ? /^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(\s*z\s*\)\s*$/.exec(tex.slice(0, eq)) : null;
