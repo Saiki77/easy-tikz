@@ -98,7 +98,7 @@ A right parse can still give no card. Known cases (6.2.2):
 - `r` in an equation or a region (`x^2 + y^2 = r^2`): the chart reads `r` as the polar radius, not as a slider.
 - A condition list with commas (`x \ge 0, x \ne 4`): join the parts with `\text{ and }`.
 - More than four free letters in a chart body: no card (notation, not a chart).
-- A set's condition with a free letter (`|\theta_1| + |\theta_2| \le t`): `t` gets no slider.
+- A set's condition with the letter `t` (`|\theta_1| + |\theta_2| \le t`): `t` is a chart variable and gets no slider. 6.2.4: other letters get one (`\lvert x \rvert \le c`).
 
 ## What it counts
 
