@@ -71,10 +71,11 @@
     font-weight: 600;
 }
 
-.etz-build-start input.etz-input.etz-expr-input {
-    height: 36px;
-    padding: 0 10px;
-    font-size: 14px;
+.etz-expr.etz-build-start {
+    --etz-expr-h1: 36px;
+    --etz-expr-lh: 22px;
+    --etz-expr-pad-x: 10px;
+    --etz-expr-font: 14px;
 }
 
 .etz-build-empty-sub {

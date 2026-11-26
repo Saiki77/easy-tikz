@@ -415,8 +415,8 @@ function syncExpr(handle: ExprInputHandle, value: string): void {
  * the host re-validates once on release. Returns true when the text changed.
  */
 function liveExpr(handle: ExprInputHandle, value: string): boolean {
-    if (handle.input.value === value) return false;
-    handle.input.value = value;
+    if (handle.getValue() === value) return false;
+    handle.setText(value);
     return true;
 }
 
@@ -527,6 +527,8 @@ export function createFunctionCard(
             host.addParameter(name);
         },
         onErrorChange: () => fields.syncError(),
+        // 6.2.2: a long formula shows typeset under its field.
+        preview: (src: string) => host.math().previewTex(src),
     });
     const main = exprRow(body, '', 'etz-fn-row mod-expr', (c) => exprInput(c, exprOptions('expression', t('build.fn.expression'))));
     fields.add('expression', main.input);
@@ -963,6 +965,7 @@ export function createSurfaceCard(
                 host.addParameter(name);
             },
             onErrorChange: () => fields.syncError(),
+            preview: (src) => host.math().previewTex(src), // 6.2.2
         }),
     );
     fields.add('expression', main.input);

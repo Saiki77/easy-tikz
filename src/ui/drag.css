@@ -164,6 +164,7 @@ svg.etz-drag-layer {
 }
 
 .is-live input.etz-input,
+.is-live textarea.etz-input,
 input.etz-input.is-live {
     background-color: color-mix(in srgb, var(--interactive-accent) 8%, var(--background-modifier-form-field));
 }

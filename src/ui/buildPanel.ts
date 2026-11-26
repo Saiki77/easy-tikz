@@ -714,6 +714,7 @@ export function createBuildPanel(parent: HTMLElement, host: PanelHost, options: 
             onEnter: (v) => {
                 if (v.trim()) addFromStart(v.trim());
             },
+            preview: (src) => host.math().previewTex(src), // 6.2.2
             // 'Add slider k' (or 'Use k*x, add slider k'): create the slider and the function in one go.
             onAddParameter: (name) => {
                 host.addParameter(name);
