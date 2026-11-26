@@ -1260,6 +1260,51 @@ if (started) {
             }
         });
 
+        // 6.2.1: the axes one by one, through the settings window's own path (setControlValue: saved, set, open charts drawn again).
+        await check('axes one by one (6.2.1): Classic + Axis numbers Small draws smaller numbers than Classic alone, with its arrowheads and the names x and y', async () => {
+            const note = 'Axes one by one';
+            const block = ['```easy-tikz', 'show x from -3 to 3 and y from -1 to 5', 'axes in the middle', 'plot f(x) = x^2 in blue', 'plot t(x) = 2x - 1 in red, dashed', 'P: mark (1, 1), labelled "P"', '```'].join('\n');
+            const setting = (key, value) => obs.call((id, k, v) => (app.setting.pluginTabs || []).find((t) => t.id === id).setControlValue(k, v), PLUGIN_ID, key, value);
+            /** The axes of the chart in the note: the size and count of its numbers, its arrowheads and its names. */
+            const axes = () =>
+                obs.call(() => {
+                    const g = document.querySelector('.workspace-leaf.mod-active .markdown-reading-view .etz-axes');
+                    if (!g) return null;
+                    const sizes = Array.from(g.querySelectorAll(':scope > text:not([data-etz-axis-name])')).map((t) => Number(t.getAttribute('font-size')));
+                    return {
+                        size: Math.max(...sizes),
+                        numbers: sizes.length,
+                        arrows: g.querySelectorAll('line[marker-end]').length,
+                        names: Array.from(g.querySelectorAll('[data-etz-axis-name]')).map((e) => e.getAttribute('data-etz-axis-name')).sort().join(''),
+                    };
+                });
+            await obs.writeNote(note, `Axes\n\n${block}\n`);
+            try {
+                await setting('chartLook', 'classic');
+                await obs.openNote(note, { mode: 'reading' });
+                await obs.waitFor(axes, { timeout: 5000, message: 'the chart in the note' });
+                await obs.sleep(400);
+                const classic = await axes();
+                assert(classic.arrows === 2 && classic.names === 'xy' && classic.numbers >= 8, `Classic draws ${JSON.stringify(classic)}`);
+                await setting('axisNumbers', 'small');
+                assert((await obs.call((id) => app.plugins.plugins[id].data.axisNumbers, PLUGIN_ID)) === 'small', 'the setting is not stored');
+                await obs.waitFor(async () => ((await axes()) || { size: Infinity }).size < classic.size, { timeout: 5000, message: 'the chart to draw again with smaller numbers' });
+                await obs.sleep(400);
+                const small = await axes();
+                const ratio = small.size / classic.size;
+                assert(Math.abs(ratio - 0.7) < 0.02, `numbers ${small.size} against ${classic.size} (${ratio.toFixed(2)}, 7 pt against 10 pt expected)`);
+                assert(small.arrows === 2 && small.names === 'xy', `Classic + small numbers lost its arrowheads or names: ${JSON.stringify(small)}`);
+                assert(small.numbers === classic.numbers, `the same numbers: ${small.numbers} against ${classic.numbers}`);
+                // Back to As the look: the numbers of Classic again.
+                await setting('axisNumbers', 'look');
+                await obs.waitFor(async () => ((await axes()) || { size: 0 }).size === classic.size, { timeout: 5000, message: 'the numbers of Classic again' });
+                return `numbers ${classic.size.toFixed(1)} -> ${small.size.toFixed(1)}, ${small.arrows} arrowheads, names ${small.names}`;
+            } finally {
+                await setting('axisNumbers', 'look');
+                await setting('chartLook', 'clean');
+            }
+        });
+
         // "What's new": who sees it, once, and what it does. Obsidian reloads a plugin after an update,
         // so each case writes data.json as that user would have it and reloads the plugin.
         const version = WHATS_NEW ? WHATS_NEW.WHATS_NEW_VERSION : null;
