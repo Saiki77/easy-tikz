@@ -198,6 +198,22 @@ test('formula: a 3D default gives every 3D formula chart its box, view, colours,
     assert.ok(!/^cube$/m.test(block), 'Proportional, not the cube');
 });
 
+test('formula: a surface is seen from a view that shows its height, its axes named x_1 and x_2 when the formula uses them (6.2.1)', () => {
+    // Seen from 45 degrees at 30, max(x_1, x_2) was a flat diamond: its ridge x = y pointed at the viewer.
+    const ridge = formulaChart('\\max(x_1, x_2)') ?? [];
+    for (const line of ['3d', 'cube', 'set rotationX = 25', 'set rotationZ = 30', 'xlabel $x_1$', 'ylabel $x_2$']) assert.ok(ridge.includes(line), `${line}\n${ridge.join('\n')}`);
+    const data = parseChartText(ridge.join('\n')).data;
+    assert.deepEqual([data.rotationX, data.rotationZ, data.axis_label_x, data.axis_label_y], [25, 30, '$x_1$', '$x_2$']);
+    // A surface in x and y keeps the names x and y.
+    const bowl = formulaChart('f(x, y) = x^2 + y^2') ?? [];
+    assert.ok(bowl.includes('set rotationZ = 30') && !bowl.some((l) => /^[xy]label/.test(l)), bowl.join('\n'));
+    // A 3D default with the plain names x and y (as every saved chart has them) keeps x_1 and x_2; its own names win.
+    const def3D = saved3D({ rotationX: 15 }, {});
+    const named = applyFormulaDefault(data, null, def3D);
+    assert.deepEqual([named.axis_label_x, named.axis_label_y, named.rotationX], ['$x_1$', '$x_2$', 15]);
+    assert.equal(applyFormulaDefault(data, null, { ...def3D, axis_label_x: 'input' }).axis_label_x, 'input');
+});
+
 test('formula: without a 3D default a 3D chart takes the default chart for formulas, as before 6.2.1', () => {
     const surface = parseChartText((formulaChart('z = x^2 - y^2') ?? []).join('\n')).data;
     const def = { showLargeGrid: true, numbers_z: 'off', boxAspect: 'true' };
