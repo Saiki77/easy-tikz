@@ -1,0 +1,436 @@
+/*
+ * Formula recognition (6.2): the spellings of a formula that the builder of
+ * its card is tried on. The network reads notation the card builders were
+ * never written for (x(t) = x_0 e^{at}, 0{,}5, a part after \qquad, \Sigma
+ * = \begin{pmatrix}, f\colon \mathbb{R} \to \mathbb{R}); each builder reads
+ * one spelling. Given the network's label, these rewrites say the same
+ * formula in the builder's spelling: the formula itself first, then its
+ * spacing and decimal commas plain, then each part, each side of a chain of
+ * =, and the rewrites of the label's kind. Only the Smart setting uses them,
+ * and only after the formula as written did not build. Pure: no DOM, no
+ * Obsidian.
+ */
+import type { Label } from './net';
+import { splitLetterRuns } from '../../latex';
+
+/** The builder a label's card comes from. */
+export type CardGroup = 'chart' | 'notes6' | 'linear' | 'iterate';
+
+const GROUP: Record<Exclude<Label, 'none'>, CardGroup> = {
+    function: 'chart',
+    surface: 'chart',
+    polar: 'chart',
+    implicit: 'chart',
+    region: 'chart',
+    set: 'notes6',
+    map: 'notes6',
+    condition: 'notes6',
+    interval: 'notes6',
+    jensen: 'notes6',
+    epigraph: 'notes6',
+    matrix: 'linear',
+    product: 'linear',
+    det: 'linear',
+    eigen: 'linear',
+    recurrence: 'iterate',
+    sum: 'iterate',
+    domain: 'iterate',
+};
+
+/** The builder of a label's card: src/formula.ts (chart), src/notes6/hover.ts, src/linear/hover.ts, src/iterate/hover.ts; null for none. */
+export function groupOf(label: Label): CardGroup | null {
+    return label === 'none' ? null : GROUP[label];
+}
+
+/** One spelling of a formula for its card's builder; for a function renamed into x, the letter its x-axis is named after. */
+export interface Spelling {
+    tex: string;
+    axis?: string;
+}
+
+/**
+ * Split at the top level (outside braces, brackets and environments) where
+ * `sep` (a sticky regex) matches. Returns the pieces and the separators.
+ */
+function topSplit(tex: string, sep: RegExp): { pieces: string[]; seps: string[] } {
+    const pieces: string[] = [];
+    const seps: string[] = [];
+    let depth = 0;
+    let from = 0;
+    for (let i = 0; i < tex.length; ) {
+        const c = tex[i];
+        if (c === '\\') {
+            const cmd = /^\\(?:begin|end)(?![A-Za-z])|^\\[{}]/.exec(tex.slice(i, i + 6));
+            if (depth === 0) {
+                sep.lastIndex = i;
+                const m = sep.exec(tex);
+                if (m && m.index === i && m[0].length) {
+                    pieces.push(tex.slice(from, i));
+                    seps.push(m[0]);
+                    i += m[0].length;
+                    from = i;
+                    continue;
+                }
+            }
+            if (cmd) {
+                if (cmd[0] === '\\begin' || cmd[0] === '\\{') depth++;
+                else depth = Math.max(0, depth - 1);
+                i += cmd[0].length;
+                continue;
+            }
+            // Any other command, or an escaped sign: one step past it.
+            const word = /^\\(?:[A-Za-z]+|.)/.exec(tex.slice(i));
+            i += word ? word[0].length : 1;
+            continue;
+        }
+        if (c === '{' || c === '(' || c === '[') {
+            depth++;
+            i++;
+            continue;
+        }
+        if (c === '}' || c === ')' || c === ']') {
+            depth = Math.max(0, depth - 1);
+            i++;
+            continue;
+        }
+        if (depth === 0) {
+            sep.lastIndex = i;
+            const m = sep.exec(tex);
+            if (m && m.index === i && m[0].length) {
+                pieces.push(tex.slice(from, i));
+                seps.push(m[0]);
+                i += m[0].length;
+                from = i;
+                continue;
+            }
+        }
+        i++;
+    }
+    pieces.push(tex.slice(from));
+    return { pieces, seps };
+}
+
+/** Where a formula of a note splits into parts, as the network cuts it: \qquad, \Rightarrow, \iff, a word, ", " before a space. */
+const PART =
+    /\\(?:qquad|quad|Rightarrow|Longrightarrow|implies|iff|Leftrightarrow|Longleftrightarrow)(?![A-Za-z])|\\(?:text|textrm|mathrm)\s*\{[^{}]*?(?:für|for|mit|with|wobei|where|falls|if|wenn|when|und|and|s\.t\.|subject to)[^{}]*\}|,(?=\s*(?:\\[,;: ]|\\q?quad(?![A-Za-z])|~))/y;
+
+/** The parts of a formula (at least two), or none. */
+function partsOf(tex: string): string[] {
+    const { pieces } = topSplit(tex, PART);
+    const parts = pieces.map((p) => p.trim()).filter((p) => p && !/^[,;.]$/.test(p));
+    return parts.length > 1 ? parts : [];
+}
+
+/** Spacing commands and decimal commas as the builders read them: 0{,}5 is 0.5, 2\,500 is 2500, \, is a space, \tfrac12 is \frac{1}{2}. */
+export function plainSpacing(tex: string): string {
+    return tex
+        .replace(/(\d)\s*\\,\s*(\d{3})(?!\d)/g, '$1$2')
+        .replace(/\{,\}/g, '.')
+        .replace(/:=|\\coloneqq(?![A-Za-z])/g, '=')
+        .replace(/\\[dt]?frac\s*([0-9])\s*([0-9A-Za-z])/g, '\\frac{$1}{$2}')
+        .replace(/\\[dt]frac(?![A-Za-z])/g, '\\frac')
+        // A row break \\ stays; \, \; \: \! and "\ " are spaces.
+        .replace(/\\\\|\\[,;:! ]|~/g, (m) => (m === '\\\\' ? m : ' '))
+        .replace(/\\(?:displaystyle|textstyle)(?![A-Za-z])/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/[.,;]\s*$/, '')
+        .trim();
+}
+
+/** An equals sign (not part of <= or !=). */
+const EQUALS = /(?<![<>!])=/y;
+const EQ = /(?<![<>!])=|\\approx(?![A-Za-z])/y;
+
+/** A chain a = b = c (or ≈) said shorter: a = b, a = c; a value after ≈ at the end dropped. */
+function chainsOf(tex: string): string[] {
+    const { pieces, seps } = topSplit(tex, EQ);
+    if (pieces.length < 2) return [];
+    const p = pieces.map((x) => x.trim());
+    const out: string[] = [];
+    if (p.length >= 3) out.push(`${p[0]} = ${p[1]}`, `${p[0]} = ${p[p.length - 1]}`);
+    if (seps[0] !== '=') out.push(`${p[0]} = ${p[1]}`);
+    if (seps[seps.length - 1] !== '=') {
+        // A value after ≈ at the end: the formula without it.
+        let short = p[0];
+        for (let i = 1; i < p.length - 1; i++) short += ` ${seps[i - 1]} ${p[i]}`;
+        out.push(short);
+    }
+    return out.filter((x) => x.trim());
+}
+
+/** The left and the right side of a formula with one =, or null. */
+function sides(tex: string): { head: string; body: string } | null {
+    const { pieces } = topSplit(tex, EQUALS);
+    if (pieces.length !== 2) return null;
+    const head = pieces[0].trim();
+    const body = pieces[1].trim();
+    return head && body ? { head, body } : null;
+}
+
+/** Greek letters that may be a variable. */
+const GREEK_VAR = /^\\(?:alpha|beta|gamma|delta|varepsilon|epsilon|zeta|eta|theta|vartheta|kappa|lambda|mu|nu|xi|rho|sigma|tau|varphi|phi|chi|psi|omega|Omega|Theta|Phi)$/;
+
+/** A head name(v) with one variable v (a letter or a Greek letter): name and v, or null. */
+function callHead(head: string): { name: string; v: string } | null {
+    const m = /^(.+?)\s*\(\s*(\\[A-Za-z]+|[A-Za-z])\s*\)$/.exec(head);
+    if (!m || /[()=]/.test(m[1])) return null;
+    const v = m[2];
+    return /^[A-Za-z]$/.test(v) || GREEK_VAR.test(v) ? { name: m[1].trim(), v } : null;
+}
+
+/** The letter v where it stands alone (not in a command, a longer name, or a subscript; x_0 is another name). */
+function alone(v: string): RegExp {
+    const esc = v.replace(/\\/g, '\\\\');
+    return v.startsWith('\\') ? new RegExp(`${esc}(?![A-Za-z_])`, 'g') : new RegExp(`(?<![\\\\A-Za-z_]|_\\{)${esc}(?![A-Za-z_])`, 'g');
+}
+
+const uses = (tex: string, v: string) => alone(v).test(tex);
+const rename = (tex: string, v: string, to: string) => tex.replace(alone(v), to);
+
+/** A function name the formula does not use: f, g, h, p, q or u. */
+function freshName(tex: string): string {
+    return ['f', 'g', 'h', 'p', 'q', 'u'].find((n) => !uses(tex, n)) ?? 'f';
+}
+
+/** The single letters of a formula as LaTeX reads them (ax is a and x), without e, i and the names of commands. */
+function lettersOf(tex: string): string[] {
+    const out: string[] = [];
+    for (const m of splitLetterRuns(tex).matchAll(/(?<![\\A-Za-z_]|_\{)([A-Za-df-hj-z])(?![A-Za-z_])/g)) if (!out.includes(m[1])) out.push(m[1]);
+    return out;
+}
+
+/** A function's arguments in brackets, as a chart reads them: \sin\omega_0 t is \sin(\omega_0 t), \ln x is \ln(x). */
+function bracketArguments(tex: string): string {
+    const factor = String.raw`(?:[0-9.]+|\\(?!(?:sin|cos|tan|sinh|cosh|tanh|ln|log|exp|cdot|frac|sqrt|left|right)(?![A-Za-z]))[A-Za-z]+|[A-Za-z])(?:\s*_\s*(?:\{[^{}]*\}|[A-Za-z0-9]))?`;
+    const re = new RegExp(String.raw`\\(sin|cos|tan|sinh|cosh|tanh|ln|log|exp)(?![A-Za-z])\s*(?![({^_]|\\left(?![A-Za-z]))((?:\s*${factor})+)`, 'g');
+    return tex.replace(re, (_m, fn: string, arg: string) => `\\${fn}(${arg.trim()})`);
+}
+
+/**
+ * A function whose head the chart cannot read (x(t) =, \Phi(x) =, i(t) =,
+ * \hat y =, V(\eta) =, MC = 2q + 10): f(x) = ..., its letter as x and the
+ * axis named after it. And its arguments in brackets (\sin\omega_0 t).
+ */
+function functionSpellings(tex: string): Spelling[] {
+    const out: Spelling[] = [];
+    const add = (s: Spelling) => {
+        out.push(s);
+        const b = bracketArguments(s.tex);
+        if (b !== s.tex) out.push({ ...s, tex: b });
+    };
+    const b0 = bracketArguments(tex);
+    if (b0 !== tex) out.push({ tex: b0 });
+    const hb = sides(tex);
+    if (!hb) return out;
+    const head = hb.head;
+    const body = splitLetterRuns(hb.body);
+    const fn = freshName(body);
+    const call = callHead(head);
+    if (call) {
+        const { v } = call;
+        if (v === 'x') add({ tex: `${fn}(x) = ${body}` });
+        else if (uses(body, 'x')) return out;
+        // n and k keep their letter: formulaLines draws them as sequences from 0.
+        else if (v === 'n' || v === 'k') add({ tex: `${fn}(${v}) = ${body}` });
+        else add({ tex: `${fn}(x) = ${rename(body, v, 'x')}`, axis: v });
+        return out;
+    }
+    if (/[()]/.test(head)) return out;
+    if (uses(body, 'x')) {
+        add({ tex: `${fn}(x) = ${body}` });
+        return out;
+    }
+    const idx = /_\s*\{?\s*([tnk])\s*\}?\s*$/.exec(head);
+    const only = lettersOf(body);
+    const v = idx && uses(body, idx[1]) ? idx[1] : only.length === 1 ? only[0] : null;
+    if (!v) return out;
+    if (v === 'n' || v === 'k') add({ tex: `${fn}(${v}) = ${body}` });
+    else add({ tex: `${fn}(x) = ${rename(body, v, 'x')}`, axis: v });
+    return out;
+}
+
+/** min{a, b} as min(a, b) (a set brace the chart reads as a call). */
+const minCall = (tex: string) => tex.replace(/\\(min|max)\s*\\\{([^{}]*)\\\}/g, '\\$1($2)');
+
+/** A surface whose head the chart cannot read (u = ..., L = ..., F(K, L) = ...): z = ..., its variables as x and y. */
+function surfaceSpellings(tex: string): Spelling[] {
+    const out: Spelling[] = [];
+    const plain = minCall(tex);
+    if (plain !== tex) out.push({ tex: plain });
+    const hb = sides(plain);
+    if (!hb) return out;
+    const two = /^(.+?)\s*\(\s*(\\[A-Za-z]+|[A-Za-z])\s*,\s*(\\[A-Za-z]+|[A-Za-z])\s*\)$/.exec(hb.head);
+    if (two && !/[()]/.test(two[1])) {
+        const [a, b] = [two[2], two[3]];
+        if (!(a === 'x' && b === 'y') && !uses(hb.body, 'x') && !uses(hb.body, 'y')) out.push({ tex: `z = ${rename(rename(hb.body, a, 'x'), b, 'y')}` });
+    } else if (!/[()]/.test(hb.head) && hb.head !== 'z') out.push({ tex: `z = ${hb.body}` });
+    return out;
+}
+
+/** A polar curve the chart cannot read: φ as θ, \sin 3\theta as \sin(3\theta), a(1 + ...) as a \cdot (1 + ...), r^2 = ... as r = \sqrt{...}. */
+function polarSpellings(tex: string): Spelling[] {
+    let s = tex.replace(/\\(?:var)?phi(?![A-Za-z])/g, '\\theta');
+    s = s.replace(/\\(sin|cos|tan)\s*([0-9.]*\s*\\theta)(?![A-Za-z])/g, '\\$1($2)');
+    const hb = sides(s);
+    if (!hb) return s !== tex ? [{ tex: s }] : [];
+    const body = hb.body.replace(/(^|[^\\A-Za-z])([a-qs-z])\s*\(/g, '$1$2 \\cdot (');
+    const square = /^r\s*\^\s*\{?\s*2\s*\}?$/.test(hb.head);
+    return [{ tex: square ? `r = \\sqrt{${body}}` : `${hb.head} = ${body}` }];
+}
+
+const REALS = /^\\mathbb\s*\{?\s*R\s*\}?(?:\s*\^\s*(?:\{[^{}]*\}|[A-Za-z0-9]))?$/;
+
+/** A map the card cannot read: \colon as :, a domain or codomain that is no ℝ or ℝⁿ (an interval, ℝ_{>0}) as ℝ. */
+function mapSpellings(tex: string): Spelling[] {
+    const s = tex.replace(/\\colon(?![A-Za-z])/g, ':').replace(/\\(?:rightarrow|longrightarrow)(?![A-Za-z])/g, '\\to');
+    const m = /^\s*(\\?[A-Za-z][A-Za-z0-9_]*)\s*:\s*(.+?)\s*\\to\s*(.+?)\s*$/.exec(s);
+    if (!m) return s !== tex ? [{ tex: s }] : [];
+    const space = (x: string) => (REALS.test(x.trim()) ? x.trim() : '\\mathbb{R}');
+    return [{ tex: `${m[1].replace(/^\\/, '')}: ${space(m[2])} \\to ${space(m[3])}` }];
+}
+
+/** An interval the card cannot read: after ≈ or =, named (I = [0, 1]), with ; between its ends, of a letter with a subscript, with ends that are no numbers. */
+function intervalSpellings(tex: string): Spelling[] {
+    let s = tex.replace(/^\s*(?:\\approx(?![A-Za-z])|=|\\Rightarrow(?![A-Za-z]))\s*/, '').replace(/;/g, ',');
+    const named = /^\s*[A-Za-z](?:_\{?\w+\}?)?\s*=\s*([[(][\s\S]*[\])])\s*$/.exec(s);
+    if (named) s = named[1];
+    const out: Spelling[] = [{ tex: s }];
+    const member = /^\s*(\\?[A-Za-z]+)(?:\s*_\s*\{?\w+\}?)?\s*\\in\s*([[(][\s\S]*[\])])\s*$/.exec(s);
+    if (member) out.push({ tex: `x \\in ${member[2]}` });
+    else if (/^\s*[[(][^,]+,[^,]+[\])]\s*$/.test(s)) out.push({ tex: `x \\in ${s.trim()}` });
+    return out;
+}
+
+/** A condition with bars the card cannot read: \lvert, \rvert, \vert as |. */
+function conditionSpellings(tex: string): Spelling[] {
+    const s = tex.replace(/\\[lr]?vert(?![A-Za-z])/g, '|');
+    return s !== tex ? [{ tex: s }] : [];
+}
+
+const WRITTEN = /^\\begin\s*\{\s*([pbB]?matrix)\s*\}[\s\S]*?\\end\s*\{\s*\1\s*\}$/;
+
+/** A matrix with a head the card cannot read (\Sigma =, H_L =, A^{-1} =, A - 2I =): the written matrix alone. */
+function matrixSpellings(tex: string): Spelling[] {
+    return topSplit(tex, EQUALS)
+        .pieces.map((p) => p.trim())
+        .filter((p) => WRITTEN.test(p))
+        .map((p) => ({ tex: p }));
+}
+
+/** A determinant of a written matrix (\det \begin{pmatrix} ... \end{pmatrix}, a vmatrix): the matrix (its card shows the same square and area). */
+function detSpellings(tex: string): Spelling[] {
+    const s = tex.replace(/\\(begin|end)\s*\{\s*vmatrix\s*\}/g, '\\$1{pmatrix}');
+    const first = topSplit(s, EQUALS).pieces[0].trim();
+    const m = /^(?:\\det\s*)?\(?\s*(\\begin\{pmatrix\}[\s\S]*?\\end\{pmatrix\})\s*\)?$/.exec(first);
+    return m ? [{ tex: m[1] }] : [];
+}
+
+/** (A - \lambda I) v = 0 as A v = \lambda v. */
+function eigenSpellings(tex: string): Spelling[] {
+    const m = /^\s*\(\s*([A-Z])\s*-\s*\\lambda(?:\s*_\s*\{?\w+\}?)?\s*I\s*\)\s*([a-z])\s*=\s*0\s*$/.exec(tex);
+    return m ? [{ tex: `${m[1]} ${m[2]} = \\lambda ${m[2]}` }] : [];
+}
+
+/** X_n = ... X_{n-1} ... as X_{n+1} = ... X_n ... (the card reads the step forward). */
+function recurrenceSpellings(tex: string): Spelling[] {
+    const hb = sides(tex);
+    if (!hb) return [];
+    const m = /^(\\?[A-Za-z]+)\s*_\s*\{?\s*([a-z])\s*\}?$/.exec(hb.head);
+    if (!m) return [];
+    const [, x, n] = m;
+    const esc = x.replace(/\\/g, '\\\\');
+    const prev = new RegExp(`${esc}\\s*_\\s*\\{\\s*${n}\\s*-\\s*1\\s*\\}`, 'g');
+    const now = new RegExp(`${esc}\\s*_\\s*\\{?\\s*${n}\\s*\\}?(?![A-Za-z0-9+-])`);
+    if (!prev.test(hb.body) || now.test(hb.body)) return [];
+    return [{ tex: `${x}_{${n}+1} = ${hb.body.replace(prev, `${x}_${n}`)}` }];
+}
+
+/** A sum with a name (s_n = \sum ...): the sum alone. */
+function sumSpellings(tex: string): Spelling[] {
+    const hb = sides(tex);
+    return hb && /^\\sum(?![A-Za-z])/.test(hb.body) ? [{ tex: hb.body }] : [];
+}
+
+/** A function of a complex variable the card cannot read: s as z (a transfer function), a formula alone as f(z) = ..., a head with a Greek name. */
+function domainSpellings(tex: string): Spelling[] {
+    let s = tex;
+    if (!uses(s, 'z') && uses(s, 's')) s = rename(s, 's', 'z');
+    const out: Spelling[] = s !== tex ? [{ tex: s }] : [];
+    const hb = sides(s);
+    if (!hb) out.push({ tex: `${freshName(s)}(z) = ${s}` });
+    else if (callHead(hb.head)?.v === 'z') out.push({ tex: `${freshName(hb.body)}(z) = ${hb.body}` });
+    return out;
+}
+
+/**
+ * A Greek letter with a subscript (\omega_0) as the letter alone, when the
+ * formula has no other \omega: the chart language reads no Greek letter
+ * with a subscript, and the slider is then ω.
+ */
+function plainGreek(tex: string): string {
+    const re = /\\(alpha|beta|gamma|delta|varepsilon|epsilon|zeta|eta|theta|kappa|lambda|mu|nu|xi|rho|sigma|tau|varphi|phi|chi|psi|omega)\s*_\s*(\{[^{}]*\}|[A-Za-z0-9])/g;
+    const subs = new Map<string, Set<string>>();
+    for (const m of tex.matchAll(re)) {
+        const set = subs.get(m[1]) ?? new Set<string>();
+        set.add(m[2].replace(/[{}\s]/g, ''));
+        subs.set(m[1], set);
+    }
+    let out = tex;
+    for (const [name, set] of subs) {
+        if (set.size !== 1 || new RegExp(`\\\\${name}(?![A-Za-z_\\s]*_)(?![A-Za-z])`).test(tex.replace(re, ''))) continue;
+        out = out.replace(new RegExp(`\\\\${name}\\s*_\\s*(?:\\{[^{}]*\\}|[A-Za-z0-9])`, 'g'), `\\${name}`);
+    }
+    return out;
+}
+
+/** The labels whose card is a chart of src/formula.ts. */
+const CHART_LABELS: ReadonlySet<Label> = new Set(['function', 'surface', 'polar', 'implicit', 'region']);
+
+const OWN: Partial<Record<Label, (tex: string) => Spelling[]>> = {
+    function: functionSpellings,
+    surface: surfaceSpellings,
+    polar: polarSpellings,
+    map: mapSpellings,
+    interval: intervalSpellings,
+    condition: conditionSpellings,
+    matrix: matrixSpellings,
+    det: detSpellings,
+    eigen: eigenSpellings,
+    recurrence: recurrenceSpellings,
+    sum: sumSpellings,
+    domain: domainSpellings,
+};
+
+/** At most this many spellings per formula (each may cost a chart check). */
+const MAX = 16;
+
+/**
+ * The spellings of a formula for the builder of the label's card, in the
+ * order to try: the formula as written first, then plain spacing, then each
+ * part and each shorter chain, each with the rewrites of the label's kind.
+ */
+export function spellings(tex: string, label: Label): Spelling[] {
+    const out: Spelling[] = [];
+    const add = (s: Spelling) => {
+        if (out.length < MAX && s.tex.trim() && !out.some((o) => o.tex === s.tex && o.axis === s.axis)) out.push(s);
+    };
+    add({ tex });
+    if (label === 'none') return out;
+    const own = OWN[label];
+    const pieces = [tex, ...partsOf(tex)].map(plainSpacing).filter((p) => p);
+    for (const p of pieces) {
+        const forms = [p, ...chainsOf(p)];
+        for (const f of forms) add({ tex: f });
+        if (own) for (const f of forms) for (const s of own(f)) add(s);
+    }
+    if (CHART_LABELS.has(label)) for (const s of out.slice(1)) add({ ...s, tex: plainGreek(s.tex) });
+    return out;
+}
+
+/** Chart lines with the x-axis named after a letter (a function renamed into x): after the view, `xlabel t` or `xlabel $\eta$`. */
+export function withAxis(lines: string[], axis: string | undefined): string[] {
+    if (!axis || lines.some((l) => l.startsWith('xlabel '))) return lines;
+    const label = /^[A-Za-z]$/.test(axis) ? `xlabel ${axis}` : `xlabel $${axis}$`;
+    const at = lines.findIndex((l) => l.startsWith('show '));
+    return at < 0 ? [label, ...lines] : [...lines.slice(0, at + 1), label, ...lines.slice(at + 1)];
+}

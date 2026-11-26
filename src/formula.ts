@@ -17,27 +17,21 @@ import { latexToPlain, splitLetterRuns } from './latex';
 // 6.0 B
 import { RESERVED_NAMES } from './migrate';
 import { settleLook } from './look'; // 6.1
+import { lineSpans, mathSpans } from './mathspans'; // 6.2
 
-/** The inline formula `$...$` around column `ch` of a line: its TeX and where it sits (dollars included). */
+/** The inline formula `$...$` around column `ch` of a line: its TeX and where it sits (dollars included); 6.2: the dollars paired as Obsidian pairs them (src/mathspans.ts). */
 export function formulaAt(line: string, ch: number): { tex: string; from: number; to: number } | null {
-    const re = /(?<!\\)\$(?!\$)((?:[^$\\]|\\.)+?)(?<!\\)\$/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(line))) {
-        const from = m.index;
-        const to = m.index + m[0].length;
-        if (ch >= from && ch <= to) return { tex: m[1].trim(), from, to };
-    }
-    return null;
+    const hit = lineSpans(line).find((s) => ch >= s.start && ch <= s.end && s.tex);
+    return hit ? { tex: hit.tex, from: hit.start, to: hit.end } : null;
 }
 
-/** The `$...$` and `$$...$$` formulas of a text, in order (code spans and escaped dollars left out). */
+/**
+ * The `$...$` and `$$...$$` formulas of a text, in order. 6.2: as Obsidian's
+ * Reading view finds them (src/mathspans.ts): a money sign (5$, $2.50) or
+ * "$ x $" is no formula, code is none, \$ is a dollar sign.
+ */
 export function formulasIn(text: string): Array<{ tex: string; start: number; end: number }> {
-    const plain = text.replace(/`[^`\n]*`/g, (m) => ' '.repeat(m.length));
-    const out: Array<{ tex: string; start: number; end: number }> = [];
-    const re = /(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$|(?<![\\$])\$(?!\$)((?:[^$\\\n]|\\.)+?)(?<!\\)\$/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(plain))) out.push({ tex: (m[1] ?? m[2] ?? '').trim(), start: m.index, end: m.index + m[0].length });
-    return out;
+    return mathSpans(text).map(({ tex, start, end }) => ({ tex, start, end }));
 }
 
 /** Spacing and punctuation that a formula in prose carries: `\displaystyle`, `\quad`, a full stop at the end. */

@@ -834,6 +834,84 @@ if (started) {
             assert(charts.length === 1 && charts[0].drawn && charts[0].issues === null, `the inserted chart: ${JSON.stringify(charts)}`);
             return `${m[1].split('\n').length} lines`;
         });
+        // 6.2: formula recognition (the setting Formula recognition: Smart by default, or Rules as 6.1).
+        const recognitionNote = 'Formeln 6.2';
+        const recognitionText =
+            'Die Stichprobenvarianz teilt die Summe der Quadrate durch $\\frac{1}{m-1}$ statt durch $m$, damit sie erwartungstreu ist.\n\nExponentielles Wachstum: $x(t) = x_0 e^{at}$ mit dem Startwert $x_0$.\n';
+        /** The dotted mark of each drawn formula of the open note: TeX to data-etz-mark. */
+        const marks = () => obs.call(() => Object.fromEntries(Array.from(document.querySelectorAll('.workspace-leaf.mod-active .markdown-reading-view .math')).map((m) => [m.dataset.etzTex, m.dataset.etzMark])));
+        /** Rest the pointer on the drawn formula with this TeX: the name of the card that opens ("Chart of the formula (Function)"), or null. */
+        const cardOf = async (tex) => {
+            await obs.mouse.move({ x: 5, y: 5 });
+            await obs.sleep(500);
+            await obs.call(() => document.querySelector('.etz-formula-pop')?.remove());
+            const at = await obs.call((t) => {
+                const el = Array.from(document.querySelectorAll('.workspace-leaf.mod-active .markdown-reading-view .math')).find((m) => m.dataset.etzTex === t);
+                if (!el) return null;
+                const r = el.getBoundingClientRect();
+                return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+            }, tex);
+            assert(at, `the note shows no formula ${tex}`);
+            await obs.mouse.move(at, { steps: 3 });
+            const opened = await obs.waitFor(() => obs.call(() => !!document.querySelector('.etz-formula-pop .etz-formula-chart svg')), { timeout: 2500, message: 'a card' }).then(
+                () => true,
+                () => false
+            );
+            if (!opened) return null;
+            return obs.call(() => (document.querySelector('.etz-formula-pop > .etz-sr-only')?.textContent || '').trim());
+        };
+        const setRecognition = (mode) =>
+            obs.call((m) => {
+                const p = app.plugins.plugins['easy-tikz'];
+                p.data.formulaRecognition = m;
+                p.refreshFormulaMarks();
+            }, mode);
+        await check('formula recognition (6.2): Smart gives notation the rules charted no card and no dotted mark, and x(t) = x_0 e^{at} its function card', async () => {
+            await obs.writeNote(recognitionNote, recognitionText);
+            await obs.openNote(recognitionNote, { mode: 'reading' });
+            await obs.sleep(800);
+            const setting = await obs.call(() => app.plugins.plugins['easy-tikz'].data.formulaRecognition);
+            assert(setting === 'smart', `the setting is ${setting} by default`);
+            const m = await marks();
+            assert(m['\\frac{1}{m-1}'] === '0', `the mark of 1/(m-1): ${JSON.stringify(m)}`);
+            assert(m['x(t) = x_0 e^{at}'] === '1', `the mark of x(t): ${JSON.stringify(m)}`);
+            const none = await cardOf('\\frac{1}{m-1}');
+            assert(none === null, `1/(m-1) opened a card: ${none}`);
+            const fn = await cardOf('x(t) = x_0 e^{at}');
+            assert(fn && /Function/.test(fn), `the card of x(t): ${fn}`);
+            const axis = await obs.call(() => Array.from(document.querySelectorAll('.etz-formula-pop .etz-formula-name')).map((n) => n.textContent));
+            assert(axis.includes('a') && axis.includes('x_0'), `sliders of x(t): ${JSON.stringify(axis)}`);
+            return `${JSON.stringify(m)}; ${fn}`;
+        });
+        await check('formula recognition (6.2): Rules is 6.1 again: 1/(m-1) is marked and opens a function card, x(t) = x_0 e^{at} has none', async () => {
+            await setRecognition('rules');
+            try {
+                await obs.sleep(300);
+                const m = await marks();
+                assert(m['\\frac{1}{m-1}'] === '1', `the mark of 1/(m-1) under Rules: ${JSON.stringify(m)}`);
+                assert(m['x(t) = x_0 e^{at}'] === '0', `the mark of x(t) under Rules: ${JSON.stringify(m)}`);
+                const card = await cardOf('\\frac{1}{m-1}');
+                assert(card && /Function/.test(card), `the card of 1/(m-1) under Rules: ${card}`);
+                const none = await cardOf('x(t) = x_0 e^{at}');
+                assert(none === null, `x(t) opened a card under Rules: ${none}`);
+                return JSON.stringify(m);
+            } finally {
+                await setRecognition('smart');
+                await obs.mouse.move({ x: 5, y: 5 });
+            }
+        });
+        await check('formulas (6.2): money signs before a formula do not give it another TeX (dollars paired as Obsidian pairs them)', async () => {
+            const moneyNote = 'Geld';
+            await obs.writeNote(moneyNote, 'Ein Kaffee kostet 5$ und ein Buch 10$ im Laden. Es gilt $f(x) = x^2$.\n');
+            await obs.openNote(moneyNote, { mode: 'reading' });
+            await obs.sleep(800);
+            const texs = await obs.call(() => Array.from(document.querySelectorAll('.workspace-leaf.mod-active .markdown-reading-view .math')).map((m) => m.dataset.etzTex));
+            assert(JSON.stringify(texs) === JSON.stringify(['f(x) = x^2']), `the drawn formulas read as ${JSON.stringify(texs)}`);
+            const card = await cardOf('f(x) = x^2');
+            assert(card && /Function/.test(card), `the card of f(x) = x^2: ${card}`);
+            await obs.mouse.move({ x: 5, y: 5 });
+            return card;
+        });
         const linkedNote = 'Connected';
         const linked = (body) => ['```easy-tikz', 'size 6 x 2.4', ...body, '```', ''].join('\n');
         await check('connected sliders: moving one moves the same name in the other connected chart of the note, never the file', async () => {
