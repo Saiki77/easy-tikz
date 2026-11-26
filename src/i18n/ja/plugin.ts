@@ -12,6 +12,7 @@ export const plugin: Messages<typeof en> = {
     'plugin.command.openEditor': 'エディタを開く',
     'plugin.command.plotFormula': 'カーソル位置の数式をグラフにする',
     'plugin.command.saveSvgFiles': 'このノートのグラフを SVG ファイルとして保存',
+    'plugin.command.newFromClipboard': 'クリップボードのグラフで新しいグラフを作成', // 6.2.1
     'plugin.notice.svgFilesSaved': '添付ファイルのフォルダに SVG ファイルを {count} 個保存しました。',
     'plugin.notice.svgFilesSame': 'このノートの SVG ファイルは最新です。',
     'plugin.notice.svgFilesFailed': 'SVG ファイルを保存できませんでした：{error}',

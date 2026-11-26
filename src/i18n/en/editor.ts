@@ -9,6 +9,10 @@ export const editor = {
     'editor.header.examplesAndTemplates': 'Examples and templates',
     'editor.menu.examples': 'Examples',
     'editor.menu.manageTemplates': 'Manage saved templates...',
+    // 6.2.1: a chart from the clipboard (Cmd/Ctrl+V in the editor, this menu, the command).
+    'editor.menu.paste': 'Paste a chart',
+    'editor.paste.pasted': 'Pasted the chart from the clipboard',
+    'editor.paste.noChart': 'The clipboard holds no chart. Copy chart lines (such as plot f(x) = x^2) or a whole ```easy-tikz block, then paste again.',
 
     // Tabs.
     'editor.tabs.sections': 'Editor sections',
