@@ -31,7 +31,22 @@ export function formulaAt(line: string, ch: number): { tex: string; from: number
  * "$ x $" is no formula, code is none, \$ is a dollar sign.
  */
 export function formulasIn(text: string): Array<{ tex: string; start: number; end: number }> {
-    return mathSpans(text).map(({ tex, start, end }) => ({ tex, start, end }));
+    return mathSpans(text).map(({ tex, start, end }) => ({ tex: plainPrimes(tex), start, end }));
+}
+
+/**
+ * 6.2.4: primes typed as quotes, as keyboards and autocorrect write them:
+ * `f‘(x)`, `f^{‘}(x)`, `f’(x)`, `` f`(x) ``, `f´(x)`, `f′(x)`, `f″(x)` read as
+ * `f'(x)` and `f''(x)`. MathJax shows them as the note writes them; formula
+ * recognition and the cards read the plain prime.
+ */
+export function plainPrimes(tex: string): string {
+    if (!/[‘’`´′″‴]/.test(tex)) return tex;
+    return tex
+        .replace(/″/g, "''")
+        .replace(/‴/g, "'''")
+        .replace(/[‘’`´′]/g, "'")
+        .replace(/\^\{\s*('+)\s*\}/g, '$1');
 }
 
 /** Spacing and punctuation that a formula in prose carries: `\displaystyle`, `\quad`, a full stop at the end. */

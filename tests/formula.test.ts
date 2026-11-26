@@ -1,8 +1,9 @@
 // Every formula in a note is a chart (src/formula.ts, src/ui/formulaHover.ts):
 // what a formula draws, its letters as sliders, the view fitted to it, the
 // formula at the cursor, and the formulas of a section in order.
+import { recognize } from '../src/notes6/recognize';
 import { test, assert } from './_lib';
-import { formulaAt, formulaChart, formulaLines, formulasIn, freeNames, chartable, formulaRows, applyFormulaDefault, formulaBlock, formulaDefaultFor } from '../src/formula';
+import { formulaAt, formulaChart, formulaLines, formulasIn, freeNames, chartable, formulaRows, applyFormulaDefault, formulaBlock, formulaDefaultFor, plainPrimes } from '../src/formula';
 import { parseChartText } from '../src/text/parse';
 import { SettingsManager } from '../src/settings';
 
@@ -241,4 +242,13 @@ test('formula: a formula in n, t or k charts against that letter', () => {
     assert.equal(formulaChart('s(t) = \\frac{1}{2} g t^2')?.includes('xlabel t'), true);
     // A value or a condition in n, and letters without a variable, are no charts.
     assert.deepEqual(['n = 5', 'n > 0', 'a + b', 'm \\cdot v'].map((tex) => chartable(tex)), [false, false, false, false]);
+});
+
+test('primes typed as quotes read as primes: recognition gives them their card (6.2.4)', () => {
+    const tex = (s: string) => formulasIn(s).map((f) => f.tex);
+    assert.deepEqual(tex('$f^{‘}(x)=2x\\cdot e^{x}+x^{2}\\cdot e^{x}$'), ["f'(x)=2x\\cdot e^{x}+x^{2}\\cdot e^{x}"]);
+    assert.deepEqual(tex('$f‘(x) = x^3$ und $f`(x) = 2x$ und $f’(x)=1$ und $f´(x)=0$ und $f′(x)=3$ und $f″(x)=6$'), ["f'(x) = x^3", "f'(x) = 2x", "f'(x)=1", "f'(x)=0", "f'(x)=3", "f''(x)=6"]);
+    // Plain spellings stay exactly as written.
+    assert.deepEqual(tex("$f'(x) = 2x$ und $f^{\\prime}(x)$"), ["f'(x) = 2x", 'f^{\\prime}(x)']);
+    assert.equal(recognize(plainPrimes('f^{‘}(x)=2x\\cdot e^{x}+x^{2}\\cdot e^{x}'), { context: 'Beispiel: [F]' }), 'function');
 });
