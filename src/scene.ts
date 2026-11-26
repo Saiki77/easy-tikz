@@ -2734,15 +2734,22 @@ function labelRank(node: SceneNode): number {
     return 4;
 }
 
+/** 6.2.1: math commands MathJax and TeX set as their upright letters (\max is three of them). */
+const OPERATOR_NAMES = new Set(['max', 'min', 'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln', 'exp', 'lim', 'det', 'arg', 'sup', 'inf', 'deg', 'gcd', 'sinh', 'cosh', 'tanh', 'arcsin', 'arccos', 'arctan']);
+/** 6.2.1: relations and arrows: one glyph with a space on each side. */
+const SPACED_COMMANDS = new Set(['to', 'le', 'leq', 'ge', 'geq', 'ne', 'neq', 'in', 'notin', 'approx', 'equiv', 'sim', 'rightarrow', 'leftarrow', 'Rightarrow', 'Leftarrow', 'leftrightarrow', 'Leftrightarrow', 'mapsto', 'implies', 'iff', 'subset', 'subseteq', 'cdot', 'times', 'pm', 'mp']);
+
 /**
  * Width of a label in em, roughly as it renders: math delimiters and braces
- * dropped, a command counts as one glyph, every other character by its class.
+ * dropped, a command counts as one glyph (6.2.1: an operator name as its
+ * letters, a relation or arrow with its spaces), every other character by
+ * its class.
  */
 function plainWidth(text: string): number {
     const t = text
         .replace(/\\[()]/g, '')
         .replace(/\$/g, '')
-        .replace(/\\[a-zA-Z]+\s*/g, 'x')
+        .replace(/\\([a-zA-Z]+)\s*/g, (_m: string, name: string) => (OPERATOR_NAMES.has(name) ? `${name} ` : SPACED_COMMANDS.has(name) ? ' x ' : 'x'))
         .replace(/\\./g, 'x')
         .replace(/[{}^_]/g, '');
     let w = 0;
@@ -2756,6 +2763,11 @@ function plainWidth(text: string): number {
         else w += CHAR_EM;
     }
     return Math.max(NARROW_EM, w);
+}
+
+/** 6.2.1: the width of a label in em of its size, as the label placer measures it (plainWidth): for the legend's place. */
+export function labelWidthEm(text: string): number {
+    return plainWidth(text);
 }
 
 /** Width and height of a label text in pt, as the placer measures it. */

@@ -43,6 +43,7 @@ import { AxisTicks, Tick, TickAxis, autoTickSteps, axisTicks, tickOptions } from
 // 6.1 clean look
 import { AxisPlace, CLEAN_COLOURS, CLEAN_GRID_ALPHA, CLEAN_LINE_TIKZ, CLEAN_TICK_PT, CleanAxisFrame, TickObstacles, axisPlace, cleanTickSpots } from './look';
 import { stillFrame } from './motion6/clock'; // 6.0 C
+import { legendCorner, legendLabelOf, legendObstacles } from './legend'; // 6.2.1
 import { pixelsTikz } from './iterate/export'; // 6.0 E
 import { pythonComments } from './python/text'; // 6.0 P
 
@@ -673,7 +674,18 @@ function tikz2D(settings: SettingsManager, ctx: MathContext, config: RendererCon
     if (config.equalScale || polar) opts.push('axis equal image');
     // Layers put the fills under the grid and axis lines (see Layers.render).
     if (anyFill || pictures.length) opts.push('set layers'); // pictures: 6.0 E
-    if (legends) opts.push(`legend pos=north east, legend cell align=left, legend style={font=${LEGEND_FONT}}`);
+    if (legends) {
+        // 6.2.1: the corner where the legend covers no label, as the preview picks it.
+        const labels: string[] = [];
+        for (const info of ctx.functions()) {
+            const f = (config.functions || [])[info.index];
+            if (f && f.showLegend && !info.hidden && !info.error && !info.domainError && String(f.expression ?? '').trim()) labels.push(legendLabelOf(info, f, ctx));
+        }
+        const metrics = labelMetricsFor(paperCm.w, paperCm.h);
+        const input = { functions: config.functions || [], annotations: config.annotations, axisStyle: config.axisStyle, clean: cleanNow };
+        const corner = legendCorner(labels, legendObstacles(input, ctx, items, view, metrics), metrics);
+        opts.push(`legend pos=${corner}, legend cell align=left, legend style={font=${LEGEND_FONT}}`);
+    }
 
     const picture = ['\\begin{tikzpicture}', ...pythonComments(config.tools) /* 6.0 P */, ...colors.lines(), ...layers.boxes, ...axisBlock(opts), ...pictures, ...layers.render(view), '\\end{axis}', '\\end{tikzpicture}']; // pictures: 6.0 E
     return wrap(settings.isStandalone(), libs, picture);
@@ -1001,10 +1013,12 @@ function curveDrawable(info: FunctionInfo, lo: number, hi: number, view: View): 
  * would split the legend's own cells and shift every later entry. Such
  * text is typeset into a save box before the axis instead (allocated once
  * per document, so a snippet may be pasted twice); the box is raised by its
- * depth because legend nodes have a fixed text depth.
+ * depth because legend nodes have a fixed text depth. 6.2.1: pgfplots
+ * keeps the entries in lists whose items end at `\to`, so an entry with
+ * `\to` (`$f(x) \to \min$`) stopped pdflatex; such an entry goes in braces.
  */
 function legendEntry(text: string, layers: Layers): string {
-    if (!/(^|[^\\])&|\\\\/.test(text)) return text;
+    if (!/(^|[^\\])&|\\\\/.test(text)) return /\\to(?![A-Za-z])/.test(text) ? `{${text}}` : text;
     let n = layers.boxes.length / 2;
     let suffix = '';
     do {

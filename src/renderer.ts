@@ -45,6 +45,7 @@ import type { LiveLayer } from './motion6/live'; // 6.0 F4
 import { themedColor } from './motion6/liveprims'; // 6.0 F4
 // 6.0 entrances
 import { EntranceKind, StepEntrance, clipLines, clipSegment, grownLine, labelStart, middleOf, nearestOn, partialLines, popDelay, riseAt, rippleStops, toolKind } from './motion6/entrances';
+import { LegendCorner, legendCorner, legendLabelOf, legendObstacles } from './legend'; // 6.2.1
 // 6.1 clean look
 import { AxisPlace, CLEAN_AXIS_PX, CLEAN_GRID_ALPHA, CLEAN_LINE_PX, CLEAN_TICK_PT, CLEAN_VARS, CleanAxisFrame, TickObstacles, axisPlace, cleanTickSpots } from './look';
 
@@ -561,7 +562,7 @@ export class SVGRenderer {
         this.drawBraces(svg, items);
         this.drawTexts(svg, items);
         this.drawAnnotations(svg, items);
-        this.drawLegend(svg, legend);
+        this.drawLegend(svg, legend, this.legendPlace(items, legend));
         this.drawTitle(svg);
         this.mathSettled = this.usedMath ? flushMathRenders() : null;
         // 6.2.1: a label that fell back because MathJax was not loaded yet: load it, then draw again.
@@ -1791,12 +1792,7 @@ export class SVGRenderer {
 
     /** Custom legend text, else the expression typeset like the export's `\( tex(expr) \)`. */
     private legendLabel(info: FunctionInfo, f: FunctionParameters): string {
-        const custom = String(f.legendLabel ?? '').trim();
-        if (custom) return custom;
-        const tex = (src: string | undefined) => this.math.tex(String(src ?? ''));
-        if (info.kind === 'parametric') return `$\\left(${tex(f.expression)},\\ ${tex(f.expressionY)}\\right)$`;
-        if (info.kind === 'polar') return `$r = ${tex(f.expression)}$`;
-        return `$${tex(f.expression)}$`;
+        return legendLabelOf(info, f, this.math);
     }
 
     /** Layer 5: curves, segments, outlines, constraint lines, tangents. */
@@ -2155,8 +2151,22 @@ export class SVGRenderer {
         return NaN;
     }
 
-    /** Legend box in the top-right corner of the plot, sized to its widest entry; \footnotesize like the export. */
-    private drawLegend(svg: SVGElement, entries: LegendEntry[]): void {
+    /**
+     * 6.2.1: the corner of the legend: the top right one unless it would
+     * cover a label, a written text, a marked point or numbers (legendCorner,
+     * with the export's estimates, so the PDF has it in the same corner).
+     */
+    private legendPlace(items: SceneItem2D[], entries: LegendEntry[]): LegendCorner {
+        if (!entries.length || this.compact) return 'north east';
+        const cfg = this.config;
+        const metrics = labelMetricsFor(cfg.paperWidthCm ?? 10, cfg.paperHeightCm ?? 10);
+        const input = { functions: cfg.functions || [], annotations: cfg.annotations, axisStyle: cfg.axisStyle, clean: this.clean };
+        const labels = entries.map((e) => e.label);
+        return legendCorner(labels, legendObstacles(input, this.math, items, { ...this.view }, metrics), metrics);
+    }
+
+    /** Legend box in a corner of the plot (6.2.1: `corner`), sized to its widest entry; \footnotesize like the export. */
+    private drawLegend(svg: SVGElement, entries: LegendEntry[], corner: LegendCorner = 'north east'): void {
         if (!entries.length || this.compact) return;
         const g = this.el('g', { class: 'etz-legend' });
         const fs = this.fontPx(LEGEND_PT);
@@ -2204,7 +2214,9 @@ export class SVGRenderer {
             }),
             g.firstChild
         );
-        g.setAttribute('transform', `translate(${num(this.plot.x + this.plot.w - inset - boxWidth)}, ${num(this.plot.y + inset / 2)})`);
+        const left = corner.endsWith('east') ? this.plot.x + this.plot.w - inset - boxWidth : this.plot.x + inset;
+        const top = corner.startsWith('north') ? this.plot.y + inset / 2 : this.plot.y + this.plot.h - inset / 2 - boxHeight;
+        g.setAttribute('transform', `translate(${num(left)}, ${num(top)})`);
         svg.appendChild(g);
     }
 
