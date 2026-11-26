@@ -1340,8 +1340,9 @@ test('recipes without functions or regions fall back to self-contained formulas'
 // Examples
 // ---------------------------------------------------------------------------
 
-test('EXAMPLES: the six documented ids, complete and migrateSettings-stable', () => {
-    assert.deepEqual(EXAMPLES.map((e) => e.id), ['lp', 'areas', 'tangent', 'levels', 'surplus', 'plane3d']);
+test('EXAMPLES: the documented ids, complete and migrateSettings-stable', () => {
+    // 6.2.1: the distributions of issue #10 after the six of 4.0.
+    assert.deepEqual(EXAMPLES.map((e) => e.id), ['lp', 'areas', 'tangent', 'levels', 'surplus', 'plane3d', 'student-t', 'chi-square', 'exponential', 'poisson', 't-formula']);
     const required = [
         'v', 'dimension', 'documentSetup', 'title', 'size_x_cm', 'size_y_cm', 'show_axis_label', 'axis_label_x',
         'axis_label_y', 'showAxis', 'showLargeGrid', 'showSmallGrid', 'gridOpacity', 'gridSize', 'xmin', 'xmax', 'ymin', 'ymax',

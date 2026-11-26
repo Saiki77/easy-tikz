@@ -161,6 +161,17 @@ export const build: Messages<typeof en> = {
     'build.example.surplusDescription': '需要、供給、均衡での消費者余剰と生産者余剰。曲線をドラッグして確かめられます。',
     'build.example.plane3dTitle': '曲面と平面',
     'build.example.plane3dDescription': '放物面 x^2 + y^2 を平面 z = h で切ります。h はドラッグできます。',
+    // 6.2.1: distributions.
+    'build.example.studentTTitle': 't 分布と正規分布',
+    'build.example.studentTDescription': '自由度 df をスライダーにした t 分布で P(-2 ≤ X ≤ 2) を塗り、点線の正規分布と比べます。df が大きいほど近づきます。',
+    'build.example.chiSquareTitle': 'カイ二乗分布の右すそ',
+    'build.example.chiSquareDescription': '自由度 df をスライダーにしたカイ二乗分布の密度と、塗った右すそ P(X ≥ 9.49) です。df = 4 で 0.05 になります。',
+    'build.example.exponentialTitle': '指数分布の待ち時間',
+    'build.example.exponentialDescription': 'レート λ をスライダーにした指数分布の密度と、もう 1 つのスライダー a までの P(X ≤ a) です。',
+    'build.example.poissonTitle': 'ポアソン分布の棒',
+    'build.example.poissonDescription': '平均 λ をスライダーにしたポアソン分布の棒と、塗った P(X ≤ 2) です。',
+    'build.example.tFormulaTitle': 'gamma() で書いた密度',
+    'build.example.tFormulaDescription': 'gamma() を使って教科書のように書いた t 分布の密度です。t 分布の行と同じ曲線になります。',
 
     // ---- names
     'build.name.startWithLetter': '英字で始め、英字・数字・_ だけを使ってください',

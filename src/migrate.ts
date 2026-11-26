@@ -2704,6 +2704,15 @@ function exPoints(id: string, name: string, fields: Partial<PointsBody>): Points
     return { ...pointsDefaults(2), id, name, ...fields };
 }
 
+// 6.2.1
+function exDistribution(id: string, name: string, fields: Partial<DistributionBody>): DistributionTool {
+    return { ...distributionDefaults(), id, name, ...fields };
+}
+
+function exProbability(id: string, name: string, fields: Partial<ProbabilityBody>): ProbabilityTool {
+    return { ...probabilityDefaults(), id, name, ...fields };
+}
+
 /**
  * Starter examples, each verified to render and export:
  * 1. 'lp' Linear program: slider c 0..15 = 9; R1 conditions
@@ -2725,6 +2734,12 @@ function exPoints(id: string, name: string, fields: Partial<PointsBody>): Points
  *    slider a; P1 intersections f1 f2; R1 'P1_y <= y <= f1', '0 <= x <= P1_x'
  *    (consumer surplus); R2 'f2 <= y <= P1_y', '0 <= x <= P1_x' (producer surplus).
  * 6. 'plane3d' (3D) Surface x^2 + y^2 cut by plane z = h, slider h 0..8.
+ * 7.-11. (6.2.1, issue #10) 'student-t' the t distribution with a slider df
+ *    against the normal curve, P(-2 <= X <= 2) shaded; 'chi-square' with a
+ *    slider df and the right tail P(X >= 9.49) (0.05 at df = 4);
+ *    'exponential' with sliders lambda (its rate) and a, P(X <= a); 'poisson' bars with a
+ *    slider lambda, P(X <= 2); 't-formula' the t density written out with
+ *    gamma(), exactly as issue #10 pasted it.
  *
  * Checked by hand: in 'lp' the corners are (0, 0), (4, 0), (3, 1), (0, 2) and
  * 2x + 3y is largest at (3, 1) with value 9 (the start value of c). In
@@ -2929,6 +2944,123 @@ export const EXAMPLES: ChartExample[] = [
             ],
             tools: [{ ...planeDefaults(), id: 't0', name: 'PL1', value: 'h', fillOpacity: 0.35 }],
             annotations: [{ x: '2', y: '-2', z: 'h', text: 'z = {h}', color: 'orange', size: 'normal', anchor: 'right' }],
+        }),
+    },
+    // 6.2.1 (issue #10): distributions with their probabilities, and a density written with gamma().
+    {
+        id: 'student-t',
+        get title() {
+            return t('build.example.studentTTitle');
+        },
+        get description() {
+            return t('build.example.studentTDescription');
+        },
+        is3D: false,
+        data: exampleChart({
+            title: 'Student t PDF (df = {df})',
+            xmin: '-5',
+            xmax: '5',
+            ymin: '0',
+            ymax: '0.45',
+            axis_style: 'middle',
+            parameters: [{ name: 'df', value: 5, min: 1, max: 30, step: 1 }],
+            tools: [
+                exDistribution('t0', 'X1', { kind: 'studentT', df: 'df', thickness: 'thick' }),
+                exDistribution('t1', 'X2', { kind: 'normal', color: 'gray', dashed: true }),
+                exProbability('t2', 'PR1', { distribution: 'X1', event: '-2 <= X <= 2', valueLabel: true }),
+            ],
+            annotations: [{ x: '1.6', y: '0.3', text: 'normal (dashed)', color: 'gray', size: 'small', anchor: 'right' }],
+        }),
+    },
+    {
+        id: 'chi-square',
+        get title() {
+            return t('build.example.chiSquareTitle');
+        },
+        get description() {
+            return t('build.example.chiSquareDescription');
+        },
+        is3D: false,
+        data: exampleChart({
+            title: 'Chi-square, df = {df}',
+            xmin: '0',
+            xmax: '20',
+            ymin: '0',
+            ymax: '0.5',
+            axis_style: 'middle',
+            parameters: [{ name: 'df', value: 4, min: 1, max: 12, step: 1 }],
+            tools: [
+                exDistribution('t0', 'X1', { kind: 'chiSquare', df: 'df', thickness: 'thick' }),
+                exProbability('t1', 'PR1', { distribution: 'X1', event: 'X >= 9.49', color: 'red', valueLabel: true }),
+            ],
+        }),
+    },
+    {
+        id: 'exponential',
+        get title() {
+            return t('build.example.exponentialTitle');
+        },
+        get description() {
+            return t('build.example.exponentialDescription');
+        },
+        is3D: false,
+        data: exampleChart({
+            xmin: '0',
+            xmax: '5',
+            ymin: '0',
+            ymax: '2.1',
+            axis_style: 'middle',
+            parameters: [
+                { name: 'lambda', value: 1, min: 0.25, max: 2, step: 0.05 },
+                { name: 'a', value: 1, min: 0, max: 5, step: 0.1 },
+            ],
+            tools: [
+                exDistribution('t0', 'X1', { kind: 'exponential', rate: 'lambda', thickness: 'thick' }),
+                exProbability('t1', 'PR1', { distribution: 'X1', event: 'X <= a', valueLabel: true }),
+            ],
+        }),
+    },
+    {
+        id: 'poisson',
+        get title() {
+            return t('build.example.poissonTitle');
+        },
+        get description() {
+            return t('build.example.poissonDescription');
+        },
+        is3D: false,
+        data: exampleChart({
+            xmin: '-1',
+            xmax: '16',
+            ymin: '0',
+            ymax: '0.4',
+            axis_style: 'middle',
+            parameters: [{ name: 'lambda', value: 3, min: 1, max: 10, step: 0.1 }],
+            tools: [
+                exDistribution('t0', 'X1', { kind: 'poisson', lambda: 'lambda' }),
+                exProbability('t1', 'PR1', { distribution: 'X1', event: 'X <= 2', valueLabel: true }),
+            ],
+        }),
+    },
+    {
+        id: 't-formula',
+        get title() {
+            return t('build.example.tFormulaTitle');
+        },
+        get description() {
+            return t('build.example.tFormulaDescription');
+        },
+        is3D: false,
+        data: exampleChart({
+            title: 'Student t PDF (df = {df})',
+            xmin: '-5',
+            xmax: '5',
+            ymin: '-0.05',
+            ymax: '0.45',
+            axis_style: 'middle',
+            showLargeGrid: true,
+            parameters: [{ name: 'df', value: 5, min: 1, max: 30, step: 1 }],
+            functions: [exFunction('f', '(gamma((df + 1) / 2) / (sqrt(df * pi) * gamma(df / 2))) * (1 + x^2 / df)^(-(df + 1) / 2)', { color: 'blue', thickness: 'thick' })],
         }),
     },
 ];

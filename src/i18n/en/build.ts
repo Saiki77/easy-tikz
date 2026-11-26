@@ -159,6 +159,17 @@ export const build = {
     'build.example.surplusDescription': 'Demand, supply, and the consumer and producer surplus at the equilibrium. Drag the curves to explore.',
     'build.example.plane3dTitle': 'Surface and plane',
     'build.example.plane3dDescription': 'The paraboloid x^2 + y^2 cut by the plane z = h; drag h.',
+    // 6.2.1: distributions.
+    'build.example.studentTTitle': 'Student t and the normal curve',
+    'build.example.studentTDescription': 'The t distribution with df on a slider and P(-2 ≤ X ≤ 2) shaded, against the dashed normal curve: the more df, the closer.',
+    'build.example.chiSquareTitle': 'Chi-square right tail',
+    'build.example.chiSquareDescription': 'The chi-square density with df on a slider and the right tail P(X ≥ 9.49) shaded: 0.05 at df = 4.',
+    'build.example.exponentialTitle': 'Exponential waiting time',
+    'build.example.exponentialDescription': 'The exponential density with its rate λ on a slider, and P(X ≤ a) for a time a on another.',
+    'build.example.poissonTitle': 'Poisson bars',
+    'build.example.poissonDescription': 'The bars of a Poisson distribution with mean λ on a slider, and P(X ≤ 2) shaded.',
+    'build.example.tFormulaTitle': 'A density written with gamma()',
+    'build.example.tFormulaDescription': 'The t density written out with gamma(), as in a textbook: the same curve as the t distribution line.',
 
     // ---- names: why a name cannot be used
     'build.name.startWithLetter': 'Start with a letter, then letters, digits or _',
