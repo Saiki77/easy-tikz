@@ -796,6 +796,33 @@ if (started) {
             assert(axes[0] === 0 && axes[1] > 0, `axes groups per chart: ${JSON.stringify(axes)}`);
             return `axes groups: ${axes.join(', ')}`;
         });
+        await check('labels on fills: math as math, a halo in the colour under it, no box (6.2.1)', async () => {
+            const haloNote = 'Labels on fills';
+            const block = (lines) => '```easy-tikz\n' + lines.join('\n') + '\n```\n';
+            await obs.writeNote(haloNote, block(['show x from -2 to 2 and y from -1 to 3', 'shade where x^2 + y^2 <= 1.5 in purple, opacity 0.3', 'write "$x^* = 1/4$" at (0, 0.2), center', 'write "plain" at (0, -0.4), center']));
+            await obs.openNote(haloNote, { mode: 'reading' });
+            const charts = await obs.noteCharts();
+            assert(charts.length === 1 && charts[0].drawn && charts[0].issues === null, `rendered charts: ${JSON.stringify(charts)}`);
+            // MathJax may load only now (a note with no other math): the chart draws again when it has.
+            await obs.waitFor(() => obs.call(() => !!document.querySelector('.workspace-leaf.mod-active .block-language-easy-tikz .etz-labels foreignObject')), { timeout: 5000, message: 'the math label drawn by MathJax' });
+            const got = await obs.call(() => {
+                const labels = document.querySelector('.workspace-leaf.mod-active .block-language-easy-tikz .etz-labels');
+                const fo = labels.querySelector('foreignObject');
+                const math = fo && fo.firstElementChild;
+                const plain = Array.from(labels.querySelectorAll('text')).find((t) => t.textContent === 'plain');
+                return {
+                    rects: labels.querySelectorAll('rect').length,
+                    shadow: math ? math.style.textShadow : '',
+                    exportHalo: fo ? fo.getAttribute('data-export-halo') : null,
+                    plainStroke: plain ? plain.getAttribute('stroke') : null,
+                };
+            });
+            assert(got.rects === 0, `backdrop boxes: ${got.rects}`);
+            assert(/color-mix|rgb/.test(got.shadow), `math halo: ${got.shadow.slice(0, 120)}`);
+            assert(got.exportHalo && got.exportHalo.includes('color-mix'), `copy halo: ${got.exportHalo}`);
+            assert(got.plainStroke && got.plainStroke.includes('color-mix'), `plain halo: ${got.plainStroke}`);
+            return 'math label drawn by MathJax, halos take the fill colour, no box';
+        });
         // 5.0: every formula is a chart, connected sliders, charts as SVG files.
         const formulaNote = 'Formulas';
         await check('formulas: resting on a formula opens its chart with a slider per letter, and Insert chart writes the block', async () => {

@@ -1,4 +1,4 @@
-import { renderMath, finishRenderMath } from 'obsidian';
+import { renderMath, finishRenderMath, loadMathJax } from 'obsidian';
 import { labelMathSource } from './mathcontext';
 
 /**
@@ -169,4 +169,29 @@ export function flushMathRenders(): Promise<boolean> {
         return redraw;
     };
     return finishRenderMath().then(fontsLoaded, fontsLoaded).then(done, done);
+}
+
+/** 6.2.1: the one load of MathJax this plugin asked for (Obsidian loads it lazily). */
+let mathJaxLoad: Promise<void> | null = null;
+let mathJaxLoaded = false;
+
+/**
+ * 6.2.1: Obsidian loads MathJax only when something renders math, and
+ * renderMath() throws until then, so a chart in a note with no other math
+ * drew its `$...$` labels as plain text (x^* = 1/4) until the editor opened.
+ * A render whose math label failed calls this: it loads MathJax and
+ * resolves with true when the chart should be drawn again (MathJax was not
+ * loaded yet), false otherwise (the formula itself cannot be read).
+ */
+export function ensureMathJax(): Promise<boolean> {
+    if (mathJaxLoaded) return Promise.resolve(false);
+    if (!mathJaxLoad) {
+        mathJaxLoad = loadMathJax().then(() => {
+            mathJaxLoaded = true;
+        });
+    }
+    return mathJaxLoad.then(
+        () => true,
+        () => false
+    );
 }

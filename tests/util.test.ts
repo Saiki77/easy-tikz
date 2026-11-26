@@ -73,3 +73,12 @@ test('errorText and cloneData', () => {
     assert.deepEqual(copy, data);
     assert.ok(copy.a !== data.a);
 });
+
+test('stripLatex: starred, primed and transposed names read cleanly (6.2.1)', () => {
+    assert.equal(stripLatex('\\alpha^* = 1/2'), 'α* = 1/2');
+    assert.equal(stripLatex('x^{*} = 1/4'), 'x* = 1/4');
+    assert.equal(stripLatex('x^\\ast'), 'x*');
+    assert.equal(stripLatex('f^\\prime(x)'), 'f′(x)');
+    assert.equal(stripLatex('c^T x'), 'cᵀ x');
+    assert.equal(stripLatex('a_1^{(2)}'), 'a₁⁽²⁾');
+});

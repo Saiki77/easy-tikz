@@ -369,6 +369,7 @@ const SUPERSCRIPT_MAP: Record<string, string> = {
     '+': '⁺', '-': '⁻', '−': '⁻', '=': '⁼', '(': '⁽', ')': '⁾',
     a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ', g: 'ᵍ', h: 'ʰ', i: 'ⁱ', j: 'ʲ', k: 'ᵏ', l: 'ˡ',
     m: 'ᵐ', n: 'ⁿ', o: 'ᵒ', p: 'ᵖ', r: 'ʳ', s: 'ˢ', t: 'ᵗ', u: 'ᵘ', v: 'ᵛ', w: 'ʷ', x: 'ˣ', y: 'ʸ', z: 'ᶻ',
+    T: 'ᵀ', '⊤': 'ᵀ', // 6.2.1: c^T, c^\top
 };
 
 const SUBSCRIPT_MAP: Record<string, string> = {
@@ -551,6 +552,12 @@ function stripLatexInner(text: string): string {
             if (ch === '^' && stripped === '∘') {
                 // e.g. 90^\circ -- render as a degree sign rather than a superscript circle.
                 out += '°';
+                i = next;
+                continue;
+            }
+            if (ch === '^' && /^[*∗⋆′']$/.test(stripped)) {
+                // 6.2.1: x^*, \alpha^{*}, x^\ast, f^\prime read as x*, α*, f′ (no superscript form; not "x^*").
+                out += stripped === '′' || stripped === "'" ? '′' : '*';
                 i = next;
                 continue;
             }
