@@ -84,6 +84,8 @@ import { DragHintHandle, DragLayerHandle, createDragHint, createDragLayer } from
 import { BuildPanelHandle, createBuildPanel } from './ui/buildPanel';
 import { HelpPanelHandle, createHelpPanel } from './ui/helpPanel';
 import { AiPanelHandle, createAiPanel } from './ui/aiPanel';
+import { readClipboardText } from './ui/clipboard'; // 6.2.1
+import { pasteMessage, readPasted } from './text/paste'; // 6.2.1
 import { SlidersDockHandle, createSlidersDock } from './ui/slidersDock';
 import { ChartPanelHandle, createChartPanel } from './ui/chartPanel';
 import { CodePanelHandle, createCodePanel } from './ui/codePanel';
@@ -161,6 +163,8 @@ const FLASH_MS = 4000;
 const AUTOSAVE_DELAY_MS = 1000;
 const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const UNDO_VISIBLE_MS = 6000;
+/** 6.2.1: how long a notice about a pasted chart's problem stays (it names a line and a column to read). */
+const NOTICE_MS = 10000;
 const COPIED_LABEL_MS = 2000;
 /**
  * Stacked layout (preview above the editor): always below STACK_WIDTH of
@@ -356,6 +360,11 @@ function isTextEditing(el: Element | null): boolean {
     return (el as HTMLElement).isContentEditable === true;
 }
 
+/** 6.2.1: the empty Start a chart field of an empty chart (the Build tab), where a pasted chart opens as a chart. */
+function isEmptyStartField(el: Element | null): boolean {
+    return !!el && el.tagName === 'INPUT' && !!el.closest('.etz-build-start') && (el as HTMLInputElement).value.trim() === '';
+}
+
 /** Decimals that resolve `step` (0.02 -> 2, 5 -> 0), clamped to 0..10. */
 function decimalsFor(step: number): number {
     if (!Number.isFinite(step) || step <= 0) return 3;
@@ -522,6 +531,8 @@ export class TikzModal extends Modal implements PanelHost {
     private draftBanner: BannerHandle | null = null;
     private draftSaveFailed = false;
     private resizeObserver: ResizeObserver | null = null;
+    /** 6.2.1: Cmd/Ctrl+V with no text field focused pastes a chart (the document's paste event, while the editor is open). */
+    private pasteHandler: ((e: ClipboardEvent) => void) | null = null;
     private lastStageSize = { w: 0, h: 0 };
 
     // Drag to edit (SPEC3 4.8)
@@ -884,6 +895,80 @@ export class TikzModal extends Modal implements PanelHost {
         });
     }
 
+    // ================================================================ paste (6.2.1)
+
+    /** "Paste a chart": the clipboard's chart in place of this one, or the reason there is none. */
+    private async pasteFromClipboard(): Promise<void> {
+        const read = await readClipboardText();
+        if (!this.isOpen) return;
+        if (!read.ok) {
+            this.showMessage(read.message);
+            return;
+        }
+        const pasted = readPasted(read.text, true);
+        if (pasted.kind === 'chart') this.pasteChart(pasted.data);
+        // A problem names its line and column: too long for the bar, so a notice says it.
+        else if (pasted.kind === 'problem') new Notice(pasted.message, NOTICE_MS);
+        else this.showMessage(pasteMessage(pasted, read.text));
+    }
+
+    /** A pasted chart in place of this one, at once: Undo (in the bar and with Mod+Z) brings the old one back. */
+    pasteChart(data: Record<string, unknown>): void {
+        const before = cloneData(this.settings.serialize());
+        const after = cloneData(data);
+        this.applyChart(after);
+        // Help and AI hide the preview: the pasted chart shows where it can be seen.
+        if (this.activeTab === 'help' || this.activeTab === 'ai') this.showTab('build');
+        const entry: HistoryEntry = {
+            label: t('editor.paste.pasted'),
+            undo: () => {
+                this.applyChart(cloneData(before));
+                return true;
+            },
+            redo: () => {
+                this.applyChart(cloneData(after));
+                return true;
+            },
+        };
+        this.pushHistory(entry);
+        this.showUndoBar(entry);
+    }
+
+    /**
+     * Cmd/Ctrl+V while no text field has the focus: a chart on the clipboard (lines, Full LaTeX, a whole
+     * ```easy-tikz block or a JSON chart) opens in the editor. Anything else, and every paste into a field
+     * or into a dialog above the editor, is left to the browser as before.
+     */
+    private bindPaste(): void {
+        const doc = this.modalEl.ownerDocument;
+        const handler = (e: ClipboardEvent) => {
+            if (e.defaultPrevented || !this.ready || !this.isOpen) return;
+            // The focused element, or the body when nothing has the focus.
+            const target = e.target as Element | null;
+            // An empty editor puts the focus in Start a chart: several lines pasted there are a chart (one line stays a formula for it).
+            const start = isEmptyStartField(target) && isEmptyStartField(doc.activeElement);
+            if (!start && (isTextEditing(target) || isTextEditing(doc.activeElement))) return;
+            // Only this editor: not a dialog or another modal above it, nor a view behind it.
+            const containers = doc.body.querySelectorAll('.modal-container');
+            if (!containers.length || containers[containers.length - 1] !== this.containerEl) return;
+            if (target && target !== doc.body && !this.modalEl.contains(target)) return;
+            const text = e.clipboardData?.getData('text/plain') ?? '';
+            if (start && !/[\r\n]/.test(text.trim())) return;
+            const pasted = readPasted(text);
+            if (pasted.kind === 'none') return;
+            e.preventDefault();
+            if (pasted.kind === 'chart') this.pasteChart(pasted.data);
+            else new Notice(pasted.message, NOTICE_MS);
+        };
+        this.pasteHandler = handler;
+        doc.addEventListener('paste', handler);
+    }
+
+    private unbindPaste(): void {
+        if (this.pasteHandler) this.modalEl.ownerDocument.removeEventListener('paste', this.pasteHandler);
+        this.pasteHandler = null;
+    }
+
     showTab(tab: TabId): void {
         const previous = this.activeTab;
         const prevPanel = this.tabPanels.get(previous);
@@ -948,6 +1033,7 @@ export class TikzModal extends Modal implements PanelHost {
             return false;
         });
         this.bindDragKeys();
+        this.bindPaste();
 
         if (typeof ResizeObserver !== 'undefined') {
             this.resizeObserver = new ResizeObserver((entries) => {
@@ -999,6 +1085,7 @@ export class TikzModal extends Modal implements PanelHost {
         }
         this.announceTimer = this.chipTimer = null;
         this.unbindDragKeys();
+        this.unbindPaste(); // 6.2.1
         this.dragLayer?.destroy();
         this.dragHint?.destroy();
         this.dragLayer = null;
@@ -1073,6 +1160,14 @@ export class TikzModal extends Modal implements PanelHost {
     }
 
     private fillMoreMenu(menu: Menu) {
+        // 6.2.1: the chart on the clipboard (Cmd/Ctrl+V does the same where no text field has the focus).
+        menu.addItem((item) =>
+            item
+                .setTitle(t('editor.menu.paste'))
+                .setIcon('clipboard-paste')
+                .onClick(() => void this.pasteFromClipboard())
+        );
+        menu.addSeparator();
         menu.addItem((item) => item.setTitle(t('editor.menu.examples')).setIsLabel(true));
         // Example names stay as src/migrate.ts writes them (the Build and Help tabs show the same names).
         // 6.0 F2: the examples of version 6 after the others, as in the Build tab.

@@ -15,14 +15,23 @@ import { errorText } from '../util';
 import type { SceneCtx, SceneOutput } from '../scene';
 import { addIssue, fail, labelSpot, newOutput, publish, towardCenter, UP_RIGHT } from '../scene';
 import { tableData } from './table';
-import { binomialPmf, decimal, integral, leastSquares, normalPdf, normalProbability, probabilityText, regressionLabel, riemannSum, solveOde } from './maths';
+import { Density, binomialPmf, decimal, densityProbability, integral, leastSquares, normalPdf, normalProbability, poissonPmf, probabilityText, regressionLabel, riemannSum, solveOde } from './maths';
 import { eventBounds, eventLabel, readEvent } from './event';
+import { DistributionField, KIND_FIELDS, MAX_LAMBDA, POISSON_SEEN, densityFor, isBadParameter, kindOf } from './kinds'; // 6.2.1
 
 /** The tool types of this module: drawn in 2D charts only. */
 export const BEYOND_TYPES: ReadonlySet<string> = new Set(['data', 'dataPlot', 'distribution', 'probability', 'riemann', 'slopeField', 'solution']);
 
-/** A distribution as the tools that shade it read it. */
-export type DistributionData = { kind: 'normal'; mean: number; sd: number } | { kind: 'binomial'; n: number; p: number; pmf: number[] };
+/**
+ * A distribution as the tools that shade it read it. 6.2.1: Poisson bars
+ * (P(X = k) at k = 0 to the end of `pmf`), and the densities of the other
+ * kinds (t, chi-square, exponential, uniform, gamma, beta).
+ */
+export type DistributionData =
+    | { kind: 'normal'; mean: number; sd: number }
+    | { kind: 'binomial'; n: number; p: number; pmf: number[] }
+    | { kind: 'poisson'; lambda: number; pmf: number[] }
+    | { kind: 'density'; density: Density };
 
 /** What these tools hand the tools that read them (kept on the producer's scene output). */
 export interface BeyondOutput {
@@ -104,13 +113,8 @@ export function beyondSources(t: Tool, scan: (src: unknown, field: string) => vo
             break;
         }
         case 'distribution':
-            if (t.kind === 'binomial') {
-                scan(t.n, 'n');
-                scan(t.p, 'p');
-            } else {
-                scan(t.mean, 'mean');
-                scan(t.sd, 'sd');
-            }
+            // 6.2.1: the fields of its kind.
+            for (const f of KIND_FIELDS[kindOf(t.kind)]) scan(t[f], f);
             break;
         case 'probability': {
             const dist = str(t.distribution).trim();
@@ -331,7 +335,21 @@ function computeDistribution(t: DistributionTool, ctx: SceneCtx): SceneOutput {
     const out = newOutput();
     const { view } = ctx;
     const color = str(t.color) || 'blue';
-    if (t.kind === 'binomial') {
+    const kind = kindOf(t.kind);
+    /** The bars of P(X = k), those too small to see left out (`seen`: the share of the highest a bar must reach). */
+    const bars = (pmf: number[], seen = 1e-9) => {
+        const peak = Math.max(...pmf);
+        const rings: Pt[][] = [];
+        pmf.forEach((h, k) => {
+            if (!(h > peak * seen)) return;
+            rings.push(bar(k, h));
+        });
+        const opacity = Number.isFinite(t.fillOpacity) ? t.fillOpacity : 0.35;
+        const shown = inView(rings, view);
+        if (shown.length) out.fills.push({ rings: shown, color, opacity, pattern: 'solid' });
+        if (rings.length) out.strokes.push({ lines: rings, color, width: str(t.thickness) || 'thin', dashed: false, closed: true, exact: true });
+    };
+    if (kind === 'binomial') {
         const n = fieldValue(str(t.n), 'n', t.name, ctx, out);
         const p = fieldValue(str(t.p), 'p', t.name, ctx, out);
         if (n === null || p === null) return out;
@@ -339,16 +357,33 @@ function computeDistribution(t: DistributionTool, ctx: SceneCtx): SceneOutput {
         if (!(p >= 0 && p <= 1)) return fail(out, t.name, 'p', msg('beyond.problem.successProbability'));
         const pmf = binomialPmf(Math.round(n), p);
         out.beyond = { distribution: { kind: 'binomial', n: Math.round(n), p, pmf } };
-        const peak = Math.max(...pmf);
-        const rings: Pt[][] = [];
-        pmf.forEach((h, k) => {
-            if (!(h > peak * 1e-9)) return;
-            rings.push(bar(k, h));
-        });
-        const opacity = Number.isFinite(t.fillOpacity) ? t.fillOpacity : 0.35;
-        const shown = inView(rings, view);
-        if (shown.length) out.fills.push({ rings: shown, color, opacity, pattern: 'solid' });
-        if (rings.length) out.strokes.push({ lines: rings, color, width: str(t.thickness) || 'thin', dashed: false, closed: true, exact: true });
+        bars(pmf);
+        return out;
+    }
+    // 6.2.1: Poisson bars.
+    if (kind === 'poisson') {
+        const lambda = fieldValue(str(t.lambda), 'lambda', t.name, ctx, out);
+        if (lambda === null) return out;
+        if (!(lambda > 0 && lambda <= MAX_LAMBDA)) return fail(out, t.name, 'lambda', msg('beyond.problem.lambdaRange', { max: MAX_LAMBDA }));
+        const pmf = poissonPmf(lambda);
+        out.beyond = { distribution: { kind: 'poisson', lambda, pmf } };
+        // Its bars run on to the right: those lower than a 500th of the highest would only outline the x-axis.
+        bars(pmf, 1 / POISSON_SEEN);
+        return out;
+    }
+    // 6.2.1: the densities of the other kinds.
+    if (kind !== 'normal') {
+        const values = new Map<DistributionField, number>();
+        for (const f of KIND_FIELDS[kind]) {
+            const v = fieldValue(str(t[f]), f, t.name, ctx, out);
+            if (v === null) return out;
+            values.set(f, v);
+        }
+        const d = densityFor(kind, (f) => values.get(f) ?? NaN);
+        if (isBadParameter(d)) return fail(out, t.name, d.field, msg(d.message, d.values));
+        out.beyond = { distribution: { kind: 'density', density: d } };
+        const lines = densityCurve(d, view.xmin, view.xmax, view);
+        if (lines.length) out.strokes.push({ lines, color, width: str(t.thickness) || 'thin', dashed: !!t.dashed });
         return out;
     }
     const mean = fieldValue(str(t.mean), 'mean', t.name, ctx, out);
@@ -388,6 +423,87 @@ function densityLine(mean: number, sd: number, a: number, b: number): Pt[] {
         pts.push({ x, y: normalPdf(x, mean, sd) });
     }
     return pts;
+}
+
+/** Samples of a density curve over [a, b] past which it is cut: this many view heights above the view. */
+const CURVE_HEADROOM = 1;
+
+/**
+ * 6.2.1: the x values a density is sampled at over [a, b] (within its
+ * support): evenly, closely around its middle, and closer and closer to an
+ * end of the support where the density may shoot up (chi-square with
+ * df < 2 at 0) or jump (the uniform distribution's sides, drawn upright).
+ */
+function densityXs(d: Density, a: number, b: number): number[] {
+    const lo = Math.max(a, d.lo);
+    const hi = Math.min(b, d.hi);
+    if (!(hi > lo)) return [];
+    const xs: number[] = [];
+    for (let i = 0; i <= 400; i++) xs.push(lo + ((hi - lo) * i) / 400);
+    const span = b - a;
+    for (let i = -80; i <= 80; i++) {
+        const x = d.mid + (span * i) / 1600;
+        if (x > lo && x < hi) xs.push(x);
+    }
+    // Towards an end of the support inside the range: 1e-1 .. 1e-9 of the span from it.
+    for (const edge of [d.lo, d.hi]) {
+        if (!(edge >= lo && edge <= hi)) continue;
+        const inward = edge === d.lo ? 1 : -1;
+        for (let k = 1; k <= 36; k++) {
+            const x = edge + inward * span * Math.pow(10, -k / 4);
+            if (x > lo && x < hi) xs.push(x);
+        }
+    }
+    xs.sort((u, v) => u - v);
+    const out: number[] = [];
+    for (const x of xs) if (!out.length || x - out[out.length - 1] >= 1e-12 * span) out.push(x);
+    return out;
+}
+
+/**
+ * 6.2.1: a density as polylines over [a, b]: cut where it runs more than a
+ * view height above the view (a pole), and for the uniform distribution
+ * with its upright sides, a box on the x-axis.
+ */
+function densityCurve(d: Density, a: number, b: number, view: SceneCtx['view']): Pt[][] {
+    const top = view.ymax + CURVE_HEADROOM * (view.ymax - view.ymin);
+    const xs = densityXs(d, a, b);
+    if (!xs.length) return [];
+    const pts: Pt[] = xs.map((x) => ({ x, y: d.pdf(x) }));
+    // A density that is not 0 at an end of its support (the uniform one, the exponential at 0) stands on the x-axis there.
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    if (first.x === d.lo && Number.isFinite(first.y) && first.y > 0) pts.unshift({ x: first.x, y: 0 });
+    if (last.x === d.hi && Number.isFinite(last.y) && last.y > 0) pts.push({ x: last.x, y: 0 });
+    return cutAbove(pts, top);
+}
+
+/** A polyline cut where it runs above `top` (or has no value): the pieces below it, each crossing ending on `top`. */
+function cutAbove(pts: Pt[], top: number): Pt[][] {
+    const lines: Pt[][] = [];
+    let cur: Pt[] = [];
+    const end = () => {
+        if (cur.length >= 2) lines.push(cur);
+        cur = [];
+    };
+    for (let i = 0; i < pts.length; i++) {
+        const p = pts[i];
+        const inside = Number.isFinite(p.y) && p.y <= top;
+        const prev = i > 0 ? pts[i - 1] : null;
+        const prevInside = !!prev && Number.isFinite(prev.y) && prev.y <= top;
+        if (inside) {
+            // Coming down from above: start on the cut.
+            if (prev && !prevInside && Number.isFinite(prev.y)) cur.push({ x: prev.x + ((p.x - prev.x) * (prev.y - top)) / (prev.y - p.y), y: top });
+            else if (prev && !prevInside) cur.push({ x: p.x, y: top });
+            cur.push(p);
+        } else if (prevInside && prev) {
+            // Going up and out: end on the cut.
+            cur.push(Number.isFinite(p.y) ? { x: prev.x + ((p.x - prev.x) * (top - prev.y)) / (p.y - prev.y), y: top } : { x: prev.x, y: top });
+            end();
+        }
+    }
+    end();
+    return lines;
 }
 
 // ------------------------------------------------------------- probability
@@ -455,8 +571,26 @@ function computeProbability(t: ProbabilityTool, ctx: SceneCtx): SceneOutput {
         }
         const mid = b.equal !== undefined ? b.equal : hi > lo ? (lo + hi) / 2 : Number.isFinite(b.lo) ? b.lo : b.hi;
         spot = { x: mid, y: normalPdf(mid, dist.mean, dist.sd) };
+    } else if (dist.kind === 'density') {
+        // 6.2.1: the area under the density of a t, chi-square, exponential, uniform, gamma or beta distribution.
+        const d = dist.density;
+        p = b.equal !== undefined ? 0 : densityProbability(d, b.lo, b.hi);
+        const lo = Math.max(b.lo, view.xmin, d.lo);
+        const hi = Math.min(b.hi, view.xmax, d.hi);
+        if (b.equal === undefined && hi > lo) {
+            const top = view.ymax + CURVE_HEADROOM * (view.ymax - view.ymin);
+            const curve = densityXs(d, lo, hi).map((x) => ({ x, y: Math.min(top, d.pdf(x)) }));
+            const ring = [{ x: lo, y: 0 }, ...curve.filter((q) => Number.isFinite(q.y)), { x: hi, y: 0 }];
+            const shown = inView([ring], view);
+            if (shown.length) out.fills.push({ rings: shown, color, opacity, pattern });
+        }
+        const mid = b.equal !== undefined ? b.equal : hi > lo ? (lo + hi) / 2 : Number.isFinite(b.lo) ? b.lo : b.hi;
+        // Over a pole (chi-square with df < 2 near 0) the label stays inside the view.
+        const y = d.pdf(mid);
+        spot = { x: mid, y: Number.isFinite(y) ? Math.min(y, view.ymin + 0.85 * (view.ymax - view.ymin)) : view.ymin + 0.85 * (view.ymax - view.ymin) };
     } else {
-        const n = dist.n;
+        // The bars in range: binomial, and (6.2.1) Poisson.
+        const n = dist.pmf.length - 1;
         let kmin = b.lo === -Infinity ? 0 : b.loStrict ? Math.floor(b.lo) + 1 : Math.ceil(b.lo - 1e-9);
         let kmax = b.hi === Infinity ? n : b.hiStrict ? Math.ceil(b.hi) - 1 : Math.floor(b.hi + 1e-9);
         kmin = Math.max(0, kmin);
@@ -470,7 +604,15 @@ function computeProbability(t: ProbabilityTool, ctx: SceneCtx): SceneOutput {
         p = Math.min(1, p);
         const shown = inView(rings, view);
         if (shown.length) out.fills.push({ rings: shown, color, opacity, pattern });
-        const k = kmax >= kmin ? Math.round((kmin + kmax) / 2) : Math.min(n, Math.max(0, Math.round(Number.isFinite(b.lo) ? b.lo : b.hi)));
+        // 6.2.1: Poisson bars run on to the right: a label over the bars that can be seen, inside the view.
+        let last = kmax;
+        if (dist.kind === 'poisson') {
+            const peak = Math.max(...dist.pmf);
+            let seen = dist.pmf.length - 1;
+            while (seen > 0 && dist.pmf[seen] < peak / POISSON_SEEN) seen--;
+            last = Math.max(kmin, Math.min(kmax, seen, Math.floor(view.xmax)));
+        }
+        const k = kmax >= kmin ? Math.round((kmin + last) / 2) : Math.min(n, Math.max(0, Math.round(Number.isFinite(b.lo) ? b.lo : b.hi)));
         spot = { x: k, y: dist.pmf[k] ?? 0 };
     }
     out.derived[`${t.name}_val`] = p;

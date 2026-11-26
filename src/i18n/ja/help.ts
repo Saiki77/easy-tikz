@@ -129,7 +129,7 @@ export const help: Messages<typeof en> = {
     'help.ref.text.t8': 'LaTeX の数式。ノートと同じくドル記号で囲みます。ドル記号の中では並んだ文字は掛け算です：`$ax^2$` は a と x の 2 乗の積です。ドル記号なしの数式も使えます。その場合 `ax` は 1 つの名前です。',
     'help.ref.text.t9': 'ノートのほかのグラフにある同じ名前のスライダーと一緒に動くスライダー。',
     'help.ref.text.t10': 'グラフの上の Markdown の表の点。続けて：mark the data、draw its regression line, labelled。または：data (1, 2), (2, 3)。',
-    'help.ref.text.t11': '分布（二項分布も：the binomial distribution with n = 10 and p = 0.4）。shade P(-1 <= X <= 1), labelled で確率に色を付けます。',
+    'help.ref.text.t11': '分布（ほかに the binomial distribution with n = 10 and p = 0.4、the t distribution with df = 5、the chi-square distribution with df = 3、the exponential distribution with rate 1、the uniform distribution from 0 to 1、the Poisson distribution with mean 3、the gamma distribution with shape 2 and rate 1、the beta distribution with a = 2 and b = 5）。shade P(-1 <= X <= 1), labelled で確率に色を付けます。',
     'help.ref.text.t12': 'f の下の長方形とその和：左、右、中点、または台形公式。分割の数はスライダーにできます。',
     'help.ref.text.t13': '微分方程式の方向場。draw the solution through P で点を通る解を描きます。',
     'help.ref.text.note': '書き間違いは、ノートのグラフの下に行と列の位置とともに表示されます（例：「4 行目、9 列目：不明なオプション」）。AI 用ガイド（「AI」タブ）には、すべての行とオプションが載っています。',

@@ -955,7 +955,7 @@ export class MathContext {
     tex(src: string): string {
         const s = str(src);
         try {
-            return toTex(parse(s, 'eq'));
+            return toTex(parse(s, 'eq'), (name) => this.paramIndex.has(name) || this.byName.has(name));
         } catch {
             return `\\mbox{${texText(s)}}`;
         }

@@ -10,6 +10,10 @@ export const editor: Messages<typeof en> = {
     'editor.header.polar': '極座標',
     'editor.header.examplesAndTemplates': 'サンプルとテンプレート',
     'editor.menu.examples': 'サンプル',
+    // 6.2.1: a chart from the clipboard (Cmd/Ctrl+V in the editor, this menu, the command).
+    'editor.menu.paste': 'グラフを貼り付け',
+    'editor.paste.pasted': 'クリップボードのグラフを貼り付けました',
+    'editor.paste.noChart': 'クリップボードにグラフがありません。グラフの行か easy-tikz のブロックをコピーしてください。',
     'editor.menu.manageTemplates': '保存したテンプレートを管理…',
 
     'editor.tabs.sections': 'エディタのセクション',

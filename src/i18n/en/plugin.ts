@@ -9,6 +9,7 @@ export const plugin = {
     'plugin.command.openEditor': 'Open editor',
     'plugin.command.plotFormula': 'Plot the formula at the cursor',
     'plugin.command.saveSvgFiles': 'Save the charts of this note as SVG files',
+    'plugin.command.newFromClipboard': 'New chart from the clipboard', // 6.2.1
     'plugin.notice.svgFilesSaved': 'Saved {count} SVG files in the attachment folder.',
     'plugin.notice.svgFilesSame': 'The SVG files of this note are up to date.',
     'plugin.notice.svgFilesFailed': 'Could not save the SVG files: {error}',

@@ -7,7 +7,7 @@ This guide is everything you need. It is served by the plugin's local AI server 
 ## How to work
 
 1. **Understand the chart.** Which functions, regions, lines and points; which numbers should be sliders; which part of the plane must be visible. Ask only when the request is ambiguous in a way that changes the picture.
-2. **Start from an example.** With the AI server, `list_examples` and `get_example` give ready-made charts (linear program, areas between curves, tangent, level curves, market surplus, 3D, vectors, fractals, orbits, systems, GeoGebra and Python charts, and one finished chart per guide). Otherwise adapt one of the blocks in this guide ([Recipes](#recipes) has the striking ones).
+2. **Start from an example.** With the AI server, `list_examples` and `get_example` give ready-made charts (linear program, areas between curves, tangent, level curves, market surplus, 3D, distributions, vectors, fractals, orbits, systems, GeoGebra and Python charts, and one finished chart per guide). Otherwise adapt one of the blocks in this guide ([Recipes](#recipes) has the striking ones).
 3. **Write the block.** One line per object: a `show` line first, so everything that matters is inside with a margin, then sliders, functions, shapes and labels. Leave out what the plugin fills in by itself.
 4. **Check it.** With the AI server, `check_chart` runs the plugin's own code. Fix every problem it reports (a problem in the text names its line and column). Then read what it computed: where each region is shaded or that it is empty, where curves are drawn, the coordinates of computed points, the final text and position of every label, and how much of each function lies inside the view. Check the ends of each slider's range too (`sliders` argument). `render_chart` shows you a picture of the result.
 5. **Put it in the note.** With the AI server, `add_chart` writes the block into the note (the open note, a named note, or a new one) and Obsidian shows it at once. Without it, write the block into the note yourself, or give it to the user as a fenced code block to paste into a note.
@@ -171,9 +171,25 @@ Options: a colour, a thickness, `dashed`, `labelled "text"`, `hidden`. Text labe
 | --- | --- |
 | `plot the normal distribution with mean 0 and sd 1` | The density curve over the view. Mean and sd are formulas (sliders work); `standard deviation`, `mu` and `sigma` read too, and `plot the standard normal distribution` is mean 0 and sd 1. Options: a colour, a thickness, `dashed`. |
 | `plot the binomial distribution with n = 10 and p = 0.4` | Bars at k = 0, 1, ..., n (n a whole number up to 1000, p from 0 to 1). Options: a colour, `opacity 0.35`. |
-| `shade P(-1 <= X <= 1), labelled` | The area under the density between the bounds, or the binomial bars in range. The event may be `a <= X <= b`, `X <= b`, `X >= a`, `X = k`, with `<` and `>` too (strict bounds matter for the binomial), and in LaTeX: `shade $P(-1 \le X \le 1)$` (`\le`, `\leq`, `\ge`, `\geq`, `≤`, `≥`). The bounds are formulas. `labelled` shows the probability, `$P(-1 \le X \le 1) = 0.683$`; `labelled "{p:4}"` is a label of your own. Options: a colour, `opacity 0.5`, `pattern dots`. |
+| `plot the t distribution with df = 5` | Student's t density (df > 0, df = 1 is Cauchy). `the Student t distribution`, `with 5 degrees of freedom` and `ν` read too. Options as the normal one. |
+| `plot the chi-square distribution with df = 3` | The chi-square density from 0 (df > 0; below df = 2 it runs off the top at 0 and is cut there). `chi-squared`, `χ²` and `k = 3` read too. |
+| `plot the exponential distribution with rate 1` | The exponential density from 0 (rate > 0; `λ = 1` reads too). |
+| `plot the uniform distribution from 0 to 1` | A box from a to b (a < b; `with a = 0 and b = 1` reads too). |
+| `plot the Poisson distribution with mean 3` | Bars at k = 0, 1, 2, ... (0 < λ ≤ 1000; `λ = 3` reads too). Options: a colour, `opacity 0.35`. |
+| `plot the gamma distribution with shape 2 and rate 1` | The gamma density (shape and rate > 0; `k` or `α` for the shape, `β` for the rate). |
+| `plot the beta distribution with a = 2 and b = 5` | The beta density on [0, 1] (a, b > 0; `α` and `β` read too). |
+| `shade P(-1 <= X <= 1), labelled` | The area under the density between the bounds, or the bars in range (binomial, Poisson). The event may be `a <= X <= b`, `X <= b`, `X >= a`, `X = k`, with `<` and `>` too (strict bounds matter for the binomial), and in LaTeX: `shade $P(-1 \le X \le 1)$` (`\le`, `\leq`, `\ge`, `\geq`, `≤`, `≥`). The bounds are formulas. `labelled` shows the probability, `$P(-1 \le X \le 1) = 0.683$`; `labelled "{p:4}"` is a label of your own. Options: a colour, `opacity 0.5`, `pattern dots`. |
 
-A shade line is about the distribution its event names (`P(X2 <= 1)`, or `shade P(X <= 1) of X2`), else the nearest distribution line above it (the first one below when there is none above). Name a distribution with a prefix: `X: plot the normal distribution with mean 0 and sd 1`. The probability is published as `PR1_val`.
+A shade line is about the distribution its event names (`P(X2 <= 1)`, or `shade P(X <= 1) of X2`), else the nearest distribution line above it (the first one below when there is none above). Name a distribution with a prefix: `X: plot the normal distribution with mean 0 and sd 1`. The probability is published as `PR1_val`. Every parameter is a formula, so a slider works: `slider df from 1 to 30, starting at 5, in steps of 1` with `plot the t distribution with df = df`. The probabilities are exact or from the incomplete gamma and beta functions (t with df 5: P(-2 <= X <= 2) = 0.898; chi-square with df 3: P(X <= 7.815) = 0.95). A density written out as a formula works too: `gamma(x)` is Γ(x).
+
+```easy-tikz
+show x from -5 to 5 and y from 0 to 0.45
+title Student t PDF (df = {df})
+slider df from 1 to 30, starting at 5, in steps of 1
+X: plot the t distribution with df = df, thick
+plot the normal distribution with mean 0 and sd 1 in gray, dashed
+shade P(-2 <= X <= 2) of X, labelled
+```
 
 **Riemann sums** (2D charts)
 
@@ -575,7 +591,7 @@ A line such as `y = x + 1` can be a function (then regions can use it by name, `
 
 #### `distribution` and `probability` (2D only)
 
-`{"type": "distribution", "name": "X1", "kind": "normal", "mean": "0", "sd": "1"}` or `{"type": "distribution", "kind": "binomial", "n": "10", "p": "0.4"}` (formulas), with `color`, `thickness`, `dashed` and `fillOpacity` (the bars). `{"type": "probability", "distribution": "X1", "event": "-1 <= X <= 1", "valueLabel": true}` shades P(event): `event` as written inside P(...), plain or LaTeX; `fillOpacity` (0.5), `fillPattern`, `label` (a template with `{p}`) and `valueLabel`.
+`{"type": "distribution", "name": "X1", "kind": "normal", "mean": "0", "sd": "1"}` or `{"type": "distribution", "kind": "binomial", "n": "10", "p": "0.4"}` (formulas); the other kinds are `studentT` and `chiSquare` (`df`), `exponential` (`rate`), `uniform` (`from`, `to`), `poisson` (`lambda`), `gamma` (`shape`, `rate`) and `beta` (`alpha`, `beta`); with `color`, `thickness`, `dashed` and `fillOpacity` (the bars). `{"type": "probability", "distribution": "X1", "event": "-1 <= X <= 1", "valueLabel": true}` shades P(event): `event` as written inside P(...), plain or LaTeX; `fillOpacity` (0.5), `fillPattern`, `label` (a template with `{p}`) and `valueLabel`.
 
 #### `riemann` (2D only)
 
@@ -665,7 +681,7 @@ Let names, GeoGebra values and the names a script sets are values themselves: `{
 - LaTeX math: a formula in a line may be LaTeX in dollars, as in a note: `plot $f(x) = \frac{1}{2}x^2 - 2$ in blue`, `shade where $x + y \le 4$ and $x \ge 0$`, `plot $r(\theta) = 1 + \cos\theta$`. `\frac`, `\sqrt`, `\sqrt[n]`, `^{...}`, `\sin x`, `\ln|x|`, `|x|`, `\cdot`, `\le`, `\ge`, `\pi` and Greek letters read as you would expect; `x_1` is the name `x_1`. Dragging in the editor changes only plain formulas, so write plain formulas when the user will drag the numbers.
 - Operators: `+ - * /`, `^` (power, right-associative; `-x^2` is `-(x^2)`), `%`, comparisons `< <= > >= == !=` (1 or 0), `and or !`, `c ? a : b`.
 - Implicit multiplication: `2x`, `3(x + 1)`, `(x + 1)(x - 1)`, `2 pi`, `a x + b y`. But `ax` is one name: write `a x`. `1/2x` is `(1/2)*x`: write `1/(2x)` when x is below. `a(x - h)^2` is `a*(x - h)^2`; `f1(x + 1)` is a call because `f1` is a function.
-- Functions: `sin cos tan sec csc cot asin acos atan atan2(y, x) sinh cosh tanh asinh acosh atanh exp ln log log10 log2 sqrt cbrt abs sign floor ceil round trunc min max hypot pow(a, b)`. `ln` and `log` are both natural. Trigonometry is in radians.
+- Functions: `sin cos tan sec csc cot asin acos atan atan2(y, x) sinh cosh tanh asinh acosh atanh exp ln log log10 log2 sqrt cbrt abs sign floor ceil round trunc min max hypot pow(a, b)`, and `gamma(x)` (Γ, also `\Gamma(x)`; a slider or function named gamma keeps its meaning). `ln` and `log` are both natural. Trigonometry is in radians.
 - Machine learning: `sigmoid` (also `\sigma(x)`), `relu` (`ReLU`), `softplus`, `gelu` (`GELU`), `silu` (`swish`) of a number, or item by item of a vector or list; `softmax(v)` of a vector or list (`softmax(u / T)` with a temperature slider) and `logsumexp(v)`; none of them overflows. Plain or LaTeX (`\operatorname{gelu}(x)`, `\mathrm{ReLU}(x)`). A function, slider or let value of the same name wins (`plot $\sigma(x) = ...$` defines your own).
 - Function names as ML notes write them: `plot $\sigma(x) = \frac{1}{1 + e^{-x}}$`, `plot $\mathrm{ReLU}(x) = \max(0, x)$`, `plot $\operatorname{softplus}(x) = ...$`, `plot $\text{relu}(x) = ...$` name the function sigma, ReLU, softplus, relu; the line prints back as written and other formulas call it either way (`\sigma(2x)`, `ReLU(x - 1)`). `plot $t(x) = \tanh x$` is a function t (of x; t stays the parameter of parametric curves).
 - Constants: `pi` (`π`), `e`.
@@ -708,6 +724,9 @@ draw the plane z = h in orange
 | Parametric and polar curves | `parametric-polar` | `c(t) = (x(t), y(t))`, or `r(theta) = 2cos(k theta)` (a polar chart). |
 | Arrows and braces | `arrows-braces` | `draw an arrow from (0, 0) to (3, 2)` and `draw a brace from (0, 0) to (4, 0)`. |
 | A surface and a plane | `plane3d` | `3d`, a surface and `draw the plane z = h` on a slider. |
+| A t distribution against the normal curve | `student-t` | `slider df`; `plot the t distribution with df = df`; the normal one dashed; `shade P(-2 <= X <= 2) of X1, labelled`. |
+| A tail probability, a waiting time, counts | `chi-square`, `exponential`, `poisson` | `shade P(X >= 9.49)` under `the chi-square distribution with df = df`; `shade P(X <= a)` under `the exponential distribution with rate lambda`; `the Poisson distribution with mean lambda` as bars. |
+| A density written out with gamma() | `t-formula` | `plot f(x) = (gamma((df + 1) / 2) / (sqrt(df * pi) * gamma(df / 2))) * (1 + x^2 / df)^(-(df + 1) / 2)` with `slider df`. |
 | Vectors, a matrix, tip to tail | `vectors`, `vectors-arrows` | `let v`, `let A`; `draw v and w as arrows`, `draw v + w tip to tail`, `draw A v as an arrow`. |
 | A Taylor or Fourier sum on a slider | `taylor`, `taylor-sine`, `sums-series` | `plot $T(x) = \sum_{k=0}^{n} ...$` with `slider n ..., in steps of 1`. |
 | Roots of unity | `roots-of-unity`, `unity-roots` | `mark the points $\{e^{2\pi i k / n} : k = 0, \dots, n - 1\}$, joined, labelled`. |

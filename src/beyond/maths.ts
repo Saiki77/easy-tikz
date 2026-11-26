@@ -1,10 +1,13 @@
 /*
  * The numbers behind the pictures beyond functions (5.0): the least-squares
- * line of a data set, the normal and binomial distributions, Riemann sums
- * and the trapezoid rule, a definite integral, and the numerical solution
- * of y' = f(x, y) (RK4). Also how their labels print the numbers. Pure: no
- * DOM, no Obsidian.
+ * line of a data set, the normal and binomial distributions (6.2.1: also
+ * the t, chi-square, exponential, uniform, Poisson, gamma and beta
+ * distributions, from the incomplete gamma and beta functions), Riemann
+ * sums and the trapezoid rule, a definite integral, and the numerical
+ * solution of y' = f(x, y) (RK4). Also how their labels print the numbers.
+ * Pure: no DOM, no Obsidian.
  */
+import { lnGamma } from '../values/special';
 
 // ------------------------------------------------------------- regression
 
@@ -104,6 +107,258 @@ export function binomialPmf(n: number, p: number): number[] {
     const out: number[] = [];
     for (let k = 0; k <= n; k++) out.push(Math.exp(lf[n] - lf[k] - lf[n - k] + k * lp + (n - k) * lq));
     return out;
+}
+
+// ------------------------------------------- more distributions (6.2.1)
+
+/** The continued fractions and series stop when a step changes the result by less than this (relative). */
+const EPS = 1e-15;
+/** Stands in for 0 in a denominator of the modified Lentz method. */
+const TINY = 1e-300;
+/** Most steps of a series or continued fraction (far more than any parameter up to 10^7 needs). */
+const MAX_STEPS = 100000;
+
+/** A probability and its complement, each with its own digits (1 - p loses those of a small q). */
+export interface Split {
+    p: number;
+    q: number;
+}
+
+/**
+ * The regularized incomplete gamma functions P(a, x) and Q(a, x) = 1 - P(a, x)
+ * for a > 0 and x >= 0: the series below x = a + 1, the continued fraction
+ * above it (Numerical Recipes, gser and gcf), so the small one keeps its digits.
+ */
+export function incompleteGamma(a: number, x: number): Split {
+    if (!(a > 0) || Number.isNaN(x)) return { p: NaN, q: NaN };
+    if (x <= 0) return { p: 0, q: 1 };
+    if (x === Infinity) return { p: 1, q: 0 };
+    const front = Math.exp(-x + a * Math.log(x) - lnGamma(a));
+    if (x < a + 1) {
+        let ap = a;
+        let del = 1 / a;
+        let sum = del;
+        for (let n = 0; n < MAX_STEPS; n++) {
+            ap += 1;
+            del *= x / ap;
+            sum += del;
+            if (Math.abs(del) < Math.abs(sum) * EPS) break;
+        }
+        const p = Math.min(1, sum * front);
+        return { p, q: 1 - p };
+    }
+    let b = x + 1 - a;
+    let c = 1 / TINY;
+    let d = 1 / b;
+    let h = d;
+    for (let i = 1; i < MAX_STEPS; i++) {
+        const an = -i * (i - a);
+        b += 2;
+        d = an * d + b;
+        if (Math.abs(d) < TINY) d = TINY;
+        c = b + an / c;
+        if (Math.abs(c) < TINY) c = TINY;
+        d = 1 / d;
+        const del = d * c;
+        h *= del;
+        if (Math.abs(del - 1) < EPS) break;
+    }
+    const q = Math.min(1, front * h);
+    return { p: 1 - q, q };
+}
+
+/** The continued fraction of the incomplete beta function (Numerical Recipes, betacf), modified Lentz. */
+function betaFraction(a: number, b: number, x: number): number {
+    const qab = a + b;
+    const qap = a + 1;
+    const qam = a - 1;
+    let c = 1;
+    let d = 1 - (qab * x) / qap;
+    if (Math.abs(d) < TINY) d = TINY;
+    d = 1 / d;
+    let h = d;
+    for (let m = 1; m <= MAX_STEPS; m++) {
+        const m2 = 2 * m;
+        let aa = (m * (b - m) * x) / ((qam + m2) * (a + m2));
+        d = 1 + aa * d;
+        if (Math.abs(d) < TINY) d = TINY;
+        c = 1 + aa / c;
+        if (Math.abs(c) < TINY) c = TINY;
+        d = 1 / d;
+        h *= d * c;
+        aa = (-(a + m) * (qab + m) * x) / ((a + m2) * (qap + m2));
+        d = 1 + aa * d;
+        if (Math.abs(d) < TINY) d = TINY;
+        c = 1 + aa / c;
+        if (Math.abs(c) < TINY) c = TINY;
+        d = 1 / d;
+        const del = d * c;
+        h *= del;
+        if (Math.abs(del - 1) < EPS) break;
+    }
+    return h;
+}
+
+/**
+ * The regularized incomplete beta function I_x(a, b) and 1 - I_x(a, b) for
+ * a, b > 0 and x in [0, 1]; `y` is 1 - x, passed when the caller has it
+ * exactly (the t distribution near 0). The continued fraction runs on the
+ * side where it converges fast, so the small one keeps its digits.
+ */
+export function incompleteBeta(a: number, b: number, x: number, y = 1 - x): Split {
+    if (!(a > 0) || !(b > 0) || Number.isNaN(x) || Number.isNaN(y)) return { p: NaN, q: NaN };
+    if (x <= 0) return { p: 0, q: 1 };
+    if (y <= 0) return { p: 1, q: 0 };
+    const front = Math.exp(lnGamma(a + b) - lnGamma(a) - lnGamma(b) + a * Math.log(x) + b * Math.log(y));
+    if (x < (a + 1) / (a + b + 2)) {
+        const p = Math.min(1, (front * betaFraction(a, b, x)) / a);
+        return { p, q: 1 - p };
+    }
+    const q = Math.min(1, (front * betaFraction(b, a, y)) / b);
+    return { p: 1 - q, q };
+}
+
+/** A continuous distribution: its density and the probabilities left and right of a point. */
+export interface Density {
+    /** The density at x: 0 outside the support, Infinity where it has a pole (chi-square with df < 2 at 0). */
+    pdf(x: number): number;
+    /** P(X <= x). */
+    cdf(x: number): number;
+    /** P(X > x), with its own digits in the right tail. */
+    sf(x: number): number;
+    /** The support: the density is 0 left of lo and right of hi (either may be infinite). */
+    lo: number;
+    hi: number;
+    /** The middle (a median or the mean): a probability above it is read from sf, below it from cdf. */
+    mid: number;
+}
+
+/** P(a <= X <= b) for a continuous distribution, precise in both tails (a or b may be infinite). */
+export function densityProbability(d: Density, a: number, b: number): number {
+    if (!(b > a)) return 0;
+    let p: number;
+    if (a >= d.mid) p = d.sf(a) - d.sf(b);
+    else if (b <= d.mid) p = d.cdf(b) - d.cdf(a);
+    else p = 1 - d.cdf(a) - d.sf(b);
+    return Math.min(1, Math.max(0, p));
+}
+
+/** The normal distribution as a Density (the t distribution with df beyond 10^7 is one). */
+export function normalDensity(mean: number, sd: number): Density {
+    return {
+        pdf: (x) => normalPdf(x, mean, sd),
+        cdf: (x) => normalCdf(x, mean, sd),
+        sf: (x) => (x === Infinity ? 0 : x === -Infinity ? 1 : 0.5 * erfc((x - mean) / (sd * SQRT2))),
+        lo: -Infinity,
+        hi: Infinity,
+        mid: mean,
+    };
+}
+
+/** Student's t distribution with df > 0 degrees of freedom (df = 1 is the Cauchy distribution). */
+export function studentT(df: number): Density {
+    // Its lnGamma difference loses its digits beyond 10^7, where t is the standard normal to 1e-7.
+    if (df > 1e7) return normalDensity(0, 1);
+    const c = lnGamma((df + 1) / 2) - lnGamma(df / 2) - 0.5 * Math.log(df * Math.PI);
+    /** P(T > t) for t >= 0: half of I_{df / (df + t^2)}(df / 2, 1 / 2). */
+    const tail = (t: number): number => {
+        const t2 = t * t;
+        if (!Number.isFinite(t2)) return 0;
+        return 0.5 * incompleteBeta(df / 2, 0.5, df / (df + t2), t2 / (df + t2)).p;
+    };
+    return {
+        pdf: (x) => Math.exp(c - ((df + 1) / 2) * Math.log1p((x * x) / df)),
+        cdf: (x) => (Number.isNaN(x) ? NaN : x <= 0 ? tail(-x) : 1 - tail(x)),
+        sf: (x) => (Number.isNaN(x) ? NaN : x >= 0 ? tail(x) : 1 - tail(-x)),
+        lo: -Infinity,
+        hi: Infinity,
+        mid: 0,
+    };
+}
+
+/** The gamma distribution with shape k > 0 and rate r > 0 (the density r^k x^(k-1) e^(-r x) / Γ(k)). */
+export function gammaDensity(k: number, r: number): Density {
+    const c = k * Math.log(r) - lnGamma(k);
+    return {
+        pdf: (x) => {
+            if (!(x >= 0)) return Number.isNaN(x) ? NaN : 0;
+            if (x === 0) return k < 1 ? Infinity : k === 1 ? r : 0;
+            return Math.exp(c + (k - 1) * Math.log(x) - r * x);
+        },
+        cdf: (x) => (Number.isNaN(x) ? NaN : x <= 0 ? 0 : incompleteGamma(k, r * x).p),
+        sf: (x) => (Number.isNaN(x) ? NaN : x <= 0 ? 1 : incompleteGamma(k, r * x).q),
+        lo: 0,
+        hi: Infinity,
+        mid: k / r,
+    };
+}
+
+/** The chi-square distribution with df > 0 degrees of freedom: the gamma distribution with shape df / 2 and rate 1 / 2. */
+export function chiSquare(df: number): Density {
+    return gammaDensity(df / 2, 0.5);
+}
+
+/** The exponential distribution with rate r > 0. */
+export function exponential(r: number): Density {
+    return {
+        pdf: (x) => (Number.isNaN(x) ? NaN : x < 0 ? 0 : r * Math.exp(-r * x)),
+        cdf: (x) => (Number.isNaN(x) ? NaN : x <= 0 ? 0 : -Math.expm1(-r * x)),
+        sf: (x) => (Number.isNaN(x) ? NaN : x <= 0 ? 1 : Math.exp(-r * x)),
+        lo: 0,
+        hi: Infinity,
+        mid: Math.LN2 / r,
+    };
+}
+
+/** The uniform distribution from a to b (a < b). */
+export function uniform(a: number, b: number): Density {
+    const w = b - a;
+    const clamp = (v: number) => Math.min(1, Math.max(0, v));
+    return {
+        pdf: (x) => (Number.isNaN(x) ? NaN : x >= a && x <= b ? 1 / w : 0),
+        cdf: (x) => (Number.isNaN(x) ? NaN : clamp((x - a) / w)),
+        sf: (x) => (Number.isNaN(x) ? NaN : clamp((b - x) / w)),
+        lo: a,
+        hi: b,
+        mid: (a + b) / 2,
+    };
+}
+
+/** The beta distribution with a, b > 0 (its α and β), on [0, 1]. */
+export function betaDensity(a: number, b: number): Density {
+    const c = lnGamma(a + b) - lnGamma(a) - lnGamma(b);
+    return {
+        pdf: (x) => {
+            if (Number.isNaN(x)) return NaN;
+            if (x < 0 || x > 1) return 0;
+            if (x === 0) return a < 1 ? Infinity : a === 1 ? b : 0;
+            if (x === 1) return b < 1 ? Infinity : b === 1 ? a : 0;
+            return Math.exp(c + (a - 1) * Math.log(x) + (b - 1) * Math.log1p(-x));
+        },
+        cdf: (x) => (Number.isNaN(x) ? NaN : x <= 0 ? 0 : x >= 1 ? 1 : incompleteBeta(a, b, x).p),
+        sf: (x) => (Number.isNaN(x) ? NaN : x <= 0 ? 1 : x >= 1 ? 0 : incompleteBeta(a, b, x).q),
+        lo: 0,
+        hi: 1,
+        mid: a / (a + b),
+    };
+}
+
+/**
+ * P(X = k) for X ~ Poisson(λ), λ > 0, at k = 0, 1, ... up to λ + 12 sqrt(λ) + 20,
+ * beyond which less than 10^-15 of the mass lies (below 0 there is none).
+ */
+export function poissonPmf(lambda: number): number[] {
+    const last = Math.ceil(lambda + 12 * Math.sqrt(lambda) + 20);
+    // Each from its neighbour, out from the mode (1 there), then scaled to sum to 1: ln k! of large k loses
+    // digits the ratios keep, and what lies beyond `last` is below the rounding of the sum.
+    const mode = Math.floor(lambda);
+    const w = new Array<number>(last + 1).fill(0);
+    w[mode] = 1;
+    for (let k = mode + 1; k <= last; k++) w[k] = (w[k - 1] * lambda) / k;
+    for (let k = mode - 1; k >= 0; k--) w[k] = (w[k + 1] * (k + 1)) / lambda;
+    let total = 0;
+    for (const v of w) total += v;
+    return w.map((v) => v / total);
 }
 
 // --------------------------------------------------------------- calculus

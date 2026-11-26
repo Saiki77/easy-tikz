@@ -26,6 +26,8 @@ import { FULL_END, axisLines, chartLanguage, exactFull, fullLine, isFullText, wi
 import { isColormap } from '../colormaps';
 import { looksLikeLatex } from '../latex';
 import { eventNames } from '../beyond/event';
+import { KIND_FIELDS } from '../beyond/kinds'; // 6.2.1
+import type { DistributionKind } from '../types';
 import { boxRatioOf } from '../box3d';
 // 6.0 C
 import { MOTION_KINDS, OWN_NAME_TYPES, keepThen, motionHead, motionOptions, thenPrefix } from '../motion6/text';
@@ -1362,6 +1364,17 @@ function columnName(name: string): string {
     return name === name.trim() && /^[^",|]+$/.test(name) && splitTop(name, ' and ').length === 1 && !/^(?:and|with)\b/i.test(name) ? name : quote(name);
 }
 
+/** 6.2.1: the line of each new kind of distribution, from the values of its fields (KIND_FIELDS order). */
+const NEW_KINDS: Record<string, (v: string[]) => string> = {
+    studentT: ([df]) => `the t distribution with df = ${df}`,
+    chiSquare: ([df]) => `the chi-square distribution with df = ${df}`,
+    exponential: ([rate]) => `the exponential distribution with rate ${rate}`,
+    uniform: ([from, to]) => `the uniform distribution from ${from} to ${to}`,
+    poisson: ([lambda]) => `the Poisson distribution with mean ${lambda}`,
+    gamma: ([shape, rate]) => `the gamma distribution with shape ${shape} and rate ${rate}`,
+    beta: ([a, b]) => `the beta distribution with a = ${a} and b = ${b}`,
+};
+
 /** The statement of each type of tool beyond functions (null: no line form fits, the tool is written raw). */
 const BEYOND_HEADS: Record<string, (full: Data, o: Options, ctx: Ctx) => string | null> = {
     data: (full, o) => {
@@ -1395,6 +1408,15 @@ const BEYOND_HEADS: Record<string, (full: Data, o: Options, ctx: Ctx) => string 
         }
     },
     distribution: (full, o) => {
+        // 6.2.1: the t, chi-square, exponential, uniform, Poisson, gamma and beta distributions.
+        const kind = str(full.kind);
+        const own = NEW_KINDS[kind];
+        if (own) {
+            const values = KIND_FIELDS[kind as DistributionKind].map((f) => part(full[f]));
+            if (values.some((v) => v === null)) return null;
+            o.mark('kind', ...KIND_FIELDS[kind as DistributionKind]);
+            return `plot ${own(values as string[])}`;
+        }
         if (str(full.kind) === 'binomial') {
             const n = part(full.n);
             const p = part(full.p);

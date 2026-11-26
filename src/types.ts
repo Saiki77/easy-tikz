@@ -338,30 +338,48 @@ export interface DataPlotTool extends ToolBase {
     valueLabel: boolean;
 }
 
+/** 6.2.1: the kinds of distribution: densities drawn as a curve, and the binomial and Poisson ones as bars. */
+export type DistributionKind = 'normal' | 'binomial' | 'studentT' | 'chiSquare' | 'exponential' | 'uniform' | 'poisson' | 'gamma' | 'beta';
+
 /**
- * A probability distribution: the density curve of a normal distribution,
- * or the bars of a binomial one at k = 0..n. Its fields are formulas, so
- * sliders work.
+ * A probability distribution: the density curve of a normal (6.2.1: t,
+ * chi-square, exponential, uniform, gamma, beta) distribution, or the bars
+ * of a binomial one at k = 0..n (6.2.1: or of a Poisson one). Its fields
+ * are formulas, so sliders work; each kind reads its own (src/beyond/kinds.ts).
  */
 export interface DistributionTool extends ToolBase {
     type: 'distribution';
-    kind: 'normal' | 'binomial';
+    kind: DistributionKind;
     /** Normal: mean and standard deviation (more than 0). */
     mean: string;
     sd: string;
     /** Binomial: number of trials (a whole number, 0 to 1000) and the probability of a success (0 to 1). */
     n: string;
     p: string;
+    /** 6.2.1: t and chi-square: the degrees of freedom (more than 0). */
+    df: string;
+    /** 6.2.1: exponential and gamma: the rate (more than 0). */
+    rate: string;
+    /** 6.2.1: uniform: from a to b (a below b). */
+    from: string;
+    to: string;
+    /** 6.2.1: Poisson: λ, its mean (more than 0, at most 1000). */
+    lambda: string;
+    /** 6.2.1: gamma: the shape (more than 0). */
+    shape: string;
+    /** 6.2.1: beta: a and b, its α and β (more than 0). */
+    alpha: string;
+    beta: string;
     /** The density curve. */
     thickness: string;
     dashed: boolean;
-    /** The binomial bars. */
+    /** The bars (binomial, Poisson). */
     fillOpacity: number;
 }
 
 /**
- * A probability shaded: the area under a normal density between the bounds
- * of the event, or the binomial bars in range. Publishes PR1_val (the
+ * A probability shaded: the area under a density between the bounds of the
+ * event, or the bars in range (binomial, Poisson). Publishes PR1_val (the
  * probability).
  */
 export interface ProbabilityTool extends ToolBase {

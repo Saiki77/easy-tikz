@@ -7,7 +7,7 @@ Everything the plugin does, by topic. The [guides](guides/README.md) show it ste
 ## The editor
 
 1. Click the function icon in the ribbon (or run *Easy Graphs Charts and TikZ: Open editor* from the command palette).
-2. The **Build** tab opens on "Start a chart". Type a formula such as `x^2 - 2x` and press Enter, or pick one of the six examples below the field.
+2. The **Build** tab opens on "Start a chart". Type a formula such as `x^2 - 2x` and press Enter, or pick one of the examples below the field. Have chart lines already (from a note, a chat, an issue)? Paste them with Cmd/Ctrl+V: see [Paste a chart](#paste-a-chart).
 3. Use **+ Add** for everything else: more functions, shaded regions, lines and curves, points, arrows, braces, text labels and sliders. The preview redraws as you type.
 4. Adjust by hand: drag a line, curve, point or label in the preview and its numbers change so it follows the pointer; Shift-drag turns lines and stretches curves (see [Drag to edit](#drag-to-edit)). Drag empty space to pan, scroll to zoom.
 5. **Insert into note** (Cmd/Ctrl+Enter). The plugin writes an `easy-tikz` code block and renders it inline.
@@ -23,11 +23,15 @@ The editor has four tabs:
 | **Code**  | The LaTeX, with a **Standalone document** switch. Hand edits are kept until you press Regenerate.          |
 | **Help**  | Step-by-step [guides](guides/README.md) with live charts, the full reference with **Open example** buttons, and a link to What's new. |
 
-Under the preview sits the **Sliders** dock (visible in every tab). The header switches between 2D / 3D and Cartesian / Polar; its "more" menu opens the examples and your saved templates.
+Under the preview sits the **Sliders** dock (visible in every tab). The header switches between 2D / 3D and Cartesian / Polar; its "more" menu (**Examples and templates**) has **Paste a chart**, the examples and your saved templates.
 
 **Fitting the ranges.** The first formula fits the ranges once, while they are still the defaults. **Fit ranges to the chart** in the preview's action pill (and **Auto-fit** in Chart, Ranges) fits them whenever you like: round ends on a nice step of about a twentieth of the span, holding everything the chart draws (functions and surfaces, points, computed ones too, labels, segments, arrows, and the regions and level curves that are bounded). 0 is taken in when it is near, a nearly symmetric range becomes symmetric, and a curve that runs off to an asymptote is cut at its 1st and 99th percentile. A function without a domain goes on forever, so x stays and y is fitted over it. Axes whose bounds are formulas (`2a`) are left alone, and fitting twice changes nothing.
 
 Problems show under their field after a short pause, often with a one-click fix (**Add slider k**, **Use a\*x**, **Use sin**), and a status chip on the preview lists them all. A chart with an error still draws everything else. Deleting a card or finishing a drag shows an **Undo** bar, Cmd/Ctrl+Z and Cmd/Ctrl+Shift+Z undo and redo outside text fields, and a chart you close without inserting is kept as a draft that the editor offers to restore.
+
+### Paste a chart
+
+Copy chart lines (in words or Full LaTeX, with or without the ```` ```easy-tikz ```` fences, or a JSON chart) and press Cmd/Ctrl+V in the editor where no text field has the focus, or in the empty **Start a chart** field: the chart opens in place of the one in the editor, and the bar at the bottom says *Pasted the chart from the clipboard* with **Undo** (Cmd/Ctrl+Z works too). **Paste a chart** in the "more" menu does the same, and the command **New chart from the clipboard** opens a new editor on the chart on the clipboard. Text that is no chart (no line that draws, or a line with a problem) pastes as before; from the menu or the command you are told why. Pasting chart lines into a note does nothing special: put them in an `easy-tikz` block there.
 
 ## Charts as text
 
@@ -85,7 +89,7 @@ Problem messages under a chart use the built-in words, and their columns point a
 Describe the chart and let an AI build it. Easy Graphs Charts and TikZ hands the AI everything it needs, checks every chart with the plugin's own code, and the chart lands in your note, ready to drag and slide. Open the **AI** tab in the editor; it has three ways in:
 
 - **AI apps on this computer** (Claude Code, Codex, Cursor, VS Code, Gemini CLI, Claude Desktop, LM Studio). Switch on **Let AI apps make charts** and copy the one line your app needs. The app then reads the chart guide, checks charts, looks at a picture of them and adds them to your notes by itself, through a small server that answers only on this computer ([how it works](ai.md#the-local-ai-server)).
-- **AI chats** (ChatGPT, Claude, Gemini in the browser). **Copy the guide** into the chat, describe your chart, then **Paste the chart** the AI writes: it opens in the editor, checked. Blocks pasted straight into a note work too, also with the comments and trailing commas AI chats like to write.
+- **AI chats** (ChatGPT, Claude, Gemini in the browser). **Copy the guide** into the chat, describe your chart, then **Paste the chart** the AI writes: it opens in the editor, checked. Cmd/Ctrl+V in the editor does the same ([Paste a chart](#paste-a-chart)). Blocks pasted straight into a note work too, also with the comments and trailing commas AI chats like to write.
 - **AI agents in your vault folder.** **Add the section** puts a short Easy Graphs Charts and TikZ part into `AGENTS.md` and `CLAUDE.md`, which agents read on their own.
 
 The guide the AI gets is [ai.md](ai.md); AIs write the text form, which reads like the math and is hard to get wrong. Then ask, for example: *"In this note, add a chart of the feasible region x + y <= 4, x + 3y <= 6, x >= 0, y >= 0, with the line 2x + 3y = c on a slider and the point where 2x + 3y is largest."*
@@ -143,6 +147,20 @@ draw its regression line in red, labelled
 
 **Probability.** `plot the normal distribution with mean 0 and sd 1` draws the bell curve and `plot the binomial distribution with n = 10 and p = 0.4` its bars; the parameters may be sliders. `shade P(-1 <= X <= 1), labelled` shades the area under the curve (or colours the bars in range) and labels it with the probability, `P(-1 ≤ X ≤ 1) = 0.683`. The event may be written in LaTeX as in a note (`$P(X \le 2)$`), with `<`, `>` and `=` too, and its bounds may be sliders. A shade line is about the distribution its event names, else the nearest one above it.
 
+Seven more distributions (6.2.1) work the same way, sliders and `shade P(...)` included:
+
+| Line | Draws | Also reads |
+| --- | --- | --- |
+| `plot the t distribution with df = 5` | Student's t density (df > 0; df = 1 is the Cauchy density) | `the Student t distribution`, `with 5 degrees of freedom`, `ν = 5` |
+| `plot the chi-square distribution with df = 3` | the chi-square density (df > 0; below 2 it runs off the top at 0) | `chi-squared`, `χ²`, `k = 3` |
+| `plot the exponential distribution with rate 1` | the exponential density from 0 | `λ = 1`, `lambda 1` |
+| `plot the uniform distribution from 0 to 1` | a box from a to b | `with a = 0 and b = 1` |
+| `plot the Poisson distribution with mean 3` | bars at k = 0, 1, 2, ... (0 < λ ≤ 1000) | `λ = 3`, `lambda 3` |
+| `plot the gamma distribution with shape 2 and rate 1` | the gamma density | `k`, `α` for the shape, `β` for the rate |
+| `plot the beta distribution with a = 2 and b = 5` | the beta density on [0, 1] | `α = 2 and β = 5` |
+
+Their probabilities are exact (exponential, uniform, Poisson) or come from the incomplete gamma and beta functions, to about 13 digits: `shade P(-2 <= X <= 2)` under the t distribution with df = 5 is 0.898, `shade P(X <= 7.815)` under chi-square with df = 3 is 0.95. The LaTeX export draws curves, areas and bars as coordinates, like the normal one. The examples *Student t and the normal curve*, *Chi-square right tail*, *Exponential waiting time*, *Poisson bars* and *A density written with gamma()* open them ready-made. A density can also be written out as a formula: `gamma(x)` is the gamma function Γ(x) (unless the chart has a slider or function called gamma), so the t density of a textbook, `plot f(x) = (gamma((df + 1) / 2) / (sqrt(df * pi) * gamma(df / 2))) * (1 + x^2 / df)^(-(df + 1) / 2)`, draws as written.
+
 ```easy-tikz
 show x from -4 to 4 and y from 0 to 0.5
 slider a from 0 to 3, starting at 1
@@ -178,6 +196,7 @@ Every formula field takes more than numbers now: complex numbers, vectors, matri
 | ------------------------------------------------------------ | ---------------------------------------------- | ---------------------------------------------------------- |
 | `\sum_{k=1}^{n} \frac{1}{k^2}`, `\prod_{k=1}^{n} k`          | `sum(1/k^2, k, 1, n)`, `prod(k, k, 1, n)`      | sums and products (bounds may be sliders, at most 100000 terms) |
 | `n!`, `\binom{n}{k}`                                         | `factorial(n)`, `binom(n, k)`                  | factorial (the gamma function between whole numbers), binomial coefficient |
+| `\Gamma(x)`                                                  | `gamma(x)`                                     | the gamma function (6.2.1; a slider or function called gamma keeps its meaning) |
 | `-0.8 + 0.156i`, `e^{i\theta}`, `\arg z`, `\bar z`, `\Re z`, `\Im z` | `abs(z)`, `arg(z)`, `conj(z)`, `re(z)`, `im(z)` | complex numbers and their parts                         |
 | `\begin{pmatrix} 2 \\ 1 \end{pmatrix}`, `(2, 1)`             | `(2, 1)`                                       | a vector: `v + w`, `2v`, `v \cdot w`, `v \times w`, `v_x`  |
 | `\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}` (also `bmatrix`) | `[[1, 2], [3, 4]]`                          | a matrix: `A v`, `AB`, `A^{-1}`, `A^T`, `\det A`, `\operatorname{tr} A` |
@@ -491,7 +510,7 @@ A typical 3D surface (samples=40, 1,600 quads) sits at ~60 fps; the slider's upp
 
 ## Privacy and permissions
 
-- **Clipboard:** writes TikZ code / SVG / PNG on the *Copy …* buttons, the text of a "type" row when you press **Copy** in a guide, the AI guide, connection lines and token when you press their **Copy** buttons in the AI tab or the settings, and your chart words when you press **Copy your words**. It reads the clipboard only when you press **Paste the chart** in the AI tab.
+- **Clipboard:** writes TikZ code / SVG / PNG on the *Copy …* buttons, the text of a "type" row when you press **Copy** in a guide, the AI guide, connection lines and token when you press their **Copy** buttons in the AI tab or the settings, and your chart words when you press **Copy your words**. It reads the clipboard only when you press **Paste the chart** in the AI tab or **Paste a chart** in the editor's menu, run **New chart from the clipboard**, or press Cmd/Ctrl+V in the editor (the text that paste hands the editor).
 - **Active note:** inserts an `easy-tikz` block on **Insert into note** or a formula's **Insert chart** (under its paragraph), replaces an existing block when saving from click-to-edit, updates `displayWidth` / `displayAlign` when you use a chart's width or alignment controls, and adds or removes `connected` on a slider line when you press its link button. Inline sliders never write to the note.
 - **Pictures of coloured planes, on Copy LaTeX:** when the code you copy draws a coloured plane or a bifurcation diagram, the plugin saves its PNG (`plane-<hash>.png`) in the note's attachment folder and says where. The same picture keeps the same name.
 - **SVG files, on request:** with **Charts as SVG files** switched on (off by default), or with the command **Save the charts of this note as SVG files**, the plugin writes one SVG file per chart into your attachment folder, named after the note, and rewrites a file only when its picture changed. It never deletes a file.

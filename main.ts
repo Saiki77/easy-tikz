@@ -35,6 +35,8 @@ import { ChartWords, NO_WORDS, clean, guideWithWords, setChartWords } from './sr
 import { guideWithLanguage, setChartLanguage } from './src/text/full';
 import { rewordNote } from './src/text/reword';
 import { ChartWordsModal } from './src/ui/wordsModal';
+import { readClipboardText } from './src/ui/clipboard'; // 6.2.1
+import { pasteMessage, readPasted } from './src/text/paste'; // 6.2.1
 import { LANGUAGE_NAMES, languageSetting, resolveLanguage, setLanguage, t } from './src/i18n';
 import type { Extension } from '@codemirror/state';
 // 6.0 C
@@ -396,6 +398,12 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             callback: () => {
                 new TikzModal(this.app, this).open();
             },
+        });
+        // 6.2.1 (issue #10): the chart on the clipboard (lines, Full LaTeX, a whole block or JSON) in a new editor.
+        this.addCommand({
+            id: 'new-chart-from-clipboard',
+            name: t('plugin.command.newFromClipboard'),
+            callback: () => void this.newChartFromClipboard(),
         });
 
         // Render `easy-tikz` blocks inline via the same SVG renderers the
@@ -772,6 +780,23 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
     }
 
     /** The AI guide (docs/ai.md) on the clipboard, for chats that cannot reach the AI server; with the person's chart words when they set some. */
+    /** "New chart from the clipboard": the editor on the clipboard's chart, or a notice saying why there is none. */
+    async newChartFromClipboard(): Promise<void> {
+        const read = await readClipboardText();
+        if (!read.ok) {
+            new Notice(read.message);
+            return;
+        }
+        const pasted = readPasted(read.text, true);
+        if (pasted.kind !== 'chart') {
+            new Notice(pasteMessage(pasted, read.text));
+            return;
+        }
+        // Like a formula's chart: Insert puts it at the cursor of the note.
+        const file = this.app.workspace.getActiveFile();
+        new TikzModal(this.app, this, { data: pasted.data, sourceFile: file }).open();
+    }
+
     async copyAiGuide(): Promise<void> {
         try {
             await navigator.clipboard.writeText(guideWithLanguage(guideWithWords(AI_GUIDE)));

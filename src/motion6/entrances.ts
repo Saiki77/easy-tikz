@@ -171,7 +171,7 @@ export function toolKind(tool: ToolLike): EntranceKind {
             return style === 'bars' ? 'sweep' : style === 'points' ? 'pop' : 'draw';
         }
         case 'distribution':
-            return String(tool.kind) === 'binomial' ? 'sweep' : 'draw';
+            return String(tool.kind) === 'binomial' || String(tool.kind) === 'poisson' ? 'sweep' : 'draw';
         case 'trajectory':
         case 'orbit':
             // A traced one draws itself on the clock already.

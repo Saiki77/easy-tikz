@@ -483,6 +483,164 @@ if (started) {
             });
         }
 
+        // 6.2.1 (issue #10): a chart pasted into the editor. The real Cmd+V is checked to reach the document as a paste event
+        // (counted and stopped before anything reads it, so the clipboard of this computer is never read or written); the
+        // chart then comes in the paste event Cmd+V hands the page, with the text of the issue.
+        const ISSUE_TEXT = [
+            'show x from -5 to 5 and y from -0.05 to 0.45',
+            'axes in the middle',
+            'with a grid',
+            'title Student t PDF (df = {df})',
+            'slider df from 1 to 30, starting at 5, in steps of 1',
+            'plot f(x) = (gamma((df + 1) / 2) / (sqrt(df * pi) * gamma(df / 2))) * (1 + x^2 / df)^(-(df + 1) / 2) in blue, thick',
+        ].join('\n');
+        /** A paste event with `text` at the focused element, as Cmd/Ctrl+V delivers it. Returns whether the editor took it. */
+        const pasteText = (text) =>
+            obs.call((t) => {
+                const dt = new DataTransfer();
+                dt.setData('text/plain', t);
+                const e = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+                (document.activeElement || document.body).dispatchEvent(e);
+                return e.defaultPrevented;
+            }, text);
+        await check('paste (6.2.1): Cmd+V in an empty editor opens the issue\'s chart with its slider df and title, with Undo', async () => {
+            await obs.openEditor();
+            const focus = await obs.call(() => {
+                const a = document.activeElement;
+                return a && a.closest('.etz-build-start') ? 'start' : a ? a.tagName : 'none';
+            });
+            assert(focus === 'start', `an empty editor focuses Start a chart, not ${focus}`);
+            await obs.call(() => {
+                window.__etzPasteSeen = 0;
+                window.__etzPasteStop = (e) => {
+                    window.__etzPasteSeen++;
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+                };
+                document.addEventListener('paste', window.__etzPasteStop, true);
+            });
+            await obs.key('v', { mod: true, commands: ['paste'] });
+            await obs.sleep(150);
+            const seen = await obs.call(() => {
+                document.removeEventListener('paste', window.__etzPasteStop, true);
+                return window.__etzPasteSeen;
+            });
+            assert(seen === 1, `Cmd+V gave ${seen} paste events`);
+            const taken = await pasteText(ISSUE_TEXT);
+            assert(taken, 'the editor did not take the paste');
+            await obs.sleep(200);
+            await obs.waitForRender({ settle: 300 });
+            const [issues, info] = [await obs.issues(), await obs.previewInfo()];
+            assert(!issues.length, `issues: ${issues.map((i) => i.message).join('; ')}`);
+            assert(info.shapes > 8, `the preview looks empty (${info.shapes} shapes)`);
+            const got = await obs.call(() => {
+                const m = window.__etzMedia.requireEditor();
+                const curve = Array.from(m.modalEl.querySelectorAll('.etz-stage svg path')).map((p) => (p.getAttribute('d') || '').length);
+                return {
+                    sliders: (m.settings.getValue('parameters') || []).map((p) => `${p.name}=${p.value}`),
+                    title: (m.modalEl.querySelector('.etz-stage svg') || {}).textContent || '',
+                    bar: (m.modalEl.querySelector('.etz-undo:not(.tikz-hidden)') || {}).textContent || '',
+                    longest: Math.max(0, ...curve),
+                };
+            });
+            assert(got.sliders.join() === 'df=5', `sliders: ${got.sliders.join()}`);
+            assert(got.title.includes('Student t PDF (df = 5)'), 'the title does not show df = 5');
+            assert(got.bar.startsWith('Pasted the chart from the clipboard') && got.bar.endsWith('Undo'), `the bar says "${got.bar}"`);
+            assert(got.longest > 1000, `the curve is short (${got.longest} characters of path)`);
+            // The slider moves the curve and the title.
+            await obs.setSlider('df', 1);
+            await obs.waitForRender({ settle: 200 });
+            const title1 = await obs.call(() => (window.__etzMedia.requireEditor().modalEl.querySelector('.etz-stage svg') || {}).textContent || '');
+            assert(title1.includes('Student t PDF (df = 1)'), 'the slider did not change the title');
+            // Undo brings the empty chart back.
+            await obs.call(() => {
+                const button = Array.from(window.__etzMedia.requireEditor().modalEl.querySelectorAll('.etz-undo button')).find((b) => b.textContent === 'Undo');
+                if (button) button.click();
+            });
+            await obs.sleep(200);
+            const after = await obs.call(() => (window.__etzMedia.requireEditor().settings.getValue('functions') || []).length);
+            assert(after === 0, `after Undo the chart has ${after} functions`);
+            return `${info.shapes} shapes, slider df, title, Undo`;
+        });
+        await check('paste (6.2.1): text that is no chart pastes as before, and a paste into a field stays in the field', async () => {
+            await loadClean(TEXT.parseChartText('plot f(x) = x^2').data, false);
+            await obs.blur();
+            const prose = await pasteText('Just a sentence about statistics.');
+            assert(!prose, 'the editor took a sentence');
+            const field = await obs.reveal('f', 'expression');
+            assert(field, 'no formula field to paste into');
+            const focused = await obs.call(() => !!document.activeElement && document.activeElement.classList.contains('etz-expr-input'));
+            assert(focused, 'the formula field has no focus');
+            const inField = await pasteText(ISSUE_TEXT);
+            assert(!inField, 'a paste into a formula field opened a chart');
+            await obs.blur();
+            const fns = await obs.call(() => window.__etzMedia.requireEditor().settings.getValue('functions').map((f) => f.expression));
+            assert(fns.length === 1 && fns[0] === 'x^2', `functions now: ${JSON.stringify(fns)}`);
+            return 'prose and field pastes left alone';
+        });
+        await check('paste (6.2.1): Paste a chart in the menu and the command New chart from the clipboard', async () => {
+            // The clipboard of this computer stays untouched: readText answers with the chart for this check only.
+            const stub = (text) =>
+                obs.call((t) => {
+                    window.__etzReadText = navigator.clipboard.readText;
+                    navigator.clipboard.readText = () => Promise.resolve(t);
+                }, text);
+            const unstub = () =>
+                obs.call(() => {
+                    if (window.__etzReadText) navigator.clipboard.readText = window.__etzReadText;
+                    delete window.__etzReadText;
+                });
+            try {
+                await stub('```easy-tikz\nshow x from -4 to 4 and y from 0 to 0.45\nplot the t distribution with df = 3\nshade P(X >= 2), labelled\n```');
+                await obs.call(() => document.querySelector('.modal.tikz-modal .etz-header button[aria-label="Examples and templates"]').click());
+                await obs.waitFor(() => obs.call(() => !!document.querySelector('.menu')), { timeout: 2000, message: 'the menu' });
+                const items = await obs.call(() => Array.from(document.querySelectorAll('.menu .menu-item-title')).map((t) => t.textContent));
+                assert(items[0] === 'Paste a chart', `the menu starts with ${JSON.stringify(items.slice(0, 3))}`);
+                await obs.call(() => Array.from(document.querySelectorAll('.menu .menu-item')).find((i) => i.textContent === 'Paste a chart').click());
+                await obs.sleep(300);
+                await obs.waitForRender({ settle: 200 });
+                const tools = await obs.call(() => window.__etzMedia.requireEditor().settings.getValue('tools').map((t) => t.kind || t.type));
+                assert(tools.join() === 'studentT,probability', `tools: ${tools.join()}`);
+                await stub('no chart here');
+                await obs.call(() => document.querySelector('.modal.tikz-modal .etz-header button[aria-label="Examples and templates"]').click());
+                await obs.waitFor(() => obs.call(() => !!document.querySelector('.menu')), { timeout: 2000, message: 'the menu' });
+                await obs.call(() => Array.from(document.querySelectorAll('.menu .menu-item')).find((i) => i.textContent === 'Paste a chart').click());
+                await obs.sleep(200);
+                const bar = await obs.call(() => (document.querySelector('.modal.tikz-modal .etz-undo:not(.tikz-hidden)') || {}).textContent || '');
+                assert(bar === 'No chart on the clipboard. Copy chart lines or an easy-tikz block.', `the bar says "${bar}"`);
+                await obs.closeEditor();
+                await stub('plot the Poisson distribution with mean 4\nshade P(X <= 2), labelled');
+                const ran = await obs.call((id) => app.commands.executeCommandById(`${id}:new-chart-from-clipboard`), PLUGIN_ID);
+                assert(ran !== false, 'the command does not exist');
+                await obs.waitFor(() => obs.call(() => !!window.__etzMedia.editor() && window.__etzMedia.editor().ready === true), { timeout: 10000, message: 'the editor to open' });
+                await obs.waitForRender({ settle: 200 });
+                const opened = await obs.call(() => window.__etzMedia.requireEditor().settings.getValue('tools').map((t) => t.kind || t.type));
+                assert(opened.join() === 'poisson,probability', `the command opened ${opened.join()}`);
+            } finally {
+                await unstub();
+            }
+            return 'menu item first, a chart and a message; the command opens a new editor';
+        });
+        await check('distributions (6.2.1): a t distribution and its shaded probability draw, the label shows 0.898', async () => {
+            const text = ['show x from -5 to 5 and y from 0 to 0.45', 'slider df from 1 to 30, starting at 5, in steps of 1', 'plot the t distribution with df = df, thick', 'plot the normal distribution with mean 0 and sd 1 in gray, dashed', 'shade P(-2 <= X <= 2) of X1, labelled', 'plot the chi-square distribution with df = 1 in green', 'plot the Poisson distribution with mean 2 in purple'].join('\n');
+            const info = await loadClean(TEXT.parseChartText(text).data, false);
+            const label = () =>
+                obs.call(() => {
+                    const stage = window.__etzMedia.requireEditor().modalEl.querySelector('.etz-stage');
+                    const texts = Array.from(stage.querySelectorAll('foreignObject[data-export-text], text')).map((e) => e.getAttribute('data-export-text') || e.textContent || '');
+                    return texts.find((t) => t.includes('P(')) || '';
+                });
+            await obs.waitFor(async () => (await label()).includes('0.898'), { timeout: 5000, interval: 100, message: 'the label P(-2 ≤ X ≤ 2) = 0.898' });
+            await obs.setSlider('df', 30);
+            await obs.waitFor(async () => (await label()).includes('0.945'), { timeout: 5000, interval: 100, message: 'the label at df = 30 (0.945)' });
+            await obs.showTab('build');
+            const cards = await obs.call(() => Array.from(document.querySelectorAll('.modal.tikz-modal .etz-layer-card.mod-distribution')).map((c) => (c.querySelector('select') || {}).value));
+            assert(cards.join() === 'studentT,normal,chiSquare,poisson', `distribution cards: ${cards.join()}`);
+            const code = await obs.call(() => window.__etzMedia.editor().generateCode());
+            assert(/P\(-2 \\le X \\le 2\) = 0\.945/.test(code), 'the LaTeX code has no label 0.945');
+            return `${info.shapes} shapes, label 0.898 then 0.945, four distribution cards`;
+        });
+
         // Every chart of every guide: the finished chart and each step.
         if (!guidesLoaded) skip('guide charts', 'src/guides did not bundle');
         else if (!GUIDES.length) skip('guide charts', 'src/guides defines no guides yet');

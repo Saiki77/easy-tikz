@@ -17,9 +17,8 @@ import { Platform, setIcon } from 'obsidian';
 import { PanelHost, PluginHost } from './host';
 import { TextButtonHandle, chip, dropdown, textButton, uniqueId } from './kit';
 import { AI_APPS, mcpUrl, shownSnippet } from '../ai/connect';
-import { blocksOf } from '../ai/charttool';
-import { parseChartText } from '../text/parse';
-import { impliedV4, parseLenientJson } from '../blockjson';
+import { chartFromText } from '../text/paste';
+import { readClipboardText } from './clipboard';
 import { t } from '../i18n';
 
 export interface AiPanelHandle {
@@ -48,40 +47,6 @@ function appendWithPlaces(el: HTMLElement, text: string, places: Record<string, 
 /** Names joined with "and" ('AGENTS.md and CLAUDE.md'). */
 function joinAnd(names: string[]): string {
     return names.reduce((all, name) => (all ? t('panels.ai.agents.and', { first: all, second: name }) : name), '');
-}
-
-/** The chart of the first easy-tikz block in `text` (or of `text` itself), text or JSON, as a note would read it. */
-export function chartFromText(text: string): Record<string, unknown> | string {
-    const trimmed = text.trim();
-    if (!trimmed) return t('panels.ai.clipboardEmpty');
-    const blocks = blocksOf(trimmed);
-    const body = blocks.length ? blocks[0].text : trimmed;
-    if (body.trim().startsWith('{')) {
-        let data: unknown;
-        try {
-            data = parseLenientJson(body);
-        } catch (e) {
-            return t('panels.ai.notJson', { message: e instanceof Error ? e.message : String(e) });
-        }
-        if (!data || typeof data !== 'object' || Array.isArray(data)) return t('panels.ai.notObject');
-        const chart = data as Record<string, unknown>;
-        return impliedV4(chart) ? { v: 4, ...chart } : chart;
-    }
-    // Text: one line per object. Outside a fence only text that reads as a chart counts.
-    const parsed = parseChartText(body);
-    const objects = ['parameters', 'functions', 'functions3D', 'tools', 'annotations'].some((k) => {
-        const items = parsed.data[k];
-        return Array.isArray(items) && items.length > 0;
-    });
-    if (!blocks.length && (parsed.problems.length || !objects)) {
-        return t('panels.ai.noChart');
-    }
-    if (parsed.problems.length) {
-        const p = parsed.problems[0];
-        return t('panels.ai.problems', { count: parsed.problems.length, line: p.line, column: p.column, message: p.message });
-    }
-    if (!objects) return t('panels.ai.empty');
-    return parsed.data;
 }
 
 export function createAiPanel(parent: HTMLElement, host: PanelHost): AiPanelHandle {
@@ -221,14 +186,13 @@ export function createAiPanel(parent: HTMLElement, host: PanelHost): AiPanelHand
     const pasteNote = note(chats);
 
     async function pasteChart() {
-        let text = '';
-        try {
-            text = await navigator.clipboard.readText();
-        } catch {
-            pasteNote(t('panels.ai.chats.unreadable'), true);
+        // 6.2.1: the clipboard is read as the editor's Paste a chart reads it (src/ui/clipboard.ts).
+        const read = await readClipboardText();
+        if (!read.ok) {
+            pasteNote(read.message, true);
             return;
         }
-        const chart = chartFromText(text);
+        const chart = chartFromText(read.text);
         if (typeof chart === 'string') {
             pasteNote(chart, true);
             return;

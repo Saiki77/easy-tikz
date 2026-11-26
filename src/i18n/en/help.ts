@@ -137,7 +137,7 @@ export const help = {
     'help.ref.text.t8': 'A formula in LaTeX, in dollars as in a note. Inside dollars letters side by side multiply: `$ax^2$` is a times x squared. Formulas without dollars work too; there `ax` is one name.',
     'help.ref.text.t9': 'A slider that moves with the sliders of the same name in the other charts of the note.',
     'help.ref.text.t10': 'The points of the Markdown table above the chart. Then: mark the data, draw its regression line, labelled. Or: data (1, 2), (2, 3).',
-    'help.ref.text.t11': 'A distribution (also: the binomial distribution with n = 10 and p = 0.4). shade P(-1 <= X <= 1), labelled shades a probability.',
+    'help.ref.text.t11': 'A distribution (also: the binomial distribution with n = 10 and p = 0.4, the t distribution with df = 5, the chi-square distribution with df = 3, the exponential distribution with rate 1, the uniform distribution from 0 to 1, the Poisson distribution with mean 3, the gamma distribution with shape 2 and rate 1, the beta distribution with a = 2 and b = 5). shade P(-1 <= X <= 1), labelled shades a probability.',
     'help.ref.text.t12': 'Rectangles under f with their sum: left, right or middle, or the trapezoid rule. The parts can be a slider.',
     'help.ref.text.t13': 'The slope field of a differential equation. draw the solution through P draws the solution through a point.',
     'help.ref.text.note': 'A typo shows under the chart in the note with its line and column, such as "Line 4, column 9: unknown option". The AI guide (AI tab) lists every line and option.',
