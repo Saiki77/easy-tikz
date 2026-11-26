@@ -841,6 +841,14 @@ const AXES: Record<string, { text: string; look: ChartLook; axes: Partial<AxisSe
     // A chart's own lines against every setting the other way: thin, no arrows, no letters, small numbers in Classic.
     ownAgainstSettings: { text: [TANGENT, 'thin axes', 'axes without arrows', 'no axis letters', 'small numbers'].join('\n'), look: 'classic', axes: { line: 'thick', arrows: 'on', names: 'always', numbers: 'large' } },
     surfaceThinSmall: { text: ['3d', 'show x from -2 to 2 and y from -2 to 2', 'plot z = x^2 - y^2'].join('\n'), look: 'clean', axes: { line: 'thin', numbers: 'small', names: 'named' } },
+    // 6.2.2: Covered numbers: Show. The normal density covers the 0.4 left of the y-axis (a node on a white backdrop
+    // over the curve), one on a shaded band gets the tint; a line under the x-axis covers its large numbers (the chart's own line).
+    coveredShow: {
+        text: ['show x from -3 to 3 and y from -0.05 to 0.45', 'axes in the middle', 'plot f(x) = exp(-x^2/2)/sqrt(2 pi) in blue, thick', 'shade where y >= 0.27 and y <= 0.33 and x >= -1 and x <= 0 in green, opacity 0.3', 'plot g(x) = 0.3 in gray, dashed'].join('\n'),
+        look: 'clean',
+        axes: { covered: 'show' },
+    },
+    coveredOwnLine: { text: ['show x from -3 to 3 and y from -1 to 3', 'axes in the middle', 'plot f(x) = -0.12 in red', 'keep all numbers', 'large numbers'].join('\n'), look: 'clean', axes: { covered: 'hide' } },
 };
 
 // --------------------------------------------------------------- compile

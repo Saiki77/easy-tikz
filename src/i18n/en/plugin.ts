@@ -70,7 +70,7 @@ export const plugin = {
     'plugin.settings.colours.export': 'As in the LaTeX export',
     'plugin.settings.look.name': 'Chart look',
     'plugin.settings.look.desc':
-        'Clean (default): axes through the middle without arrows, a light grid, small grey numbers, no axis letters unless the chart names its axes, slightly thicker curves and values in soft labels, in the note and in the LaTeX export. Classic: the look of version 6.0. A chart that sets its own look keeps it (axes in a box, with a grid, no grid, grid opacity, axis names, a thickness). The four settings below change the axes of either look one by one; one chart can choose its own in the Chart tab of the editor.',
+        'Clean (default): axes through the middle without arrows, a light grid, small grey numbers, no axis letters unless the chart names its axes, slightly thicker curves and values in soft labels, in the note and in the LaTeX export. Classic: the look of version 6.0. A chart that sets its own look keeps it (axes in a box, with a grid, no grid, grid opacity, axis names, a thickness). The settings below change the axes of either look one by one; one chart can choose its own in the Chart tab of the editor.',
     'plugin.settings.look.clean': 'Clean',
     'plugin.settings.look.classic': 'Classic',
     // 6.2.1: the axes, one by one, in a group under the heading Chart look.
@@ -92,6 +92,12 @@ export const plugin = {
     'plugin.settings.axisNumbers.desc': 'The size of the numbers on the axes, in the note and in the LaTeX export. As the look (default): small in Clean, large in Classic.',
     'plugin.settings.axisNumbers.small': 'Small',
     'plugin.settings.axisNumbers.large': 'Large',
+    // 6.2.2: numbers a curve or a marked point covers, in the clean look.
+    'plugin.settings.coveredNumbers.name': 'Covered numbers',
+    'plugin.settings.coveredNumbers.desc':
+        'Numbers on the axes that a curve or a marked point covers, in the clean look. Hide (default): such a number is left out. Show: every number stays, and a covered one gets a halo in the colour behind it, so it reads over the curve (a white backdrop in the LaTeX export). Classic always shows its numbers.',
+    'plugin.settings.coveredNumbers.hide': 'Hide',
+    'plugin.settings.coveredNumbers.show': 'Show',
     'plugin.settings.imageBackground.name': 'Copied images',
     'plugin.settings.imageBackground.desc': 'Background of Copy PNG and Copy SVG. White uses the light theme\'s colours, so the picture reads on paper also from a dark theme.',
     'plugin.settings.imageBackground.transparent': 'Transparent, theme colours',

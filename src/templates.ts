@@ -156,6 +156,8 @@ export interface PluginData {
     axisArrows: 'look' | 'on' | 'off';
     axisNames: 'look' | 'always' | 'named';
     axisNumbers: 'look' | 'small' | 'large';
+    /** 6.2.2: Covered numbers: Hide (default) or Show the clean look's numbers that a curve or a marked point covers. */
+    coveredNumbers: 'hide' | 'show';
     /** Copy PNG and Copy SVG: no background and the theme's colours, or white with the light theme's colours. */
     imageBackground: 'transparent' | 'white';
     /** Every chart also as an SVG file in the attachment folder, white background (5.0). */
@@ -192,6 +194,7 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     axisArrows: 'look',
     axisNames: 'look',
     axisNumbers: 'look',
+    coveredNumbers: 'hide',
     imageBackground: 'transparent',
     svgFiles: false,
     interfaceLanguage: 'auto',

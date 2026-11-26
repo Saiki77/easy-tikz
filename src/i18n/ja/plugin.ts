@@ -73,7 +73,7 @@ export const plugin: Messages<typeof en> = {
     'plugin.settings.colours.export': 'LaTeX 出力と同じ',
     'plugin.settings.look.name': 'グラフの見た目',
     'plugin.settings.look.desc':
-        'すっきり（デフォルト）：矢印のない軸が原点を通り、薄いグリッド、小さな灰色の目盛りの数値で描きます。軸に名前を付けたグラフ以外は軸の文字 x と y を表示せず、曲線は少し太く、値はやわらかいラベルに表示します。ノートでも LaTeX 出力でも同じです。クラシック：バージョン 6.0 の見た目です。見た目を自分で指定したグラフはそのまま描きます（axes in a box、with a grid、no grid、grid opacity、軸の名前、線の太さ）。下の 4 つの設定で、どちらの見た目でも軸を 1 つずつ変えられます。1 つのグラフだけの指定は、エディタの「グラフ」タブでできます。',
+        'すっきり（デフォルト）：矢印のない軸が原点を通り、薄いグリッド、小さな灰色の目盛りの数値で描きます。軸に名前を付けたグラフ以外は軸の文字 x と y を表示せず、曲線は少し太く、値はやわらかいラベルに表示します。ノートでも LaTeX 出力でも同じです。クラシック：バージョン 6.0 の見た目です。見た目を自分で指定したグラフはそのまま描きます（axes in a box、with a grid、no grid、grid opacity、軸の名前、線の太さ）。下の設定で、どちらの見た目でも軸を 1 つずつ変えられます。1 つのグラフだけの指定は、エディタの「グラフ」タブでできます。',
     'plugin.settings.look.clean': 'すっきり',
     'plugin.settings.look.classic': 'クラシック',
     // 6.2.1：軸を 1 つずつ（見出し「グラフの見た目」の下のグループ）
@@ -95,6 +95,12 @@ export const plugin: Messages<typeof en> = {
     'plugin.settings.axisNumbers.desc': '軸の目盛りの数値の大きさです。ノートでも LaTeX 出力でも同じです。見た目に合わせる（デフォルト）：すっきりでは小さく、クラシックでは大きく表示します。',
     'plugin.settings.axisNumbers.small': '小さい',
     'plugin.settings.axisNumbers.large': '大きい',
+    // 6.2.2：すっきりの見た目で、曲線や点と重なる軸の数値
+    'plugin.settings.coveredNumbers.name': '重なる数値',
+    'plugin.settings.coveredNumbers.desc':
+        'すっきりの見た目で、曲線や点と重なる軸の数値の扱いです。隠す（デフォルト）：重なる数値は表示しません。表示する：すべての数値を表示し、重なる数値には後ろの色で縁取りを付けて、曲線の上でも読めるようにします（LaTeX 出力では白い下地）。クラシックでは常にすべての数値を表示します。',
+    'plugin.settings.coveredNumbers.hide': '隠す',
+    'plugin.settings.coveredNumbers.show': '表示する',
     'plugin.settings.imageBackground.name': 'コピーした画像',
     'plugin.settings.imageBackground.desc': '「PNG をコピー」と「SVG をコピー」の背景です。白ではライトテーマの色を使うので、ダークテーマからでも紙の上で読めます。',
     'plugin.settings.imageBackground.transparent': '透明（テーマの色）',

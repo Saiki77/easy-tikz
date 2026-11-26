@@ -266,5 +266,5 @@ test('hover cards: a sum with its value draws the partial sums and the value, a 
     }
     // A series in x with its value (exp): both curves.
     const exp = iterateHoverCard('\\sum_{i=0}^{n} \\frac{x^i}{i!} = e^x');
-    assert.ok(exp && exp.lines.some((l) => l.startsWith('plot $F(x) = e^x$')), exp && exp.lines.join('\n'));
+    assert.ok(exp && exp.lines.some((l) => l.startsWith('plot $F(x) = e^x$')), exp ? exp.lines.join('\n') : 'no card');
 });

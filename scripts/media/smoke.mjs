@@ -1602,6 +1602,80 @@ if (started) {
             }
         });
 
+        // 6.2.2: Covered numbers, through the settings window's own path, on the Student t density of the issue (y-axis in the
+        // middle), square so its y numbers step by 0.05 and the curve covers 0.25 to 0.35 as in the developer's screenshot.
+        await check('covered numbers (6.2.2): Hide leaves out the y numbers the t density covers; Show keeps every one, drawn over the curve with a halo; the chart\'s own line wins', async () => {
+            const note = 'Covered numbers';
+            const lines = [
+                'show x from -5 to 5 and y from -0.05 to 0.45',
+                'size 8 x 8',
+                'axes in the middle',
+                'with a grid',
+                'title Student t PDF (df = {df})',
+                'slider df from 1 to 30, starting at 5, in steps of 1',
+                'plot f(x) = (gamma((df + 1) / 2) / (sqrt(df * pi) * gamma(df / 2))) * (1 + x^2 / df)^(-(df + 1) / 2) in blue, thick',
+            ];
+            const block = (extra) => ['```easy-tikz', ...lines, ...extra, '```'].join('\n');
+            const setting = (key, value) => obs.call((id, k, v) => (app.setting.pluginTabs || []).find((t) => t.id === id).setControlValue(k, v), PLUGIN_ID, key, value);
+            /** The y numbers of the chart in the note: those with the axes, those drawn over the curves (with their halo), and the order of the layers. */
+            const numbers = () =>
+                obs.call(() => {
+                    const svg = document.querySelector('.workspace-leaf.mod-active .markdown-reading-view .block-language-easy-tikz svg');
+                    const axes = svg && svg.querySelector(':scope > .etz-axes');
+                    if (!axes) return null;
+                    const y = (t) => t.getAttribute('text-anchor') === 'end';
+                    const plain = Array.from(axes.querySelectorAll(':scope > text:not([data-etz-axis-name])')).filter(y).map((t) => t.textContent);
+                    const front = svg.querySelector(':scope > .etz-covered-numbers');
+                    const covered = front ? Array.from(front.querySelectorAll('text')).filter(y).map((t) => ({ text: t.textContent, halo: t.getAttribute('stroke'), order: t.getAttribute('paint-order'), width: Number(t.getAttribute('stroke-width')) })) : [];
+                    const layers = Array.from(svg.children).map((c) => (c.getAttribute('class') || '').split(' ')[0]);
+                    return { plain, covered, layers };
+                });
+            const num = (s) => Number(s.replace('\u2212', '-'));
+            await obs.writeNote(note, `Covered numbers\n\n${block([])}\n`);
+            try {
+                await obs.openNote(note, { mode: 'reading' });
+                await obs.waitFor(numbers, { timeout: 5000, message: 'the chart in the note' });
+                await obs.sleep(400);
+                // Hide (the default): some y numbers are left out, none is drawn over the curve.
+                const hide = await numbers();
+                assert(hide.covered.length === 0, `Hide draws covered numbers: ${JSON.stringify(hide.covered)}`);
+                assert(!hide.plain.includes('0.3'), `Hide shows the 0.3 the curve covers: ${hide.plain}`);
+                await setting('coveredNumbers', 'show');
+                assert((await obs.call((id) => app.plugins.plugins[id].data.coveredNumbers, PLUGIN_ID)) === 'show', 'the setting is not stored');
+                await obs.waitFor(async () => ((await numbers()) || { covered: [] }).covered.length > 0, { timeout: 5000, message: 'the chart to draw again with the covered numbers' });
+                await obs.sleep(400);
+                const show = await numbers();
+                // Show: the numbers Hide left out are back, over the curve, each with a halo; together every y number but the 0 at the crossing.
+                const all = [...show.plain, ...show.covered.map((c) => c.text)].map(num).sort((a, b) => a - b);
+                const kept = hide.plain.map(num).sort((a, b) => a - b);
+                assert(JSON.stringify(show.plain.map(num).sort((a, b) => a - b)) === JSON.stringify(kept), `Show moved the free numbers: ${show.plain} against ${hide.plain}`);
+                assert(all.length === kept.length + show.covered.length && all.length > kept.length, `Hide left out ${all.length - kept.length} numbers: ${kept} against ${all}`);
+                // With the 0 where the axes cross (left out in both), the y numbers of Show step evenly: none is missing.
+                assert(all.every((v) => Math.abs(v) > 1e-9), 'the 0 where the axes cross stays out');
+                const full = [...all, 0].sort((a, b) => a - b);
+                const steps = full.slice(1).map((v, i) => Math.round((v - full[i]) * 1000) / 1000);
+                assert(steps.every((d) => d === steps[0]), `a y number is missing in Show: ${all}`);
+                for (const c of show.covered) assert(c.halo && c.order === 'stroke' && c.width > 0, `no halo on ${c.text}: ${JSON.stringify(c)}`);
+                const at = (cls) => show.layers.indexOf(cls);
+                assert(at('etz-covered-numbers') > at('etz-curves') && at('etz-curves') > at('etz-axes'), `layers: ${show.layers.join(', ')}`);
+                // The chart's own line wins over the setting: hide covered numbers.
+                await obs.writeNote(note, `Covered numbers\n\n${block(['hide covered numbers'])}\n`);
+                await obs.waitFor(async () => ((await numbers()) || { covered: [1] }).covered.length === 0, { timeout: 5000, message: 'hide covered numbers to win over Show' });
+                const own = await numbers();
+                assert(JSON.stringify(own.plain.map(num).sort((a, b) => a - b)) === JSON.stringify(kept), `hide covered numbers draws ${own.plain}`);
+                // Back to Hide: the same numbers as at first.
+                await obs.writeNote(note, `Covered numbers\n\n${block([])}\n`);
+                await setting('coveredNumbers', 'hide');
+                await obs.waitFor(async () => {
+                    const n = await numbers();
+                    return n && n.covered.length === 0 && n.plain.length === hide.plain.length;
+                }, { timeout: 5000, message: 'Hide again' });
+                return `Hide: ${kept.length} y numbers; Show: ${all.length} (${show.covered.map((c) => c.text).join(', ')} over the curve)`;
+            } finally {
+                await setting('coveredNumbers', 'hide');
+            }
+        });
+
         // "What's new": who sees it, once, and what it does. Obsidian reloads a plugin after an update,
         // so each case writes data.json as that user would have it and reloads the plugin.
         const version = WHATS_NEW ? WHATS_NEW.WHATS_NEW_VERSION : null;

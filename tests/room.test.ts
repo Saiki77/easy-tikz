@@ -51,7 +51,7 @@ test('roomKey: the view is not part of it (the hand moves the view), the rest of
         { height: 500 },
         { paperWidthCm: 12 },
         { look: 'classic' },
-        { axes: { line: 'thick', arrows: true, names: 'always', numbers: 'large' } },
+        { axes: { line: 'thick', arrows: true, names: 'always', numbers: 'large', covered: 'hide' } },
         { axisStyle: 'box' },
         { showAxis: false },
         { showAxisLabels: false },
