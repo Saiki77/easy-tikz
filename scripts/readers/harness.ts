@@ -73,8 +73,9 @@ export function readerOf(mod: ReaderModule | null): Reader {
         }
         return null;
     };
-    const fn = pick(mod.read) ?? pick(mod.reader) ?? pick(mod.default);
-    if (!fn) throw new Error('the reader module exports no read(tex, kind, ctx), reader or default');
+    // 6.2.4: else the first export that is a Reader (src/readers/smart.ts: smartReader, src/readers/vote: voteReader).
+    const fn = pick(mod.read) ?? pick(mod.reader) ?? pick(mod.default) ?? Object.values(mod).map((o) => (o && typeof o === 'object' ? pick(o) : null)).find((f) => !!f) ?? null;
+    if (!fn) throw new Error('the reader module exports no read(tex, kind, ctx), reader, default or other Reader');
     return {
         read(tex, kind, ctx) {
             const r = fn(tex, kind, ctx);

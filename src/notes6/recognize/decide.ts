@@ -7,8 +7,9 @@
  *           order chart (src/formula.ts), iterate, notes6, linear.
  *   Smart   the network (index.ts) decides. none: no card and no mark. A
  *           card kind: the builder of that kind, on the parses a reader
- *           gives for that kind (src/readers: reader 0, the regex readers of
- *           6.2.1 on the formula and its spellings, adapt.ts). If that
+ *           gives for that kind (src/readers/smart.ts: the vote of three
+ *           readers, then reader 0, the regex readers of 6.2.1 on the
+ *           formula and its spellings, adapt.ts). If that
  *           builder builds nothing, the formula falls back to Rules: so it
  *           gets a card only when the network and the rules both say "a
  *           card", and then the card the rules open. Otherwise no card.
@@ -21,9 +22,11 @@
  * the builder's kind shows. 6.2.1, round 3: the label vector has its own
  * card (src/linear/vector.ts), with the vectors of the whole note; Rules
  * has no vector card (as 6.1). 6.2.2: the readers are pluggable (a Reader
- * of src/readers/types.ts, the last argument; reader 0 by default), and
- * smartCard gives the card of any kind with the parse it came from (for
- * scripts/readers/gap.mjs). Pure: no DOM, no Obsidian.
+ * of src/readers/types.ts, the last argument), and smartCard gives the card
+ * of any kind with the parse it came from (for scripts/readers/gap.mjs).
+ * 6.2.4: Smart's reader is src/readers/smart.ts by default: the vote of three
+ * hand-designed readers (src/readers/vote), then reader 0. Pure: no DOM, no
+ * Obsidian.
  */
 import { chartable, formulaChart, formulaLines } from '../../formula';
 import { parseChartText } from '../../text/parse';
@@ -34,7 +37,7 @@ import { NoteVector, VectorHoverCard, buildVector } from '../../linear/vector';
 import { chartableParse } from '../../formula';
 import { Label } from './net';
 import { groupOf, withAxis } from './adapt';
-import { reader0 } from '../../readers/reader0';
+import { smartReader } from '../../readers/smart';
 import {
     BuiltCard,
     ChartCard,
@@ -123,13 +126,13 @@ function readFor(reader: Reader, tex: string, label: Label, ctx: ReadContext): C
 }
 
 /** Smart, for a chart label (function, surface, polar, implicit, region): the chart of the formula or of one of its spellings, of the label's kind first; 6.2.1: `functions`, the note's functions (their calls are no products). */
-export function smartChart(tex: string, row: number | undefined, rowTex: string, label: Label, functions?: ReadonlySet<string>, reader: Reader = reader0): ChartCard | null {
+export function smartChart(tex: string, row: number | undefined, rowTex: string, label: Label, functions?: ReadonlySet<string>, reader: Reader = smartReader): ChartCard | null {
     const candidates = readFor(reader, rowTex, label, { block: tex, row, functions }).filter(isChartParse);
     return ofKind(candidates, buildChartCard, label)?.card ?? null;
 }
 
 /** Smart, for recurrence, sum and domain: the card of src/iterate/hover.ts for the formula or a spelling of it, of the label's kind first. */
-export function smartIterate(rowTex: string, label: Label, reader: Reader = reader0): IterateHoverCard | null {
+export function smartIterate(rowTex: string, label: Label, reader: Reader = smartReader): IterateHoverCard | null {
     const candidates = readFor(reader, rowTex, label, {}).filter(isIterateParse);
     return ofKind(candidates, buildIterateCard, label)?.card ?? null;
 }
@@ -140,13 +143,13 @@ export function smartIterate(rowTex: string, label: Label, reader: Reader = read
  * first. 6.2.1: `domains`, the sets the note names (noteDomains), for a
  * map's domain letter.
  */
-export function smartNotes6(rowTex: string, label: Label, defs: Map<string, NoteDefinition>, domains?: ReadonlyMap<string, string>, reader: Reader = reader0): HoverCard | null {
+export function smartNotes6(rowTex: string, label: Label, defs: Map<string, NoteDefinition>, domains?: ReadonlyMap<string, string>, reader: Reader = smartReader): HoverCard | null {
     const candidates = readFor(reader, rowTex, label, { domains }).filter(isNotes6Parse);
     return ofKind(candidates, (p) => buildNotes6Card(p, defs), label)?.card ?? null;
 }
 
 /** Smart, for matrix, product, det and eigen: the card of src/linear/hover.ts with the note's matrices and vectors, of the label's kind first. */
-export function smartLinear(rowTex: string, label: Label, values: Map<string, string>, reader: Reader = reader0): LinearHoverCard | null {
+export function smartLinear(rowTex: string, label: Label, values: Map<string, string>, reader: Reader = smartReader): LinearHoverCard | null {
     const candidates = readFor(reader, rowTex, label, {}).filter(isLinearParse);
     const card = ofKind(candidates, (p) => buildLinearCard(p, values), label)?.card ?? null;
     // det of a written matrix: its card is the matrix's (the unit square and its area), named as a determinant.
@@ -154,7 +157,7 @@ export function smartLinear(rowTex: string, label: Label, values: Map<string, st
 }
 
 /** 6.2.1, Smart, for vector: the vector card of src/linear/vector.ts for the formula or a spelling of it, with the note's vectors. */
-export function smartVector(rowTex: string, vectors: ReadonlyMap<string, NoteVector>, reader: Reader = reader0): VectorHoverCard | null {
+export function smartVector(rowTex: string, vectors: ReadonlyMap<string, NoteVector>, reader: Reader = smartReader): VectorHoverCard | null {
     const candidates = readFor(reader, rowTex, 'vector', {}).filter(isVectorParse);
     return ofKind(candidates, (p) => buildVectorCard(p, vectors), 'vector')?.card ?? null;
 }
@@ -167,7 +170,7 @@ export interface SmartContext extends NoteValues, ReadContext {}
  * builder's card of the label's kind first, as the hover opens it, without
  * the fall back to Rules); null when the reader's parses build none.
  */
-export function smartCard(rowTex: string, label: Label, ctx: SmartContext = {}, reader: Reader = reader0): { card: BuiltCard; parse: CardParse } | null {
+export function smartCard(rowTex: string, label: Label, ctx: SmartContext = {}, reader: Reader = smartReader): { card: BuiltCard; parse: CardParse } | null {
     const group = groupOf(label);
     if (!group) return null;
     const candidates = readFor(reader, rowTex, label, ctx);
@@ -205,7 +208,7 @@ function quick(tex: string, row: number | undefined, rowTex: string, label: Labe
  * gave carry the dotted mark? 6.2.1: `functions` as for smartChart;
  * `vectors`, the note's vectors (asked only for the label vector).
  */
-export function smartMark(tex: string, row: number | undefined, rowTex: string, label: Label, functions?: ReadonlySet<string>, vectors?: () => ReadonlyMap<string, NoteVector>, reader: Reader = reader0): boolean {
+export function smartMark(tex: string, row: number | undefined, rowTex: string, label: Label, functions?: ReadonlySet<string>, vectors?: () => ReadonlyMap<string, NoteVector>, reader: Reader = smartReader): boolean {
     if (label === 'none') return false;
     // Its own builder, or (the fall back of open) a card of the rules.
     return quick(tex, row, rowTex, label, functions, vectors, reader) || rulesMark(tex, row, rowTex);

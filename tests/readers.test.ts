@@ -1,14 +1,16 @@
 // 6.2.2: the typed reader interface of the hover cards (src/readers): the
 // parse shapes build their cards, reader 0 gives named roles, the builders
 // rename a formula's own variables, parseKey compares as the chart reads,
-// and the gap harness (scripts/readers) keeps reader 0 within its counts on
-// a committed subset of the hover-ml corpus and suite (and on all of it,
-// when the corpus is on this machine).
+// and the gap harness (scripts/readers) keeps reader 0 and, 6.2.4, Smart's
+// reader (the vote, then reader 0) within their counts on a committed subset
+// of the hover-ml corpus and suite (and on all of it, when the corpus is on
+// this machine), with the network of round 4.
 import { test, assert } from './_lib';
 import * as fs from 'node:fs';
 import { parseChartText } from '../src/text/parse';
 import { buildCard, parseKey, sameParse } from '../src/readers/build';
 import { reader0 } from '../src/readers/reader0';
+import { smartReader } from '../src/readers/smart';
 import { inVariables } from '../src/formula';
 import type { CardKind, CardParse } from '../src/readers/types';
 import { Item, Measured, measure, readJsonl } from '../scripts/readers/harness';
@@ -132,16 +134,26 @@ function totals(m: Measured) {
     return t;
 }
 
-test('gap harness on the committed subset (tests/readers-fixture.json): reader 0 has no more gaps or false cards than before', () => {
+test('gap harness on the committed subset (tests/readers-fixture.json): reader 0 and Smart\'s reader have no more gaps or false cards than before', () => {
     const fx = JSON.parse(fs.readFileSync('tests/readers-fixture.json', 'utf8')) as Fixture;
-    const m = measure(reader0, fx.corpus, new Map(Object.entries(fx.gold)), fx.suite, new Map(Object.entries(fx.expected)));
-    const t = totals(m);
-    console.log(`    corpus ${fx.corpus.length}: a ${t.a} of ${t.net}, b ${t.b}; suite ${fx.suite.length}: c ${t.c} of ${t.vNet}; false cards shown ${m.falseCards.shown} of ${m.falseCards.netCard}`);
-    // reader 0 (6.2.2): the counts at the time of writing; a reader that does better lowers them.
-    assert.ok(t.a <= 26, `a: ${t.a}`);
-    assert.ok(t.b <= 14, `b: ${t.b}`);
-    assert.ok(t.c <= 47, `c: ${t.c}`);
-    assert.ok(m.falseCards.shown <= 138, `false cards: ${m.falseCards.shown}`);
+    const run = (name: string, reader: typeof reader0) => {
+        const m = measure(reader, fx.corpus, new Map(Object.entries(fx.gold)), fx.suite, new Map(Object.entries(fx.expected)));
+        const t = totals(m);
+        console.log(`    ${name}: corpus ${fx.corpus.length}: a ${t.a} of ${t.net}, b ${t.b}; suite ${fx.suite.length}: c ${t.c} of ${t.vNet}; false cards shown ${m.falseCards.shown} of ${m.falseCards.netCard}`);
+        return { t, m };
+    };
+    // reader 0 with the network of round 4 (6.2.4): it reads none of the new forms, so a is higher than with round 3 (26).
+    const r0 = run('reader 0', reader0);
+    assert.ok(r0.t.a <= 32, `a: ${r0.t.a}`);
+    assert.ok(r0.t.b <= 14, `b: ${r0.t.b}`);
+    assert.ok(r0.t.c <= 47, `c: ${r0.t.c}`);
+    assert.ok(r0.m.falseCards.shown <= 70, `false cards: ${r0.m.falseCards.shown}`);
+    // Smart's reader: the counts at the time of writing (b and c count other cards than reader 0's gold parses).
+    const smart = run('Smart', smartReader);
+    assert.ok(smart.t.a <= 12, `a: ${smart.t.a}`);
+    assert.ok(smart.t.b <= 12, `b: ${smart.t.b}`);
+    assert.ok(smart.t.c <= 12, `c: ${smart.t.c}`);
+    assert.ok(smart.m.falseCards.shown <= 70, `false cards: ${smart.m.falseCards.shown}`);
 });
 
 // The hover-ml corpus and the reader data: only on the machine that has them, so CI without them passes.
@@ -151,7 +163,7 @@ const GOLD = `${SCRATCH}/reader-data/gold.jsonl`;
 const EXPECTED = `${SCRATCH}/reader-data/suite-expected.jsonl`;
 const SUITE = `${SCRATCH}/designed3-frozen/suite.jsonl`;
 
-test('gap harness on the whole corpus and every fourth suite variant: reader 0 within its counts (skipped without the corpus)', () => {
+test('gap harness on the whole corpus and every fourth suite variant: reader 0 and Smart\'s reader within their counts (skipped without the corpus)', () => {
     if (![...CORPUS, GOLD, EXPECTED, SUITE].every((f) => fs.existsSync(f))) {
         console.log('    (skipped: the hover-ml corpus or reader-data is not on this machine)');
         return;
@@ -160,11 +172,22 @@ test('gap harness on the whole corpus and every fourth suite variant: reader 0 w
     const gold = new Map(readJsonl<{ id: string; parse: CardParse; doubt?: string }>(GOLD).filter((g) => !g.doubt).map((g) => [g.id, g.parse]));
     const expected = new Map(readJsonl<{ id: string; parse: CardParse }>(EXPECTED).map((e) => [e.id, e.parse]));
     const suite = readJsonl<Item>(SUITE).filter((it) => expected.has(it.id)).filter((_it, i) => i % 4 === 0);
-    const m = measure(reader0, corpus, gold, suite, expected);
-    const t = totals(m);
-    console.log(`    corpus: a ${t.a} of ${t.net} (${((100 * t.a) / t.net).toFixed(1)}%), b ${t.b}; suite: c ${t.c} of ${t.vNet} (${((100 * t.c) / t.vNet).toFixed(1)}%); false cards shown ${m.falseCards.shown}`);
-    assert.ok(t.a / t.net <= 0.093, `a: ${t.a} of ${t.net}`);
-    assert.ok(t.b <= 14, `b: ${t.b}`);
-    assert.ok(t.c / t.vNet <= 0.385, `c: ${t.c} of ${t.vNet}`);
-    assert.ok(m.falseCards.shown <= 138, `false cards: ${m.falseCards.shown}`);
+    const run = (name: string, reader: typeof reader0) => {
+        const m = measure(reader, corpus, gold, suite, expected);
+        const t = totals(m);
+        console.log(`    ${name}: corpus: a ${t.a} of ${t.net} (${((100 * t.a) / t.net).toFixed(1)}%), b ${t.b}; suite: c ${t.c} of ${t.vNet} (${((100 * t.c) / t.vNet).toFixed(1)}%); false cards shown ${m.falseCards.shown}`);
+        return { t, m };
+    };
+    // reader 0 with the network of round 4 (6.2.4: 1819 formulas get a card kind, 1673 with round 3)
+    const r0 = run('reader 0', reader0);
+    assert.ok(r0.t.a / r0.t.net <= 0.126, `a: ${r0.t.a} of ${r0.t.net}`);
+    assert.ok(r0.t.b <= 14, `b: ${r0.t.b}`);
+    assert.ok(r0.t.c / r0.t.vNet <= 0.385, `c: ${r0.t.c} of ${r0.t.vNet}`);
+    assert.ok(r0.m.falseCards.shown <= 71, `false cards: ${r0.m.falseCards.shown}`);
+    // Smart's reader (6.2.4): b and c count other cards than reader 0's gold parses (DESIGN-READERS.md section 6)
+    const smart = run('Smart', smartReader);
+    assert.ok(smart.t.a / smart.t.net <= 0.04, `a: ${smart.t.a} of ${smart.t.net}`);
+    assert.ok(smart.t.b <= 92, `b: ${smart.t.b}`);
+    assert.ok(smart.t.c / smart.t.vNet <= 0.065, `c: ${smart.t.c} of ${smart.t.vNet}`);
+    assert.ok(smart.m.falseCards.shown <= 78, `false cards: ${smart.m.falseCards.shown}`);
 });
