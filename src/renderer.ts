@@ -35,7 +35,7 @@ import {
     labelMetricsFor,
     tintsAt,
 } from './scene';
-import { Grid, Pt, View, pointInRings } from './geometry';
+import { Grid, Pt, View } from './geometry';
 import { t as msg } from './i18n';
 import { GRID_OPACITY, opacityValue } from './opacity';
 import { pixelLayer } from './iterate/paint'; // 6.0 E

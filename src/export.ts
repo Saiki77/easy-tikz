@@ -16,7 +16,7 @@ import { THICKNESS_MAP, TIKZ_COLOR_DEFS } from './colors';
 import { colormapOption, colormapRange, isColormap } from './colormaps';
 import { GRID_OPACITY, MESH_OPACITY, opacityValue } from './opacity';
 import { FunctionInfo, MathContext, fmtNum, texLabel } from './mathcontext';
-import { Pt, View, clipPolylineToView, pointInRings, simplifyPolyline } from './geometry';
+import { Pt, View, clipPolylineToView, simplifyPolyline } from './geometry';
 import {
     ArrowHeads,
     BracePrim,
