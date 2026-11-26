@@ -281,25 +281,70 @@ export function readChart(texIn: string, row?: number): ChartParse | null {
     if (!parts.length) return null;
     const first = parts[0].found;
     const axis = parts[0].axis;
-    // The axis keeps the formula's own letter; 6.2.1: x_1 and x_2 name the axes they became (as math).
+    // The variables as the formula writes them: its own letter (t became x), 6.2.1: x_1 and x_2 (they became x and y).
     const named = parts[0].axisNames ?? {};
-    // A surface in another letter (z = 2t: no x, so t became x) names its x-axis after it.
-    const xAxis = named.x ?? (first.kind !== 'function' ? axis : undefined);
-    const axes = xAxis || named.y ? { axes: { ...(xAxis ? { x: xAxis } : {}), ...(named.y ? { y: named.y } : {}) } } : {};
+    const vx = axis ?? named.x ?? 'x';
+    const vy = named.y ?? 'y';
+    const fy = first.kind === 'function' ? 'y' : vy;
+    // The bodies back in those variables (the builder renames them into x and y again), when that gives the same body.
+    const bodies = [first.body, ...parts.map((p) => p.found.body)];
+    const back = bodies.every((b) => inVariables(inVariables(b, 'x', 'y', vx, fy), vx, fy, 'x', 'y') === b);
+    const variables = back && (vx !== 'x' || vy !== 'y') ? { variables: first.kind === 'function' && vy === 'y' ? [vx] : [vx, vy] } : {};
+    const own = (body: string) => (back ? inVariables(body, 'x', 'y', vx, fy) : body);
     switch (first.kind) {
         case 'function': {
             const fns = parts.filter((p) => p.found.kind === 'function').slice(0, COLOURS.length);
-            return { kind: 'function', functions: fns.map((p) => ({ ...(p.found.name ? { name: p.found.name } : {}), body: p.found.body })), ...(axis ? { variable: axis } : {}), ...axes };
+            return { kind: 'function', functions: fns.map((p) => ({ ...(p.found.name ? { name: p.found.name } : {}), body: own(p.found.body) })), ...variables };
         }
         case 'surface':
-            return { kind: 'surface', body: first.body, ...axes };
+            return { kind: 'surface', body: own(first.body), ...variables };
         case 'polar':
             return { kind: 'polar', body: first.body };
         case 'region':
-            return { kind: 'region', condition: first.body, ...axes };
+            return { kind: 'region', condition: own(first.body), ...variables };
         default:
-            return { kind: 'implicit', equation: first.body, ...axes };
+            return { kind: 'implicit', equation: own(first.body), ...variables };
     }
+}
+
+/** A variable as the cards name it: x_1 (also x_{1}) and x_2 as the axes x and y, another name as written. */
+const IS_X1 = /^x_\s*(?:\{\s*1\s*\}|1)$/;
+const IS_X2 = /^x_\s*(?:\{\s*2\s*\}|2)$/;
+
+/**
+ * Where a variable stands alone: a letter or a command (\eta), maybe with a
+ * subscript (v_1, \alpha_{12}); never inside a command, a longer name or a
+ * subscript (x is not the x of x_0, \exp or a_x).
+ */
+function standalone(v: string): RegExp {
+    const m = /^(\\?[A-Za-z]+)(?:\s*_\s*(?:\{\s*([A-Za-z0-9]+)\s*\}|([A-Za-z0-9])))?$/.exec(v.trim());
+    if (!m) return new RegExp(v.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&'), 'g');
+    const base = m[1].replace(/\\/g, '\\\\');
+    const sub = m[2] ?? m[3];
+    const head = m[1].startsWith('\\') ? base : `(?<![\\\\A-Za-z_]|_\\{)${base}`;
+    if (sub === undefined) return new RegExp(`${head}(?![A-Za-z_])`, 'g');
+    return new RegExp(`${head}\\s*_\\s*(?:\\{\\s*${sub}\\s*\\}${sub.length === 1 ? `|${sub}(?![0-9])` : ''})`, 'g');
+}
+
+/** One variable renamed: x_1 and x_2 as axesOf renames them (X1, X2), another one where it stands alone. */
+function renameOne(tex: string, from: string, to: string): string {
+    if (IS_X1.test(from.trim())) return tex.replace(X1, to);
+    if (IS_X2.test(from.trim())) return tex.replace(X2, to);
+    return tex.replace(standalone(from), to);
+}
+
+/**
+ * 6.2.2: a body in the variables (fx, fy) written in (tx, ty) instead: the
+ * builder writes a parse's body in the chart's x and y with it, reader 0
+ * its body back in the formula's own variables. Through stand-ins, so a y
+ * written for x is not renamed again.
+ */
+export function inVariables(tex: string, fx: string, fy: string, tx: string, ty: string): string {
+    if (fx === tx && fy === ty) return tex;
+    let s = tex;
+    if (fx !== tx) s = renameOne(s, fx, '');
+    if (fy !== ty) s = renameOne(s, fy, '');
+    return s.replace(//g, tx).replace(//g, ty);
 }
 
 /** 6.2.2: a chart parse's kind as src/formula.ts names it (implicit is an equation). */
@@ -318,15 +363,19 @@ const PLOT_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
  */
 export function chartLines(p: ChartParse): { kind: FormulaKind; lines: string[]; axis?: string } | null {
     const kind = formulaKindOf(p);
-    const variable = p.kind === 'function' ? p.variable : undefined;
-    const named = p.kind === 'polar' ? {} : p.axes ?? {};
+    // The formula's variables (x and y unless it names others): the bodies are renamed into x and y, the axes named after them.
+    const vars = p.kind === 'polar' ? [] : p.variables ?? [];
+    const vx = vars[0]?.trim() || 'x';
+    const vy = vars[1]?.trim() || 'y';
     // A letter names its axis as text (xlabel t), anything else as math (xlabel $x_1$).
-    const axisLabel = (name: string) => (/^[A-Za-z]$/.test(name) ? `xlabel ${name}` : `xlabel $${name}$`);
-    const xName = variable ? axisLabel(variable) : named.x ? axisLabel(named.x) : null;
-    const yName = named.y && kind !== 'polar' ? `ylabel $${named.y}$` : null;
+    const xName = vx !== 'x' ? (/^[A-Za-z]$/.test(vx) ? `xlabel ${vx}` : `xlabel $${vx}$`) : null;
+    const yName = vy !== 'y' ? `ylabel $${vy}$` : null;
     const label = [xName, yName].filter((l): l is string => !!l);
+    // The letter a function is in (a sequence's n): formulaChart draws n and k from 0.
+    const variable = p.kind === 'function' && vx !== 'x' && /^[A-Za-z]$/.test(vx) ? vx : undefined;
+    const inXY = (body: string) => inVariables(body, vx, p.kind === 'function' ? 'y' : vy, 'x', 'y');
     const fns = p.kind === 'function' ? p.functions.slice(0, COLOURS.length) : [];
-    const bodies = p.kind === 'function' ? fns.map((f) => f.body) : [p.kind === 'implicit' ? p.equation : p.kind === 'region' ? p.condition : p.body];
+    const bodies = (p.kind === 'function' ? fns.map((f) => f.body) : [p.kind === 'implicit' ? p.equation : p.kind === 'region' ? p.condition : p.body]).map((b) => (p.kind === 'polar' ? b : inXY(b)));
     if (!bodies.length || bodies.some((b) => !b.trim())) return null;
     const free = Array.from(new Set(bodies.flatMap((b) => freeNames(b))));
     if (free.length > MAX_SLIDERS) return null;

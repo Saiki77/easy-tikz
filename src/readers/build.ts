@@ -10,10 +10,10 @@
  *   vector    vector   src/linear/vector.ts (buildVector)
  *
  * A card counts only when its chart lines parse (as the hover shows it).
- * Also here: parseKey, when two parses are the same; renameVariable, a
+ * Also here: parseKey, when two parses are the same; inVariables, a
  * letter renamed as reader 0 renames it. Pure: no DOM, no Obsidian.
  */
-import { FormulaKind, chartLines, chartOfParse, chartableParse, formulaKindOf } from '../formula';
+import { FormulaKind, chartLines, chartOfParse, chartableParse, formulaKindOf, inVariables } from '../formula';
 import { parseChartText } from '../text/parse';
 import { HoverCard, NoteDefinition, buildNotes6 } from '../notes6/hover';
 import { LinearHoverCard, buildLinear } from '../linear/hover';
@@ -200,13 +200,10 @@ export function sameParse(a: CardParse, b: CardParse): boolean {
 }
 
 /**
- * A letter renamed where it stands alone, as reader 0 renames a formula's
- * variable into the chart's x (never inside a command such as \sin, a longer
- * name, or a subscript): renameVariable('3t^2 + \sin t', 't', 'x') is
- * 3x^2 + \sin x.
+ * A chart body's variables renamed as the chart builder renames them
+ * (src/formula.ts): inVariables('3t^2 + \sin t', 't', 'y', 'x', 'y') is
+ * 3x^2 + \sin x; a letter where it stands alone (never inside a command
+ * such as \sin, a longer name, or a subscript: x_0 stays), x_1 and x_2 as x
+ * and y.
  */
-export function renameVariable(tex: string, letter: string, to: string): string {
-    const esc = letter.replace(/\\/g, '\\\\');
-    const re = letter.startsWith('\\') ? new RegExp(`${esc}(?![A-Za-z])`, 'g') : new RegExp(`(?<![\\\\A-Za-z_]|_\\{)${esc}(?![A-Za-z])`, 'g');
-    return tex.replace(re, to);
-}
+export { inVariables };

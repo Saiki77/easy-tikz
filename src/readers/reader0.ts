@@ -15,7 +15,7 @@
  * builds them in order (src/notes6/recognize/decide.ts): the cards are the
  * cards of 6.2.1. Pure: no DOM, no Obsidian.
  */
-import { readChart } from '../formula';
+import { inVariables, readChart } from '../formula';
 import { readNotes6 } from '../notes6/hover';
 import { readLinear } from '../linear/hover';
 import { readIterate } from '../iterate/hover';
@@ -68,10 +68,16 @@ export const reader0: Reader = {
                 // no chart
             }
             for (const s of all.slice(1)) {
-                let p = readOne(s.tex, kind);
-                // A function renamed into x: the x-axis keeps the formula's letter (functionSpellings' axis).
-                if (p && s.axis && p.kind === 'function' && !p.variable && !p.axes?.x) p = { ...p, variable: s.axis };
-                add(p);
+                const p = readOne(s.tex, kind);
+                // A function renamed into x (functionSpellings): back in the formula's letter, its x-axis named after it.
+                const axis = s.axis;
+                if (p && axis && p.kind === 'function' && (p.variables?.[0] ?? 'x') === 'x') {
+                    const rest = p.variables?.slice(1) ?? [];
+                    const back = p.functions.map((f) => ({ ...f, body: inVariables(f.body, 'x', 'y', axis, 'y') }));
+                    // Only when the builder gets the same body back (a body with the letter as a slider too, x/\omega, keeps x).
+                    const same = back.every((f, i) => inVariables(f.body, axis, 'y', 'x', 'y') === p.functions[i].body);
+                    add(same ? { ...p, functions: back, variables: [axis, ...rest] } : p);
+                } else add(p);
             }
             return out;
         }

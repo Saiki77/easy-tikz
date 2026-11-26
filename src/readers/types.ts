@@ -23,13 +23,18 @@
  *             subscript, or a Greek letter command.
  *   variable  the letter a formula is in, as it writes it (x, t, x_1, \lambda, \theta).
  *
- * The chart kinds (function, surface, polar, implicit, region) write their
- * bodies in the chart's own variables: x for a function, x and y for a
- * surface, a curve and a region, \theta for a polar curve. A formula in
- * another letter is renamed into them (s(t) = 3t^2 is the body 3x^2 with
- * variable t; f(x_1, x_2) = x_1^2 + x_2^2 is the body x^2 + y^2 with axes
- * x_1 and x_2); the variable and the axes only name the axes of the chart.
- * renameVariable (src/readers/build.ts) renames a letter as reader 0 does.
+ * The chart kinds (function, surface, implicit, region) write their bodies
+ * in the formula's own variables, as written, and name them in `variables`
+ * (the x-axis first, then the y-axis): s(t) = 3t^2 is the body 3t^2 with
+ * variables [t]; f(x_1, x_2) = x_1^2 + x_2^2 the body x_1^2 + x_2^2 with
+ * variables [x_1, x_2]. Without `variables` they are x and y. The builder
+ * renames them into the chart's x and y and names the axes after them. A
+ * polar curve is written in \theta.
+ *
+ * Bodies are TeX as the chart reads it after the formula's own spelling is
+ * set straight: a product of letters split (ax is a x), an objective
+ * without its min or s.t. part, Unicode signs as commands (src/formula.ts,
+ * prepared).
  *
  * Pure types: no code, no DOM, no Obsidian.
  */
@@ -59,50 +64,46 @@ export type CardKind =
     | 'domain'
     | 'vector';
 
-/** The names the axes of a chart take from a formula in x_1 and x_2 (written as x and y in the body). */
-export interface AxisNames {
-    /** The x-axis: x_1. */
-    x?: string;
-    /** The y-axis: x_2. */
-    y?: string;
-}
-
 // ------------------------------------------------------------------ charts (src/formula.ts)
 
 /** One function of a function card. */
 export interface FunctionPiece {
     /** The formula's own name (g in g(x) = ...); without one the card names it f, g or h. */
     name?: string;
-    /** The right side, in x: x^2 - 2x + 1, \sin(x) + a. */
+    /** The right side, in the formula's variable: x^2 - 2x + 1, \sin(x) + a, x_0 e^{a t}. */
     body: Tex;
 }
 
 /**
  * function: the graph y = f(x). f(x) = x^2 - 1, y = 2x + 1, x(t) = x_0 e^{a t}, a_n = 1/n, \frac{1}{1 + x}.
  * JSON: {"kind":"function","functions":[{"name":"f","body":"x^2 - 1"}]}
- *       {"kind":"function","functions":[{"body":"x_0 e^{a x}"}],"variable":"t"}
+ *       {"kind":"function","functions":[{"body":"x_0 e^{a t}"}],"variables":["t"]}
+ *       {"kind":"function","functions":[{"body":"\\frac{m}{p_2} - \\frac{p_1}{p_2} x_1"}],"variables":["x_1","x_2"]}
  */
 export interface FunctionParse {
     kind: 'function';
     /** The functions to plot, the main one first; a formula may hold up to three (f(x) = ..., g(x) = ...). */
     functions: FunctionPiece[];
-    /** The formula's variable when it is no x (t, n, k, a letter): the x-axis is named after it; n and k draw as a sequence from 0 to 20. */
-    variable?: string;
-    /** The axis names of a formula in x_1 (and x_2). */
-    axes?: AxisNames;
-    /** Where the graph is drawn (x from `from` to `to`); without it, everywhere. Reader 0 never gives it. */
+    /**
+     * The formula's variable (t, n, k, x_1, \eta; default x), and the name of the value when the head is a
+     * coordinate (x_2 in x_2 = 3x_1 + 1; default y): the axes are named after them; n and k draw as a sequence
+     * from 0 to 20.
+     */
+    variables?: string[];
+    /** Where the graph is drawn (the variable from `from` to `to`); without it, everywhere. Reader 0 never gives it. */
     domain?: { from: Tex; to: Tex };
 }
 
 /**
  * surface: z = f(x, y). f(x, y) = x^2 + y^2, z = x y, 2x_1^2 + x_2^2, u = \sqrt{x y}.
- * JSON: {"kind":"surface","body":"x^2 + y^2"}   {"kind":"surface","body":"2x^2 + y^2","axes":{"x":"x_1","y":"x_2"}}
+ * JSON: {"kind":"surface","body":"x^2 + y^2"}   {"kind":"surface","body":"2x_1^2 + x_2^2","variables":["x_1","x_2"]}
  */
 export interface SurfaceParse {
     kind: 'surface';
-    /** The height, in x and y. */
+    /** The height, in its two variables. */
     body: Tex;
-    axes?: AxisNames;
+    /** The two variables (default x and y): the axes are named after them. */
+    variables?: string[];
 }
 
 /**
@@ -116,25 +117,27 @@ export interface PolarParse {
 }
 
 /**
- * implicit: the curve of one equation in x and y. x^2 + y^2 = 1, xy = 4, \{(x, y) \mid x + y = 1\} (as x + y = 1).
+ * implicit: the curve of one equation in two variables. x^2 + y^2 = 1, xy = 4, \{(x, y) \mid x + y = 1\} (as x + y = 1).
  * JSON: {"kind":"implicit","equation":"x^2 + y^2 = 1"}
  */
 export interface ImplicitParse {
     kind: 'implicit';
-    /** The equation, in x and y, with one =. */
+    /** The equation, with one =. */
     equation: Tex;
-    axes?: AxisNames;
+    /** The two variables (default x and y). */
+    variables?: string[];
 }
 
 /**
- * region: the part of the plane where inequalities in x and y hold. x + y \le 4, x^2 + y^2 < 1, x_1 + x_2 \le 4.
- * JSON: {"kind":"region","condition":"x + y \\le 4"}
+ * region: the part of the plane where inequalities in two variables hold. x + y \le 4, x^2 + y^2 < 1, x_1 + x_2 \le 4.
+ * JSON: {"kind":"region","condition":"x_1 + x_2 \\le 4","variables":["x_1","x_2"]}
  */
 export interface RegionParse {
     kind: 'region';
-    /** The inequalities, in x and y (several joined by commas: x + y \le 4, x \ge 0). */
+    /** The inequalities (several joined by commas: x + y \le 4, x \ge 0). */
     condition: Tex;
-    axes?: AxisNames;
+    /** The two variables (default x and y). */
+    variables?: string[];
 }
 
 // ------------------------------------------------------------------ sets and maps (src/notes6/hover.ts)
