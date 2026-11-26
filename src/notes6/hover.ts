@@ -31,8 +31,8 @@ export interface HoverCard {
     lines: string[];
     /** The chart for n = 2, when the formula is in ℝⁿ. */
     lines2?: string[];
-    /** The function the card draws: its name, its body (LaTeX), and where it comes from. */
-    fn?: { name: string; body: string; from: 'note' | 'example' };
+    /** The function the card draws: its name, its body (LaTeX), and where it comes from (6.2.1: a built-in, \ln: (0, \infty) \to \mathbb{R}). */
+    fn?: { name: string; body: string; from: 'note' | 'example' | 'builtin' };
     /** The letter the formula uses for its variable, when it is not x (the chart's x-axis is named after it). */
     variable?: string;
 }
@@ -43,6 +43,9 @@ export interface NoteDefinition {
     sliders: string[];
 }
 
+/** 6.2.1: built-in functions a map may be named after (\ln: (0, \infty) \to \mathbb{R}, \sin: \mathbb{R} \to [-1, 1]): the card draws them. */
+const BUILT_IN_MAPS: ReadonlySet<string> = new Set(['ln', 'log', 'exp', 'sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan', 'sinh', 'cosh', 'tanh', 'sqrt']);
+
 /** The example function of a card whose note defines none: convex, with two zeros. */
 export const EXAMPLE_BODY = 'x^2 - 1';
 
@@ -52,10 +55,10 @@ const REALS = String.raw`(?:\\mathbb\s*\{?\s*R\s*\}?|\\R(?![A-Za-z])|ℝ|\\mathb
 const SPACE = new RegExp(String.raw`^${REALS}\s*(?:\^\s*\{?\s*([A-Za-z0-9]+)\s*\}?)?$`);
 const REL = /\\(?:le|leq|ge|geq|lt|gt|leqslant|geqslant)(?![A-Za-z])|[<>]|≤|≥/;
 
-/** Spacing, sizes and Unicode as plain LaTeX: \left\{ is \{, ℝ is \mathbb{R}, ≤ is \le, λ is \lambda. */
+/** Spacing, sizes and Unicode as plain LaTeX: \left\{ is \{, ℝ is \mathbb{R}, ≤ is \le, λ is \lambda; 6.2.1: \middle| is |. */
 export function normalize(tex: string): string {
     return tex
-        .replace(/\\(?:left|right|bigl?|bigr?|Bigl?|Bigr?|biggl?|biggr?)(?![A-Za-z])/g, '')
+        .replace(/\\(?:left|right|middle|bigl?|bigr?|Bigl?|Bigr?|biggl?|biggr?)(?![A-Za-z])/g, '')
         .replace(/\\(?:displaystyle|textstyle|quad|qquad)(?![A-Za-z])|\\[,;!: ]/g, ' ')
         .replace(/ℝ/g, '\\mathbb{R}')
         .replace(/∈/g, '\\in ')
@@ -270,7 +273,8 @@ function parse(texIn: string): Parsed | null {
     const epi = /(?:\\operatorname\s*\{\s*epi\s*\}|\\mathrm\s*\{\s*epi\s*\}|\\text\s*\{\s*epi\s*\}|(?<![A-Za-z\\])epi)\s*\(?\s*([A-Za-z][A-Za-z0-9_]*)/.exec(tex);
     if (epi) return { kind: 'epigraph', fn: epi[1] };
     // A set {head | condition}, maybe named: S = {...}.
-    const set = /(?:^|=\s*)\\\{\s*(.+?)\s*(?:\\mid|\\vert|\||:)\s*(.+?)\s*\\\}$/.exec(tex);
+    // (6.2.1: \mid and \vert as whole commands: \middle is no \mid)
+    const set = /(?:^|=\s*)\\\{\s*(.+?)\s*(?:\\mid(?![A-Za-z])|\\vert(?![A-Za-z])|\||:)\s*(.+?)\s*\\\}$/.exec(tex);
     if (set) {
         const head = set[1].trim();
         const cond = set[2].trim();
@@ -371,9 +375,11 @@ export function hoverCard(texIn: string, defs: Map<string, NoteDefinition>): Hov
     if (!p) return null;
     const name = p.fn;
     const def = name ? defs.get(name) : undefined;
-    const fn = name ? { name, body: def ? def.body : EXAMPLE_BODY, from: def ? ('note' as const) : ('example' as const) } : undefined;
+    const builtin = !def && p.kind === 'map' && !!name && BUILT_IN_MAPS.has(name);
+    const fn = name ? { name, body: def ? def.body : builtin ? `\\${name}(x)` : EXAMPLE_BODY, from: def ? ('note' as const) : builtin ? ('builtin' as const) : ('example' as const) } : undefined;
     const sliders = def ? def.sliders : [];
-    const plot = fn ? [...sliders, `plot $${fn.name}(x) = ${fn.body}$ in blue, thick`] : [];
+    // a built-in keeps its own name: the chart draws y = \ln(x)
+    const plot = fn ? [...sliders, builtin ? `plot $y = ${fn.body}$ in blue, thick` : `plot $${fn.name}(x) = ${fn.body}$ in blue, thick`] : [];
     const hidden = fn ? [...sliders, `plot $${fn.name}(x) = ${fn.body}$, hidden`] : [];
     const plane = ['show x from -3 to 3 and y from -3 to 3', 'equal scale'];
     const card = (lines: string[], extra: Partial<HoverCard> = {}): HoverCard => ({ kind: p ? p.kind : 'set', lines, ...(fn ? { fn } : {}), ...extra });

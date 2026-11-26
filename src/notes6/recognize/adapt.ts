@@ -282,20 +282,186 @@ function polarSpellings(tex: string): Spelling[] {
 
 const REALS = /^\\mathbb\s*\{?\s*R\s*\}?(?:\s*\^\s*(?:\{[^{}]*\}|[A-Za-z0-9]))?$/;
 
-/** A map the card cannot read: \colon as :, a domain or codomain that is no ℝ or ℝⁿ (an interval, ℝ_{>0}) as ℝ. */
-function mapSpellings(tex: string): Spelling[] {
+/** 6.2.1: the sets of a note that a map's domain letter may name: letter to the space it lies in (\mathbb{R}, or \mathbb{R}^2 for a set in the plane). */
+export function noteDomains(formulas: readonly string[] | undefined): Map<string, string> {
+    const out = new Map<string, string>();
+    for (const f of formulas ?? []) {
+        const m = /^\s*([A-Z])(?:_\{?[A-Za-z0-9]+\}?)?\s*(?::=|=|\\coloneqq|\\subseteq|\\subset(?![A-Za-z])|⊆|⊂)\s*([\s\S]+)$/.exec(f);
+        if (!m || out.has(m[1])) continue;
+        const rhs = m[2].replace(/\\(?:left|right|big|Big)(?![A-Za-z])/g, '');
+        // a set of numbers or of pairs: ℝ, an interval, a ray, ℝ \ {0}; ℝ², a product of intervals, {(x, y) | ...}
+        const plane = /\^\s*\{?\s*2\s*\}?|\\times|^\s*\\\{\s*\(\s*[A-Za-z](?:_\{?\w+\}?)?\s*,\s*[A-Za-z](?:_\{?\w+\}?)?\s*\)/.test(rhs);
+        const space3 = /\^\s*\{?\s*[3-9]\s*\}?|\(\s*[A-Za-z]\s*,\s*[A-Za-z]\s*,\s*[A-Za-z]\s*\)/.test(rhs);
+        const real = /^\s*(?:\\mathbb\s*\{?\s*R|ℝ|[[(]|\]|\\\{\s*(?:x|t)\b)/.test(rhs);
+        if (space3) continue;
+        if (plane) out.set(m[1], '\\mathbb{R}^2');
+        else if (real) out.set(m[1], '\\mathbb{R}');
+    }
+    return out;
+}
+
+/**
+ * A map the card cannot read: \colon as :, \longrightarrow as \to, a
+ * domain or codomain that is no ℝ or ℝⁿ (an interval, ℝ_{>0}, ℝ \ {0}) as
+ * ℝ; 6.2.1: a domain letter (D) as the space of the set the note gives it
+ * (`domains`: D = [0, 1] is ℝ, D \subseteq ℝ² is ℝ²), and a built-in
+ * function as the name (\ln, \sin: the card draws it).
+ */
+function mapSpellings(tex: string, domains?: ReadonlyMap<string, string>): Spelling[] {
     const s = tex.replace(/\\colon(?![A-Za-z])/g, ':').replace(/\\(?:rightarrow|longrightarrow)(?![A-Za-z])/g, '\\to');
     const m = /^\s*(\\?[A-Za-z][A-Za-z0-9_]*)\s*:\s*(.+?)\s*\\to\s*(.+?)\s*$/.exec(s);
     if (!m) return s !== tex ? [{ tex: s }] : [];
-    const space = (x: string) => (REALS.test(x.trim()) ? x.trim() : '\\mathbb{R}');
+    const space = (x: string) => {
+        const t = x.trim();
+        if (REALS.test(t)) return t;
+        return domains?.get(t) ?? '\\mathbb{R}';
+    };
     return [{ tex: `${m[1].replace(/^\\/, '')}: ${space(m[2])} \\to ${space(m[3])}` }];
+}
+
+/** The set braces \{ ... \} of a formula that hold a set builder: where they start and end, and what is inside; null without one. */
+function setBraces(tex: string): { start: number; end: number; inner: string } | null {
+    for (let i = tex.indexOf('\\{'); i >= 0; i = tex.indexOf('\\{', i + 2)) {
+        let depth = 0;
+        for (let j = i; j < tex.length; j++) {
+            if (tex.startsWith('\\{', j)) {
+                depth++;
+                j++;
+            } else if (tex.startsWith('\\}', j)) {
+                depth--;
+                j++;
+                if (depth === 0) {
+                    const inner = tex.slice(i + 2, j - 1).trim();
+                    // a builder: a separator or a relation inside (\{1\}, \{0, 1\} are lists)
+                    if (/\\mid|\\vert|\||:|;|\\colon|\\text|\\le|\\ge|<|>|=/.test(inner)) return { start: i, end: j + 1, inner };
+                    break;
+                }
+            } else if (tex[j] === '\\') j++;
+        }
+    }
+    return null;
+}
+
+/** Where a set builder's head ends: the first separator at the top level (\mid, |, \vert, :, \colon, ;, a word such as mit or with). */
+const SET_SEPARATOR = /\\mid(?![A-Za-z])|\\vert(?![A-Za-z])|\\colon(?![A-Za-z])|\\(?:text|textrm|mathrm)\s*\{\s*(?:mit|with|wobei|where|so\s*dass|sodass|such\s+that|für\s+die|for\s+which)\s*\}|[|:;]/y;
+
+/** A set's spelling as the set card reads it: sizes out (\middle| is |), \lbrace as \{, ℝ, ∈ and ∣ as LaTeX. */
+const plainSet = (tex: string) =>
+    tex
+        .replace(/\\(?:left|right|middle|bigl?|bigr?|bigm|Bigl?|Bigr?|Bigm|biggl?|biggr?|Biggl?|Biggr?)(?![A-Za-z])/g, '')
+        .replace(/\\lbrace(?![A-Za-z])/g, '\\{')
+        .replace(/\\rbrace(?![A-Za-z])/g, '\\}')
+        .replace(/ℝ/g, '\\mathbb{R}')
+        .replace(/∈/g, '\\in ')
+        .replace(/∣/g, '\\mid ');
+
+/** A set builder as head and condition; a set given by its condition alone gets its head. Null without a set builder. */
+function setBuilderOf(texIn: string): { head: string; cond: string } | null {
+    const b = setBraces(plainSet(texIn));
+    if (!b) return null;
+    const { pieces, seps } = topSplit(b.inner, SET_SEPARATOR);
+    let head = '';
+    let cond = '';
+    if (pieces.length >= 2 && pieces[0].trim()) {
+        head = pieces[0].trim();
+        // the rest is the condition, with its own bars (|x - 1| \le 3)
+        cond = b.inner.slice(pieces[0].length + seps[0].length).trim();
+    } else {
+        // a set written by its condition only: \{x_1^2 + x_2^2 \le 4\}, \{x + y \le 1, x \ge 0\}
+        cond = b.inner;
+        const used = (v: string) => new RegExp(`(?<![A-Za-z\\\\])${v.replace('_', '\\s*_\\s*\\{?')}(?![A-Za-z0-9])`).test(cond);
+        if (used('x_1') && used('x_2')) head = '(x_1, x_2)';
+        else if (/(?<![A-Za-z\\])x(?![A-Za-z_])/.test(cond) && /(?<![A-Za-z\\])y(?![A-Za-z_])/.test(cond)) head = '(x, y)';
+        else if (/(?<![A-Za-z\\])x(?![A-Za-z_])/.test(cond)) head = 'x';
+        else return null;
+    }
+    return cond ? { head, cond } : null;
+}
+
+/** The coordinates of a set's head: (x, y), (x_1, x_2), (u, v) with \in \mathbb{R}^2, or x \in \mathbb{R}^2 with x_1 and x_2 in the condition; null for one variable. */
+function pairOf(head: string, cond: string): [string, string] | null {
+    const name = String.raw`[A-Za-z](?:\s*_\s*(?:\{\s*[A-Za-z0-9]+\s*\}|[A-Za-z0-9]))?`;
+    const pair = new RegExp(String.raw`^\(\s*(${name})\s*,\s*(${name})\s*\)(?:\s*\\in\s*\\mathbb\s*\{?\s*R\s*\}?\s*\^\s*\{?\s*2\s*\}?)?$`).exec(head);
+    if (pair) return [pair[1].replace(/[\s{}]/g, ''), pair[2].replace(/[\s{}]/g, '')];
+    const plane = /^([A-Za-z])(?:\s*\\in\s*\\mathbb\s*\{?\s*R\s*\}?\s*\^\s*\{?\s*2\s*\}?)?$/.exec(head);
+    if (plane && new RegExp(`${plane[1]}\\s*_\\s*\\{?\\s*1`).test(cond) && new RegExp(`${plane[1]}\\s*_\\s*\\{?\\s*2`).test(cond)) return [`${plane[1]}_1`, `${plane[1]}_2`];
+    return null;
+}
+
+/** A coordinate (x_1) replaced by a letter (x) in a condition. */
+function renameCoordinate(tex: string, from: string, to: string): string {
+    const [base, sub] = from.split('_');
+    const re = sub ? new RegExp(`(?<![A-Za-z\\\\])${base}\\s*_\\s*(?:\\{\\s*${sub}\\s*\\}|${sub})(?![0-9])`, 'g') : new RegExp(`(?<![A-Za-z\\\\_])${base}(?![A-Za-z_])`, 'g');
+    return tex.replace(re, to);
+}
+
+/**
+ * 6.2.1, round 3: a set the card cannot read (DESIGN3.md, section 3): the
+ * separators ;, :, \colon, \middle|, \vert and words (mit, with, such
+ * that) as \mid; the set alone, without a name or image before it and a
+ * value after it (= (-2, 2), = \emptyset); a set given by its condition only
+ * with its head; x \in \mathbb{R}^n written in the condition moved into the
+ * head; the coordinates x_1, x_2 (or u, v) as x and y, with x \ge 0 for
+ * both; a domain the card does not draw (\operatorname{dom} f) left out.
+ */
+function setSpellings(tex: string): Spelling[] {
+    const sb = setBuilderOf(tex);
+    if (!sb) return [];
+    let head = sb.head.replace(/\s*\\in\s*\\operatorname\s*\{\s*dom\s*\}\s*[A-Za-z]$/, '');
+    let cond = sb.cond.replace(/[.,;]\s*$/, '');
+    // x \mid x \in R^n, g(x) \le 0
+    const member = /^([A-Za-z])\s*\\in\s*(\\mathbb\s*\{?\s*R\s*\}?(?:\s*\^\s*(?:\{[^{}]*\}|[A-Za-z0-9]))?)\s*,\s*([\s\S]+)$/.exec(cond);
+    if (member && member[1] === head) {
+        head = `${head} \\in ${member[2]}`;
+        cond = member[3];
+    }
+    const pair = pairOf(head, cond);
+    if (pair) {
+        const [a, b] = pair;
+        // x \ge 0 for a vector x in the plane: both coordinates
+        const vec = /^([A-Za-z])_1$/.exec(a);
+        if (vec) cond = cond.replace(new RegExp(`(?<![A-Za-z\\\\])${vec[1]}\\s*(\\\\ge|\\\\geq|\\\\le|\\\\leq|>|<)\\s*0(?![0-9.])`, 'g'), `${a} $1 0, ${vec[1]}_2 $1 0`);
+        if (!(a === 'x' && b === 'y')) cond = renameCoordinate(renameCoordinate(cond, a, '\uE000'), b, '\uE001').replace(/\uE000/g, 'x').replace(/\uE001/g, 'y');
+        return [{ tex: `\\{(x, y) \\mid ${cond}\\}` }];
+    }
+    return [{ tex: `\\{${head} \\mid ${cond}\\}` }];
+}
+
+/**
+ * 6.2.1, round 3, S3: a set of pairs given by ONE equation is the curve of
+ * that equation: its chart is the equation's, with the two coordinates as x
+ * and y (\{(x, y) \mid x^2 + y^2 = 1\} is x^2 + y^2 = 1, \{(u, v) \mid u = 1\}
+ * is x = 1). setCurve in features.ts reads the set the same way.
+ */
+function setCurveSpellings(tex: string): Spelling[] {
+    const sb = setBuilderOf(tex);
+    if (!sb) return [];
+    const pair = pairOf(sb.head, sb.cond);
+    if (!pair) return [];
+    const cond = sb.cond.replace(/[.,;]\s*$/, '');
+    // one equation: one = at the top level, no inequality, no list, no words
+    const { pieces } = topSplit(cond, EQUALS);
+    if (pieces.length !== 2 || /\\(?:le|ge|leq|geq|ne|neq|lt|gt|text)(?![A-Za-z])|[<>]/.test(cond) || topSplit(cond, /[,;]/y).pieces.length > 1) return [];
+    const [a, b] = pair;
+    let eq = cond;
+    if (!(a === 'x' && b === 'y')) {
+        // through a stand-in, so a coordinate named y does not meet the new y
+        eq = renameCoordinate(renameCoordinate(eq, a, '\uE000'), b, '\uE001').replace(/\uE000/g, 'x').replace(/\uE001/g, 'y');
+    }
+    return [{ tex: eq.trim() }];
 }
 
 /** An interval the card cannot read: after ≈ or =, named (I = [0, 1]), with ; between its ends, of a letter with a subscript, with ends that are no numbers. */
 function intervalSpellings(tex: string): Spelling[] {
     let s = tex.replace(/^\s*(?:\\approx(?![A-Za-z])|=|\\Rightarrow(?![A-Za-z]))\s*/, '').replace(/;/g, ',');
     const named = /^\s*[A-Za-z](?:_\{?\w+\}?)?\s*=\s*([[(][\s\S]*[\])])\s*$/.exec(s);
+    // 6.2.1, round 3 (S6): an interval after an image or a set operation (g(\mathbb{R}) = [0, \infty), A \cup B = [-2, 4]),
+    // and the interval a set defines ([a, b] = \{x \in \mathbb{R} \mid a \le x \le b\})
+    const image = /^[^=]*\S\s*=\s*([[(][^=]*[\])])\s*$/.exec(s);
+    const defined = /^\s*([[(][^=]*?[\])])\s*=\s*\\\{/.exec(s);
     if (named) s = named[1];
+    else if (defined) s = defined[1];
+    else if (image) s = image[1];
     const out: Spelling[] = [{ tex: s }];
     const member = /^\s*(\\?[A-Za-z]+)(?:\s*_\s*\{?\w+\}?)?\s*\\in\s*([[(][\s\S]*[\])])\s*$/.exec(s);
     if (member) out.push({ tex: `x \\in ${member[2]}` });
@@ -426,10 +592,11 @@ export function productsOf(tex: string, functions: ReadonlySet<string> = new Set
 /** The labels whose card is a chart of src/formula.ts. */
 const CHART_LABELS: ReadonlySet<Label> = new Set(['function', 'surface', 'polar', 'implicit', 'region']);
 
-const OWN: Partial<Record<Label, (tex: string) => Spelling[]>> = {
+const OWN: Partial<Record<Label, (tex: string, domains?: ReadonlyMap<string, string>) => Spelling[]>> = {
     function: functionSpellings,
     surface: surfaceSpellings,
     polar: polarSpellings,
+    set: setSpellings,
     map: mapSpellings,
     interval: intervalSpellings,
     condition: conditionSpellings,
@@ -449,9 +616,11 @@ const MAX = 16;
  * order to try: the formula as written first, then plain spacing, then each
  * part and each shorter chain, each with the rewrites of the label's kind.
  * 6.2.1: for a chart, then each with a letter before a bracket as a product
- * (M(1 - y)), unless the note defines it as a function (`functions`).
+ * (M(1 - y)), unless the note defines it as a function (`functions`); a
+ * set of pairs with one equation as that equation (implicit, function);
+ * `domains`, the sets the note names (noteDomains), for a map's domain.
  */
-export function spellings(tex: string, label: Label, functions?: ReadonlySet<string>): Spelling[] {
+export function spellings(tex: string, label: Label, functions?: ReadonlySet<string>, domains?: ReadonlyMap<string, string>): Spelling[] {
     const out: Spelling[] = [];
     const add = (s: Spelling) => {
         if (out.length < MAX && s.tex.trim() && !out.some((o) => o.tex === s.tex && o.axis === s.axis)) out.push(s);
@@ -463,7 +632,8 @@ export function spellings(tex: string, label: Label, functions?: ReadonlySet<str
     for (const p of pieces) {
         const forms = [p, ...chainsOf(p)];
         for (const f of forms) add({ tex: f });
-        if (own) for (const f of forms) for (const s of own(f)) add(s);
+        if (own) for (const f of forms) for (const s of own(f, domains)) add(s);
+        if (label === 'implicit' || label === 'function') for (const f of forms) for (const s of setCurveSpellings(f)) add(s);
     }
     if (CHART_LABELS.has(label)) {
         // 6.2.1: the formula as written too (-\alpha_1 \le x_1 + x_2 \le \alpha_1 has no other spelling).
