@@ -170,7 +170,8 @@ test('Clean + thick + arrows + names: pgfplots\' own axis lines with their arrow
     assert.ok(opts.includes('tick label style={font=\\scriptsize, text=etzTick}'));
     // The names stand beyond the ends of the axes, as named axes always did in Clean.
     assert.ok(opts.some((o) => o.startsWith('xlabel style={at={(axis description cs:1,')), opts.join('\n'));
-    assert.ok(opts.some((o) => o.startsWith('ylabel style={at={(axis description cs:')), opts.join('\n'));
+    // Upright above the end of the y-axis (up to 6.2.0 a rotate=-90 laid it on its side).
+    assert.ok(opts.includes('ylabel style={at={(axis description cs:0.5,1)}, anchor=south, yshift=3pt}'), opts.join('\n'));
     // Thin with arrows: the light grey line with pgfplots' arrowheads.
     assert.ok(axisOptions(tikz(TANGENT, 'clean', { arrows: 'on' })).includes('axis line style={draw=etzAxis, line width=0.45pt}'));
 });
