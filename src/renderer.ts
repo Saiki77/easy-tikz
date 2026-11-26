@@ -47,7 +47,7 @@ import { themedColor } from './motion6/liveprims'; // 6.0 F4
 import { EntranceKind, StepEntrance, clipLines, clipSegment, grownLine, labelStart, middleOf, nearestOn, partialLines, popDelay, riseAt, rippleStops, toolKind } from './motion6/entrances';
 import { LegendCorner, legendCorner, legendLabelOf, legendObstacles } from './legend'; // 6.2.1
 // 6.1 clean look
-import { AxisPlace, CLEAN_AXIS_PX, CLEAN_GRID_ALPHA, CLEAN_LINE_PX, CLEAN_TICK_PT, CLEAN_VARS, CleanAxisFrame, TickObstacles, axisPlace, cleanTickSpots } from './look';
+import { AxisLook, AxisPlace, CLEAN_AXIS_PX, CLEAN_GRID_ALPHA, CLEAN_LINE_PX, CLEAN_VARS, CleanAxisFrame, LOOK_AXES, NUMBER_PT, TickObstacles, axisPlace, cleanTickSpots } from './look';
 
 /** 6.0 entrances: how a scene item whose step comes in enters (its object's kind, its start, where its points start popping). */
 interface ItemEntrance {
@@ -429,6 +429,8 @@ export class SVGRenderer {
     // 6.1
     /** Drawn in the clean look (src/look.ts): RendererConfig.look. */
     private readonly clean: boolean;
+    /** 6.2.1: the axis lines, arrows and number size (RendererConfig.axes, else the look's). */
+    private readonly axes: AxisLook;
     /** Function polylines sampled this render (by function index), shared by the axes' numbers and the curves. */
     private readonly sampled = new Map<number, Pt[][]>();
     /** 6.0 F4: the live canvas, and whether it draws this render's moving parts (their still frame is hidden then). */
@@ -473,6 +475,7 @@ export class SVGRenderer {
         this.quality = opts && opts.quality === 'draft' ? 'draft' : 'full';
         this.live = opts?.live ?? null; // 6.0 F4
         this.clean = config.look === 'clean'; // 6.1
+        this.axes = config.axes ?? LOOK_AXES[this.clean ? 'clean' : 'classic']; // 6.2.1
         this.width = Number.isFinite(config.width) && config.width > 0 ? config.width : 760;
         this.height = Number.isFinite(config.height) && config.height > 0 ? config.height : 480;
         this.compact = this.width < COMPACT_MAX_WIDTH || this.height < COMPACT_MAX_HEIGHT;
@@ -588,9 +591,34 @@ export class SVGRenderer {
         return pt * this.ptPx;
     }
 
-    /** 6.1: tick numbers in pt: small in the clean look. */
+    /** 6.1: tick numbers in pt: small in the clean look. 6.2.1: or the setting Axis numbers, or the chart's axis_numbers. */
     private tickPt(): number {
-        return this.clean ? CLEAN_TICK_PT : TICK_PT;
+        return NUMBER_PT[this.axes.numbers];
+    }
+
+    /**
+     * 6.2.1: the ink and width of the axis lines: thin is the clean look's
+     * light grey line, thick Classic's (a box in the text colour, 2 px).
+     * Thumbnails draw 1 px.
+     */
+    private axisInk(box: boolean): { stroke: string; width: number } {
+        if (this.axes.line === 'thin') return { stroke: CLEAN_VARS.axis, width: this.compact ? 1 : CLEAN_AXIS_PX };
+        if (box) return { stroke: TEXT_NORMAL, width: this.compact ? 1 : 2 };
+        return { stroke: TEXT_MUTED, width: this.compact ? 1 : 1.5 };
+    }
+
+    /** 6.2.1: an axis line from (x1, y1) to (x2, y2), with an arrowhead at (x2, y2) when the axes have arrows (never on thumbnails). */
+    private axisLine(g: SVGElement, x1: number, y1: number, x2: number, y2: number, ink: { stroke: string; width: number }): void {
+        const attrs = { stroke: ink.stroke, 'stroke-width': num(ink.width) };
+        if (this.compact || !this.axes.arrows) {
+            g.appendChild(this.line(x1, y1, x2, y2, attrs));
+            return;
+        }
+        const d = Math.hypot(x2 - x1, y2 - y1) || 1;
+        const inset = arrowLength(ink.width) / 2;
+        const ex = x2 - ((x2 - x1) / d) * inset;
+        const ey = y2 - ((y2 - y1) / d) * inset;
+        g.appendChild(this.line(x1, y1, ex, ey, { ...attrs, 'marker-end': this.arrow(ink.stroke, ink.width) }));
     }
 
     /** Estimated width of a line of label text (MathJax and plain text alike), in viewBox units. */
@@ -614,7 +642,7 @@ export class SVGRenderer {
         if (this.compact) return [{ top: COMPACT_PADDING, right: COMPACT_PADDING, bottom: COMPACT_PADDING, left: COMPACT_PADDING }, 0];
         if (this.clean) return this.cleanPadding(); // 6.1
         const cfg = this.config;
-        const tickFs = this.fontPx(TICK_PT);
+        const tickFs = this.fontPx(this.tickPt()); // 6.2.1: or small
         const axisFs = this.fontPx(AXIS_LABEL_PT);
         const pt = (n: number) => n * this.ptPx;
         const yt = this.ticks('y').ticks;
@@ -692,7 +720,7 @@ export class SVGRenderer {
     private cleanPadding(): [Padding, number] {
         const cfg = this.config;
         const v = this.view;
-        const tickFs = this.fontPx(CLEAN_TICK_PT);
+        const tickFs = this.fontPx(this.tickPt()); // 6.2.1: or large
         const axisFs = this.fontPx(AXIS_LABEL_PT);
         const pt = (n: number) => n * this.ptPx;
         const edge = pt(EDGE_PT);
@@ -797,7 +825,9 @@ export class SVGRenderer {
             compact: this.compact,
             plotW: this.width * 0.85,
             plotH: this.height * 0.8,
-            fs: this.fontPx(this.tickPt()), // 6.1: the clean look's numbers are smaller
+            // 6.1: the clean look's numbers are smaller (6.2.1: their size as drawn; the export lists the same steps). Classic keeps
+            // the steps of 10 pt numbers whatever their size: pgfplots picks its own steps, and smaller numbers do not change them.
+            fs: this.fontPx(this.clean ? this.tickPt() : TICK_PT),
             // 6.1: the clean look's y target follows the plot's shape, so a square chart gets square grid cells.
             yRatio: this.clean ? (this.height * 0.8) / (this.width * 0.85) : undefined,
         });
@@ -1488,26 +1518,16 @@ export class SVGRenderer {
         const yT = this.ticks('y');
         const xs = this.compact ? [] : xT.ticks;
         const ys = this.compact ? [] : yT.ticks;
-        const tickAttrs = { stroke: TEXT_MUTED, 'stroke-width': '1' };
-        const axisWidth = this.compact ? 1 : 1.5;
-        const axisAttrs = { stroke: TEXT_MUTED, 'stroke-width': String(axisWidth) };
-        const tickFs = this.fontPx(TICK_PT);
+        // 6.2.1: the tick marks in the light grey of thin axis lines.
+        const tickAttrs = { stroke: this.axes.line === 'thin' ? CLEAN_VARS.axis : TEXT_MUTED, 'stroke-width': '1' };
+        const ink = this.axisInk(false); // 6.2.1: Axis lines
+        const tickFs = this.fontPx(this.tickPt()); // 6.2.1: Axis numbers
         const tickGap = TICK_GAP_PT * this.ptPx;
         // Axes through the origin, pinned to the plot edge when 0 is outside the view.
         const ox = clamp(this.sx(0), left, right);
         const oy = clamp(this.sy(0), top, bottom);
-        // Axis line from (x1, y1) to an arrowhead at (x2, y2) (no heads on thumbnails).
-        const axisLine = (x1: number, y1: number, x2: number, y2: number) => {
-            if (this.compact) {
-                g.appendChild(this.line(x1, y1, x2, y2, axisAttrs));
-                return;
-            }
-            const d = Math.hypot(x2 - x1, y2 - y1) || 1;
-            const inset = arrowLength(axisWidth) / 2;
-            const ex = x2 - ((x2 - x1) / d) * inset;
-            const ey = y2 - ((y2 - y1) / d) * inset;
-            g.appendChild(this.line(x1, y1, ex, ey, { ...axisAttrs, 'marker-end': this.arrow(TEXT_MUTED, axisWidth) }));
-        };
+        // Axis line from (x1, y1) to an arrowhead at (x2, y2) (no heads on thumbnails; 6.2.1: none for Axis arrows: Without).
+        const axisLine = (x1: number, y1: number, x2: number, y2: number) => this.axisLine(g, x1, y1, x2, y2, ink);
         const tick = (x1: number, y1: number, x2: number, y2: number) => g.appendChild(this.line(x1, y1, x2, y2, tickAttrs));
         // x tick labels hang below (x, y); y tick labels end at (x, y), centred on it.
         const xTickLabel = (k: Tick, x: number, y: number) => this.tickLabel(g, tickText(k), x, y + 0.78 * tickFs, 'middle', tickFs);
@@ -1548,7 +1568,8 @@ export class SVGRenderer {
             // Box: four explicit border lines in the full-contrast text colour,
             // so the frame reads clearly in light and dark themes. Ticks are
             // mirrored on the top and right bars.
-            const border = { stroke: TEXT_NORMAL, 'stroke-width': this.compact ? '1' : '2', 'stroke-linecap': 'square' };
+            const frame = this.axisInk(true); // 6.2.1: thin, a light grey frame
+            const border = { stroke: frame.stroke, 'stroke-width': num(frame.width), 'stroke-linecap': 'square' };
             g.appendChild(this.line(left, bottom, right, bottom, border));
             g.appendChild(this.line(left, top, right, top, border));
             g.appendChild(this.line(left, top, left, bottom, border));
@@ -1662,14 +1683,15 @@ export class SVGRenderer {
         const place = this.cleanPlaces();
         const oy = place.x === 'low' ? bottom : place.x === 'high' ? top : this.sy(0);
         const ox = place.y === 'low' ? left : place.y === 'high' ? right : this.sx(0);
-        const axisAttrs = { stroke: CLEAN_VARS.axis, 'stroke-width': num(this.compact ? 1 : CLEAN_AXIS_PX) };
-        g.appendChild(this.line(left, oy, right, oy, axisAttrs));
-        g.appendChild(this.line(ox, top, ox, bottom, axisAttrs));
+        // 6.2.1: thin or thick (Axis lines), with or without arrowheads at the high ends (Axis arrows).
+        const ink = this.axisInk(false);
+        this.axisLine(g, left, oy, right, oy, ink);
+        this.axisLine(g, ox, bottom, ox, top, ink);
         if (!this.compact) {
             const [stepX, stepY] = this.tickSteps();
             const xT = this.ticks('x');
             const yT = this.ticks('y');
-            const fs = this.fontPx(CLEAN_TICK_PT);
+            const fs = this.fontPx(this.tickPt()); // 6.2.1: small, or large (Axis numbers)
             const frame: CleanAxisFrame = { sx: (v) => this.sx(v), sy: (v) => this.sy(v), ox, oy, place, fs, gap: this.cleanGap(), charEm: CHAR_WIDTH_EM };
             const obstacles = this.tickObstacles(fns, items);
             const inCanvas = (b: { x0: number; x1: number; y0: number; y1: number }) => b.x0 >= 0.5 && b.x1 <= this.width - 0.5 && b.y0 >= 0.5 && b.y1 <= this.height - 0.5;
@@ -2161,7 +2183,7 @@ export class SVGRenderer {
         if (!entries.length || this.compact) return 'north east';
         const cfg = this.config;
         const metrics = labelMetricsFor(cfg.paperWidthCm ?? 10, cfg.paperHeightCm ?? 10);
-        const input = { functions: cfg.functions || [], annotations: cfg.annotations, axisStyle: cfg.axisStyle, clean: this.clean };
+        const input = { functions: cfg.functions || [], annotations: cfg.annotations, axisStyle: cfg.axisStyle, clean: this.clean, numberPt: this.tickPt() };
         const labels = entries.map((e) => e.label);
         return legendCorner(labels, legendObstacles(input, this.math, items, { ...this.view }, metrics), metrics);
     }

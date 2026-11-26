@@ -19,8 +19,14 @@
  * box. settleLook reads such blocks (a complete dump without the `look`
  * key, which 6.1 writes) with the old defaults as left open.
  *
- * Pure: no DOM, no Obsidian. The setting is module state, set by the plugin
- * when it loads (like the interface language).
+ * 6.2.1: four settings change the axes of either look one by one: Axis
+ * lines (thin or thick), Axis arrows, Axis names (x and y always, or only
+ * names the chart gives) and Axis numbers (small or large), each As the look
+ * by default. A chart can set each of them itself (axis_lines, axis_arrows,
+ * axis_names, axis_numbers), and what it sets wins (resolveAxes).
+ *
+ * Pure: no DOM, no Obsidian. The settings are module state, set by the
+ * plugin when it loads (like the interface language).
  */
 import type { AxisStyle, FunctionParameters } from './types';
 
@@ -94,6 +100,96 @@ export function settleLook<T extends Record<string, unknown>>(data: T): T {
     return out as T;
 }
 
+// ------------------------------------------------------------ 6.2.1: the axes, one by one
+
+/** The axis lines: thin (the clean look's thin light grey line) or thick (Classic's darker, wider line). */
+export type AxisLine = 'thin' | 'thick';
+/** The axis names: always (the letters x and y too) or only names the chart gives its axes (named). */
+export type AxisNames = 'always' | 'named';
+/** The axis numbers: small (\scriptsize, 7 pt, the clean look's) or large (10 pt, Classic's). */
+export type AxisNumberSize = 'small' | 'large';
+
+/** How a chart draws its axes: what its look gives, what the four settings change and what the chart sets itself. */
+export interface AxisLook {
+    line: AxisLine;
+    /** Arrowheads at the ends of axis lines (never on a box). */
+    arrows: boolean;
+    names: AxisNames;
+    numbers: AxisNumberSize;
+}
+
+/** What each look draws. */
+export const LOOK_AXES: Readonly<Record<ChartLook, Readonly<AxisLook>>> = {
+    clean: { line: 'thin', arrows: false, names: 'named', numbers: 'small' },
+    classic: { line: 'thick', arrows: true, names: 'always', numbers: 'large' },
+};
+
+/** The four settings under Chart look (Axis lines, Axis arrows, Axis names, Axis numbers): 'look' is As the look. */
+export interface AxisSettings {
+    line: 'look' | AxisLine;
+    arrows: 'look' | 'on' | 'off';
+    names: 'look' | AxisNames;
+    numbers: 'look' | AxisNumberSize;
+}
+
+/** Every setting As the look: the axes of the chosen look, as up to 6.2.0. */
+export const AS_THE_LOOK: Readonly<AxisSettings> = { line: 'look', arrows: 'look', names: 'look', numbers: 'look' };
+
+let axes: AxisSettings = { ...AS_THE_LOOK };
+
+/** The four settings now. */
+export function axisSettings(): AxisSettings {
+    return { ...axes };
+}
+
+export function setAxisSettings(s: AxisSettings): void {
+    axes = { ...s };
+}
+
+const pick = <T extends string>(v: unknown, values: readonly T[]): T | null => (typeof v === 'string' && (values as readonly string[]).includes(v) ? (v as T) : null);
+
+/** Stored setting values (plugin data axisLines, axisArrows, axisNames, axisNumbers) as settings: As the look unless one says otherwise. */
+export function axisSettingsOf(stored: { axisLines?: unknown; axisArrows?: unknown; axisNames?: unknown; axisNumbers?: unknown } | null | undefined): AxisSettings {
+    const s = stored ?? {};
+    return {
+        line: pick(s.axisLines, ['thin', 'thick'] as const) ?? 'look',
+        arrows: pick(s.axisArrows, ['on', 'off'] as const) ?? 'look',
+        names: pick(s.axisNames, ['always', 'named'] as const) ?? 'look',
+        numbers: pick(s.axisNumbers, ['small', 'large'] as const) ?? 'look',
+    };
+}
+
+/**
+ * What a chart sets itself (the chart fields axis_lines, axis_arrows,
+ * axis_names and axis_numbers, written as `set` lines): one of their values,
+ * else null, left open ('auto', the default). Arrows also take true and false.
+ */
+export function ownAxes(fields: { line?: unknown; arrows?: unknown; names?: unknown; numbers?: unknown }): { line: AxisLine | null; arrows: boolean | null; names: AxisNames | null; numbers: AxisNumberSize | null } {
+    const arrows = fields.arrows === true || fields.arrows === 'on' ? true : fields.arrows === false || fields.arrows === 'off' ? false : null;
+    return {
+        line: pick(fields.line, ['thin', 'thick'] as const),
+        arrows,
+        names: pick(fields.names, ['always', 'named'] as const),
+        numbers: pick(fields.numbers, ['small', 'large'] as const),
+    };
+}
+
+/**
+ * The axes of a chart drawn in `look` (the look it is drawn in: a box, a
+ * polar or a 3D chart is Classic): each of the four is what the chart sets,
+ * else the setting, else the look's.
+ */
+export function resolveAxes(look: ChartLook, fields: { line?: unknown; arrows?: unknown; names?: unknown; numbers?: unknown }, settings: AxisSettings = axes): AxisLook {
+    const own = ownAxes(fields);
+    const base = LOOK_AXES[look];
+    return {
+        line: own.line ?? (settings.line !== 'look' ? settings.line : base.line),
+        arrows: own.arrows ?? (settings.arrows !== 'look' ? settings.arrows === 'on' : base.arrows),
+        names: own.names ?? (settings.names !== 'look' ? settings.names : base.names),
+        numbers: own.numbers ?? (settings.numbers !== 'look' ? settings.numbers : base.numbers),
+    };
+}
+
 // ------------------------------------------------------------ the clean look's sizes and colours
 
 /** Width in px of a function's line that sets no thickness (Classic: thin, 1.5 px): as bold as thick (2.5 px), like the 6.0 film. */
@@ -102,6 +198,8 @@ export const CLEAN_LINE_PX = 2.5;
 export const CLEAN_LINE_TIKZ = 'thick';
 /** Tick numbers in pt of the exported figure (\scriptsize); Classic sets them at 10 pt. */
 export const CLEAN_TICK_PT = 7;
+/** 6.2.1: the numbers of an axis in pt: small (the clean look's \scriptsize) or large (Classic's 10 pt, pgfplots' own size). */
+export const NUMBER_PT: Readonly<Record<AxisNumberSize, number>> = { small: CLEAN_TICK_PT, large: 10 };
 /** Axis lines in px. */
 export const CLEAN_AXIS_PX = 1.2;
 /** Grid lines: the grid ink at this many times the chart's grid opacity (0.5 by default: 0.12, about #eceef3 on white). */

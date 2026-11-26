@@ -41,7 +41,7 @@ import type { Extension } from '@codemirror/state';
 import { MotionPlayer } from './src/motion6/player';
 import { playerFor } from './src/motion6/host';
 import { setStepEntrances } from './src/motion6/entrances'; // 6.0 entrances
-import { lookSetting, setChartLook } from './src/look'; // 6.1 clean look
+import { axisSettingsOf, lookSetting, setAxisSettings, setChartLook, AS_THE_LOOK } from './src/look'; // 6.1 clean look, 6.2.1 the axes
 import { atStep } from './src/motion6/steps';
 // 6.0 F4: the live canvas of a moving 2D chart, the turn of a turning 3D chart.
 import { LiveLayer } from './src/motion6/live';
@@ -361,6 +361,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             chartLanguage: stored?.chartLanguage === 'full' ? 'full' : 'words',
             interfaceLanguage: languageSetting(stored?.interfaceLanguage),
             chartLook: lookSetting(stored?.chartLook), // 6.1
+            ...axisData(stored), // 6.2.1
             formulaRecognition: recognitionSetting(stored?.formulaRecognition), // 6.2
         };
         // The interface in the reader's language (src/i18n): Obsidian's, unless the setting fixes one. Set before
@@ -379,6 +380,9 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         // 6.1: the chart look (src/look.ts): Clean or Classic, for what a chart leaves open.
         setChartLook(this.data.chartLook);
         this.register(() => setChartLook('clean'));
+        // 6.2.1: the axes of either look, one by one (As the look by default).
+        setAxisSettings(axisSettingsOf(this.data));
+        this.register(() => setAxisSettings(AS_THE_LOOK));
 
         this.addRibbonIcon('square-function', 'Easy Graphs Charts and TikZ', () => {
             new TikzModal(this.app, this).open();
@@ -2179,15 +2183,66 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 },
             },
             {
-                name: t('plugin.settings.look.name'),
-                desc: t('plugin.settings.look.desc'),
-                aliases: ['look', 'style', 'clean', 'classic', 'axes', 'grid', '見た目', 'スタイル', 'クラシック', '軸', 'グリッド'],
-                control: {
-                    type: 'dropdown',
-                    key: 'chartLook',
-                    options: { clean: t('plugin.settings.look.clean'), classic: t('plugin.settings.look.classic') },
-                    defaultValue: 'clean',
-                },
+                // 6.2.1: the look and, under it, its axes one by one.
+                type: 'group',
+                heading: t('plugin.settings.look.name'),
+                items: [
+                    {
+                        name: t('plugin.settings.look.row'),
+                        desc: t('plugin.settings.look.desc'),
+                        aliases: ['chart look', 'look', 'style', 'clean', 'classic', 'axes', 'grid', 'グラフの見た目', '見た目', 'スタイル', 'クラシック', '軸', 'グリッド'],
+                        control: {
+                            type: 'dropdown',
+                            key: 'chartLook',
+                            options: { clean: t('plugin.settings.look.clean'), classic: t('plugin.settings.look.classic') },
+                            defaultValue: 'clean',
+                        },
+                    },
+                    {
+                        name: t('plugin.settings.axisLines.name'),
+                        desc: t('plugin.settings.axisLines.desc'),
+                        aliases: ['axis', 'axes', 'line', 'thickness', 'thin', 'thick', 'box', '軸', '線', '太さ', '細い', '太い'],
+                        control: {
+                            type: 'dropdown',
+                            key: 'axisLines',
+                            options: { look: t('plugin.settings.axes.asTheLook'), thin: t('plugin.settings.axisLines.thin'), thick: t('plugin.settings.axisLines.thick') },
+                            defaultValue: 'look',
+                        },
+                    },
+                    {
+                        name: t('plugin.settings.axisArrows.name'),
+                        desc: t('plugin.settings.axisArrows.desc'),
+                        aliases: ['axis', 'axes', 'arrow', 'arrowhead', 'arrows', '軸', '矢印'],
+                        control: {
+                            type: 'dropdown',
+                            key: 'axisArrows',
+                            options: { look: t('plugin.settings.axes.asTheLook'), on: t('plugin.settings.axisArrows.on'), off: t('plugin.settings.axisArrows.off') },
+                            defaultValue: 'look',
+                        },
+                    },
+                    {
+                        name: t('plugin.settings.axisNames.name'),
+                        desc: t('plugin.settings.axisNames.desc'),
+                        aliases: ['axis', 'axes', 'label', 'labels', 'name', 'names', 'x', 'y', 'letters', '軸', 'ラベル', '名前'],
+                        control: {
+                            type: 'dropdown',
+                            key: 'axisNames',
+                            options: { look: t('plugin.settings.axes.asTheLook'), always: t('plugin.settings.axisNames.always'), named: t('plugin.settings.axisNames.named') },
+                            defaultValue: 'look',
+                        },
+                    },
+                    {
+                        name: t('plugin.settings.axisNumbers.name'),
+                        desc: t('plugin.settings.axisNumbers.desc'),
+                        aliases: ['axis', 'axes', 'numbers', 'ticks', 'tick labels', 'size', 'font', 'small', 'large', '軸', '数値', '目盛り', '大きさ'],
+                        control: {
+                            type: 'dropdown',
+                            key: 'axisNumbers',
+                            options: { look: t('plugin.settings.axes.asTheLook'), small: t('plugin.settings.axisNumbers.small'), large: t('plugin.settings.axisNumbers.large') },
+                            defaultValue: 'look',
+                        },
+                    },
+                ],
             },
             {
                 name: t('plugin.settings.imageBackground.name'),
@@ -2561,6 +2616,14 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 setChartLook(this.plugin.data.chartLook);
                 this.plugin.redrawCharts();
                 break;
+            case 'axisLines': // 6.2.1
+            case 'axisArrows':
+            case 'axisNames':
+            case 'axisNumbers':
+                Object.assign(this.plugin.data, axisData({ ...this.plugin.data, [key]: value }));
+                setAxisSettings(axisSettingsOf(this.plugin.data));
+                this.plugin.redrawCharts();
+                break;
             case 'interfaceLanguage':
                 this.plugin.data.interfaceLanguage = languageSetting(value);
                 setLanguage(resolveLanguage(this.plugin.data.interfaceLanguage, getLanguage()));
@@ -2602,6 +2665,12 @@ async function copyText(text: string, done: string): Promise<void> {
     } catch (e) {
         new Notice(t('plugin.copy.failed', { error: errorText(e) }));
     }
+}
+
+/** 6.2.1: the four settings under Chart look as plugin data, from stored values: As the look unless one holds a choice. */
+function axisData(stored: Partial<PluginData> | null | undefined): Pick<PluginData, 'axisLines' | 'axisArrows' | 'axisNames' | 'axisNumbers'> {
+    const s = axisSettingsOf(stored);
+    return { axisLines: s.line, axisArrows: s.arrows, axisNames: s.names, axisNumbers: s.numbers };
 }
 
 /** File names in a sentence: 'AGENTS.md and CLAUDE.md' (one after another, as join(' and ') would). */

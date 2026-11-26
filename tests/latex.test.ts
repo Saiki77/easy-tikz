@@ -25,6 +25,7 @@ import { COLORMAPS } from '../src/colormaps';
 import { parseChartText } from '../src/text/parse';
 import type { NoteTable } from '../src/beyond/table';
 import { collectExportFiles } from '../src/iterate/export'; // 6.0 E
+import { AS_THE_LOOK, AxisSettings, ChartLook, setAxisSettings, setChartLook } from '../src/look'; // 6.2.1
 
 const TIMEOUT_MS = 30000;
 const PARALLEL = 4;
@@ -779,6 +780,22 @@ const CLEAN: Record<string, { text: string; table?: NoteTable | null }> = {
     },
 };
 
+// ------------------------------------------------------- the axes, one by one (6.2.1)
+
+/**
+ * The settings under Chart look: Clean with thick axes, arrowheads and the
+ * names x and y (axes through the middle, the names beyond their ends), and
+ * Classic with small numbers; and a 3D box in thin lines with small numbers.
+ */
+const TANGENT = ['show x from -3 to 3 and y from -1 to 5', 'axes in the middle', 'plot f(x) = x^2 in blue', 'plot t(x) = 2x - 1 in red, dashed', 'P: mark (1, 1), labelled "P"'].join('\n');
+const AXES: Record<string, { text: string; look: ChartLook; axes: Partial<AxisSettings> }> = {
+    cleanThickArrowsNames: { text: TANGENT, look: 'clean', axes: { line: 'thick', arrows: 'on', names: 'always' } },
+    classicSmallNumbers: { text: TANGENT, look: 'classic', axes: { numbers: 'small' } },
+    classicThinNoArrows: { text: ['show x from 0 to 6 and y from 0 to 4', 'axes on the edges', 'plot f(x) = sqrt(x)'].join('\n'), look: 'classic', axes: { line: 'thin', arrows: 'off' } },
+    cleanLargeEdges: { text: ['show x from 1 to 9 and y from 2 to 8', 'plot f(x) = x - 1', 'xlabel time'].join('\n'), look: 'clean', axes: { numbers: 'large', arrows: 'on' } },
+    surfaceThinSmall: { text: ['3d', 'show x from -2 to 2 and y from -2 to 2', 'plot z = x^2 - y^2'].join('\n'), look: 'clean', axes: { line: 'thin', numbers: 'small', names: 'named' } },
+};
+
 // --------------------------------------------------------------- compile
 
 /** The block's export as a complete document. Snippets are wrapped using their own `% Needs:` lines. */
@@ -864,7 +881,7 @@ if (!hasLatex) {
     const dir = keep ? path.resolve(keep) : fs.mkdtempSync(path.join(os.tmpdir(), 'etz-latex-'));
     fs.mkdirSync(dir, { recursive: true });
 
-    const cases: Array<{ name: string; data: Record<string, unknown>; table?: NoteTable | null }> = [];
+    const cases: Array<{ name: string; data: Record<string, unknown>; table?: NoteTable | null; look?: ChartLook; axes?: Partial<AxisSettings> }> = [];
     for (const ex of EXAMPLES) cases.push({ name: `example-${ex.id}`, data: ex.data });
     // The live chart of the "What's new" popup, which Try an example opens in the editor.
     cases.push({ name: 'whats-new', data: whatsNewChart() });
@@ -887,12 +904,22 @@ if (!hasLatex) {
     for (const [k, text] of Object.entries(GEOGEBRA)) cases.push({ name: `geogebra-${k}`, data: parseChartText(text).data }); // 6.0 G
     for (const [k, text] of Object.entries(PYTHON)) cases.push({ name: `python-${k}`, data: parseChartText(text).data }); // 6.0 P
     for (const [k, c] of Object.entries(CLEAN)) cases.push({ name: `clean-${k}`, data: parseChartText(c.text).data, table: c.table }); // 6.1
+    for (const [k, c] of Object.entries(AXES)) cases.push({ name: `axes-${k}`, data: parseChartText(c.text).data, look: c.look, axes: c.axes }); // 6.2.1
 
     const jobs = pool(
         cases.map((c) => ({
             name: c.name,
             run: () => {
-                const tex = documentFor(c.data, c.table, dir);
+                // 6.2.1: the settings under Chart look, set for this export only (it runs at once, nothing else in between).
+                if (c.look) setChartLook(c.look);
+                if (c.axes) setAxisSettings({ ...AS_THE_LOOK, ...c.axes });
+                let tex: string;
+                try {
+                    tex = documentFor(c.data, c.table, dir);
+                } finally {
+                    setChartLook('clean');
+                    setAxisSettings(AS_THE_LOOK);
+                }
                 // Labels keep their LaTeX: nothing typed is printed as a literal backslash.
                 assert.ok(!tex.includes('\\textbackslash'), `${c.name} prints a literal backslash`);
                 return compile(dir, c.name, tex);

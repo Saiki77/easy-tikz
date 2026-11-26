@@ -1594,6 +1594,8 @@ function axisFull(fields: string[], chart: Data): string[] {
     }
     done.add('showLargeGrid').add('showSmallGrid');
     take('gridOpacity', (v) => (fraction(v) ? opts.push(`grid opacity=${v}`) : generic('gridOpacity')));
+    // 6.2.1: the chart's own axis lines, arrows, names and number size: the bare word.
+    for (const k of ['axis_lines', 'axis_arrows', 'axis_names', 'axis_numbers']) take(k, (v) => (typeof v === 'string' && /^[a-z]+$/.test(v) ? opts.push(`${k}=${v}`) : generic(k)));
     for (const a of ['x', 'y', 'z']) {
         const [mode, step, at] = [`numbers_${a}`, `numbers_step_${a}`, `numbers_at_${a}`];
         if (!has(mode) && !has(step) && !has(at)) continue;

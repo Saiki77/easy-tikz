@@ -120,7 +120,7 @@ export interface LegendObstacles {
  * and function curves.
  */
 export function legendObstacles(
-    input: { functions: FunctionParameters[]; annotations?: Annotation[]; axisStyle?: string; clean?: boolean },
+    input: { functions: FunctionParameters[]; annotations?: Annotation[]; axisStyle?: string; clean?: boolean; numberPt?: number },
     math: MathContext,
     items: readonly SceneItem2D[],
     view: View,
@@ -168,7 +168,8 @@ export function legendObstacles(
     }
     // Axes through the middle: the line and the band of its numbers (below the x-axis, left of the y-axis).
     if (input.axisStyle === 'middle') {
-        const pt = input.clean ? NUMBER_PT.clean : NUMBER_PT.classic;
+        // 6.2.1: the size the numbers are drawn at (the setting Axis numbers), else the look's.
+        const pt = input.numberPt ?? (input.clean ? NUMBER_PT.clean : NUMBER_PT.classic);
         if (view.ymin < 0 && view.ymax > 0) {
             const y0 = Y(0);
             out.lines.push([{ x: 0, y: y0 }, { x: metrics.w, y: y0 }]);
