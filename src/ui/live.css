@@ -21,7 +21,7 @@
 }
 
 button.etz-icon-btn.etz-live-play {
-    margin-top: 1px;
+    margin-top: 3px;
 }
 
 button.etz-icon-btn.etz-live-play[aria-pressed='true'] {
