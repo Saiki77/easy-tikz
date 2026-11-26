@@ -961,6 +961,21 @@ export class MathContext {
         }
     }
 
+    /**
+     * 6.2.2: LaTeX for the typeset preview under a formula field: as tex(),
+     * with every division stacked (display), or null when the text does not
+     * read as a formula yet (half typed): the field then keeps its last one.
+     */
+    previewTex(src: string): string | null {
+        const s = str(src);
+        if (!s.trim()) return null;
+        try {
+            return toTex(parse(s, 'eq'), (name) => this.paramIndex.has(name) || this.byName.has(name), true);
+        } catch {
+            return null;
+        }
+    }
+
     // ----------------------------------------------------------- private
 
     private compileField(field: FieldKind, fnKind: FunctionKind, src: string, locals: string[] | null): Compiled {

@@ -2797,10 +2797,6 @@ function texNumber(n: NumNode): Tex {
 
 const TEX_CMP: Record<CmpOp, string> = { '<': '<', '<=': '\\le', '>': '>', '>=': '\\ge', '==': '=', '!=': '\\ne' };
 
-function paren(t: Tex, min: number): string {
-    return t.p >= min ? t.s : `(${t.s})`;
-}
-
 /** Simple enough for \frac: atoms, powers, products of those, and their negation. */
 function fracSimple(n: Node): boolean {
     switch (n.t) {
@@ -2820,6 +2816,17 @@ function fracSimple(n: Node): boolean {
     }
 }
 
+/**
+ * 6.2.2, display mode: a thin space between two factors that would run
+ * together, a name of several letters and its neighbour (df pi reads
+ * \mathit{df}\,\pi, not dfπ) or a root, fraction or bracket and the
+ * command after it (\sqrt{u}\,\Gamma(v)).
+ */
+function thinSpace(left: string, right: string): boolean {
+    if (/\\mathit\{[^{}]*\}$/.test(left) || right.startsWith('\\mathit{')) return true;
+    return /[})]$/.test(left) && /^\\[A-Za-z]/.test(right);
+}
+
 /** The call is a builtin (printed as a function); anything else prints as `name(args)`. */
 function texBuiltin(n: CallNode): boolean {
     return (n.math ? own(MATH_FUNCTIONS, n.name) : own(BUILTINS, n.name)) !== undefined;
@@ -2828,9 +2835,21 @@ function texBuiltin(n: CallNode): boolean {
 class TexPrinter {
     /** 6.2.1: `taken(name)`: the chart has a value or function of that name (gamma(x) is then not Γ). */
     private readonly taken: (name: string) => boolean;
+    /** 6.2.2: the typeset preview of a formula field: every division stacked, brackets around fractions tall. */
+    private readonly display: boolean;
 
-    constructor(taken?: (name: string) => boolean) {
+    constructor(taken?: (name: string) => boolean, display = false) {
         this.taken = taken ?? (() => false);
+        this.display = display;
+    }
+
+    /** `(s)`; in display mode `\left(s\right)` when `s` holds a fraction, so the brackets grow with it. */
+    private group(s: string): string {
+        return this.display && s.indexOf('\\frac') >= 0 ? `\\left(${s}\\right)` : `(${s})`;
+    }
+
+    private paren(t: Tex, min: number): string {
+        return t.p >= min ? t.s : this.group(t.s);
     }
 
     print(n: Node): Tex {
@@ -2849,21 +2868,21 @@ class TexPrinter {
             case 'unary': {
                 const a = this.print(n.arg);
                 if (n.op === '+') return a;
-                if (n.op === '!') return { s: `\\lnot ${paren(a, P_UNARY)}`, p: P_UNARY, unaryStart: true };
-                return { s: `-${paren(a, P_UNARY)}`, p: P_UNARY, unaryStart: true };
+                if (n.op === '!') return { s: `\\lnot ${this.paren(a, P_UNARY)}`, p: P_UNARY, unaryStart: true };
+                return { s: `-${this.paren(a, P_UNARY)}`, p: P_UNARY, unaryStart: true };
             }
             case 'binary':
                 return this.binary(n);
             case 'cmp': {
-                const parts: string[] = [paren(this.print(n.args[0]), P_ADD)];
-                n.ops.forEach((op, i) => parts.push(TEX_CMP[op], paren(this.print(n.args[i + 1]), P_ADD)));
+                const parts: string[] = [this.paren(this.print(n.args[0]), P_ADD)];
+                n.ops.forEach((op, i) => parts.push(TEX_CMP[op], this.paren(this.print(n.args[i + 1]), P_ADD)));
                 return { s: parts.join(' '), p: P_CMP };
             }
             case 'logic': {
                 const p = n.op === '&&' ? P_AND : P_OR;
                 const l = this.print(n.left);
                 const r = this.print(n.right);
-                return { s: `${paren(l, p)} ${n.op === '&&' ? '\\land' : '\\lor'} ${paren(r, p + 1)}`, p };
+                return { s: `${this.paren(l, p)} ${n.op === '&&' ? '\\land' : '\\lor'} ${this.paren(r, p + 1)}`, p };
             }
             case 'ternary': {
                 // Flatten nested else-branches into one cases-style array (kernel LaTeX only).
@@ -2886,41 +2905,41 @@ class TexPrinter {
         switch (n.op) {
             case '+':
             case '-': {
-                const right = r.unaryStart ? `(${r.s})` : paren(r, n.op === '-' ? P_MUL : P_ADD);
-                return { s: `${paren(l, P_ADD)} ${n.op} ${right}`, p: P_ADD, digitStart: l.digitStart, unaryStart: l.unaryStart };
+                const right = r.unaryStart ? this.group(r.s) : this.paren(r, n.op === '-' ? P_MUL : P_ADD);
+                return { s: `${this.paren(l, P_ADD)} ${n.op} ${right}`, p: P_ADD, digitStart: l.digitStart, unaryStart: l.unaryStart };
             }
             case '*': {
-                const left = paren(l, P_MUL);
-                const right = r.unaryStart ? `(${r.s})` : paren(r, P_MUL);
-                const rightParen = right.startsWith('(');
+                const left = this.paren(l, P_MUL);
+                const right = r.unaryStart ? this.group(r.s) : this.paren(r, P_MUL);
+                const rightParen = right.startsWith('(') || right.startsWith('\\left(');
                 const cdot = !rightParen && (r.digitStart || /^\d/.test(right));
                 return {
-                    s: cdot ? `${left} \\cdot ${right}` : `${left} ${right}`,
+                    s: cdot ? `${left} \\cdot ${right}` : this.display && thinSpace(left, right) ? `${left}\\,${right}` : `${left} ${right}`,
                     p: P_MUL,
                     digitStart: l.digitStart,
                     unaryStart: l.unaryStart,
                 };
             }
             case '/':
-                if (fracSimple(n.left) && fracSimple(n.right)) {
+                if (this.display || (fracSimple(n.left) && fracSimple(n.right))) {
                     const num = n.left.t === 'unary' && n.left.op === '-' ? this.print(n.left.arg).s : l.s;
                     const frac = `\\frac{${num}}{${r.s}}`;
                     if (n.left.t === 'unary' && n.left.op === '-') return { s: `-${frac}`, p: P_UNARY, unaryStart: true };
                     return { s: frac, p: P_ATOM };
                 }
                 return {
-                    s: `${paren(l, P_MUL)} / ${r.unaryStart ? `(${r.s})` : paren(r, P_UNARY)}`,
+                    s: `${this.paren(l, P_MUL)} / ${r.unaryStart ? this.group(r.s) : this.paren(r, P_UNARY)}`,
                     p: P_MUL,
                     digitStart: l.digitStart,
                 };
             case '%':
-                return { s: `${paren(l, P_MUL)} \\bmod ${paren(r, P_UNARY)}`, p: P_MUL, digitStart: l.digitStart };
+                return { s: `${this.paren(l, P_MUL)} \\bmod ${this.paren(r, P_UNARY)}`, p: P_MUL, digitStart: l.digitStart };
             default: {
                 // `a(x - h)^2` reads as a (x - h)^2 in print as in the compiler; a call the user put in
                 // parentheses keeps them, so `(a(x - h))^2` does not print as the same text.
                 const base = n.left;
                 const wrapped = base.t === 'call' && base.s !== base.ns && !texBuiltin(base);
-                return { s: `${wrapped ? `(${l.s})` : paren(l, P_ATOM)}^{${r.s}}`, p: P_POW, digitStart: l.digitStart };
+                return { s: `${wrapped ? this.group(l.s) : this.paren(l, P_ATOM)}^{${r.s}}`, p: P_POW, digitStart: l.digitStart };
             }
         }
     }
@@ -2931,17 +2950,17 @@ class TexPrinter {
         if (index !== null) {
             const body = this.print(n.args[0]);
             const op = n.name === 'prod' ? '\\prod' : '\\sum';
-            return { s: `${op}_{${texName(index)}=${this.print(n.args[2]).s}}^{${this.print(n.args[3]).s}} ${paren(body, P_MUL)}`, p: P_ADD };
+            return { s: `${op}_{${texName(index)}=${this.print(n.args[2]).s}}^{${this.print(n.args[3]).s}} ${this.paren(body, P_MUL)}`, p: P_ADD };
         }
-        if (!n.math && n.name === 'factorial' && n.args.length === 1) return { s: `${paren(this.print(n.args[0]), P_ATOM)}!`, p: P_POW };
+        if (!n.math && n.name === 'factorial' && n.args.length === 1) return { s: `${this.paren(this.print(n.args[0]), P_ATOM)}!`, p: P_POW };
         if (!n.math && n.name === 'binom' && n.args.length === 2) {
             return { s: `{${this.print(n.args[0]).s} \\choose ${this.print(n.args[1]).s}}`, p: P_ATOM };
         }
         // 6.2.1: the gamma function.
-        if (!n.math && own(SOFT_BUILTINS, n.name) && n.args.length === 1 && !this.taken(n.name)) return { s: `\\Gamma(${this.print(n.args[0]).s})`, p: P_ATOM };
+        if (!n.math && own(SOFT_BUILTINS, n.name) && n.args.length === 1 && !this.taken(n.name)) return { s: `\\Gamma${this.group(this.print(n.args[0]).s)}`, p: P_ATOM };
         const args = n.args.map((a) => this.print(a).s);
         if (!texBuiltin(n)) {
-            return { s: `${texName(n.name)}(${args.join(', ')})`, p: P_ATOM };
+            return { s: `${texName(n.name)}${this.group(args.join(', '))}`, p: P_ATOM };
         }
         const a0 = args[0] ?? '';
         switch (n.name) {
@@ -2963,13 +2982,13 @@ class TexPrinter {
                 return { s: `\\ln(1 + ${a0})`, p: P_ATOM };
             case 'pow': {
                 const base = this.print(n.args[0]);
-                return { s: `${paren(base, P_ATOM)}^{${args[1] ?? ''}}`, p: P_POW };
+                return { s: `${this.paren(base, P_ATOM)}^{${args[1] ?? ''}}`, p: P_POW };
             }
             case 'hypot':
-                return { s: `\\sqrt{${n.args.map((a) => `${paren(this.print(a), P_ATOM)}^{2}`).join(' + ')}}`, p: P_ATOM };
+                return { s: `\\sqrt{${n.args.map((a) => `${this.paren(this.print(a), P_ATOM)}^{2}`).join(' + ')}}`, p: P_ATOM };
             default: {
                 const fn = own(TEX_FUNCTIONS, n.name) ?? `\\mathop{\\mathrm{${n.name}}}`;
-                return { s: `${fn}(${args.join(', ')})`, p: P_ATOM };
+                return { s: `${fn}${this.group(args.join(', '))}`, p: P_ATOM };
             }
         }
     }
@@ -2978,7 +2997,9 @@ class TexPrinter {
 /**
  * LaTeX math source (no delimiters) for `ast`. Uses kernel LaTeX only
  * (no amsmath), so legend entries compile in a bare pgfplots document.
+ * 6.2.2: `display` (the typeset preview under a formula field) stacks every
+ * division as a fraction and lets the brackets around a fraction grow.
  */
-export function toTex(ast: Node, taken?: (name: string) => boolean): string {
-    return new TexPrinter(taken).print(ast).s;
+export function toTex(ast: Node, taken?: (name: string) => boolean, display = false): string {
+    return new TexPrinter(taken, display).print(ast).s;
 }
