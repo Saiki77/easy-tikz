@@ -946,6 +946,56 @@ if (started) {
             await obs.mouse.move({ x: 5, y: 5 });
             return card;
         });
+        await check('formulas (6.2.1): a 3D card takes the default 3D chart set up in the editor, and Insert chart writes its look', async () => {
+            const surfaceNote = 'Surface';
+            const tex = 'f(x, y) = x^2 + y^2';
+            /** Rest on the formula, then Insert chart: the lines of the block it writes. */
+            const insert = async () => {
+                await obs.writeNote(surfaceNote, `A bowl: $${tex}$ opens upwards.\n`);
+                await obs.openNote(surfaceNote, { mode: 'reading' });
+                await obs.sleep(800);
+                const card = await cardOf(tex);
+                assert(card && /Surface/.test(card), `the card of ${tex}: ${card}`);
+                await obs.mouse.click('.etz-formula-pop button.mod-cta');
+                await obs.sleep(600);
+                const m = /```easy-tikz\n([\s\S]*?)\n```/.exec(await obs.readNote(surfaceNote));
+                assert(m, 'Insert chart wrote no block');
+                await obs.mouse.move({ x: 5, y: 5 });
+                return m[1].split('\n');
+            };
+            const editorOpen = () => obs.call(() => !!window.__etzMedia.requireEditor().modalEl.isConnected).catch(() => false);
+            try {
+                const before = await insert();
+                assert(before.includes('cube') && before.some((l) => /^plot .* in viridis/.test(l)) && !before.includes('no axes'), `before a 3D default:\n${before.join('\n')}`);
+                // Settings, Default 3D chart for formulas, Edit: the editor on a surface. Box Proportional, Style None, Save as 3D default.
+                await obs.call(() => app.plugins.plugins['easy-tikz'].editFormulaDefault(() => {}, true));
+                await obs.waitFor(editorOpen, { timeout: 4000, message: 'the editor on the sample surface' });
+                await obs.showTab('chart');
+                const label = await obs.call(() => {
+                    const ed = window.__etzMedia.requireEditor();
+                    const pick = (text) => Array.from(ed.modalEl.querySelectorAll('.etz-segmented button')).find((b) => (b.textContent || '').trim() === text);
+                    pick('Proportional').click();
+                    pick('None').click();
+                    return (ed.ctaBtn.el.textContent || '').trim();
+                });
+                assert(label === 'Save as 3D default', `the editor's button says "${label}"`);
+                await obs.call(() => window.__etzMedia.requireEditor().ctaBtn.el.click());
+                await obs.sleep(400);
+                const saved = await obs.call(() => app.plugins.plugins['easy-tikz'].data.formulaDefault3D);
+                assert(saved && saved.dimension === true && saved.showAxis === false && saved.boxAspect === 'true', `the saved 3D default: ${JSON.stringify(saved).slice(0, 200)}`);
+                const flat = await obs.call(() => app.plugins.plugins['easy-tikz'].data.formulaDefault);
+                assert(flat === null, 'saving the 3D default changed the default chart for formulas');
+                const after = await insert();
+                assert(after.includes('no axes') && !after.includes('cube') && after.some((l) => /^plot .* in viridis/.test(l)), `after the 3D default:\n${after.join('\n')}`);
+                return `${before.length} lines, then ${after.length} with no axes and the Proportional box`;
+            } finally {
+                await obs.call(async () => {
+                    const p = app.plugins.plugins['easy-tikz'];
+                    p.data.formulaDefault3D = null;
+                    await p.saveSettings();
+                });
+            }
+        });
         const linkedNote = 'Connected';
         const linked = (body) => ['```easy-tikz', 'size 6 x 2.4', ...body, '```', ''].join('\n');
         await check('connected sliders: moving one moves the same name in the other connected chart of the note, never the file', async () => {

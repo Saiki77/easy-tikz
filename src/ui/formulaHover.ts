@@ -52,6 +52,8 @@ export interface FormulaHoverHost {
     sliders(): boolean;
     /** The default chart for formulas (set up in the editor), or null for the plugin's own. */
     formulaDefault(): Record<string, unknown> | null;
+    /** 6.2.1: the default chart for 3D formula charts, or null: they take formulaDefault (as before). */
+    formulaDefault3D(): Record<string, unknown> | null;
     /** The setting Invert vertical drag in 3D: a drag in the card turns a surface as the editor's preview does. */
     invertDrag3D(): boolean;
     /** 6.2: the setting Formula recognition: Smart (the network) or Rules (as 6.1). */
@@ -553,8 +555,8 @@ export class FormulaHover {
         pop.addEventListener('pointerdown', () => (this.held = true));
         pop.addEventListener('mouseenter', () => this.cancelClose());
 
-        // The chart in the look of the default chart for formulas.
-        const data = applyFormulaDefault(cloneData(chart), this.host.formulaDefault());
+        // The chart in the look of the default chart for formulas (a 3D chart: the 3D default, 6.2.1).
+        const data = applyFormulaDefault(cloneData(chart), this.host.formulaDefault(), this.host.formulaDefault3D());
         const is3D = data.dimension === true;
         const params = (Array.isArray(data.parameters) ? data.parameters : []) as Parameter[];
         // The dots of the roots and extrema belong to the first chart (a switch to n = 2 drops them).
@@ -629,7 +631,7 @@ export class FormulaHover {
             let plane: HTMLElement | null = null;
             if (two) {
                 const one = cloneData(data);
-                const second = applyFormulaDefault(cloneData(two), this.host.formulaDefault());
+                const second = applyFormulaDefault(cloneData(two), this.host.formulaDefault(), this.host.formulaDefault3D());
                 const bar = foot.createDiv({ cls: 'etz-formula-switch', attr: { role: 'group' } });
                 const label = visuallyHidden(bar, t('notes6.hover.dimension'));
                 label.id = uniqueId('formula-n');

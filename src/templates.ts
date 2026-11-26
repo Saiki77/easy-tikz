@@ -139,6 +139,8 @@ export interface PluginData {
     formulaRecognition: 'smart' | 'rules';
     /** The default chart for formulas, set up in the editor: its look is every formula chart's (5.0). */
     formulaDefault: Record<string, unknown> | null;
+    /** 6.2.1: the default chart for 3D formula charts (surfaces), set up in the editor; null: 3D charts take formulaDefault, as before. */
+    formulaDefault3D: Record<string, unknown> | null;
     /** Setting "Chart language": new charts in words with LaTeX math in $...$ (default) or in Full LaTeX (src/text/full.ts, 5.0). */
     chartLanguage: 'words' | 'full';
     /** In Live Preview, a block being edited shows its chart under its lines (src/live.ts). */
@@ -175,6 +177,7 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     formulaSliders: true,
     formulaRecognition: 'smart',
     formulaDefault: null,
+    formulaDefault3D: null,
     chartLanguage: 'words',
     liveChart: true,
     chartWords: { words: {}, bundles: [], write: 'yours' },

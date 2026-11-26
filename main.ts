@@ -442,6 +442,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             enabled: () => this.data.formulaHover !== false,
             sliders: () => this.data.formulaSliders !== false,
             formulaDefault: () => this.data.formulaDefault ?? null,
+            formulaDefault3D: () => this.data.formulaDefault3D ?? null, // 6.2.1
             invertDrag3D: () => !!this.data.invertDrag3D,
             recognition: () => this.data.formulaRecognition, // 6.2
             openChart: (data, file) => new TikzModal(this.app, this, { data, sourceFile: file }).open(),
@@ -1027,7 +1028,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             new Notice(t('plugin.notice.noFormula'));
             return;
         }
-        const body = formulaBlock(found.tex, this.data.formulaDefault);
+        const body = formulaBlock(found.tex, this.data.formulaDefault, this.data.formulaDefault3D);
         if (!body) {
             new Notice(t('plugin.notice.formulaUnreadable', { formula: found.tex }));
             return;
@@ -1047,17 +1048,23 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         }
     }
 
-    /** Set up the default chart for formulas in the editor: its button saves the chart as the default. */
-    editFormulaDefault(done: () => void): void {
-        const sample = parseChartText((formulaChart('f(x) = \\frac{1}{2}x^2 - 2') ?? []).join('\n')).data as Record<string, unknown>;
+    /**
+     * Set up the default chart for formulas in the editor: its button saves the chart as the default.
+     * 6.2.1: `solid` sets up the default of 3D formula charts on a surface; it starts from the look
+     * such a chart has now (the 3D default, or the default chart for formulas when there is none).
+     */
+    editFormulaDefault(done: () => void, solid = false): void {
+        const formula = solid ? 'f(x, y) = \\frac{x^2 - y^2}{2}' : 'f(x) = \\frac{1}{2}x^2 - 2';
+        const sample = parseChartText((formulaChart(formula) ?? []).join('\n')).data as Record<string, unknown>;
         new TikzModal(this.app, this, {
-            data: applyFormulaDefault(sample, this.data.formulaDefault),
+            data: applyFormulaDefault(sample, this.data.formulaDefault, this.data.formulaDefault3D),
             saveAs: {
-                label: t('plugin.formula.saveDefault'),
+                label: t(solid ? 'plugin.formula.saveDefault3D' : 'plugin.formula.saveDefault'),
                 save: (chart) => {
-                    this.data.formulaDefault = chart;
+                    if (solid) this.data.formulaDefault3D = chart;
+                    else this.data.formulaDefault = chart;
                     void this.saveSettings();
-                    new Notice(t('plugin.formula.defaultSaved'));
+                    new Notice(t(solid ? 'plugin.formula.defaultSaved3D' : 'plugin.formula.defaultSaved'));
                     done();
                 },
             },
@@ -2296,6 +2303,31 @@ class EasyTikzSettingTab extends PluginSettingTab {
                         );
                     }
                     setting.addButton((b) => b.setButtonText(t('plugin.settings.formulaDefault.edit')).setCta().onClick(() => this.plugin.editFormulaDefault(() => this.update())));
+                },
+            },
+            {
+                // 6.2.1: the look of 3D formula charts (surfaces), set up in the editor on a surface.
+                name: t('plugin.settings.formulaDefault3D.name'),
+                desc: t('plugin.settings.formulaDefault3D.descBuiltIn'),
+                aliases: ['default', '3D', 'surface', 'box', 'colour map', 'color map', 'formula', '既定', '曲面', '数式'],
+                render: (setting) => {
+                    const own = !!this.plugin.data.formulaDefault3D;
+                    setting.setDesc(t(own ? 'plugin.settings.formulaDefault3D.descOwn' : 'plugin.settings.formulaDefault3D.descBuiltIn'));
+                    if (own) {
+                        setting.addButton((b) =>
+                            b.setButtonText(t('plugin.settings.formulaDefault.reset')).onClick(async () => {
+                                this.plugin.data.formulaDefault3D = null;
+                                await this.plugin.saveSettings();
+                                this.update();
+                            })
+                        );
+                    }
+                    setting.addButton((b) =>
+                        b
+                            .setButtonText(t('plugin.settings.formulaDefault.edit'))
+                            .setCta()
+                            .onClick(() => this.plugin.editFormulaDefault(() => this.update(), true))
+                    );
                 },
             },
             {
