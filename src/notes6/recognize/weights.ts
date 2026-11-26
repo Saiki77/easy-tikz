@@ -1,6 +1,6 @@
 // The weights of the formula recognition network (src/notes6/recognize), written by hand: no number in this
-// file comes from an optimiser. A copy of the frozen design of round 2 (hover-ml, designed2: the circuit,
-// best.mjs) without its hybrid part. Data only: net.ts turns it into matrices.
+// file comes from an optimiser. A copy of the frozen design of round 3 (hover-ml, designed3: the circuit,
+// best.mjs, with the label vector) without its hybrid part. Data only: net.ts turns it into matrices.
 //
 // A unit is [name, bias, 'input weight input weight ...']. Inputs are features (features.ts) or earlier units.
 // Every unit computes clip01(bias + sum of weight * input). With 0/1 inputs this gives the three patterns used here:
@@ -16,7 +16,7 @@ export const SPEC: NetSpec = {
     units: [
         // ---- layer 1: what kind of notation is this? (ORs and small ANDs over the features)
         ['V_ops', 0, 'op_int 1 op_lim 1 op_prod 1 op_ddx 1 op_nabla 1 op_bigO 1 op_mod 1 op_logic 1 hasCases 1 hasLarrow 1 hasEquiv 1 hasSim 1 hasSub 1 hasOtherRel 1'],
-        ['V_prob', 0, 'op_prob 1 op_binom 1 hasFact 1 hasMid 1'],
+        ['V_prob', 0, 'op_prob 1 op_binom 1 hasFact 1 hasMid 1 hcRandom 1'],
         ['V_mat', 0, 'mat1 1 mat2p 1 vmat 1 detAny 1'],
         ['V_set', 0, 'setB 1 setList 1 setLevel 1 hasBB 1 hasSetOps 1'],
         ['ABSFN', -1, 'hasAbs 1 hasFn 1'],
@@ -24,7 +24,7 @@ export const SPEC: NetSpec = {
         ['V_unk', 0, 'unkCall 1 unkCallMarked 1 primeBody 1 selfRef 1 defCall 1'],
         ['V_value', 0, 'lastNumeric 1 firstBodyNumeric 1 bodyTuple 1 hasPm 1 hcArgNum 1 hcArgMarked 1 hcArgExpr 1 ha_star 1'],
         ['V_cplx', 0, 'hasImag 1 hasReIm 1'],
-        ['V_struct', 0, 'mat1 1 mat2p 1 vmat 1 setB 1 setList 1 setLevel 1 iv 1 list3 1 hasBB 1 hasSetOps 1 detAny 1 epiOp 1 hasColon 1 hasText 1 textOnly 1 numeric 1 lone 1 loneCall 1 empty 1'],
+        ['V_struct', 0, 'mat1 1 mat2p 1 vmat 1 setB 1 setList 1 setLevel 1 iv 1 list3 1 hasBB 1 hasSetOps 1 detAny 1 epiOp 1 hasColon 1 hasText 1 textOnly 1 numeric 1 lone 1 loneCall 1 empty 1 tupleSide 1'],
         ['C_nonlin', 0, 'hasPow 1 hasFn 1 hasFrac 1 hasAbs 1 fnMaxMin 1 hasFloor 1 knownCall 1'],
         ['XY', -1, 'has_x 1 has_y 1'],
         ['X12', -1, 'has_x1 1 has_x2 1'],
@@ -46,7 +46,7 @@ export const SPEC: NetSpec = {
         ['CR', 0, 'c_rhsNum 1 c_rhsAtom 1'],
         ['CTXSIG', 0, 'ctxSignal 1 ctxML 1'],
         ['IVENDS', 0, 'ivEndsNum 1 ivEndsAB 1'],
-        ['IVFORM', 0, 'rel0 1 ivMemberAtom 1 ivNamed 1 ivApprox 1'],
+        ['IVFORM', 0, 'rel0 1 ivMemberAtom 1 ivNamed 1 ivApprox 1 ivDef 1 ivImage 1'],
         ['ZS_ok', -1, 'ivZeroSym 1 rel0 1 ctxPoint -2'],
         ['MEM_ok', 0, 'ivMemberAtom 1 ivEndsExpr -2'],
         ['CTX_ok', -1, 'ctxInterval 1 rel0 1 ivEndsExpr -2 ctxPoint -2'],
@@ -67,7 +67,8 @@ export const SPEC: NetSpec = {
         ['VETO_D', 0, 'V_ops 1 V_prob 1 V_data 1 V_unk 1 V_value 1 let5 1 let6p 1 op_sum 1 V_set 1'],
         ['RV', 0, 'XY 1 X12 1 RX12 1 RMIDY 1'],
         ['INF_ok', 0, 'ivHasInf 1 ivEndsExpr -2'],
-        ['IVR', 0, 'ZS_ok 1 MEM_ok 1 CTX_ok 1 INF_ok 1'],
+        ['IVD_ok', 0, 'ivDef 1 ivImage 1 ivEndsExpr -2'],
+        ['IVR', 0, 'ZS_ok 1 MEM_ok 1 CTX_ok 1 INF_ok 1 IVD_ok 1'],
         ['EPIP', 0, 'EPI_a 1 EPI_b 1'],
         ['JP', 0, 'JCOMB 1 jensenE 1 jensenSum 1'],
 
@@ -112,17 +113,33 @@ export const SPEC: NetSpec = {
         ['IV_rd', -2, 'iv 1 ivRound 1 IVR 1 V_prob -2 anyPm -2'],
         // set and epigraph
         ['EPI_op', 0, 'epiOp 1 hasText -2'],
-        ['SET', 0, 'setB 1 setLevel 1 hasSetOps -2 op_logic -2 setBadElem -2 hasTop -2 capMul -2 op_nabla -2 hasText -2 hasDots -2 callNonX -2 hasReIm -2 hasArr -2 op_prob -2'],
+        ['SET', -1, 'setB 1 setCondRel 1 ivDef -2 setSpace -2 setText -2 op_logic -2 setBadElem -2 hasTop -2 capMul -2 op_nabla -2 hasDots -2 setCallBad -2 hasReIm -2 hasArr -2 op_prob -2 hasAngle -2 op_sum -2 idxSubs -2'],
         ['EPI', -2, 'setB 1 setTuple 1 EPIP 1'],
         // map
-        ['MAP', -1, 'mapForm 1 mapCodR 1 mapDomAbstract -2 mapHasC -2 anyMapsto -2 mapCodPow -2'],
+        ['MAP', -1, 'mapForm 1 mapCodR 1 mapDomAbstract -2 mapHasC -2 anyMapsto -2 mapCodPow -2 mapRuleLater -2'],
         // jensen
         ['JEN', -1, 'ineq1 1 JP 1 hasStar -2 hasIn -2 EQANY -2'],
         // matrix, det, product, eigen
-        ['MAT', -1, 'matSq 1 MATOK 1 matStateVar -2 matDots -2 detLead -2 matAdjVec -2 hc -2 vmat -2 hasCases -2 V_ops -2'],
+        ['MAT', -2, 'matSq 1 MATOK 1 matAlone 1 matStateVar -2 matDots -2 detLead -2 matAdjVec -2 vmat -2 hasCases -2 hasSim -2 hasEquiv -2 hasLarrow -2 hasSub -2 hasOtherRel -2 op_int -2 op_lim -2 op_logic -2 op_bigO -2 op_mod -2 ctxTable -2'],
         ['DET', 0, 'detLone 1 detMat 1 vmatNumeric 1'],
-        ['PROD', 0, 'prodAv 1 prodVec 1 matAdjVec 1'],
+        ['PRODMAP', -1, 'prodMap 1 matKnown 1'],
+        ['PROD', 0, 'prodAv 1 prodVec 1 prodWritten 1 prodMixed 1 prodEval 1 PRODMAP 1'],
         ['EIG', 0, 'eig1 1 eig2 1'],
+        // vector: a written vector (the spelling says it), a plain tuple with a vector context, a sum of the note's vectors, basis vectors
+        ['VEC_ctx', 0, 'vecHeadDeco 1 vecHeadKnown 1 ctxVecWord 1'],
+        // no arrow: the zero vector, a distribution, a result of solving (an eigenvector is an arrow all the same)
+        ['VEC_solve', 0, 'ctxSolveWord 1 ctxVecWord -2'],
+        ['VEC_no', 0, 'vecZero 1 vecProb 1 vecStoch 1 VEC_solve 1 vecHeadCap 1'],
+        // a weak head (x, y, z, b: a linear system or a data point; in a note on learning all but w and n) or a point word needs the word vector
+        ['VEC_pt', 0, 'ctxPointWord 1 vecHeadDeco -2'],
+        ['VEC_ml', -1, 'ctxML 1 vecHeadData 1'],
+        ['VEC_weak', 0, 'vecHeadSys 1 VEC_ml 1 VEC_pt 1 ctxVecWord -2'],
+        ['VEC_lit', 0, 'vecLit 1 VEC_no -2 VEC_weak -2'],
+        ['VEC_plain', -1, 'vecPlain 1 VEC_ctx 1 VEC_no -2 VEC_weak -2'],
+        // \binom and a list of tuples in a note that writes letters with arrows
+        ['VEC_note', -1, 'vecSoft 1 noteVec 1 VEC_no -2 VEC_pt -2'],
+        ['VEC_names', 0, 'vecNamesDef 1 vecBasis 1'],
+        ['VEC_ijk', -1, 'vecBasisPlain 1 VEC_ctx 1'],
         // recurrence
         ['REC', 0, 'RECF 1 recTwoStep -2 recOtherIdx -2 V_unk -2 V_ops -2 V_prob -2 hasVec -2 hasTop -2 hasArr -2 ha_hat -2 op_sum -2 INEQ -2'],
         // sum
@@ -154,5 +171,6 @@ export const SPEC: NetSpec = {
         ['recurrence', 0, 'REC 1.3'],
         ['sum', 0, 'SUM 1.3'],
         ['domain', 0, 'D_headz 1 D_heads 1 D_bare_z 1 D_bare_s 1'],
+        ['vector', 0, 'VEC_lit 1 VEC_plain 1.2 VEC_note 1.2 VEC_names 1 VEC_ijk 1'],
     ],
 };

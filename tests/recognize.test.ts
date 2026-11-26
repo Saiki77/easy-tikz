@@ -11,10 +11,10 @@ interface Case extends RecognizeContext {
     label: Label;
 }
 
-test('recognize: the TypeScript port gives the frozen round 2 network\'s label on the committed fixture (about 200 formulas)', () => {
+test('recognize: the TypeScript port gives the frozen round 3 network\'s label on the committed fixture (about 250 formulas)', () => {
     // tests/recognize-fixture.json: formulas of train and dev with what is around them, and the frozen network's label.
     const cases = JSON.parse(fs.readFileSync('tests/recognize-fixture.json', 'utf8')) as Case[];
-    assert.ok(cases.length >= 180, `${cases.length} cases`);
+    assert.ok(cases.length >= 240, `${cases.length} cases`);
     const wrong = cases.filter((c) => recognize(c.tex, { defs: c.defs, context: c.context, note: c.note }) !== c.label);
     assert.deepEqual(
         wrong.map((c) => `${c.tex} (${c.label})`),
@@ -26,30 +26,82 @@ test('recognize: the TypeScript port gives the frozen round 2 network\'s label o
 
 // The experiment's corpus and the frozen network (hover-ml): only on the machine that has them, so CI without them passes.
 const SCRATCH = '/private/tmp/claude-501/-Users-justus-PycharmProjects-tikz-graph-help/d7060021-8494-476b-bf42-b1974d650603/scratchpad/hover-ml';
-const FROZEN = `${SCRATCH}/designed2-frozen/best.mjs`;
-const SPLITS = ['train', 'dev', 'hard_dev'].map((s) => `${SCRATCH}/data/${s}.jsonl`);
+const FROZEN = `${SCRATCH}/designed3-frozen/best.mjs`;
+const SUITE = `${SCRATCH}/designed3-frozen/suite.jsonl`;
+const DATA = `${SCRATCH}/data`;
 
-test('recognize: the port gives the frozen round 2 network\'s label (best.mjs) on every formula of train, dev and hard_dev (skipped without the corpus)', async () => {
-    if (!fs.existsSync(FROZEN) || !SPLITS.every((f) => fs.existsSync(f))) {
+type Frozen = { predict: (tex: string, ctx: RecognizeContext) => string };
+const readLines = (file: string) =>
+    fs
+        .readFileSync(file, 'utf8')
+        .split('\n')
+        .filter((l) => l.trim())
+        .map((l) => JSON.parse(l) as Case & { id: string });
+const ctxOf = (it: RecognizeContext): RecognizeContext => ({ defs: it.defs ?? [], context: it.context ?? '', note: it.note ?? null });
+
+test('recognize: the port gives the frozen round 3 network\'s label (best.mjs) on every formula of every data file (skipped without the corpus)', async () => {
+    if (!fs.existsSync(FROZEN) || !fs.existsSync(DATA)) {
         console.log('    (skipped: the hover-ml corpus is not on this machine)');
         return;
     }
-    const url = pathToFileURL(FROZEN).href;
-    const frozen = (await import(url)) as { predict: (tex: string, ctx: RecognizeContext) => string };
+    const frozen = (await import(pathToFileURL(FROZEN).href)) as Frozen;
+    const files = fs.readdirSync(DATA).filter((f) => f.endsWith('.jsonl'));
     let n = 0;
     const wrong: string[] = [];
-    for (const file of SPLITS) {
-        for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-            if (!line.trim()) continue;
-            const it = JSON.parse(line) as Case & { id: string };
-            const ctx = { defs: it.defs ?? [], context: it.context ?? '', note: it.note ?? null };
+    for (const file of files) {
+        for (const it of readLines(`${DATA}/${file}`)) {
+            const ctx = ctxOf(it);
             n++;
-            if (recognize(it.tex, ctx) !== frozen.predict(it.tex, ctx)) wrong.push(it.id);
+            if (recognize(it.tex, ctx) !== frozen.predict(it.tex, ctx)) wrong.push(`${file} ${it.id}`);
         }
     }
-    console.log(`    ${n} formulas, ${wrong.length} with another label`);
-    assert.ok(n > 6000, `${n} formulas`);
+    console.log(`    ${n} formulas of ${files.length} files, ${wrong.length} with another label`);
+    assert.ok(n > 16000, `${n} formulas`);
     assert.deepEqual(wrong, []);
+});
+
+test('recognize: the port gives the frozen network\'s label on a fuzz set: the robustness suite of round 3 and cut, unbalanced spellings (skipped without the corpus)', async () => {
+    if (!fs.existsSync(FROZEN) || !fs.existsSync(SUITE) || !fs.existsSync(DATA)) {
+        console.log('    (skipped: the hover-ml corpus is not on this machine)');
+        return;
+    }
+    const frozen = (await import(pathToFileURL(FROZEN).href)) as Frozen;
+    let n = 0;
+    const wrong: string[] = [];
+    const same = (tex: string, ctx: RecognizeContext) => {
+        n++;
+        let a: string;
+        try {
+            a = frozen.predict(tex, ctx);
+        } catch {
+            a = 'throws';
+        }
+        if (recognize(tex, ctx) !== a && wrong.length < 20) wrong.push(JSON.stringify(tex));
+    };
+    // 49 851 variants of the suite, each with its context.
+    for (const it of readLines(SUITE)) same(it.tex, ctxOf(it));
+    // Every formula of the round 3 files cut in four places: the head, the tail, a brace or a backslash too many.
+    for (const split of ['train_r3', 'dev_r3', 'hard_dev_r3', 'r3_dev']) {
+        for (const it of readLines(`${DATA}/${split}.jsonl`)) {
+            const t = it.tex;
+            const ctx = ctxOf(it);
+            for (let k = 1; k < t.length; k += Math.max(1, Math.floor(t.length / 4))) {
+                for (const s of [t.slice(0, k), t.slice(k), `${t.slice(0, k)}{${t.slice(k)}`, `${t.slice(0, k)}}${t.slice(k)}`, `${t.slice(0, k)}\\${t.slice(k)}`]) same(s, k % 2 ? ctx : {});
+            }
+        }
+    }
+    console.log(`    ${n} variants, ${wrong.length} with another label`);
+    assert.ok(n > 150000, `${n} variants`);
+    assert.deepEqual(wrong, []);
+});
+
+test('recognize: well under 1 ms per formula', () => {
+    const cases = JSON.parse(fs.readFileSync('tests/recognize-fixture.json', 'utf8')) as Case[];
+    const t0 = performance.now();
+    for (let r = 0; r < 20; r++) for (const c of cases) recognize(c.tex, { defs: c.defs, context: c.context, note: c.note });
+    const ms = (performance.now() - t0) / (20 * cases.length);
+    console.log(`    ${ms.toFixed(3)} ms per formula`);
+    assert.ok(ms < 0.5, `${ms} ms per formula`);
 });
 
 test('recognize: a formula it cannot read, and broken TeX, get no card and never throw', () => {

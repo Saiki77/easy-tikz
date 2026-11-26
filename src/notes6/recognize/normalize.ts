@@ -1,6 +1,6 @@
 /*
  * The front end of formula recognition (a port of the frozen normalize.mjs,
- * hover-ml designed2; the logic is the same line by line): one TeX string
+ * hover-ml designed3, round 3; the logic is the same line by line): one TeX string
  * in, one canonical TeX string out, plus flags. It changes spelling only
  * (Unicode to TeX, sloppy plain-text math to TeX, layout commands removed)
  * and takes no decision about a card. The flags are inputs of the network:
@@ -117,6 +117,23 @@ export interface Normalized {
 export function normalize(texIn: string, ctx?: RecognizeContext): Normalized {
     let s = String(texIn ?? '');
     const flags = { unreadable: false, prose: false, rowCont: false, hadCases: /\\begin\s*\{cases\}/.test(s) };
+    // a combining arrow above a letter (v⃗), blackboard letters of other packages, a transposition sign in a font command
+    s = s.replace(/([A-Za-z])\s?[\u20D7\u20D1]/g, '\\vec{$1}');
+    s = s.replace(/\\(?:mathds|Bbb|mathbbm)(?![A-Za-z])/g, '\\mathbb').replace(/\\(R|N|Z|Q|C)(?![A-Za-z])/g, '\\mathbb{$1}').replace(/\\(?:RR|IR)(?![A-Za-z])/g, '\\mathbb{R}');
+    s = s.replace(/\^\s*\{?\s*\\(?:mathsf|mathrm|text|operatorname|mathit|textsf|mathtt)\s*\{\s*([Tt])\s*\}\s*\}?/g, '^\\top ').replace(/\^\s*\{\s*\\(?:top|intercal)\s*\}/g, '^\\top ').replace(/\^\s*\\intercal(?![A-Za-z])/g, '^\\top ');
+    // a matrix as a plain list of rows: [[1, 2], [3, 4]]
+    // (A decimal comma {,} is kept out of the split with a private-use sign; the frozen code uses \u0001.)
+    s = s.replace(/\[\s*(\[[^[\]]*\]\s*(?:[,;]\s*\[[^[\]]*\]\s*)+)\]/g, (m: string, inner: string) => {
+        const rows = (inner.match(/\[[^[\]]*\]/g) ?? []).map((r) =>
+            r
+                .slice(1, -1)
+                .replace(/\{,\}/g, '\uE000')
+                .split(',')
+                .map((c) => c.replace(/\uE000/g, '{,}').trim())
+        );
+        if (rows.some((r) => r.length !== rows[0].length || r.some((c) => !c))) return m;
+        return `\\begin{bmatrix} ${rows.map((r) => r.join(' & ')).join(' \\\\ ')} \\end{bmatrix}`;
+    });
     // comments (a % that is not \%)
     s = s.replace(/(^|[^\\])%[^\n]*/g, '$1');
     // layout and numbering
@@ -142,18 +159,18 @@ export function normalize(texIn: string, ctx?: RecognizeContext): Normalized {
         let d = 0;
         for (let i = 0; i < s.length; i++) {
             const ch = s[i];
-            if (ch === '(' || ch === '[') d++;
-            else if (ch === ')' || ch === ']') d = Math.max(0, d - 1);
+            if (ch === '(' || ch === '[' || (ch === '{' && s[i - 1] === '\\')) d++;
+            else if (ch === ')' || ch === ']' || (ch === '}' && s[i - 1] === '\\')) d = Math.max(0, d - 1);
             else if (ch === ',' && d === 0 && /[0-9]/.test(s[i - 1] ?? '') && /[0-9]/.test(s[i + 1] ?? '') && /[A-Za-z\\^]/.test(s.slice(i + 1).replace(/^[0-9]+\s*/, '')[0] ?? '')) flags.unreadable = true;
         }
     }
     // a unit after a formula is a label (rubric_hard.md 6): x(t) = 0,2 cos(7,854 t) \ \mathrm{m}
     const before = s;
     s = s.replace(/(?:\\[ ,;:]|~|\s)+\\(?:mathrm|text)\s*\{\s*[a-zA-Zµ°€%][a-zA-Zµ°/^0-9{}\-\\, ]{0,9}\}\s*[.,]?\s*$/, (m: string, off: number) => (/[=\\]in\b|=/.test(before.slice(0, off)) && /[\])0-9}]\s*$/.test(before.slice(0, off)) ? ' ' : m));
-    // a label before an equation: "g: y = 2x + 1"
-    s = s.replace(/^\s*[a-zA-Z](?:_[0-9a-z])?\s*(?::|\\colon)\s*(?=[^:]*=)(?![^=]*\\(?:to|mapsto|rightarrow)\b)/, '');
     // Unicode
     s = s.replace(UNI_RE, (c) => UNI[c]);
+    // a label before an equation: "g: y = 2x + 1"
+    s = s.replace(/^\s*[a-zA-Z](?:_[0-9a-z])?\s*(?::|\\colon)(?!\s*=)\s*(?=[^:]*=)(?![^=]*\\(?:to|mapsto|rightarrow|longrightarrow)\b)/, '');
     s = s.replace(/\^-(?=\^)/g, '^-').replace(/\^-\^([0-9])/g, '^{-$1}');
     // a table cell writes a bar as \|
     const c = String(ctx?.context ?? '').trim();
@@ -194,8 +211,8 @@ export function normalize(texIn: string, ctx?: RecognizeContext): Normalized {
         let o = '';
         for (let i = 0; i < s.length; i++) {
             const ch = s[i];
-            if (ch === '(' || ch === '[') d++;
-            else if (ch === ')' || ch === ']') d = Math.max(0, d - 1);
+            if (ch === '(' || ch === '[' || (ch === '{' && s[i - 1] === '\\')) d++;
+            else if (ch === ')' || ch === ']' || (ch === '}' && s[i - 1] === '\\')) d = Math.max(0, d - 1);
             if (ch === ',' && d === 0 && /[0-9]/.test(s[i - 1] ?? '') && /[0-9]/.test(s[i + 1] ?? '')) o += '{,}';
             else o += ch;
         }

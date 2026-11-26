@@ -15,7 +15,7 @@ import { splitLetterRuns } from '../../latex';
 import { isEmptyPair } from '../hover';
 
 /** The builder a label's card comes from. */
-export type CardGroup = 'chart' | 'notes6' | 'linear' | 'iterate';
+export type CardGroup = 'chart' | 'notes6' | 'linear' | 'iterate' | 'vector';
 
 const GROUP: Record<Exclude<Label, 'none'>, CardGroup> = {
     function: 'chart',
@@ -36,6 +36,7 @@ const GROUP: Record<Exclude<Label, 'none'>, CardGroup> = {
     recurrence: 'iterate',
     sum: 'iterate',
     domain: 'iterate',
+    vector: 'vector',
 };
 
 /** The builder of a label's card: src/formula.ts (chart), src/notes6/hover.ts, src/linear/hover.ts, src/iterate/hover.ts; null for none. */
