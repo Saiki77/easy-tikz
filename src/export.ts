@@ -763,11 +763,26 @@ function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, pape
         const labels = spots.map((sp) => {
             if (!sp.show) return '{}';
             const k = sp.tick;
-            return `{${k.label !== undefined ? labelText(k.label) : k.piTex !== undefined ? k.piTex : `$\\pgfmathprintnumber{${fmtNum(k.value)}}$`}}`;
+            const text = k.label !== undefined ? labelText(k.label) : k.piTex !== undefined ? k.piTex : `$\\pgfmathprintnumber{${fmtNum(k.value)}}$`;
+            return `{${shiftedTick(text, a, place, sp.shift)}}`;
         });
         opts.push(`${a}tick={${t.ticks.map((k) => fmtNum(k.value)).join(',')}}`, `${a}ticklabels={${labels.join(',')}}`);
     }
     return opts;
+}
+
+/**
+ * 6.2.1: a tick number moved `shift` pt away from its axis, as the preview
+ * moves a number that a marked point or a curve would cover
+ * (cleanTickSpots): an x number lowered (raised at the top edge) inside a
+ * box of its own height, a y number pushed left (right at the right edge)
+ * by a kern on its axis side.
+ */
+function shiftedTick(text: string, axis: 'x' | 'y', place: { x: AxisPlace; y: AxisPlace }, shift: number): string {
+    if (!(shift > 0.005)) return text;
+    const d = `${fmtNum(Math.round(shift * 100) / 100)}pt`;
+    if (axis === 'x') return `\\raisebox{${place.x === 'high' ? '' : '-'}${d}}[\\height][\\depth]{${text}}`;
+    return place.y === 'high' ? `\\kern${d}${text}` : `${text}\\kern${d}`;
 }
 
 /** 6.1: the marked points and function curves of the picture, in the plot's pt (y down), for the numbers to keep clear of. */

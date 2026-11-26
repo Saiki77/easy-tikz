@@ -1630,7 +1630,8 @@ export class SVGRenderer {
         for (const item of items) {
             for (const m of item.markers || []) {
                 if (!finitePt(m) || !this.inView(m.x, m.y, 0)) continue;
-                dots.push({ x: this.sx(m.x), y: this.sy(m.y), r: CLEAN_MARKER_RADIUS[m.size] || CLEAN_MARKER_RADIUS.normal });
+                // 6.2.1: with the half of its 2 px rim that lies outside the dot.
+                dots.push({ x: this.sx(m.x), y: this.sy(m.y), r: (CLEAN_MARKER_RADIUS[m.size] || CLEAN_MARKER_RADIUS.normal) + 1 });
             }
         }
         const lines: TickObstacles['lines'] = [];
