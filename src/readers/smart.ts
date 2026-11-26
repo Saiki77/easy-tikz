@@ -10,17 +10,21 @@
  * The parses of one formula are remembered (the hover asks for them on
  * every redraw of a note, for the dotted mark). Pure: no DOM, no Obsidian.
  */
+import { isEmptyPair } from '../notes6/hover';
 import { reader0 } from './reader0';
 import type { CardKind, CardParse, ReadContext, Reader } from './types';
 import { readVote } from './vote';
 import { writtenLinear } from './written';
 
-/** The vote, the written vectors of a product or an eigen equation, then reader 0; the same parse once. */
+/** The vote, the written vectors of a product or an eigen equation, then reader 0; the same parse once, no interval for a point. */
 function readSmart(tex: string, kind: CardKind, ctx: ReadContext): CardParse[] {
     const out: CardParse[] = [];
     const seen = new Set<string>();
+    // 6.2.1 (issue 6): a bare pair of equal or reversed numbers, (1, 1) or (\tfrac83, \tfrac43), is a point: no interval, whoever reads one.
+    const point = kind === 'interval' && isEmptyPair(tex);
     const add = (list: CardParse[]) => {
         for (const p of list) {
+            if (point && p.kind === 'interval') continue;
             const key = JSON.stringify(p);
             if (seen.has(key)) continue;
             seen.add(key);

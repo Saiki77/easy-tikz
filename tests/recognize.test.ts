@@ -1,7 +1,7 @@
 import { test, assert } from './_lib';
 import * as fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { LABELS, Label, RecognizeContext, recognize } from '../src/notes6/recognize';
+import { LABELS, Label, RecognizeContext, designedLabel, recognize, respell } from '../src/notes6/recognize';
 import { contextOf, noteId, definingFormulas, formulaContext, noteFacts } from '../src/notes6/recognize/context';
 import { groupOf, spellings } from '../src/notes6/recognize/adapt';
 import { recognitionSetting, rulesMark, smartChart, smartLinear, smartMark } from '../src/notes6/recognize/decide';
@@ -48,14 +48,18 @@ test('recognize: the port gives the frozen round 4 network\'s label (best.mjs) o
     const files = fs.readdirSync(DATA).filter((f) => f.endsWith('.jsonl'));
     let n = 0;
     const wrong: string[] = [];
+    const respelled: string[] = [];
     for (const file of files) {
         for (const it of readLines(`${DATA}/${file}`)) {
             const ctx = ctxOf(it);
             n++;
-            if (recognize(it.tex, ctx) !== frozen.predict(it.tex, ctx)) wrong.push(`${file} ${it.id}`);
+            if (designedLabel(it.tex, ctx) !== frozen.predict(it.tex, ctx)) wrong.push(`${file} ${it.id}`);
+            // 6.2.4: the plugin respells a few formulas first (e^{(x+1)}); then it is the network on the respelled formula
+            if (respell(it.tex) !== it.tex) respelled.push(`${file} ${it.id}`);
+            if (recognize(it.tex, ctx) !== frozen.predict(respell(it.tex), ctx)) wrong.push(`${file} ${it.id} (respelled)`);
         }
     }
-    console.log(`    ${n} formulas of ${files.length} files, ${wrong.length} with another label`);
+    console.log(`    ${n} formulas of ${files.length} files, ${wrong.length} with another label; ${respelled.length} respelled before the network`);
     assert.ok(n > 27000, `${n} formulas`);
     assert.deepEqual(wrong, []);
 });
@@ -67,6 +71,7 @@ test('recognize: the port gives the frozen network\'s label on a fuzz set: the r
     }
     const frozen = (await import(pathToFileURL(FROZEN).href)) as Frozen;
     let n = 0;
+    let respelled = 0;
     const wrong: string[] = [];
     const same = (tex: string, ctx: RecognizeContext) => {
         n++;
@@ -76,7 +81,8 @@ test('recognize: the port gives the frozen network\'s label on a fuzz set: the r
         } catch {
             a = 'throws';
         }
-        if (recognize(tex, ctx) !== a && wrong.length < 20) wrong.push(JSON.stringify(tex));
+        if (designedLabel(tex, ctx) !== a && wrong.length < 20) wrong.push(JSON.stringify(tex));
+        if (respell(tex) !== tex) respelled++;
     };
     // 79 366 variants of the suite, each with its context.
     for (const it of readLines(SUITE)) same(it.tex, ctxOf(it));
@@ -90,9 +96,19 @@ test('recognize: the port gives the frozen network\'s label on a fuzz set: the r
             }
         }
     }
-    console.log(`    ${n} variants, ${wrong.length} with another label`);
+    console.log(`    ${n} variants, ${wrong.length} with another label; ${respelled} respelled before the network`);
     assert.ok(n > 300000, `${n} variants`);
     assert.deepEqual(wrong, []);
+});
+
+test('recognize, 6.2.4: the plugin respells a bracket around a whole exponent of e before the network (e^{(x+1)} is no layer index)', () => {
+    assert.equal(respell('f(x)=e^{(x+1)}'), 'f(x)=e^{x+1}');
+    assert.equal(respell('g(t) = 3 e^{(t - 1)}'), 'g(t) = 3 e^{t - 1}');
+    assert.equal(designedLabel('f(x)=e^{(x+1)}'), 'none');
+    assert.equal(recognize('f(x)=e^{(x+1)}'), 'function');
+    assert.equal(recognize('f(x)=e^{(x+1)}', { context: 'Wir betrachten die Funktion [F] auf ganz $\\mathbb{R}$.' }), 'function');
+    // indices stay: a layer, a sample, an iterate, the error of an iteration
+    for (const tex of ['W^{(1)} x + b^{(1)}', 'x^{(i)}', 'x^{(k+1)} = x^{(k)} - \\alpha \\nabla f(x^{(k)})', '\\|e^{(k+1)}\\| \\le \\rho\\,\\|e^{(k)}\\|', 'e^{(i)}', 'I_0 e^{(\\beta - \\gamma)t}']) assert.equal(respell(tex), tex, tex);
 });
 
 test('recognize: well under 1 ms per formula', () => {

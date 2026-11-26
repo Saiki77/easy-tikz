@@ -14,6 +14,7 @@ import { axisVariable, namedSetLabel } from '../src/notes6/sets';
 import { chartable, formulaChart, formulaLines } from '../src/formula';
 import { definedFunctions, productsOf, spellings } from '../src/notes6/recognize/adapt';
 import { rulesMark, smartChart, smartLinear, smartMark, smartNotes6 } from '../src/notes6/recognize/decide';
+import { reader0 } from '../src/readers/reader0';
 
 /** The scene of chart lines, as the card draws it (the axis names reach the scene). */
 function sceneOf(lines: string[]): Scene2D {
@@ -143,8 +144,11 @@ test('issue 8: the card is of the kind the network gives (a = x \\cdot y labelle
     assert.ok(!surface.lines.some((l) => l.startsWith('slider a')), surface.lines.join(' / '));
     // Labelled implicit, the same formula is the curve x y = a with its slider.
     assert.equal(smartChart(tex, undefined, tex, 'implicit')?.kind, 'equation');
-    // Without a spelling of the label's kind, the builder's kind shows (f(x) = x^2 labelled surface stays a function).
-    assert.equal(smartChart('f(x) = x^2', undefined, 'f(x) = x^2', 'surface')?.kind, 'function');
+    // Without a spelling of the label's kind, the builder's kind shows (6.2.4: f(x) = x^2 labelled surface is the surface z = x^2
+    // of the vote's readers; reader 0 alone gives its function).
+    assert.equal(smartChart('f(x) = x^2', undefined, 'f(x) = x^2', 'surface')?.kind, 'surface');
+    assert.equal(smartChart('f(x) = x^2', undefined, 'f(x) = x^2', 'surface', undefined, reader0)?.kind, 'function');
+    assert.equal(smartChart('f(x) = x^2', undefined, 'f(x) = x^2', 'polar')?.kind, 'function');
     // The other builders: the interval of \lambda \in [0, 1] labelled interval; det of a written matrix is det.
     assert.equal(smartNotes6('\\lambda \\in [0,1]', 'interval', new Map())?.kind, 'interval');
     assert.equal(smartLinear('\\det \\begin{pmatrix} 2 & 1 \\\\ 0 & 1 \\end{pmatrix}', 'det', new Map())?.kind, 'det');

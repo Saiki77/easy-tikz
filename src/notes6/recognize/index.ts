@@ -38,8 +38,12 @@ export { LABELS } from './net';
 let compiled: ReturnType<typeof compile> | null = null;
 let act: Float32Array | null = null;
 
-/** The card of a formula: the first of its parts that earns a card decides (as formulaLines does). */
-export function recognize(tex: string, ctx: RecognizeContext = {}): Label {
+/**
+ * The network's label as designed (the port of the frozen best.mjs, the same
+ * label on every formula): the first of the parts that earns a card decides
+ * (as formulaLines does). The plugin asks recognize(), which respells first.
+ */
+export function designedLabel(tex: string, ctx: RecognizeContext = {}): Label {
     compiled ??= compile(SPEC, FEATURES);
     act ??= new Float32Array(compiled.size);
     let parts: Float32Array[];
@@ -54,6 +58,29 @@ export function recognize(tex: string, ctx: RecognizeContext = {}): Label {
         if (label !== 0) return LABELS[label];
     }
     return 'none';
+}
+
+/** A bracket that wraps a whole exponent of e, with an operation inside: e^{(x+1)}. */
+const E_BRACKET = /(^|[^A-Za-z\\])e\s*\^\s*\{\s*\(([^(){}]*(?:[-+*/]|\\cdot)[^(){}]*)\)\s*\}/g;
+
+/**
+ * 6.2.4: what the plugin respells before the network (no part of the designed
+ * network): a bracket around a whole exponent of e is no layer or sample
+ * index, so e^{(x+1)} is read as e^{x+1} (the network reads ^{(l)} as the
+ * index of W^{(1)}, x^{(i)}, x^{(k+1)} and gives such formulas no card). Only
+ * with an operation inside, and only when no other bracketed superscript
+ * stays (\lVert e^{(k+1)} \rVert \le \rho \lVert e^{(k)} \rVert keeps its indices).
+ */
+export function respell(tex: string): string {
+    E_BRACKET.lastIndex = 0;
+    if (!E_BRACKET.test(tex)) return tex;
+    const out = tex.replace(E_BRACKET, (_m: string, before: string, inner: string) => `${before}e^{${inner}}`);
+    return /\^\s*\{?\s*[([]/.test(out) ? tex : out;
+}
+
+/** The card of a formula (the network's label after the plugin's respelling): none, or a card kind. */
+export function recognize(tex: string, ctx: RecognizeContext = {}): Label {
+    return designedLabel(respell(tex), ctx);
 }
 
 const memo = new Map<string, Label>();
