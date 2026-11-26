@@ -2,8 +2,9 @@
 // what a formula draws, its letters as sliders, the view fitted to it, the
 // formula at the cursor, and the formulas of a section in order.
 import { test, assert } from './_lib';
-import { formulaAt, formulaChart, formulaLines, formulasIn, freeNames, chartable, formulaRows, applyFormulaDefault } from '../src/formula';
+import { formulaAt, formulaChart, formulaLines, formulasIn, freeNames, chartable, formulaRows, applyFormulaDefault, formulaBlock, formulaDefaultFor } from '../src/formula';
 import { parseChartText } from '../src/text/parse';
+import { SettingsManager } from '../src/settings';
 
 test('formula: what each kind of formula draws', () => {
     const kinds: Array<[string, string, string]> = [
@@ -157,6 +158,76 @@ test('formula: a 2D default chart keeps the cube of surfaces and the colours of 
     const two = applyFormulaDefault(parseChartText((formulaChart('f(x) = x^2, \\quad g(x) = x^3') ?? []).join('\n')).data, def);
     const fns = two.functions as Array<{ color?: string; thickness?: string }>;
     assert.deepEqual(fns.map((f) => [f.color, f.thickness]), [['violet', 'very thick'], ['red', 'very thick']]);
+});
+
+/** A default as Save as 3D default stores it: the editor's whole chart, here the surface sample with the person's changes (6.2.1). */
+function saved3D(changes: Record<string, unknown>, surface: Record<string, unknown>): Record<string, unknown> {
+    const data = parseChartText((formulaChart('f(x, y) = \\frac{x^2 - y^2}{2}') ?? []).join('\n')).data;
+    Object.assign(data, changes);
+    const surfaces = data.functions3D as Array<Record<string, unknown>>;
+    for (const [k, v] of Object.entries(surface)) {
+        if (v === undefined) delete surfaces[0][k];
+        else surfaces[0][k] = v;
+    }
+    return SettingsManager.fromJSON(data).serialize();
+}
+
+test('formula: a 3D default gives every 3D formula chart its box, view, colours, mesh, axes and grid; 2D charts keep the default chart (6.2.1)', () => {
+    const def2D = { axis_style: 'box', showLargeGrid: true, size_x_cm: 12, functions: [{ color: 'violet', thickness: 'very thick' }] };
+    const def3D = saved3D({ boxAspect: 'true', rotationX: 20, rotationZ: 120, zoom3D: 1.2, showAxis: false, showLargeGrid: true, size_x_cm: 9 }, { colormap: 'heat', meshOpacity: 0, opacity: 0.9 });
+    const surface = parseChartText((formulaChart('f(x, y) = x^2 + y^2') ?? []).join('\n')).data;
+    assert.equal(surface.boxAspect, 'equal', 'a formula surface starts as a cube');
+    const out = applyFormulaDefault(surface, def2D, def3D);
+    assert.deepEqual([out.boxAspect, out.rotationX, out.rotationZ, out.zoom3D, out.showAxis, out.showLargeGrid, out.size_x_cm], ['true', 20, 120, 1.2, false, true, 9]);
+    const s = (out.functions3D as Array<Record<string, unknown>>)[0];
+    assert.deepEqual([s.colormap, s.meshOpacity, s.opacity, s.expression], ['heat', 0, 0.9, 'x^2 + y^2'], 'the look, not what it draws');
+    assert.deepEqual([out.xmin, out.xmax, out.zmax], [surface.xmin, surface.xmax, surface.zmax], 'the fitted view stays the formula\'s');
+    // A 2D chart takes the 2D default and nothing of the 3D one.
+    const flat = applyFormulaDefault(parseChartText((formulaChart('f(x) = x^2') ?? []).join('\n')).data, def2D, def3D);
+    assert.deepEqual([flat.axis_style, flat.size_x_cm, flat.showAxis], ['box', 12, undefined]);
+    assert.equal((flat.functions as Array<{ color?: string }>)[0].color, 'violet');
+    // Its own colour: the formula's viridis goes, so the surface is in the default's colour.
+    const own = applyFormulaDefault(surface, null, saved3D({}, { colormap: undefined, color: 'orange' }));
+    const plain = (own.functions3D as Array<Record<string, unknown>>)[0];
+    assert.equal('colormap' in plain, false);
+    assert.equal(plain.color, 'orange');
+    // Insert chart and Plot the formula write the look into the block.
+    const block = formulaBlock('f(x, y) = x^2 + y^2', def2D, def3D) ?? '';
+    for (const line of ['no axes', 'with a grid', 'set rotationX = 20', 'set rotationZ = 120']) assert.ok(block.split('\n').includes(line), `${line}\n${block}`);
+    assert.ok(/^plot .*\bin heat\b.*mesh 0\b/m.test(block), block);
+    assert.ok(!/^cube$/m.test(block), 'Proportional, not the cube');
+});
+
+test('formula: a surface is seen from a view that shows its height, its axes named x_1 and x_2 when the formula uses them (6.2.1)', () => {
+    // Seen from 45 degrees at 30, max(x_1, x_2) was a flat diamond: its ridge x = y pointed at the viewer.
+    const ridge = formulaChart('\\max(x_1, x_2)') ?? [];
+    for (const line of ['3d', 'cube', 'set rotationX = 25', 'set rotationZ = 30', 'xlabel $x_1$', 'ylabel $x_2$']) assert.ok(ridge.includes(line), `${line}\n${ridge.join('\n')}`);
+    const data = parseChartText(ridge.join('\n')).data;
+    assert.deepEqual([data.rotationX, data.rotationZ, data.axis_label_x, data.axis_label_y], [25, 30, '$x_1$', '$x_2$']);
+    // A surface in x and y keeps the names x and y.
+    const bowl = formulaChart('f(x, y) = x^2 + y^2') ?? [];
+    assert.ok(bowl.includes('set rotationZ = 30') && !bowl.some((l) => /^[xy]label/.test(l)), bowl.join('\n'));
+    // A 3D default with the plain names x and y (as every saved chart has them) keeps x_1 and x_2; its own names win.
+    const def3D = saved3D({ rotationX: 15 }, {});
+    const named = applyFormulaDefault(data, null, def3D);
+    assert.deepEqual([named.axis_label_x, named.axis_label_y, named.rotationX], ['$x_1$', '$x_2$', 15]);
+    assert.equal(applyFormulaDefault(data, null, { ...def3D, axis_label_x: 'input' }).axis_label_x, 'input');
+});
+
+test('formula: without a 3D default a 3D chart takes the default chart for formulas, as before 6.2.1', () => {
+    const surface = parseChartText((formulaChart('z = x^2 - y^2') ?? []).join('\n')).data;
+    const def = { showLargeGrid: true, numbers_z: 'off', boxAspect: 'true' };
+    assert.equal(formulaDefaultFor(surface, def, null), def);
+    assert.equal(formulaDefaultFor(surface, def, undefined), def);
+    assert.deepEqual(applyFormulaDefault(surface, def, null), applyFormulaDefault(surface, def));
+    // A 2D default keeps the cube (its stored 3D view counts only when it is 3D), as before.
+    assert.equal(applyFormulaDefault(surface, def, null).boxAspect, 'equal');
+    assert.equal(applyFormulaDefault(surface, def, null).showLargeGrid, true);
+    // No default at all: the formula's chart as it is.
+    assert.equal(applyFormulaDefault(surface, null, null), surface);
+    // A 2D chart never takes the 3D default, even when there is no 2D default.
+    const flat = parseChartText((formulaChart('f(x) = x^2') ?? []).join('\n')).data;
+    assert.equal(applyFormulaDefault(flat, null, { dimension: true, showAxis: false }), flat);
 });
 
 test('formula: a formula in n, t or k charts against that letter', () => {

@@ -3727,7 +3727,8 @@ export class TikzModal extends Modal implements PanelHost {
         const data = this.settings.serialize();
         if (this.saveAs) {
             this.saveAs.save(data);
-            this.close();
+            // 6.2.1: as after Insert, its autosaved draft goes too (it showed as unsaved changes in the next editor).
+            this.finish();
             return;
         }
         const original = this.originalBlockText;

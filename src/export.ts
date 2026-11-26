@@ -1279,7 +1279,8 @@ export function generateTikz3D(settings: SettingsManager, ctx: MathContext): str
     body.push(...annotationCmds3D(config, ctx, box, colors, camera));
 
     const vectors = unitVectors(camera, box, paper);
-    const opts = commonOptions(config, ctx, vectors || sizeOption(paper));
+    // 6.2.1: `no axes` writes no axis names either.
+    const opts = commonOptions(config.showAxis === false ? { ...config, showAxisLabels: false } : config, ctx, vectors || sizeOption(paper));
     opts.push(`xmin=${fmtNum(box.xmin)}, xmax=${fmtNum(box.xmax)}`);
     opts.push(`ymin=${fmtNum(box.ymin)}, ymax=${fmtNum(box.ymax)}`);
     opts.push(`zmin=${fmtNum(box.zmin)}, zmax=${fmtNum(box.zmax)}`);
@@ -1290,6 +1291,8 @@ export function generateTikz3D(settings: SettingsManager, ctx: MathContext): str
     // pgfplots draws the grid on the back planes of the box, under the surfaces.
     opts.push(...gridOptions(config));
     opts.push(...numbersOptions(config, ctx, [['x', box.xmin, box.xmax], ['y', box.ymin, box.ymax], ['z', box.zmin, box.zmax]]));
+    // 6.2.1: `no axes`, as the preview draws it.
+    if (config.showAxis === false) opts.push(...noAxes3D(config));
     opts.push('trig format plots=rad');
     opts.push('unbounded coords=jump');
     opts.push(restrict('z', box.zmin, box.zmax));
@@ -1302,6 +1305,17 @@ export function generateTikz3D(settings: SettingsManager, ctx: MathContext): str
         : [camNote, '% Axis ranges too small or too large for exact unit vectors: pgfplots fits the box to width and height'];
     const picture = ['\\begin{tikzpicture}', ...colors.lines(), ...note, ...axisBlock(opts), ...body, '\\end{axis}', '\\end{tikzpicture}'];
     return wrap(settings.isStandalone(), { patterns: false, braces: false }, picture);
+}
+
+/**
+ * 6.2.1: `no axes` in 3D: no box edges, tick marks, numbers or axis names.
+ * `hide axis` drops the grid as well (pgfplots draws it at the ticks of the
+ * axes it shows), so a chart that asks for a grid keeps its axes but draws
+ * them invisibly: the grid stays on the back planes, as in the preview.
+ */
+function noAxes3D(config: RendererConfig): string[] {
+    if (!config.gridMajor && !config.gridMinor) return ['hide axis'];
+    return ['axis line style={draw=none}', 'major tick length=0pt, minor tick length=0pt', 'xticklabels={}, yticklabels={}, zticklabels={}'];
 }
 
 /** The 3D preview's camera (renderer3d prepareScene / project), so the PDF shows the box from the same side with the same shape. */

@@ -46,6 +46,7 @@ export const panels: Messages<typeof en> = {
     'panels.chart.styleBox': '枠',
     'panels.chart.styleMiddle': '中央',
     'panels.chart.styleAxes': '軸線',
+    'panels.chart.styleNone': 'なし',
     'panels.chart.axisLabels': '軸ラベル',
     'panels.chart.equalScale': '縦横同じ縮尺',
     'panels.chart.equalScalePolar': '縦横同じ縮尺（極座標では常にオン）',

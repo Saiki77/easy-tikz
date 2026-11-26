@@ -823,6 +823,29 @@ if (started) {
             assert(got.plainStroke && got.plainStroke.includes('color-mix'), `plain halo: ${got.plainStroke}`);
             return 'math label drawn by MathJax, halos take the fill colour, no box';
         });
+        await check('no axes in 3D: no box edges, ticks, numbers or names; a grid the chart asks for stays (6.2.1)', async () => {
+            const noAxesNote = 'No axes 3D';
+            const block = (lines) => '```easy-tikz\n' + lines.join('\n') + '\n```\n';
+            const view = ['3d', 'show x from -2 to 2, y from -2 to 2 and z from 0 to 8'];
+            const surface = 'plot z = x^2 + y^2 in viridis';
+            await obs.writeNote(noAxesNote, [block([...view, 'no axes', surface]), block([...view, 'no axes', 'with a grid', surface]), block([...view, surface])].join('\n'));
+            await obs.openNote(noAxesNote, { mode: 'reading' });
+            const charts = await obs.noteCharts();
+            assert(charts.length === 3 && charts.every((c) => c.drawn && c.issues === null), `rendered charts: ${JSON.stringify(charts)}`);
+            // Back group: the grid and the back edges; front group: the outline, ticks, numbers and axis names.
+            const parts = await obs.call(() =>
+                Array.from(document.querySelectorAll('.workspace-leaf.mod-active .markdown-reading-view .block-language-easy-tikz')).map((b) => ({
+                    back: b.querySelectorAll('.tikz-3d-axes-back > *').length,
+                    front: b.querySelectorAll('.tikz-3d-axes-front > *').length,
+                    surface: b.querySelectorAll('.tikz-3d-surface path').length,
+                }))
+            );
+            assert(parts.length === 3 && parts.every((p) => p.surface > 0), `surfaces: ${JSON.stringify(parts)}`);
+            assert(parts[0].back === 0 && parts[0].front === 0, `no axes still draws axes: ${JSON.stringify(parts[0])}`);
+            assert(parts[1].back > 0 && parts[1].front === 0, `no axes with a grid: ${JSON.stringify(parts[1])}`);
+            assert(parts[2].back > 0 && parts[2].front > 0, `the chart with axes: ${JSON.stringify(parts[2])}`);
+            return parts.map((p) => `${p.back}/${p.front}`).join(', ');
+        });
         // 5.0: every formula is a chart, connected sliders, charts as SVG files.
         const formulaNote = 'Formulas';
         await check('formulas: resting on a formula opens its chart with a slider per letter, and Insert chart writes the block', async () => {
@@ -949,6 +972,56 @@ if (started) {
             assert(card && /Function/.test(card), `the card of f(x) = x^2: ${card}`);
             await obs.mouse.move({ x: 5, y: 5 });
             return card;
+        });
+        await check('formulas (6.2.1): a 3D card takes the default 3D chart set up in the editor, and Insert chart writes its look', async () => {
+            const surfaceNote = 'Surface';
+            const tex = 'f(x, y) = x^2 + y^2';
+            /** Rest on the formula, then Insert chart: the lines of the block it writes. */
+            const insert = async () => {
+                await obs.writeNote(surfaceNote, `A bowl: $${tex}$ opens upwards.\n`);
+                await obs.openNote(surfaceNote, { mode: 'reading' });
+                await obs.sleep(800);
+                const card = await cardOf(tex);
+                assert(card && /Surface/.test(card), `the card of ${tex}: ${card}`);
+                await obs.mouse.click('.etz-formula-pop button.mod-cta');
+                await obs.sleep(600);
+                const m = /```easy-tikz\n([\s\S]*?)\n```/.exec(await obs.readNote(surfaceNote));
+                assert(m, 'Insert chart wrote no block');
+                await obs.mouse.move({ x: 5, y: 5 });
+                return m[1].split('\n');
+            };
+            const editorOpen = () => obs.call(() => !!window.__etzMedia.requireEditor().modalEl.isConnected).catch(() => false);
+            try {
+                const before = await insert();
+                assert(before.includes('cube') && before.some((l) => /^plot .* in viridis/.test(l)) && !before.includes('no axes'), `before a 3D default:\n${before.join('\n')}`);
+                // Settings, Default 3D chart for formulas, Edit: the editor on a surface. Box Proportional, Style None, Save as 3D default.
+                await obs.call(() => app.plugins.plugins['easy-tikz'].editFormulaDefault(() => {}, true));
+                await obs.waitFor(editorOpen, { timeout: 4000, message: 'the editor on the sample surface' });
+                await obs.showTab('chart');
+                const label = await obs.call(() => {
+                    const ed = window.__etzMedia.requireEditor();
+                    const pick = (text) => Array.from(ed.modalEl.querySelectorAll('.etz-segmented button')).find((b) => (b.textContent || '').trim() === text);
+                    pick('Proportional').click();
+                    pick('None').click();
+                    return (ed.ctaBtn.el.textContent || '').trim();
+                });
+                assert(label === 'Save as 3D default', `the editor's button says "${label}"`);
+                await obs.call(() => window.__etzMedia.requireEditor().ctaBtn.el.click());
+                await obs.sleep(400);
+                const saved = await obs.call(() => app.plugins.plugins['easy-tikz'].data.formulaDefault3D);
+                assert(saved && saved.dimension === true && saved.showAxis === false && saved.boxAspect === 'true', `the saved 3D default: ${JSON.stringify(saved).slice(0, 200)}`);
+                const flat = await obs.call(() => app.plugins.plugins['easy-tikz'].data.formulaDefault);
+                assert(flat === null, 'saving the 3D default changed the default chart for formulas');
+                const after = await insert();
+                assert(after.includes('no axes') && !after.includes('cube') && after.some((l) => /^plot .* in viridis/.test(l)), `after the 3D default:\n${after.join('\n')}`);
+                return `${before.length} lines, then ${after.length} with no axes and the Proportional box`;
+            } finally {
+                await obs.call(async () => {
+                    const p = app.plugins.plugins['easy-tikz'];
+                    p.data.formulaDefault3D = null;
+                    await p.saveSettings();
+                });
+            }
         });
         const linkedNote = 'Connected';
         const linked = (body) => ['```easy-tikz', 'size 6 x 2.4', ...body, '```', ''].join('\n');

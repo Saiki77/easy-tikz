@@ -10,6 +10,7 @@ import { test, assert } from './_lib';
 import { SettingsManager } from '../src/settings';
 import { parseChartText } from '../src/text/parse';
 import { printChartText } from '../src/text/print';
+import { printFullText } from '../src/text/print';
 import { readBlock } from '../src/blockjson';
 import { minimize } from '../src/chartdata';
 import { applyFormulaDefault } from '../src/formula';
@@ -322,4 +323,40 @@ test('no axes: no axis lines, numbers or names on screen and in the export; no a
     // A chart with axes keeps them; `no axes` with an explicit grid keeps the grid.
     withLook('clean', () => assert.equal(settings('plot f(x) = x^2').toRendererConfig().showAxis, true));
     withLook('clean', () => assert.equal(settings('no axes\nwith a grid\nplot f(x) = x^2').resolvedLook().gridMajor, true));
+});
+
+test('no axes in 3D: no box, ticks, numbers or names in the export; the grid only when the chart asks; the line survives words and Full LaTeX (6.2.1)', () => {
+    const view = '3d\nshow x from -2 to 2, y from -2 to 2 and z from 0 to 8';
+    const text = `${view}\nno axes\nplot s(x, y) = x^2 + y^2 in viridis`;
+    for (const look of ['clean', 'classic'] as ChartLook[]) {
+        withLook(look, () => {
+            const s = settings(text);
+            assert.equal(s.toRendererConfig().showAxis, false, `${look}: the 3D renderer gets showAxis false`);
+            assert.equal(s.resolvedLook().gridMajor, false, `${look}: no grid unless the chart asks for one`);
+        });
+        const code = tikz(text, look);
+        assert.ok(code.includes('hide axis'), `${look}: the export hides the box, ticks, numbers and names`);
+        assert.ok(!/[xyz]label=\{/.test(code), `${look}: no axis names in the export`);
+        assert.ok(!/grid=/.test(code), `${look}: no grid in the export`);
+    }
+    // A chart with its axes keeps the box and its names.
+    const shown = tikz(`${view}\nplot s(x, y) = x^2 + y^2`);
+    assert.ok(!shown.includes('hide axis') && !shown.includes('axis line style={draw=none}'), shown);
+    assert.ok(shown.includes('xlabel={x}'), 'the axis names stay with the axes');
+    // `no axes` with a grid: the grid stays on the back planes, so the axes are there but drawn invisibly.
+    const grid = `${view}\nno axes\nwith a grid\nplot s(x, y) = x^2 + y^2`;
+    assert.equal(settings(grid).resolvedLook().gridMajor, true);
+    const gridCode = tikz(grid);
+    assert.ok(gridCode.includes('grid=major') && !gridCode.includes('hide axis'), gridCode);
+    for (const part of ['axis line style={draw=none}', 'major tick length=0pt', 'xticklabels={}, yticklabels={}, zticklabels={}']) assert.ok(gridCode.includes(part), `${part}\n${gridCode}`);
+    assert.ok(!/[xyz]label=\{/.test(gridCode), 'no axis names with the grid either');
+    // The words write `no axes` back for a 3D chart, and Full LaTeX as hide axis; both read back as the same chart.
+    const data = parseChartText(text).data;
+    const words = printChartText(data);
+    assert.ok(words.split('\n').includes('no axes'), words);
+    assert.equal(parseChartText(words).data.showAxis, false);
+    const full = printFullText(data);
+    assert.ok(/\\axis\[[^\]]*\b3d\b[^\]]*hide axis/.test(full), full);
+    assert.equal(parseChartText(full).data.showAxis, false);
+    assert.equal(parseChartText(full).data.dimension, true);
 });

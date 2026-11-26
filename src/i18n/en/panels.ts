@@ -43,6 +43,7 @@ export const panels = {
     'panels.chart.styleBox': 'Box',
     'panels.chart.styleMiddle': 'Middle',
     'panels.chart.styleAxes': 'Axes',
+    'panels.chart.styleNone': 'None',
     'panels.chart.axisLabels': 'Axis labels',
     'panels.chart.equalScale': 'Equal scale',
     'panels.chart.equalScalePolar': 'Equal scale (always on in polar)',

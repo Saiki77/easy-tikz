@@ -223,6 +223,8 @@ function kindOf(tex: string, vector = false): { kind: FormulaKind; body: string;
 
 /** At most this many sliders: a formula with more letters is notation, not a chart. */
 const MAX_SLIDERS = 4;
+/** 6.2.1: the built-in view of a formula's surface: lower and turned off the diagonal, so a ridge along x = y shows its height. */
+const SURFACE_VIEW = ['set rotationX = 25', 'set rotationZ = 30'];
 const COLOURS = ['blue', 'red', 'green'];
 
 /**
@@ -241,9 +243,9 @@ export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; 
         // A list of definitions in one line: f(x) = ..., g(x) = ...
         .flatMap((part) => part.split(/[,;]\s*(?=[A-Za-z][A-Za-z0-9_]*\s*'*\s*\(\s*x(?:_\{?1\}?)?\s*\)\s*=)/))
         .map((part) => prepared(part))
-        .map((p) => (p ? { tex: p.tex, axis: p.axis, found: kindOf(p.tex, p.vector) } : null))
+        .map((p) => (p ? { tex: p.tex, axis: p.axis, vector: p.vector, found: kindOf(p.tex, p.vector) } : null))
         // n = 5 gives a value, not a curve: an equation in another variable has no chart.
-        .filter((x): x is { tex: string; axis: string | undefined; found: { kind: FormulaKind; body: string; name?: string } } => !!x && !!x.found && !(x.axis && x.found.kind === 'equation'));
+        .filter((x): x is { tex: string; axis: string | undefined; vector: boolean; found: { kind: FormulaKind; body: string; name?: string } } => !!x && !!x.found && !(x.axis && x.found.kind === 'equation'));
     if (!parts.length) return null;
     const first = parts[0].found;
     const axis = parts[0].axis;
@@ -269,7 +271,9 @@ export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; 
             return { kind, axis, lines: [...label, ...sliders, ...bodies.map((b, i) => `plot $${names[i]}(x) = ${b}$ in ${COLOURS[i]}, thick`)] };
         }
         case 'surface':
-            return { kind, lines: ['3d', 'cube', ...sliders, `plot $z = ${body}$ in viridis`] };
+            // 6.2.1: a view that shows the height (seen from 45 degrees, max(x_1, x_2) was a flat diamond), and the
+            // axes named by the formula's own variables (x_1 and x_2 are drawn as x and y).
+            return { kind, lines: ['3d', 'cube', ...SURFACE_VIEW, ...(parts[0].vector ? ['xlabel $x_1$', 'ylabel $x_2$'] : []), ...sliders, `plot $z = ${body}$ in viridis`] };
         case 'polar':
             return { kind, lines: [...sliders, `plot $r(\\theta) = ${body}$ in blue, thick`] };
         case 'region':
@@ -312,38 +316,59 @@ export function formulaChart(tex: string, row?: number): string[] | null {
     }
 }
 
-/** What a default chart for formulas sets: how the chart looks, never what it draws or where. */
+/** What a default chart for formulas sets: how the chart looks, never what it draws or where. showAxis: `no axes` (6.2.1). */
 const DEFAULT_CHART_KEYS = [
-    'axis_style', 'show_axis_label', 'axis_label_x', 'axis_label_y', 'axis_label_z',
+    'axis_style', 'showAxis', 'show_axis_label', 'axis_label_x', 'axis_label_y', 'axis_label_z',
     'showLargeGrid', 'showSmallGrid', 'gridOpacity', 'gridSize', 'majorTickNum',
     'numbers_x', 'numbers_step_x', 'numbers_at_x', 'numbers_y', 'numbers_step_y', 'numbers_at_y', 'numbers_z', 'numbers_step_z', 'numbers_at_z',
     'equalScale', 'size_x_cm', 'size_y_cm', 'boxAspect', 'boxRatio', 'rotationX', 'rotationZ', 'zoom3D', 'documentSetup', 'showSlidersInNote',
 ];
+/** The axis names every chart starts with. */
+const PLAIN_NAMES: Record<string, string> = { axis_label_x: 'x', axis_label_y: 'y', axis_label_z: 'z' };
 /** The 3D view of a default chart: it counts only when the default is 3D. */
 const VIEW_3D = ['boxAspect', 'boxRatio', 'rotationX', 'rotationZ', 'zoom3D'];
 /** The style of a line the default's first function gives the functions and curves of a formula chart (its colour: the first only). */
 const LINE_STYLE = ['color', 'thickness', 'dashed', 'extrema', 'showLegend', 'fill', 'fillOpacity', 'fillPattern'];
 /** The style the default's first surface gives a surface. */
 const SURFACE_STYLE = ['color', 'colormap', 'opacity', 'meshOpacity', 'wireframe', 'samples'];
+/** Surface fields whose absence is a choice: no colour map is the surface's own colour, no mesh opacity the default one (6.2.1). */
+const SURFACE_OPTIONAL = ['colormap', 'meshOpacity'];
 
 type Rec = Record<string, unknown>;
 const copy = <T>(v: T): T => (v === undefined ? v : (JSON.parse(JSON.stringify(v)) as T));
 
 /**
+ * The default chart that gives a formula's chart its look: the 3D default
+ * for a 3D chart when the person set one up (6.2.1), else the default chart
+ * for formulas, as before 6.2.1 (a 3D chart then takes its axes, grid and
+ * numbers, and its 3D view when that default is 3D itself).
+ */
+export function formulaDefaultFor(data: Rec, stored: Rec | null | undefined, stored3D?: Rec | null): Rec | null {
+    if (data.dimension === true && stored3D) return stored3D;
+    return stored ?? null;
+}
+
+/**
  * A formula's chart in the look of the default chart for formulas (a
  * setting the person sets up in the editor): its axes, grid, numbers, size
  * and 3D view, and the style of its first function and surface. What the
- * formula draws and the fitted view stay the formula's.
+ * formula draws and the fitted view stay the formula's. A 3D chart takes
+ * the 3D default when there is one (6.2.1: box, colours by height, mesh
+ * lines, view, axes and grid).
  */
-export function applyFormulaDefault(data: Rec, stored: Rec | null | undefined): Rec {
-    if (!stored) return data;
+export function applyFormulaDefault(data: Rec, stored: Rec | null | undefined, stored3D?: Rec | null): Rec {
+    const chosen = formulaDefaultFor(data, stored, stored3D);
+    if (!chosen) return data;
     // 6.1: a default saved before the chart look holds every field, the defaults too: those leave the look open.
-    const def = settleLook(stored);
+    const def = settleLook(chosen);
     const out = copy(data);
     for (const k of DEFAULT_CHART_KEYS) {
         // A 2D default holds the 3D view untouched (its stored Proportional box made surfaces thin columns):
         // only a 3D default sets the box, the turn and the zoom.
-        if (k in def && (def.dimension === true || !VIEW_3D.includes(k))) out[k] = copy(def[k]);
+        if (!(k in def) || (def.dimension !== true && VIEW_3D.includes(k))) continue;
+        // 6.2.1: in 3D, a default's plain axis name (x, y, z, as every chart starts) keeps the formula's own (x_1, x_2).
+        if (data.dimension === true && def[k] === PLAIN_NAMES[k] && typeof data[k] === 'string' && data[k] !== '') continue;
+        out[k] = copy(def[k]);
     }
     const first = (key: string): Rec | null => {
         const list = def[key];
@@ -351,30 +376,34 @@ export function applyFormulaDefault(data: Rec, stored: Rec | null | undefined): 
     };
     // The default's colour goes to the first line only: further functions keep their own, so they stay apart.
     let drawn = 0;
-    const style = (list: unknown, from: Rec | null, keys: readonly string[]) => {
+    const style = (list: unknown, from: Rec | null, keys: readonly string[], optional: readonly string[] = []) => {
         if (!from || !Array.isArray(list)) return;
         for (const item of list as Rec[]) {
-            for (const k of keys) if (k in from && (k !== 'color' || drawn === 0)) item[k] = copy(from[k]);
+            for (const k of keys) {
+                if (k in from && (k !== 'color' || drawn === 0)) item[k] = copy(from[k]);
+                else if (optional.includes(k)) delete item[k];
+            }
             drawn++;
         }
     };
     const line = first('functions');
     style(out.functions, line, LINE_STYLE);
     drawn = 0;
-    style(out.functions3D, first('functions3D'), SURFACE_STYLE);
+    // A default surface in its own colour gives a surface its own colour too, not the formula's viridis (6.2.1).
+    style(out.functions3D, first('functions3D'), SURFACE_STYLE, SURFACE_OPTIONAL);
     // A curve (an equation) takes the line's thickness and dashes, and its colour when it is the first line.
     drawn = Array.isArray(out.functions) ? out.functions.length : 0;
     if (line && Array.isArray(out.tools)) style(out.tools.filter((t: Rec) => t.type === 'curve'), line, ['color', 'thickness', 'dashed']);
     return out;
 }
 
-/** The chart block body of a formula in the default look, as the plugin writes it; null when it does not draw. */
-export function formulaBlock(tex: string, def: Rec | null | undefined): string | null {
+/** The chart block body of a formula in the default look (def3D: the 3D default, 6.2.1), as the plugin writes it; null when it does not draw. */
+export function formulaBlock(tex: string, def: Rec | null | undefined, def3D?: Rec | null): string | null {
     const lines = formulaChart(tex);
     if (!lines) return null;
     const parsed = parseChartText(lines.join('\n'));
     if (parsed.problems.length) return null;
-    return printChartText(applyFormulaDefault(parsed.data, def));
+    return printChartText(applyFormulaDefault(parsed.data, def, def3D));
 }
 
 const chartableMemo = new Map<string, boolean>();
