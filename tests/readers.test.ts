@@ -171,6 +171,21 @@ test('6.2.4: products and eigen equations that write their vector (or their matr
     assert.equal(buildCard({ kind: 'eigen', entries: [['2', '1'], ['1', '2']], components: ['1', '1', '1'] }), null);
 });
 
+test('6.2.4: the other letters of a condition or a set get a slider each (the card drew nothing for c in \\lvert x \\rvert \\le c)', () => {
+    const lines = (p: CardParse) => buildCard(p)?.lines ?? [];
+    const c = lines({ kind: 'condition', variable: 'x', condition: '\\lvert x\\rvert \\le c' });
+    assert.ok(c.includes('slider c from -5 to 5, starting at 1'), c.join(' / '));
+    assert.deepEqual(parses(c), []);
+    const big = lines({ kind: 'condition', variable: 'x', condition: 'x \\le b + M' });
+    assert.ok(big.includes('slider b from -5 to 5, starting at 1') && big.includes('slider M from -5 to 5, starting at 1'), big.join(' / '));
+    const pairs = lines({ kind: 'set', variables: ['x', 'y'], condition: '\\lvert x\\rvert + \\lvert y\\rvert \\le a' });
+    assert.ok(pairs.includes('slider a from -5 to 5, starting at 1'), pairs.join(' / '));
+    // no new slider where there is no other letter, and none for words or Greek letters
+    assert.ok(!lines({ kind: 'condition', variable: 'x', condition: 'x \\ge 0 \\text{ and } x \\ne 4' }).some((l) => l.startsWith('slider')));
+    // more than four letters: notation, no card
+    assert.equal(buildCard({ kind: 'condition', variable: 'x', condition: 'a x + b \\le c + d + f' }), null);
+});
+
 interface Fixture {
     corpus: Item[];
     gold: Record<string, CardParse>;

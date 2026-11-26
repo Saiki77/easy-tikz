@@ -16,7 +16,7 @@
  * for n = 2, where g(x) reads as g(|x|): x² is x₁² + x₂². Pure: no DOM, no
  * Obsidian.
  */
-import { formulaLines } from '../formula';
+import { formulaLines, freeNames } from '../formula';
 import { latexToPlain } from '../latex';
 import { BUILTIN_FUNCTION_NAMES, CONSTANT_NAMES } from '../expr';
 import { SettingsManager } from '../settings';
@@ -399,6 +399,23 @@ function powerOf(space: string): string | null {
     return m ? m[1] ?? '' : null;
 }
 
+/**
+ * 6.2.4: the other letters of a set's or a condition's condition (\lvert x \rvert \le c, x \le b + M): a slider each,
+ * as the letters of a chart get one (else the card draws nothing); null with more than four (notation). Letters only
+ * (with a subscript: c_1), not the sliders the card has already, not a function (h (x), the card's own function).
+ */
+function letterSliders(cond: string, taken: readonly string[], fnName?: string): string[] | null {
+    let names: string[];
+    try {
+        const called = (n: string) => n === fnName || new RegExp(`(?<![A-Za-z\\\\])${n}\\s*(?:\\\\[,;!: ]\\s*)*\\(`).test(cond);
+        names = freeNames(cond).filter((n) => /^[A-Za-z](?:_[A-Za-z0-9]+)?$/.test(n) && !called(n) && !taken.some((l) => l.startsWith(`slider ${n} `)));
+    } catch {
+        return [];
+    }
+    if (names.length > 4) return null;
+    return names.map((n) => `slider ${n} from -5 to 5, starting at 1`);
+}
+
 /** 6.2.2: the card of a parse of this part, with the note's definitions; null when it has none. */
 export function buildNotes6(p: Notes6Parse, defs: ReadonlyMap<string, NoteDefinition>): HoverCard | null {
     const name = functionOf(p);
@@ -435,15 +452,19 @@ export function buildNotes6(p: Notes6Parse, defs: ReadonlyMap<string, NoteDefini
             if (p.variables.length === 2) {
                 // A set of pairs: a region in the plane, its letters as x and y.
                 const cond = renameVariable(renameVariable(p.condition, p.variables[0], 'x'), p.variables[1], 'y');
-                return card(['show x from -4 to 4 and y from -4 to 4', ...hidden, `shade where $${cond}$, outlined`]);
+                const free = letterSliders(cond, sliders, fn?.name);
+                if (!free) return null;
+                return card(['show x from -4 to 4 and y from -4 to 4', ...free, ...hidden, `shade where $${cond}$, outlined`]);
             }
             const v = p.variables[0];
             const cond = renameVariable(p.condition, v, 'x');
+            const free = letterSliders(cond, sliders, fn?.name);
+            if (!free) return null;
             const label = v !== 'x' ? [`xlabel $${v}$`] : [];
-            const lines = [fn ? 'show x from -4 to 4' : setView(cond), ...label, ...plot, `mark where $${cond}$ on the x-axis, labelled`];
+            const lines = [fn ? 'show x from -4 to 4' : setView(cond), ...label, ...free, ...plot, `mark where $${cond}$ on the x-axis, labelled`];
             // ℝⁿ (n other than 1): the set in the plane for n = 2 too.
             const space = !!p.space && p.space !== '1';
-            return card(lines, { ...(space ? { lines2: [...plane, ...hidden, `shade where $${inPlane(cond)}$, outlined`] } : {}), ...(v !== 'x' ? { variable: v } : {}) });
+            return card(lines, { ...(space ? { lines2: [...plane, ...free, ...hidden, `shade where $${inPlane(cond)}$, outlined`] } : {}), ...(v !== 'x' ? { variable: v } : {}) });
         }
         case 'interval': {
             const v = p.variable;
@@ -469,7 +490,9 @@ export function buildNotes6(p: Notes6Parse, defs: ReadonlyMap<string, NoteDefini
             const v = p.variable;
             const label = v !== 'x' ? [`xlabel $${v}$`] : [];
             const cond = renameVariable(p.condition, v, 'x');
-            return card([fn ? 'show x from -4 to 4' : setView(cond), ...label, ...plot, `mark where $${cond}$ on the x-axis, labelled`], v !== 'x' ? { variable: v } : {});
+            const free = letterSliders(cond, sliders, fn?.name);
+            if (!free) return null;
+            return card([fn ? 'show x from -4 to 4' : setView(cond), ...label, ...free, ...plot, `mark where $${cond}$ on the x-axis, labelled`], v !== 'x' ? { variable: v } : {});
         }
     }
 }
