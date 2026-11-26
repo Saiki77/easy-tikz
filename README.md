@@ -6,6 +6,8 @@
 
 <p align="center">Easy Graphs Charts and TikZ is an Obsidian plugin for math charts. Rest the pointer on a formula, or write a chart in LaTeX, Python or GeoGebra: functions, fractals, matrices that move the plane, vector fields, machine learning, and charts that answer your questions. It draws on phones too, and exports pgfplots code that compiles with pdflatex.</p>
 
+<p align="center"><b><a href="https://community.obsidian.md/plugins/easy-tikz">Get it in Obsidian</a></b>: Settings › Community plugins › Browse, search "Easy Graphs". Free and open source.</p>
+
 ### A complete editor
 
 <img src="docs/media/readme/editor.png" alt="The Easy Graphs Charts and TikZ editor on the area between the cubic f(x) = x³ − 3x and its tangent at a. On the left, cards for the function, the hidden tangent and the shaded region; on the right, the live preview with the tangent, the orange area labelled A = 2.76 and the title slope at x = 0.8: −1.08, and under it the slider a. The tabs Build, Chart, Code, Help and AI are at the top." width="100%">
@@ -96,7 +98,7 @@ The Help tab starts with Start here and New in 6, then 79 short guides by topic.
 
 ---
 
-**79 step-by-step guides** in the Help tab and [on GitHub](docs/guides/README.md) · [What's new in 6.0](docs/whats-new.md) · [Make charts with AI](docs/ai.md) · [Reference](docs/reference.md) · [Changelog](CHANGELOG.md)
+[Plugin page in Obsidian](https://community.obsidian.md/plugins/easy-tikz) · **79 step-by-step guides** in the Help tab and [on GitHub](docs/guides/README.md) · [What's new in 6.0](docs/whats-new.md) · [Make charts with AI](docs/ai.md) · [Reference](docs/reference.md) · [Changelog](CHANGELOG.md)
 
 **Privacy:** nothing goes to the internet, and there is no telemetry. The one exception: the 6.0 film in What's new loads from YouTube (`youtube-nocookie.com`) when you press Play, and not before. AI access (off by default) answers on `127.0.0.1` only, with your token. [All details](docs/reference.md#privacy-and-permissions)
 
