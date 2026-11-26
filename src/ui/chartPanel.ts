@@ -115,6 +115,8 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
     let axisStyle: SegmentedHandle<string> | null = null;
 
     const isPolar = () => settings.getValue('coordinateSystem') === 'polar';
+    /** The Style control: None for `no axes`, else the chart's style or the look's (6.1); a 3D chart has its box. */
+    const styleValue = (): string => (settings.getValue('showAxis') === false ? 'none' : host.is3D() ? 'box' : settings.resolvedLook().axisStyle);
     const xLabelKey = () => (isPolar() ? 'axis_label_x_polar' : 'axis_label_x');
     const yLabelKey = () => (isPolar() ? 'axis_label_y_polar' : 'axis_label_y');
 
@@ -261,26 +263,32 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
 
     const buildAxes = () => {
         const g = group(el, t('panels.chart.axes'));
-        if (!host.is3D()) {
-            const styleField = field(g.body, { label: t('panels.chart.style'), layout: 'inline' });
-            axisStyle = segmented(styleField.controlEl, {
-                label: t('panels.chart.axisStyle'),
-                value: settings.resolvedLook().axisStyle, // 6.1: the chart's, or the look's when it leaves it open
-                options: [
-                    { value: 'box', text: t('panels.chart.styleBox') },
-                    { value: 'middle', text: t('panels.chart.styleMiddle') },
-                    { value: 'axes', text: t('panels.chart.styleAxes') },
-                ],
-                onChange: (value) => {
-                    settings.setValue('axis_style', value);
-                    host.requestUpdate();
-                },
-            });
-            styleField.bind(axisStyle.el);
-        }
+        // The axis style, or None (`no axes`, 6.2.1): a 3D chart draws its axes as a box, so it has Box and None.
+        const styleField = field(g.body, { label: t('panels.chart.style'), layout: 'inline' });
+        const styles = host.is3D() ? [{ value: 'box', text: t('panels.chart.styleBox') }] : [
+            { value: 'box', text: t('panels.chart.styleBox') },
+            { value: 'middle', text: t('panels.chart.styleMiddle') },
+            { value: 'axes', text: t('panels.chart.styleAxes') },
+        ];
+        let axisNames: ChipHandle | null = null;
+        axisStyle = segmented(styleField.controlEl, {
+            label: t('panels.chart.axisStyle'),
+            value: styleValue(),
+            options: [...styles, { value: 'none', text: t('panels.chart.styleNone') }],
+            onChange: (value) => {
+                // Shown again: true is the default, so the block leaves the field out.
+                settings.setValue('showAxis', value !== 'none');
+                if (value !== 'none' && !host.is3D()) settings.setValue('axis_style', value);
+                axisNames?.setDisabled(value === 'none');
+                // The look's grid follows the style (a box or no axes: none unless the chart asks for one).
+                gridMajor?.setValue(settings.resolvedLook().gridMajor);
+                host.requestUpdate();
+            },
+        });
+        styleField.bind(axisStyle.el);
 
         const chips = g.body.createDiv({ cls: 'etz-chip-row' });
-        chip(chips, {
+        axisNames = chip(chips, {
             label: t('panels.chart.axisLabels'),
             value: settings.getValue('show_axis_label') !== false,
             onChange: (on) => {
@@ -288,6 +296,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
                 host.requestUpdate();
             },
         });
+        axisNames.setDisabled(styleValue() === 'none');
         if (!host.is3D()) {
             const equal = chip(chips, {
                 label: isPolar() ? t('panels.chart.equalScalePolar') : t('panels.chart.equalScale'),
@@ -542,7 +551,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
             gridOpacity?.setValue(opacityValue(settings.getValue('gridOpacity'), GRID_OPACITY));
             elevation?.setValue(num(settings.getValue('rotationX'), 30));
             azimuth?.setValue(num(settings.getValue('rotationZ'), 45));
-            if (!host.is3D()) axisStyle?.setValue(settings.resolvedLook().axisStyle); // 6.1
+            axisStyle?.setValue(styleValue()); // 6.1; None: 6.2.1
         },
         hasErrors: () => Array.from(ranges.values()).some((h) => h.hasError()),
     };

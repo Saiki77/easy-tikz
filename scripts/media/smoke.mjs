@@ -796,6 +796,29 @@ if (started) {
             assert(axes[0] === 0 && axes[1] > 0, `axes groups per chart: ${JSON.stringify(axes)}`);
             return `axes groups: ${axes.join(', ')}`;
         });
+        await check('no axes in 3D: no box edges, ticks, numbers or names; a grid the chart asks for stays (6.2.1)', async () => {
+            const noAxesNote = 'No axes 3D';
+            const block = (lines) => '```easy-tikz\n' + lines.join('\n') + '\n```\n';
+            const view = ['3d', 'show x from -2 to 2, y from -2 to 2 and z from 0 to 8'];
+            const surface = 'plot z = x^2 + y^2 in viridis';
+            await obs.writeNote(noAxesNote, [block([...view, 'no axes', surface]), block([...view, 'no axes', 'with a grid', surface]), block([...view, surface])].join('\n'));
+            await obs.openNote(noAxesNote, { mode: 'reading' });
+            const charts = await obs.noteCharts();
+            assert(charts.length === 3 && charts.every((c) => c.drawn && c.issues === null), `rendered charts: ${JSON.stringify(charts)}`);
+            // Back group: the grid and the back edges; front group: the outline, ticks, numbers and axis names.
+            const parts = await obs.call(() =>
+                Array.from(document.querySelectorAll('.workspace-leaf.mod-active .markdown-reading-view .block-language-easy-tikz')).map((b) => ({
+                    back: b.querySelectorAll('.tikz-3d-axes-back > *').length,
+                    front: b.querySelectorAll('.tikz-3d-axes-front > *').length,
+                    surface: b.querySelectorAll('.tikz-3d-surface path').length,
+                }))
+            );
+            assert(parts.length === 3 && parts.every((p) => p.surface > 0), `surfaces: ${JSON.stringify(parts)}`);
+            assert(parts[0].back === 0 && parts[0].front === 0, `no axes still draws axes: ${JSON.stringify(parts[0])}`);
+            assert(parts[1].back > 0 && parts[1].front === 0, `no axes with a grid: ${JSON.stringify(parts[1])}`);
+            assert(parts[2].back > 0 && parts[2].front > 0, `the chart with axes: ${JSON.stringify(parts[2])}`);
+            return parts.map((p) => `${p.back}/${p.front}`).join(', ');
+        });
         // 5.0: every formula is a chart, connected sliders, charts as SVG files.
         const formulaNote = 'Formulas';
         await check('formulas: resting on a formula opens its chart with a slider per letter, and Insert chart writes the block', async () => {

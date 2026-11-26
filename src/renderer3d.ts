@@ -835,25 +835,30 @@ export class SVG3DRenderer {
         // at the front corner not at all, so no line crosses a surface.
         const view = toViewer(cfg.rotationZ, cfg.rotationX);
         this.boxEdges = [];
-        for (const [i, j] of BOX_EDGES) {
+        // 6.2.1: `no axes` draws no box edges, tick marks, numbers or axis names (the grid stays when the chart asks for one).
+        const axes = cfg.showAxis !== false;
+        for (const [i, j] of axes ? BOX_EDGES : []) {
             const kind = edgeKind(view, i, j);
             if (kind !== 'hidden') this.boxEdges.push({ p1Idx: i, p2Idx: j, layer: kind === 'back' ? 'back' : 'front' });
         }
 
         // Tick edges outside the box: x and y on the floor edges at the front, z on the left outline.
-        const sides = tickSides(view, corners.map((c) => c.sx));
-        const X = [xmin, xmax];
-        const Y = [ymin, ymax];
-        const Z = [zmin, zmax];
-        const xy = Y[sides.x.y];
-        const xz = Z[sides.x.z];
-        this.xTickEdge = this.buildTickEdge(this.project(xmin, xy, xz), this.project(xmax, xy, xz), xy, xz, csx, csy);
-        const yx = X[sides.y.x];
-        const yz = Z[sides.y.z];
-        this.yTickEdge = this.buildTickEdge(this.project(yx, ymin, yz), this.project(yx, ymax, yz), yx, yz, csx, csy);
-        const zx = X[sides.z.x];
-        const zy = Y[sides.z.y];
-        this.zTickEdge = this.buildTickEdge(this.project(zx, zy, zmin), this.project(zx, zy, zmax), zx, zy, csx, csy);
+        this.xTickEdge = this.yTickEdge = this.zTickEdge = null;
+        if (axes) {
+            const sides = tickSides(view, corners.map((c) => c.sx));
+            const X = [xmin, xmax];
+            const Y = [ymin, ymax];
+            const Z = [zmin, zmax];
+            const xy = Y[sides.x.y];
+            const xz = Z[sides.x.z];
+            this.xTickEdge = this.buildTickEdge(this.project(xmin, xy, xz), this.project(xmax, xy, xz), xy, xz, csx, csy);
+            const yx = X[sides.y.x];
+            const yz = Z[sides.y.z];
+            this.yTickEdge = this.buildTickEdge(this.project(yx, ymin, yz), this.project(yx, ymax, yz), yx, yz, csx, csy);
+            const zx = X[sides.z.x];
+            const zy = Y[sides.z.y];
+            this.zTickEdge = this.buildTickEdge(this.project(zx, zy, zmin), this.project(zx, zy, zmax), zx, zy, csx, csy);
+        }
 
         // The grid on the floor and the back walls, at the tick values (minor lines between them), as in the PDF.
         this.gridSegments = [];

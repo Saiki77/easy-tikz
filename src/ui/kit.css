@@ -274,6 +274,12 @@ button.etz-chip[aria-pressed='true']:focus-visible {
     box-shadow: var(--etz-focus-ring);
 }
 
+/* A chip that does nothing now (Axis labels with no axes, Equal scale in polar): faded, as a disabled segment. */
+button.etz-chip:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
 .etz-chip-check {
     display: none;
 }

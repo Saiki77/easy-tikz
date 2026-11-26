@@ -446,6 +446,23 @@ const STRESS: Record<string, Record<string, unknown>> = {
         numbers_at_z: '0 "ground", 8 "$z_{max}$"',
         functions3D: [surface3('f1', 'x^2 + y^2', 'blue')],
     }),
+    // 6.2.1: `no axes` in 3D: hide axis; with a grid, invisible axes that keep the grid on the back planes.
+    noAxes3d: chart({ dimension: true, showAxis: false, xmin: '-2', xmax: '2', ymin: '-2', ymax: '2', zmin: '0', zmax: '8', functions3D: [surface3('f1', 'x^2 + y^2', 'blue', { colormap: 'viridis' })] }),
+    noAxesGrid3d: chart({
+        dimension: true,
+        showAxis: false,
+        showLargeGrid: true,
+        showSmallGrid: true,
+        numbers_z: 'every',
+        numbers_step_z: '2',
+        xmin: '-2',
+        xmax: '2',
+        ymin: '-2',
+        ymax: '2',
+        zmin: '0',
+        zmax: '8',
+        functions3D: [surface3('f1', 'x^2 + y^2', 'blue')],
+    }),
     tiny3d: chart({
         dimension: true,
         boxAspect: 'equal',
