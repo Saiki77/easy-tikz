@@ -698,10 +698,13 @@ function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, pape
     // The names beyond the ends of the axes, where the axes lie.
     const fx = place.y === 'low' ? 0 : place.y === 'high' ? 1 : (0 - view.xmin) / (view.xmax - view.xmin);
     const fy = place.x === 'low' ? 0 : place.x === 'high' ? 1 : (0 - view.ymin) / (view.ymax - view.ymin);
+    // An axis at an edge keeps pgfplots' place for its name: beside its numbers.
     const yNamed = config.showAxisLabels && !!labelText(String(config.yLabel ?? ''));
-    if (config.showAxisLabels && labelText(String(config.xLabel ?? ''))) opts.push(`xlabel style={at={(axis description cs:1,${fmtNum(fy)})}, anchor=west, xshift=3pt}`);
-    if (yNamed) opts.push(`ylabel style={at={(axis description cs:${fmtNum(fx)},1)}, anchor=south, rotate=-90, yshift=3pt}`);
-    if (yNamed && labelText(ctx.formatTemplate(String(config.title ?? '')))) opts.push(`title style={yshift=${MIDDLE_TITLE_LIFT_PT}pt}`);
+    if (place.x === 'zero' && config.showAxisLabels && labelText(String(config.xLabel ?? ''))) opts.push(`xlabel style={at={(axis description cs:1,${fmtNum(fy)})}, anchor=west, xshift=3pt}`);
+    if (place.y === 'zero' && yNamed) {
+        opts.push(`ylabel style={at={(axis description cs:${fmtNum(fx)},1)}, anchor=south, rotate=-90, yshift=3pt}`);
+        if (labelText(ctx.formatTemplate(String(config.title ?? '')))) opts.push(`title style={yshift=${MIDDLE_TITLE_LIFT_PT}pt}`);
+    }
     // The grid: the light ink at the chart's grid opacity.
     if (config.gridMajor || config.gridMinor) {
         const grid = colors.named('etzGrid', CLEAN_COLOURS.grid.slice(1));

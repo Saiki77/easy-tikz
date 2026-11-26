@@ -261,6 +261,23 @@ interface DrawnLabel {
     y0: number;
 }
 
+/** 6.1: a canvas to measure plain label text with (the pill of a value label fits its text). */
+let measureCanvas: CanvasRenderingContext2D | null | undefined;
+
+/** 6.1: the width of a plain text at `fs` px in the theme's text font, or null where nothing can measure it. */
+function measuredWidth(text: string, fs: number, weight: string | null): number | null {
+    try {
+        if (measureCanvas === undefined) measureCanvas = createEl('canvas').getContext('2d');
+        if (!measureCanvas || typeof activeDocument === 'undefined') return null;
+        const family = getComputedStyle(activeDocument.body).getPropertyValue('--font-text').trim() || 'sans-serif';
+        measureCanvas.font = `${weight || '400'} ${fs}px ${family}`;
+        const w = measureCanvas.measureText(text).width;
+        return Number.isFinite(w) && w > 0 ? w : null;
+    } catch {
+        return null;
+    }
+}
+
 interface LegendEntry {
     color: string;
     width: number;
@@ -670,9 +687,18 @@ export class SVGRenderer {
             const room = ((0 - v.xmin) / (v.xmax - v.xmin)) * estW;
             if (room < needY) p.left = Math.max(p.left, needY - room + edge);
         }
-        // Names beyond the ends of the axes, as the middle axes of Classic have them.
-        if (this.hasAxisLabel(cfg.xLabel)) p.right = Math.max(p.right, pt(LABEL_GAP_PT) + this.textWidth(String(cfg.xLabel), axisFs) + edge);
-        if (this.hasAxisLabel(cfg.yLabel)) p.top = Math.max(p.top, pt(LABEL_GAP_PT) + axisFs * 1.2 + edge);
+        // Names: beyond the end of an axis through 0 (as the middle axes of Classic have them), beside the numbers of an axis at an edge.
+        const nameH = pt(LABEL_GAP_PT) + axisFs * 1.2;
+        if (this.hasAxisLabel(cfg.xLabel)) {
+            if (place.x === 'zero') p.right = Math.max(p.right, pt(LABEL_GAP_PT) + this.textWidth(String(cfg.xLabel), axisFs) + edge);
+            else if (place.x === 'low') p.bottom += nameH;
+            else p.top += nameH;
+        }
+        if (this.hasAxisLabel(cfg.yLabel)) {
+            if (place.y === 'zero') p.top = Math.max(p.top, nameH + edge);
+            else if (place.y === 'low') p.left += nameH;
+            else p.right += nameH;
+        }
         p.top += title;
         const kx = Math.min(1, (MAX_PADDING_SHARE * this.width) / Math.max(1, p.left + p.right));
         const ky = Math.min(1, (MAX_PADDING_SHARE * this.height) / Math.max(1, p.top + p.bottom));
@@ -1531,10 +1557,22 @@ export class SVGRenderer {
         const padX = 0.45 * fs;
         const padY = 0.2 * fs;
         const h = label.height + 2 * padY;
+        // A plain text: its real width (the estimate is for layout only), about its anchor.
+        let x0 = label.x0;
+        let width = label.width;
+        if (label.el.tagName.toLowerCase() === 'text') {
+            const real = measuredWidth(label.el.textContent ?? '', fs, label.el.getAttribute('font-weight'));
+            if (real !== null) {
+                const anchor = label.el.getAttribute('text-anchor');
+                const ax = anchor === 'middle' ? x0 + width / 2 : anchor === 'end' ? x0 + width : x0;
+                x0 = anchor === 'middle' ? ax - real / 2 : anchor === 'end' ? ax - real : ax;
+                width = real;
+            }
+        }
         const rect = this.el('rect', {
-            x: num(label.x0 - padX),
+            x: num(x0 - padX),
             y: num(label.y0 - padY),
-            width: num(label.width + 2 * padX),
+            width: num(width + 2 * padX),
             height: num(h),
             rx: num(h / 2),
             fill: BACKGROUND,
@@ -1602,9 +1640,24 @@ export class SVGRenderer {
             if (cfg.showAxisLabels) {
                 const axisFs = this.fontPx(AXIS_LABEL_PT);
                 const lgap = LABEL_GAP_PT * this.ptPx;
-                const label = (hAnchor: HAnchor, vAnchor: VAnchor, axis: 'x' | 'y'): LabelOptions => ({ color: TEXT_MUTED, fontSize: axisFs, hAnchor, vAnchor, weight: '500', attrs: { 'data-etz-axis-name': axis } });
-                this.drawLabel(g, String(cfg.xLabel ?? ''), right + lgap, oy, label('start', 'middle', 'x'));
-                this.drawLabel(g, String(cfg.yLabel ?? ''), ox, top - lgap, label('middle', 'above', 'y'));
+                const gap = this.cleanGap();
+                const label = (hAnchor: HAnchor, vAnchor: VAnchor, axis: 'x' | 'y'): LabelOptions => ({ color: TEXT_NORMAL, fontSize: axisFs, hAnchor, vAnchor, weight: '500', attrs: { 'data-etz-axis-name': axis } });
+                const xName = String(cfg.xLabel ?? '');
+                const yName = String(cfg.yLabel ?? '');
+                // An axis through 0: its name beyond its end. An axis at an edge: its name beside its numbers, as in a box.
+                if (place.x === 'zero') this.drawLabel(g, xName, right + lgap, oy, label('start', 'middle', 'x'));
+                else if (place.x === 'low') this.drawLabel(g, xName, left + w / 2, bottom + gap + fs * 1.1 + lgap, label('middle', 'below', 'x'));
+                else this.drawLabel(g, xName, left + w / 2, top - gap - fs * 1.1 - lgap, label('middle', 'above', 'x'));
+                if (place.y === 'zero') this.drawLabel(g, yName, ox, top - lgap, label('middle', 'above', 'y'));
+                else if (yName.trim()) {
+                    const yTickW = yT.ticks.reduce((m, k) => Math.max(m, tickText(k).length * fs * CHAR_WIDTH_EM), 0);
+                    const reach = gap + yTickW + lgap + axisFs * 0.6;
+                    const cx = place.y === 'low' ? Math.max(axisFs * 0.6, left - reach) : Math.min(this.width - axisFs * 0.6, right + reach);
+                    const cy = top + h / 2;
+                    const rotated = this.el('g', { transform: `rotate(-90, ${num(cx)}, ${num(cy)})` });
+                    this.drawLabel(rotated, yName, cx, cy, label('middle', 'middle', 'y'));
+                    this.attach(g, rotated);
+                }
             }
         }
         svg.appendChild(g);
@@ -1913,11 +1966,20 @@ export class SVGRenderer {
                 // 6.1: a value the plugin writes sits in a soft pill in the clean look.
                 const pill = this.clean && !!t.value && !bold;
                 const at = g.children.length;
+                let offset = finitePt(t.offset) ? t.offset : undefined;
+                if (pill) {
+                    // The pill's padding stays off the point the text belongs to, as the export's node border does.
+                    const pt = FONT_PT[t.size || 'normal'] || FONT_PT.normal;
+                    const side = TEXT_ALIGN[t.anchor] ?? TEXT_ALIGN.center;
+                    const dx = side.h === 'start' ? 0.45 * pt : side.h === 'end' ? -0.45 * pt : 0;
+                    const dy = side.v === 'above' ? 0.2 * pt + 1 : side.v === 'below' ? -0.2 * pt - 1 : 0;
+                    offset = { x: (offset?.x ?? 0) + dx, y: (offset?.y ?? 0) + dy };
+                }
                 const drawnText = this.drawPlaced(g, t.text, t.x, t.y, t.anchor, t.size, {
                     color: bold ? this.boldInk(t.color) : this.css(t.color),
                     halo: !!t.halo && !pill,
                     weight: bold ? '600' : undefined,
-                    offset: finitePt(t.offset) ? t.offset : undefined,
+                    offset,
                     attrs: t.still ? this.stillAttrs(t, {}) : undefined, // 6.0 ML: a frame(t) text the live canvas draws
                 });
                 if (pill && drawnText) this.pillBehind(g, at, drawnText, this.fontPx(FONT_PT[t.size || 'normal'] || FONT_PT.normal));

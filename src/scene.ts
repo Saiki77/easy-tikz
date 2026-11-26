@@ -2326,6 +2326,7 @@ function scene2D(input: SceneInput2D): Scene2D {
                 own: -1,
                 kept: false,
                 value,
+                pill: value && !!ctx.clean && !spec.region && spec.weight !== 'bold',
             });
         }
     }
@@ -2606,6 +2607,8 @@ interface TextJob {
     // 6.1
     /** Its object writes its value (labelled without a text of its own): TextPrim.value. */
     value?: boolean;
+    /** The clean look draws it in a pill: the placer keeps room for the pill around the text. */
+    pill?: boolean;
 }
 
 /** Axis-aligned box in plot pt (origin bottom-left, y up). */
@@ -2991,6 +2994,11 @@ class LabelLayout {
         job.w = s.w;
         job.h = s.h;
         job.em = s.em;
+        // 6.1: a value in a pill (the clean look): the pill's padding is part of its box (the renderer's 0.45 em and 0.2 em a side).
+        if (job.pill) {
+            job.w += 0.9 * s.em;
+            job.h += 0.4 * s.em + 2;
+        }
         const own = job.spec.slide ? this.strokeOf.get(job.spec.slide) : undefined;
         job.own = own === undefined ? -1 : own;
     }

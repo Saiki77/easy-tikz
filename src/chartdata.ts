@@ -5,6 +5,7 @@
  * text syntax (src/text), notes and the AI tools (src/ai/charttool.ts).
  */
 import { SettingsManager } from './settings';
+import { settleLook } from './look';
 
 export type Data = Record<string, unknown>;
 
@@ -33,7 +34,8 @@ export function canonicalData(data: Data): Data {
 /** The block with every field left out that equals what the plugin would fill in. Same chart, much shorter. */
 export function minimize(data: Data): Data {
     const base = canonical(data);
-    let cur = clone(data);
+    // 6.1: an older complete dump with its stored defaults read as open first, so leaving out a field never changes how the rest reads.
+    let cur = settleLook(clone(data));
     if (cur.v === undefined) cur = { v: 4, ...cur };
     const tryDelete = (mutate: (d: Data) => void) => {
         const trial = clone(cur);
