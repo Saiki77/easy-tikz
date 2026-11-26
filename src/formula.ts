@@ -326,12 +326,24 @@ function standalone(v: string): RegExp {
     return new RegExp(`${head}\\s*_\\s*(?:\\{\\s*${sub}\\s*\\}${sub.length === 1 ? `|${sub}(?![0-9])` : ''})`, 'g');
 }
 
+/** A name put in for another: after a command (\lvert), a name that starts with a letter gets a space (\lvert x, not \lvertx). */
+function putIn(tex: string, re: RegExp, to: string): string {
+    return tex.replace(re, (m: string, ...rest: unknown[]) => {
+        const at = rest.find((r) => typeof r === 'number') as number;
+        return /^[A-Za-z]/.test(to) && /\\[A-Za-z]+$/.test(tex.slice(0, at)) ? ` ${to}` : to;
+    });
+}
+
 /** One variable renamed: x_1 and x_2 as axesOf renames them (X1, X2), another one where it stands alone. 6.2.2: also for the angle of a polar curve and the variable of a function of z. */
 export function renameOne(tex: string, from: string, to: string): string {
-    if (IS_X1.test(from.trim())) return tex.replace(X1, to);
-    if (IS_X2.test(from.trim())) return tex.replace(X2, to);
-    return tex.replace(standalone(from), to);
+    if (IS_X1.test(from.trim())) return putIn(tex, X1, to);
+    if (IS_X2.test(from.trim())) return putIn(tex, X2, to);
+    return putIn(tex, standalone(from), to);
 }
+
+/** The stand-ins of inVariables (private-use signs, never in a formula). */
+const STAND_X = '\uE000';
+const STAND_Y = '\uE001';
 
 /**
  * 6.2.2: a body in the variables (fx, fy) written in (tx, ty) instead: the
@@ -342,9 +354,9 @@ export function renameOne(tex: string, from: string, to: string): string {
 export function inVariables(tex: string, fx: string, fy: string, tx: string, ty: string): string {
     if (fx === tx && fy === ty) return tex;
     let s = tex;
-    if (fx !== tx) s = renameOne(s, fx, '');
-    if (fy !== ty) s = renameOne(s, fy, '');
-    return s.replace(//g, tx).replace(//g, ty);
+    if (fx !== tx) s = renameOne(s, fx, STAND_X);
+    if (fy !== ty) s = renameOne(s, fy, STAND_Y);
+    return putIn(putIn(s, new RegExp(STAND_X, 'g'), tx), new RegExp(STAND_Y, 'g'), ty);
 }
 
 /** 6.2.2: a chart parse's kind as src/formula.ts names it (implicit is an equation). */

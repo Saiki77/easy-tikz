@@ -138,7 +138,11 @@ function variablePattern(v: string): RegExp {
 /** Replace the variable `v` (a letter or a command such as \lambda, maybe with a subscript: x_1) by `to`, where it stands alone. */
 function renameVariable(tex: string, v: string, to: string): string {
     if (v === to) return tex;
-    return tex.replace(variablePattern(v), to);
+    // 6.2.2: after a command (\lvert), a letter gets a space: \lvert x, not \lvertx.
+    return tex.replace(variablePattern(v), (_m: string, ...rest: unknown[]) => {
+        const at = rest.find((r) => typeof r === 'number') as number;
+        return /^[A-Za-z]/.test(to) && /\\[A-Za-z]+$/.test(tex.slice(0, at)) ? ` ${to}` : to;
+    });
 }
 
 /** A variable as a head writes it: a letter or a command (\lambda), maybe with a subscript (x_1, x_{12}). */
