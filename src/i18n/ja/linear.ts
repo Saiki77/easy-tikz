@@ -102,6 +102,14 @@ export const linear: Messages<typeof en> = {
     'linear.hover.note.t': 's を 0 から 1 に動かすと、格子が I から {name} へ動きます。',
     'linear.hover.note.example': 'このノートには {name} の定義がないので、例を使っています。',
     'linear.hover.note.fromNote': 'ノートで定義された {name} です。',
+    // 6.2.1: the vector card (src/linear/vector.ts)
+    'linear.hover.kind.vector': 'ベクトル',
+    'linear.hover.kind.vectorSum': 'ベクトルの和',
+    'linear.hover.kind.vectorMultiple': 'ベクトルのスカラー倍',
+    'linear.hover.kind.dot': '内積',
+    'linear.hover.kind.cross': '外積',
+    'linear.hover.kind.vectors': 'ベクトルの組',
+    'linear.hover.vector.fromLine': '{formula}（このノートの定義）',
 
     // ---- drag
     'linear.drag.tip': '{name} の先端',

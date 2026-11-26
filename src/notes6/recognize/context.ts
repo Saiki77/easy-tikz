@@ -13,11 +13,14 @@
  *             formula's own block; formulas in code blocks and the front
  *             matter do not count
  *
- * Pure: no DOM, no Obsidian.
+ * 6.2.1: and, for the vector card only (no input of the network), the
+ * vectors of the whole note (src/linear/vector.ts), worked out once per
+ * version of the note when a formula first asks. Pure: no DOM, no Obsidian.
  */
 import { formulasIn } from '../../formula';
 import { noteDefinitions } from '../hover';
 import { noteValues } from '../../linear/hover';
+import { NoteVector, vectorValues } from '../../linear/vector';
 import type { RecognizeContext } from './features';
 
 /** A name as the corpus wrote it: lower case, accents off, ß as ss, anything else a dash. */
@@ -84,17 +87,26 @@ export function definingFormulas(text: string): string[] {
         .filter(isDef);
 }
 
+/** 6.2.1: the vectors a note's formulas define (\vec a = (1, 2, 3)), for the vector card: formulas in code blocks and the front matter do not count. */
+export function noteVectors(text: string): Map<string, NoteVector> {
+    return vectorValues(formulasIn(blankCode(text)).map((f) => f.tex));
+}
+
 /** A note's text, read once per version: its id and its defining formulas. */
 export interface NoteFacts {
     note: string;
     defs: string[];
     /** Which version of which note (for the caches of formula recognition). */
     id: number;
+    /** 6.2.1: the note's vectors (noteVectors), worked out on the first call. */
+    vectors: () => ReadonlyMap<string, NoteVector>;
 }
 
 /** What the network reads around a formula, and a key for its cache (the note's version and the formula's block). */
 export interface NoteContext extends RecognizeContext {
     key: string;
+    /** 6.2.1: the note's vectors, for the vector card's dotted mark (the network does not read them). */
+    vectors?: () => ReadonlyMap<string, NoteVector>;
 }
 
 let versions = 0;
@@ -105,7 +117,8 @@ const facts = new Map<string, { text: string; facts: NoteFacts }>();
 export function noteFacts(path: string, text: string): NoteFacts {
     const hit = facts.get(path);
     if (hit && hit.text === text) return hit.facts;
-    const made = { note: noteId(path), defs: definingFormulas(text), id: ++versions };
+    let vectors: Map<string, NoteVector> | null = null;
+    const made: NoteFacts = { note: noteId(path), defs: definingFormulas(text), id: ++versions, vectors: () => (vectors ??= noteVectors(text)) };
     if (facts.size > 32) facts.clear();
     facts.set(path, { text, facts: made });
     return made;
@@ -113,5 +126,5 @@ export function noteFacts(path: string, text: string): NoteFacts {
 
 /** What the network reads around the formula at text[start, end) (dollars included), whose block's TeX is blockTex. */
 export function formulaContext(facts: NoteFacts, text: string, start: number, end: number, blockTex: string): NoteContext {
-    return { defs: facts.defs.filter((d) => d !== blockTex), context: contextOf(text, start, end), note: facts.note, key: `${facts.id}\u0000${blockTex}` };
+    return { defs: facts.defs.filter((d) => d !== blockTex), context: contextOf(text, start, end), note: facts.note, key: `${facts.id}\u0000${blockTex}`, vectors: facts.vectors };
 }

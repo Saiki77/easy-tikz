@@ -99,6 +99,14 @@ export const linear = {
     'linear.hover.note.t': 'Move s from 0 to 1: the grid goes from I to {name}.',
     'linear.hover.note.example': 'The note does not define {name}: the card uses an example.',
     'linear.hover.note.fromNote': '{name} as the note defines it.',
+    // 6.2.1: the vector card (src/linear/vector.ts)
+    'linear.hover.kind.vector': 'Vector',
+    'linear.hover.kind.vectorSum': 'Sum of vectors',
+    'linear.hover.kind.vectorMultiple': 'Multiple of a vector',
+    'linear.hover.kind.dot': 'Dot product',
+    'linear.hover.kind.cross': 'Cross product',
+    'linear.hover.kind.vectors': 'Vectors',
+    'linear.hover.vector.fromLine': '{formula}, from this note',
 
     // ---- drag
     'linear.drag.tip': 'Tip of {name}',
