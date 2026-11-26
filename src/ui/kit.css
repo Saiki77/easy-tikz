@@ -377,7 +377,7 @@ textarea.etz-input.etz-expr-input {
     width: 100%;
     min-width: 0;
     height: var(--etz-expr-h, var(--etz-expr-h1));
-    min-height: 0;
+    min-height: var(--etz-expr-h1);
     box-sizing: border-box;
     margin: 0;
     padding: var(--etz-expr-pad-y) var(--etz-expr-pad-x);
@@ -430,7 +430,9 @@ textarea.etz-input.etz-expr-input:focus-visible {
     left: 0;
     box-sizing: border-box;
     padding: var(--etz-expr-pad-y) calc(var(--etz-expr-pad-x) + var(--etz-expr-bar, 0px)) var(--etz-expr-pad-y) var(--etz-expr-pad-x);
-    border: var(--input-border-width, 1px) solid transparent;
+    border-color: transparent;
+    border-style: solid;
+    border-width: var(--etz-expr-bw, var(--input-border-width, 1px));
     color: transparent;
     font-family: var(--font-monospace);
     font-size: var(--etz-expr-font);

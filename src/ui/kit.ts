@@ -831,7 +831,8 @@ export function exprInput(parent: HTMLElement, opts: ExprInputOptions): ExprInpu
     const box = el.createDiv({ cls: 'etz-expr-box' });
     const input = box.createEl('textarea', {
         cls: ['etz-input', 'mod-mono', 'etz-expr-input'],
-        attr: { rows: 1, wrap: 'soft', enterkeyhint: 'done', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' },
+        // One line for screen readers too: Enter commits, as in an input.
+        attr: { rows: 1, wrap: 'soft', 'aria-multiline': 'false', enterkeyhint: 'done', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' },
     });
     input.value = oneLine(opts.value);
     if (opts.placeholder) input.placeholder = opts.placeholder;
@@ -872,11 +873,32 @@ export function exprInput(parent: HTMLElement, opts: ExprInputOptions): ExprInpu
         // A last empty line still has a height (and the mirror one line when the field is empty).
         mirror.appendText('​');
     };
-    /** Height for the mirror's lines (up to EXPR_MAX_LINES), and the scroll state past them. */
-    const fit = () => {
+    /** The field's own border widths on the mirror (phones and themes draw fields without one). True when they changed. */
+    let border = '';
+    const syncBorder = (): boolean => {
+        const ics = getComputedStyle(input);
+        const next = `${ics.borderTopWidth} ${ics.borderRightWidth} ${ics.borderBottomWidth} ${ics.borderLeftWidth}`;
+        if (next === border) return false;
+        border = next;
+        mirror.setCssProps({ '--etz-expr-bw': next });
+        return true;
+    };
+    /**
+     * Height for the mirror's lines (up to EXPR_MAX_LINES), and the scroll state past them. From the size
+     * watcher, a border change waits for the next frame: the mirror's new size would come back to it in this one.
+     */
+    const fit = (watched = false) => {
         const outer = mirror.offsetHeight;
         // Hidden (a collapsed card): the size watcher fits it once it shows.
         if (!outer) return;
+        if (watched) {
+            window.requestAnimationFrame(() => {
+                if (syncBorder()) fit();
+            });
+        } else if (syncBorder()) {
+            fit();
+            return;
+        }
         const cs = getComputedStyle(mirror);
         const lineH = parseFloat(cs.lineHeight) || 18;
         const frame = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
@@ -915,7 +937,7 @@ export function exprInput(parent: HTMLElement, opts: ExprInputOptions): ExprInpu
         typeof ResizeObserver !== 'undefined'
             ? new ResizeObserver((entries) => {
                   for (const entry of entries) {
-                      if (entry.target === mirror) fit();
+                      if (entry.target === mirror) fit(true);
                       else if (entry.target === mathEl && mathEl.clientWidth !== mathWidth) {
                           mathWidth = mathEl.clientWidth;
                           window.requestAnimationFrame(() => {
