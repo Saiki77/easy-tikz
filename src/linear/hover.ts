@@ -151,7 +151,8 @@ export function linearHoverCard(tex: string, defs: Map<string, string>): LinearH
         case 'eigen':
             return card(['draw the grid', 'draw the basis vectors', moving, `draw the eigenvectors of ${name}, labelled`]);
         case 'product': {
-            const v = p.vector && p.vector !== S && p.vector !== name ? p.vector : 'v';
+            // 6.2.1: a vector named x, y, z or t (A\vec x) is v in the chart: those names are the axes'.
+            const v = p.vector && p.vector !== S && p.vector !== name && !/^[xyzt]$/.test(p.vector) ? p.vector : 'v';
             let vector = p.vector ? defs.get(p.vector) : undefined;
             if (!vector) {
                 vector = EXAMPLE_VECTOR;

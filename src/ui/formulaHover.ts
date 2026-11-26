@@ -16,7 +16,9 @@
  * 6.2: the setting Formula recognition decides which formulas have one:
  * Smart (default), a hand-designed network that reads the formula, the
  * words around it and the note's other formulas (src/notes6/recognize), or
- * Rules, the builders' own checks as in 6.1.
+ * Rules, the builders' own checks as in 6.1. 6.2.1: a concrete vector opens
+ * the vector card (src/linear/vector.ts: its arrow, a sum tip to tail, both
+ * arrows of a product), under Smart only.
  */
 import { App, MarkdownPostProcessorContext, Platform, TFile, editorInfoField, finishRenderMath, renderMath, setIcon } from 'obsidian';
 import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
@@ -41,9 +43,11 @@ import { LinearHoverCard, LinearHoverKind, linearHoverCard, linearHoverKind, not
 import { IterateHoverCard, IterateHoverKind, iterateHoverCard } from '../iterate/hover';
 // 6.2: formula recognition, the network that decides which card a formula opens (src/notes6/recognize).
 import { recognizeCached } from '../notes6/recognize';
-import { NoteContext, formulaContext, noteFacts } from '../notes6/recognize/context';
-import { definedFunctions, groupOf } from '../notes6/recognize/adapt';
-import { ChartCard, RecognitionMode, chartCard, rulesMark, smartChart, smartIterate, smartLinear, smartMark, smartNotes6 } from '../notes6/recognize/decide';
+import { NoteContext, formulaContext, noteFacts, noteVectors } from '../notes6/recognize/context';
+import { definedFunctions, groupOf, noteDomains } from '../notes6/recognize/adapt';
+import { ChartCard, RecognitionMode, chartCard, rulesMark, smartChart, smartIterate, smartLinear, smartMark, smartNotes6, smartVector } from '../notes6/recognize/decide';
+// 6.2.1: concrete vectors, their sums and products (src/linear/vector.ts).
+import { NoteVector, VectorHoverCard, VectorShape } from '../linear/vector';
 
 export interface FormulaHoverHost {
     /** The setting Charts for formulas. */
@@ -95,6 +99,8 @@ interface CardExtra {
     from?: { name: string; body: string; example: boolean };
     /** 6.0.1: the line under it while n = 2 shows: what n = 2 means. */
     plane?: string;
+    /** 6.2.1: the note's vectors a vector card uses, each a line with its formula in math: \vec a = (1, 2, 3), from this note. */
+    fromNote?: string[];
 }
 
 /** 6.0.1: what a card draws besides its chart's own lines. */
@@ -120,6 +126,16 @@ const LINEAR_KIND: Record<LinearHoverKind, MessageKey> = {
     eigen: 'linear.hover.kind.eigen',
 };
 
+/** 6.2.1: what a vector card draws. */
+const VECTOR_KIND: Record<VectorShape, MessageKey> = {
+    one: 'linear.hover.kind.vector',
+    sum: 'linear.hover.kind.vectorSum',
+    multiple: 'linear.hover.kind.vectorMultiple',
+    dot: 'linear.hover.kind.dot',
+    cross: 'linear.hover.kind.cross',
+    list: 'linear.hover.kind.vectors',
+};
+
 /** 6.0 E: what each card of src/iterate/hover.ts is. */
 const ITERATE_KIND: Record<IterateHoverKind, MessageKey> = {
     recurrence: 'iterate.hover.recurrence',
@@ -130,7 +146,8 @@ const ITERATE_KIND: Record<IterateHoverKind, MessageKey> = {
 /** 6.0.1: the grey line of a card of this part: where its function comes from; what n = 2 means while n = 2 shows. (The x-axis names its letter itself.) */
 function cardExtra(card: HoverCard): Pick<CardExtra, 'from' | 'plane'> {
     return {
-        ...(card.fn ? { from: { name: card.fn.name, body: card.fn.body, example: card.fn.from === 'example' } } : {}),
+        // 6.2.1: a built-in (\ln as a map's name) needs no line: the chart is the function.
+        ...(card.fn && card.fn.from !== 'builtin' ? { from: { name: card.fn.name, body: card.fn.body, example: card.fn.from === 'example' } } : {}),
         ...(card.lines2 && card.fn ? { plane: t('notes6.hover.plane', { name: card.fn.name }) } : {}),
     };
 }
@@ -430,7 +447,8 @@ export class FormulaHover {
      *      formulaLines and formulaChart for function, surface, polar,
      *      implicit and region; hoverCard for set, map, condition, interval,
      *      jensen and epigraph; the linear card for matrix, product, det and
-     *      eigen; the iterate card for recurrence, sum and domain.
+     *      eigen; the iterate card for recurrence, sum and domain; 6.2.1, the
+     *      vector card for vector.
      *   3. That builder builds nothing: the rules decide (openRules). The
      *      network said "a card", so the formula gets the rules' card when
      *      the rules have one ("card" both times), and none when they have
@@ -459,10 +477,13 @@ export class FormulaHover {
                 return;
             }
             case 'notes6':
-                void this.openNotes6(at, found, (defs) => smartNotes6(tex, label, defs)).then((r) => r === 'none' && fallBack());
+                void this.openNotes6(at, found, (defs, domains) => smartNotes6(tex, label, defs, domains)).then((r) => r === 'none' && fallBack());
                 return;
             case 'linear':
                 void this.openLinear(at, found, (values) => smartLinear(tex, label, values)).then((r) => r === 'none' && fallBack());
+                return;
+            case 'vector':
+                void this.openVector(at, found, (vectors) => smartVector(tex, vectors)).then((r) => r === 'none' && fallBack());
                 return;
         }
     }
@@ -484,7 +505,7 @@ export class FormulaHover {
     }
 
     /** 6.0 B: the card of a formula of src/notes6/hover.ts, once the note is read (build: the card, from the note's definitions). */
-    private async openNotes6(at: Place, found: Found, build: (defs: Map<string, NoteDefinition>) => HoverCard | null): Promise<Opened> {
+    private async openNotes6(at: Place, found: Found, build: (defs: Map<string, NoteDefinition>, domains: ReadonlyMap<string, string>) => HoverCard | null): Promise<Opened> {
         const { math } = at;
         let note = '';
         try {
@@ -494,8 +515,11 @@ export class FormulaHover {
         }
         // The pointer may have moved on meanwhile.
         if (!math.isConnected || (this.pop && this.target !== math && this.held)) return 'stale';
-        const defs = noteDefinitions(formulasIn(note).map((f) => f.tex).filter((f) => f !== found.tex));
-        const card = build(defs);
+        const formulas = formulasIn(note)
+            .map((f) => f.tex)
+            .filter((f) => f !== found.tex);
+        // 6.2.1: and the sets the note names, for a map's domain (f: D \to \mathbb{R} with D = [0, 1])
+        const card = build(noteDefinitions(formulas), noteDomains(formulas));
         if (!card) return 'none';
         const read = (lines: string[]) => {
             const parsed = parseChartText(lines.join('\n'));
@@ -525,6 +549,24 @@ export class FormulaHover {
         if (parsed.problems.length) return 'none';
         const text = [card.example ? t('linear.hover.note.example', { name: card.name }) : '', t('linear.hover.note.t', { name: card.name })].filter((x) => x).join(' ');
         this.show(math, at.row, at.pick, at.drawnRows, found, t(LINEAR_KIND[card.kind]), parsed.data, { note: text, two: null });
+        return 'shown';
+    }
+
+    /** 6.2.1: the card of a concrete vector, a sum, a multiple or a product of vectors, with the note's vectors (build: the card, from them). */
+    private async openVector(at: Place, found: Found, build: (vectors: ReadonlyMap<string, NoteVector>) => VectorHoverCard | null): Promise<Opened> {
+        const { math } = at;
+        let note = '';
+        try {
+            note = await found.note();
+        } catch {
+            note = '';
+        }
+        if (!math.isConnected || (this.pop && this.target !== math && this.held)) return 'stale';
+        const card = build(noteVectors(note));
+        if (!card) return 'none';
+        const parsed = parseChartText(card.lines.join('\n'));
+        if (parsed.problems.length) return 'none';
+        this.show(math, at.row, at.pick, at.drawnRows, found, t(VECTOR_KIND[card.shape]), parsed.data, { note: '', two: null, fromNote: card.fromNote });
         return 'shown';
     }
 
@@ -626,7 +668,7 @@ export class FormulaHover {
         }
 
         // 6.0 B: n = 1 / n = 2 for a formula in R^n (bottom left), and one grey line: where g comes from, or what to move.
-        if (extra && (extra.two || extra.note || extra.from)) {
+        if (extra && (extra.two || extra.note || extra.from || extra.fromNote?.length)) {
             const foot = pop.createDiv({ cls: 'etz-formula-foot' });
             const two = extra.two;
             let plane: HTMLElement | null = null;
@@ -654,6 +696,10 @@ export class FormulaHover {
             if (from) {
                 const line = foot.createDiv({ cls: 'etz-formula-from' });
                 lineWithMath(line, (formula) => (from.example ? t('notes6.hover.exampleLine', { formula, name: from.name }) : t('notes6.hover.fromLine', { formula })), `${from.name}(x) = ${from.body}`);
+            } else if (extra.fromNote?.length) {
+                // 6.2.1: where the vector card's names come from, one line with all of them
+                const line = foot.createDiv({ cls: 'etz-formula-from' });
+                lineWithMath(line, (formula) => t('linear.hover.vector.fromLine', { formula }), extra.fromNote.join(',\\quad '));
             } else if (extra.note) foot.createDiv({ cls: 'etz-formula-from', text: extra.note });
             if (extra.plane && two) plane = foot.createDiv({ cls: 'etz-formula-from etz-formula-plane tikz-hidden', text: extra.plane });
         }
@@ -839,7 +885,7 @@ function markMath(math: HTMLElement, tex: string | null, ctx: NoteContext | unde
         return;
     }
     const functions = mode === 'rules' ? undefined : definedFunctions(ctx?.defs); // 6.2.1
-    const has = (row: number | undefined, rowTex: string) => (mode === 'rules' ? rulesMark(tex, row, rowTex) : smartMark(tex, row, rowTex, recognizeCached(rowTex, ctx ?? {}, ctx?.key ?? ''), functions));
+    const has = (row: number | undefined, rowTex: string) => (mode === 'rules' ? rulesMark(tex, row, rowTex) : smartMark(tex, row, rowTex, recognizeCached(rowTex, ctx ?? {}, ctx?.key ?? ''), functions, ctx?.vectors));
     const rows = formulaRows(tex);
     const drawn = rows.length > 1 ? rowsOf(math) : [];
     if (rows.length > 1 && drawn.length === rows.length) {

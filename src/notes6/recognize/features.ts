@@ -1,6 +1,6 @@
 /*
  * The input encoding of formula recognition (a port of the frozen
- * features.mjs of round 2, hover-ml designed2; the logic is the same line by
+ * features.mjs of round 3, hover-ml designed3; the logic is the same line by
  * line). The front end (normalize.ts) writes the formula in canonical TeX;
  * it is cut into parts (\qquad, \Rightarrow, \iff, a word such as für, a
  * list of statements, a remark in brackets at the end, a chain f(x) = A = B),
@@ -50,6 +50,16 @@ interface Item {
     upper?: string[];
     /** An environment's cells (rows of cells of tokens). */
     rows?: string[][][];
+    /** An array with a bar in its columns (augmented: no square matrix). */
+    aug?: boolean;
+    /** A bare matrix environment in its own brackets. */
+    wrapped?: number;
+    /** \circ as a unit sign (a composition when it stands between two letters). */
+    circ?: number;
+    /** An arrow over two or three capitals (\overrightarrow{AB}). */
+    arrow?: number;
+    /** A number with an arrow (\vec 0) as a vector element. */
+    num?: number;
 }
 
 /** The answers about one part: a name to a value; a true value sets the feature. */
@@ -64,7 +74,7 @@ export function tokenize(tex: string): string[] {
 }
 
 const set = (s: string) => new Set(s.split(' '));
-const DROP = set('\\left \\right \\big \\Big \\bigg \\Bigg \\bigl \\bigr \\Bigl \\Bigr \\biggl \\biggr \\displaystyle \\textstyle \\limits \\nolimits \\! \\mathstrut \\, \\: \\> $ \\underline \\phantom \\hphantom');
+const DROP = set('\\left \\right \\big \\Big \\bigg \\Bigg \\bigl \\bigr \\Bigl \\Bigr \\biggl \\biggr \\displaystyle \\textstyle \\limits \\nolimits \\! \\mathstrut \\, \\: \\> $ \\phantom \\hphantom');
 const SP = new Set(['\\;', '\\ ', '~']);
 const MAP: Record<string, string> = {
     '\\dfrac': '\\frac', '\\tfrac': '\\frac', '\\leq': '\\le', '\\geq': '\\ge', '\\neq': '\\ne', '\\leqslant': '\\le', '\\geqslant': '\\ge',
@@ -72,13 +82,13 @@ const MAP: Record<string, string> = {
     '\\dbinom': '\\binom', '\\tbinom': '\\binom', '\\phi': '\\varphi', '\\epsilon': '\\varepsilon', '\\ast': '*', '\\star': '*', '\\lbrace': '\\{', '\\rbrace': '\\}',
     '\\implies': '\\Rightarrow', '\\Longrightarrow': '\\Rightarrow', '\\Leftrightarrow': '\\iff', '\\Longleftrightarrow': '\\iff', '\\gets': '\\leftarrow',
     '\\dots': '\\dots', '\\ldots': '\\dots', '\\cdots': '\\dots', '\\vdots': '\\dots', '\\ddots': '\\dots', '\\lt': '<', '\\gt': '>', '≤': '\\le', '≥': '\\ge',
-    '\\middle': '', '\\vartheta': '\\theta', '\\mid': '\\mid', '\\prime': "'", '\\land': '\\wedge', '\\lor': '\\vee', '\\ne': '\\ne', '\\not': '\\not',
+    '\\middle': '', '\\imath': 'i', '\\jmath': 'j', '\\vartheta': '\\theta', '\\mid': '\\mid', '\\prime': "'", '\\land': '\\wedge', '\\lor': '\\vee', '\\ne': '\\ne', '\\not': '\\not',
 };
 const GREEK = set('\\alpha \\beta \\gamma \\delta \\varepsilon \\zeta \\eta \\theta \\iota \\kappa \\lambda \\mu \\nu \\xi \\rho \\sigma \\tau \\upsilon \\varphi \\chi \\psi \\omega \\Gamma \\Delta \\Theta \\Lambda \\Xi \\Pi \\Sigma \\Phi \\Psi \\Omega \\ell \\hbar \\pi');
 const FN = set('\\sin \\cos \\tan \\cot \\exp \\ln \\log \\lg \\sqrt \\arctan \\arcsin \\arccos \\sinh \\cosh \\tanh');
 const FNWORD = set('sin cos tan exp ln log sgn sign abs sinh cosh tanh arctan si sinc erf');
 const BIG: Record<string, string> = { '\\sum': 'sum', '\\prod': 'prod', '\\int': 'int', '\\oint': 'int', '\\iint': 'int', '\\lim': 'lim', '\\max': 'max', '\\min': 'min', '\\sup': 'max', '\\inf': 'min', '\\argmax': 'max', '\\argmin': 'min', '\\limsup': 'lim', '\\liminf': 'lim' };
-const DECO: Record<string, Deco | ''> = { '\\hat': 'hat', '\\widehat': 'hat', '\\bar': 'bar', '\\overline': 'bar', '\\tilde': 'hat', '\\widetilde': 'hat', '\\vec': 'vec', '\\mathbf': 'vec', '\\boldsymbol': 'vec', '\\bm': 'vec', '\\dot': 'dot', '\\ddot': 'dot', '\\mathit': '', '\\mathsf': '' };
+const DECO: Record<string, Deco | ''> = { '\\hat': 'hat', '\\widehat': 'hat', '\\bar': 'bar', '\\overline': 'bar', '\\tilde': 'hat', '\\widetilde': 'hat', '\\vec': 'vec', '\\mathbf': 'vec', '\\boldsymbol': 'vec', '\\bm': 'vec', '\\dot': 'dot', '\\ddot': 'dot', '\\mathit': '', '\\mathsf': '', '\\underline': '', '\\overrightarrow': 'vec', '\\vv': 'vec', '\\underrightarrow': 'vec' };
 const REL: Record<string, string> = { '=': 'eq', '<': 'lt', '>': 'gt', '\\le': 'le', '\\ge': 'ge', '\\ne': 'ne', '\\in': 'in', '\\to': 'to', '\\mapsto': 'mapsto', '\\approx': 'approx', '\\sim': 'sim', '\\equiv': 'equiv', '\\leftarrow': 'larrow', '\\propto': 'sim', '\\subset': 'sub', '\\subseteq': 'sub', '\\notin': 'in', '\\ll': 'other', '\\gg': 'other', '\\perp': 'other', '\\simeq': 'approx', '\\cong': 'equiv', ':': 'colon', '\\mid': 'mid', '\\nmid': 'mid' };
 const JOIN = set('\\Rightarrow \\iff \\Leftarrow \\quad \\qquad');
 const BB: Record<string, string> = { R: 'ℝ', C: 'ℂ', N: 'ℕ', Z: 'ℤ', Q: 'ℚ', E: '𝔼', P: 'ℙ', D: '𝔻', K: '𝕂', 1: '𝟙' };
@@ -143,14 +153,20 @@ function parse(tIn: string[]): Item[] {
     const items: Item[] = [];
     let deco: Deco | null = null;
     const last = (): Item | undefined => items[items.length - 1];
+    let delta = false;
     const push = (it: Item) => {
         if (deco && it.t === 'atom') {
             it[deco] = 1;
             deco = null;
         }
+        if (delta && it.t === 'atom') {
+            it.base = 'Δ' + String(it.base);
+            delta = false;
+        }
         items.push(it);
         return it;
     };
+    let decoAt = -1;
     let guard = 0;
     for (let i = 0; i < t.length; ) {
         if (++guard > 50 * (t.length + 20)) throw new Error('parse does not end');
@@ -164,9 +180,20 @@ function parse(tIn: string[]): Item[] {
                 if (t[e] === '\\begin') d++;
                 else if (t[e] === '\\end' && --d === 0) break;
             }
-            const body = t.slice(j, e);
+            let body = t.slice(j, e);
             const [, after] = unit(t, e + 1);
-            if (MATENV.has(name) || name === 'cases') {
+            let aug = false;
+            if (name === 'array' && body[0] === '{') {
+                const [spec, q] = unit(body, 0);
+                aug = spec.includes('|') && !(spec[0] === '|' && spec[spec.length - 1] === '|' && spec.filter((x) => x === '|').length === 2);
+                body = body.slice(q);
+            }
+            if (name === 'array' && body[0] === '[') {
+                const q = body.indexOf(']');
+                if (q > 0 && q <= 2) body = body.slice(q + 1);
+            }
+            body = body.filter((x) => x !== '\\hline');
+            if (MATENV.has(name.replace('*', '')) || name === 'cases') {
                 const rows: string[][][] = [[[]]];
                 let bd = 0;
                 for (let q = 0; q < body.length; q++) {
@@ -186,7 +213,7 @@ function parse(tIn: string[]): Item[] {
                     r[r.length - 1].push(b);
                 }
                 while (rows.length && rows[rows.length - 1].every((c) => !c.length)) rows.pop();
-                items.push({ t: 'env', name, rows });
+                items.push({ t: 'env', name: name.replace('*', ''), rows, aug });
                 i = after;
             } else {
                 t = [...t.slice(0, i), ...body, ...t.slice(after)];
@@ -221,7 +248,8 @@ function parse(tIn: string[]): Item[] {
             else if (/^(min|max|argmin|argmax)$/.test(s)) {
                 t = [...t.slice(0, i), '\\' + s.replace('arg', ''), ...t.slice(j)];
                 continue;
-            } else if (FNWORD.has(s)) items.push({ t: 'fn', name: s });
+            } else if (s === 'det' || s === 'Det') items.push({ t: 'det' });
+            else if (FNWORD.has(s)) items.push({ t: 'fn', name: s });
             else if (!/␣/.test(sRaw) && (t[j] === '(' || t[j] === '[' || k === '\\operatorname' || k === '\\mathop')) items.push({ t: 'name', name: s });
             else if (/^[A-Z][A-Za-z]{0,3}$/.test(s) && k === '\\mathrm' && t[j] === '_') items.push({ t: 'name', name: s });
             else items.push({ t: 'text', v: sRaw });
@@ -241,12 +269,30 @@ function parse(tIn: string[]): Item[] {
             t = [...t.slice(0, i), '(', ...u, ')', ...rest];
             continue;
         }
+        // a decoration marks the next letter only: \vec 0 or \mathbf{1} does not mark a later letter
+        if (deco && decoAt >= 0 && i >= decoAt && !(/^[A-Za-z]$/.test(k) || GREEK.has(k) || k === '\\Delta' || k in DECO || (i === decoAt && /^[0-9]/.test(k)))) deco = null;
+        if (deco && decoAt >= 0 && i > decoAt && /^[0-9]/.test(k)) deco = null;
+        if (k === '\\Delta' && t[i + 1] in DECO && DECO[t[i + 1]]) {
+            delta = true;
+            i++;
+            continue;
+        }
         if (k in DECO) {
             const mark = DECO[k];
-            if (mark) deco = mark;
+            if (mark) {
+                deco = mark;
+                decoAt = i + 1;
+            }
             if (t[i + 1] === '{') {
-                // drop the braces of the decorated group
                 const [u, j] = unit(t, i + 1);
+                // an arrow over two or three capitals is one name: \overrightarrow{AB}
+                if (mark === 'vec' && u.length >= 2 && u.length <= 3 && u.every((x) => /^[A-Z]$/.test(x))) {
+                    deco = null;
+                    items.push({ t: 'atom', base: u.join(''), sub: '', vec: 1, arrow: 1 });
+                    i = j;
+                    continue;
+                }
+                // drop the braces of the decorated group
                 t = [...t.slice(0, i + 1), ...u, ...t.slice(j)];
             }
             i++;
@@ -331,7 +377,8 @@ function parse(tIn: string[]): Item[] {
                 i = j;
                 continue;
             }
-            items.push({ t: 'pow', sci: !!p && p.t === 'num' && p.v === '10' && /^-?[0-9]+$/.test(s) });
+            // (sci stays undefined after nothing, as in the frozen code: items are compared as JSON)
+            items.push({ t: 'pow', sci: p === undefined ? undefined : p.t === 'num' && p.v === '10' && /^-?[0-9]+$/.test(s) });
             items.push({ t: 'lb' });
             for (const x of parse(u)) items.push(x);
             items.push({ t: 'rb' });
@@ -387,7 +434,7 @@ function parse(tIn: string[]): Item[] {
             continue;
         }
         if (/^[0-9]/.test(k)) {
-            items.push({ t: 'num', v: k });
+            items.push(deco === 'vec' && decoAt === i ? { t: 'num', v: k, vec: 1 } : { t: 'num', v: k });
             i++;
             continue;
         }
@@ -461,7 +508,12 @@ function parse(tIn: string[]): Item[] {
             i++;
             continue;
         }
-        if (k === '%' || k === '\\%' || k === '°' || k === '\\circ' || k === '€' || k === '\\degree') {
+        if (k === '\\circ') {
+            items.push({ t: 'unit', circ: 1 });
+            i++;
+            continue;
+        }
+        if (k === '%' || k === '\\%' || k === '°' || k === '€' || k === '\\degree') {
             items.push({ t: 'unit' });
             i++;
             continue;
@@ -479,7 +531,54 @@ function parse(tIn: string[]): Item[] {
         items.push({ t: 'sym', v: k });
         i++;
     }
-    return items;
+    return wrapEnvs(items);
+}
+
+/** A matrix environment in its own brackets is one item: ( matrix ), [ array ], | matrix | (a determinant). */
+function wrapEnvs(items0: Item[]): Item[] {
+    // a composition of two plain letters is one name: (g \circ f)(x), g \circ f = ...
+    let items = items0;
+    if (items.some((x) => x.t === 'unit' && x.circ)) {
+        const plain = (x: Item | undefined) => !!x && x.t === 'atom' && !x.vec && !x.hat && !x.bar && /^[a-zA-Z]$|^(varphi|psi|sigma|tau)$/.test(String(x.base));
+        const out: Item[] = [];
+        for (let i = 0; i < items.length; i++) {
+            const a = items[i];
+            if (a.t === 'open' && a.v === '(' && plain(items[i + 1]) && items[i + 2] && items[i + 2].circ && plain(items[i + 3]) && items[i + 4] && items[i + 4].t === 'close') {
+                out.push({ t: 'name', name: 'comp' });
+                i += 4;
+                continue;
+            }
+            if (plain(a) && items[i + 1] && items[i + 1].circ && plain(items[i + 2])) {
+                out.push({ t: 'name', name: 'comp' });
+                i += 2;
+                continue;
+            }
+            out.push(a);
+        }
+        items = out;
+    }
+    if (!items.some((x) => x.t === 'env')) return items;
+    const out: Item[] = [];
+    for (let i = 0; i < items.length; i++) {
+        const a = items[i];
+        const e = items[i + 1];
+        const b = items[i + 2];
+        if (e && b && e.t === 'env' && e.name !== 'cases' && e.name !== 'vmatrix') {
+            const bare = e.name === 'matrix' || e.name === 'array' || e.name === 'smallmatrix';
+            if (a.t === 'open' && b.t === 'close' && bare) {
+                out.push({ ...e, wrapped: 1 });
+                i += 2;
+                continue;
+            }
+            if (a.t === 'sym' && a.v === '|' && b.t === 'sym' && b.v === '|') {
+                out.push({ ...e, name: 'vmatrix' });
+                i += 2;
+                continue;
+            }
+        }
+        out.push(a);
+    }
+    return out;
 }
 
 /** Depth of every item (round, square, set and group brackets all count). */
@@ -505,6 +604,7 @@ function depths(items: Item[]): number[] {
 const W_COND = /(^|[^a-zäöüß])(für|fuer|fur|for|mit|with|wobei|where|falls|if|wenn|when|sofern|whenever|solange|while|da|since|weil|because|unless|given|gegeben|nur|only|provided|gilt|holds|valid|gültig)($|[^a-zäöüß])/i;
 const W_AND = /(^|[^a-zäöüß])(und|and|oder|or|sowie|bzw|aber|but|also|dann|then|d\.h|i\.e|sei|let|somit|hence|thus|folglich|daher|damit|so|bzw\.|resp|sowie|ergibt|gives|yields|liefert|folgt|daraus)($|[^a-zäöüß])/i;
 const W_ST = /^[␣(]*(s\.?␣?t\.?|u\.?␣?d\.?␣?N\.?|subject␣to|such␣that|unter␣der␣Nebenbedingung|unter␣den␣Nebenbedingungen|NB:?|u\.␣?d\.␣?NB\.?)[␣:)]*$/i;
+const W_SET = /^[␣]*(mit|with|wobei|where|so␣?dass|such␣that|s\.␣?t\.|für␣die|for␣which|sodass|und|and)[␣:]*$/i;
 const STMT = new Set(['eq', 'lt', 'gt', 'le', 'ge', 'ne', 'in', 'approx', 'to', 'mapsto', 'sub', 'equiv', 'sim', 'colon', 'larrow', 'other']);
 const hasTopRel = (its: Item[]) => {
     const d = depths(its);
@@ -754,7 +854,477 @@ function matrixInfo(env: Item) {
     const letters = new Set<string>();
     for (const cell of cells) for (const it of parse(cell)) if (it.t === 'atom' && it.base !== 'pi' && it.base !== 'e') letters.add(key(it));
     const nums = cells.every((cell) => cell.some((x) => /^[0-9]/.test(x)) || cell.some((x) => /^[A-Za-z]$|^\\[a-z]+$/.test(x)));
-    return { nums, r, c, square: r === c && (r === 2 || r === 3) && rows.every((x) => x.length === c), col: c === 1 && r >= 2, letters, dots: cells.some((cell) => cell.includes('\\dots')) };
+    return { nums, r, c, square: !env.aug && r === c && (r === 2 || r === 3) && rows.every((x) => x.length === c), col: c === 1 && r >= 2, letters, dots: cells.some((cell) => cell.includes('\\dots')) };
+}
+
+// ---- round 3: written vectors, the note's values, set builders.
+
+/** A written vector: where it ends, its entries, the letters in them, and what its spelling says. */
+interface VecLit {
+    end: number;
+    n: number;
+    letters: Set<string>;
+    /** The spelling alone says vector (a column, a transposed row or tuple, angle brackets). */
+    definite: boolean;
+    kind: 'col' | 'row' | 'binom' | 'tuple' | 'top' | 'angle';
+    zero: boolean;
+    /** Shares that sum to 1 (a distribution). */
+    stoch: boolean;
+    /** How many entries hold a letter. */
+    withLetter: number;
+}
+
+/** One element of a side read as a vector expression. */
+type VecEl = { k: 'lit'; lit: VecLit } | { k: 'atom'; a: Item } | { k: 'num' } | { k: 'pm' } | { k: 'dot' } | { k: 'cross' };
+
+/** What a side is (sideClass). */
+interface SideClass {
+    c: 'num' | 'param' | 'other' | 'prod' | 'lit' | 'comb' | 'nameprod' | 'namefactor' | 'names' | 'unknown';
+    lits?: VecLit[];
+    atoms?: Item[];
+    single?: boolean;
+    scalar?: boolean;
+}
+
+const isSepV = (x: Item) => (x.t === 'sym' && (x.v === ',' || x.v === ';' || x.v === '|')) || (x.t === 'rel' && x.v === 'mid');
+const dkey = (a: Item) => String(a.base) + (a.sub ? '_' + a.sub : '');
+
+/** The letters of one entry of a vector (a number, or an expression of numbers and letters); null when it is no entry. */
+function entryLetters(its: Item[]): Set<string> | null {
+    const letters = new Set<string>();
+    let some = false;
+    for (const x of its) {
+        if (x.t === 'num') {
+            some = true;
+            continue;
+        }
+        if (x.t === 'frac' || x.t === 'lb' || x.t === 'rb' || x.t === 'pow' || x.t === 'fn') continue;
+        if ((x.t === 'open' && x.v === '(') || (x.t === 'close' && x.v === ')')) continue;
+        if (x.t === 'sym' && /^(\+|-|cdot|\/)$/.test(String(x.v))) continue;
+        if (x.t === 'atom' && !x.star && !x.prime && !x.vec) {
+            some = true;
+            if (!((x.base === 'pi' || x.base === 'e') && !x.sub)) letters.add(key(x));
+            continue;
+        }
+        return null;
+    }
+    return some ? letters : null;
+}
+
+/**
+ * A written vector that starts at its[i]: a column environment, a row with
+ * a transposition sign, a tuple, \binom, angle brackets; null when none
+ * starts there.
+ */
+function vecLiteral(its: Item[], i: number): VecLit | null {
+    const x = its[i];
+    if (!x) return null;
+    const mk = (entries: Item[][], end: number, definite: boolean, kind: VecLit['kind']): VecLit | null => {
+        const letters = new Set<string>();
+        for (const e of entries) {
+            const l = entryLetters(e);
+            if (!l) return null;
+            for (const k of l) letters.add(k);
+        }
+        // the entries as numbers (when each is one number): the zero vector, and a list of shares that sum to 1
+        const vals = entries.map((e) => {
+            const q = e[0] && e[0].t === 'sym' && e[0].v === '-' ? e.slice(1) : e;
+            return q.length === 1 && q[0].t === 'num' ? (q === e ? 1 : -1) * Number(q[0].v) : NaN;
+        });
+        const zero = vals.every((v) => v === 0);
+        const stoch = vals.every((v) => v >= 0 && v < 1) && Math.abs(vals.reduce((a, b) => a + b, 0) - 1) < 1e-9;
+        const withLetter = entries.filter((e) => (entryLetters(e)?.size ?? 0) > 0).length;
+        return { end, n: entries.length, letters, definite, kind, zero, stoch, withLetter };
+    };
+    if (x.t === 'env') {
+        const rows = x.rows ?? [];
+        if (x.name === 'vmatrix' || x.name === 'Vmatrix' || x.name === 'cases' || x.aug) return null;
+        const r = rows.length;
+        const c = Math.max(...rows.map((q) => q.length));
+        if (c === 1 && r >= 2) return mk(rows.map((q) => parse(q[0])), i + 1, true, 'col');
+        if (r === 1 && c >= 2 && its[i + 1] && its[i + 1].t === 'top') return mk(rows[0].map((q) => parse(q)), i + 2, true, 'row');
+        return null;
+    }
+    if (x.t === 'binom') {
+        const groups: Item[][] = [];
+        let j = i + 1;
+        for (let g = 0; g < 2; g++) {
+            if (!its[j] || its[j].t !== 'lb') return null;
+            let d = 0;
+            const s = j;
+            for (; j < its.length; j++) {
+                if (its[j].t === 'lb') d++;
+                else if (its[j].t === 'rb' && --d === 0) break;
+            }
+            groups.push(its.slice(s + 1, j));
+            j++;
+        }
+        const b = mk(groups, j, false, 'binom');
+        return b && b.letters.size === 0 ? b : null;
+    }
+    const angle = x.t === 'sym' && x.v === 'angle';
+    if (x.t === 'open' || angle) {
+        let j = i + 1;
+        let d = 1;
+        const entries: Item[][] = [[]];
+        for (; j < its.length; j++) {
+            const y = its[j];
+            if (angle) {
+                if (y.t === 'sym' && y.v === '\\rangle') break;
+            } else if (y.t === 'open' || y.t === 'lb' || y.t === 'sopen') d++;
+            else if (y.t === 'close' || y.t === 'rb' || y.t === 'sclose') {
+                if (--d === 0) break;
+            }
+            if (d === 1 && isSepV(y)) entries.push([]);
+            else entries[entries.length - 1].push(y);
+        }
+        if (j >= its.length || entries.length < 2) return null;
+        if (!angle && (x.v === '(') !== (its[j].v === ')')) return null;
+        const top = !!its[j + 1] && its[j + 1].t === 'top';
+        if (!angle && x.v === '[' && !top) return null;
+        const lit = mk(entries, top ? j + 2 : j + 1, top || angle, top ? 'top' : angle ? 'angle' : 'tuple');
+        return angle && lit && lit.letters.size ? null : lit;
+    }
+    return null;
+}
+
+/** One side of an equation as a list of vector elements (written vectors, numbers, signs, product signs, letters); null when something else is in it. */
+function vecSide(its: Item[]): VecEl[] | null {
+    const els: VecEl[] = [];
+    for (let i = 0; i < its.length; ) {
+        // an inner product of two written vectors: < (1, -1), (1, 1) >
+        if (its[i].t === 'sym' && its[i].v === 'angle') {
+            const e = its.findIndex((y, q) => q > i && y.t === 'sym' && y.v === '\\rangle');
+            const ch =
+                e > 0
+                    ? commaSplit(its.slice(i + 1, e)).map((c) => {
+                          const l = vecLiteral(c, 0);
+                          return l && l.end === c.length ? l : null;
+                      })
+                    : [];
+            const [c0, c1] = ch;
+            if (ch.length === 2 && c0 && c1) {
+                els.push({ k: 'lit', lit: c0 }, { k: 'dot' }, { k: 'lit', lit: c1 });
+                i = e + 1;
+                continue;
+            }
+        }
+        const lit = vecLiteral(its, i);
+        if (lit) {
+            els.push({ k: 'lit', lit });
+            i = lit.end;
+            continue;
+        }
+        const x = its[i];
+        if (x.t === 'num' && x.vec) {
+            els.push({ k: 'atom', a: { t: 'atom', base: x.v, sub: '', vec: 1, num: 1 } });
+            i++;
+            continue;
+        }
+        if (x.t === 'num') {
+            els.push({ k: 'num' });
+            i++;
+            continue;
+        }
+        if (x.t === 'frac' || (x.t === 'fn' && x.name === 'sqrt')) {
+            // a fraction or a root of numbers is a number
+            let j = i + 1;
+            let ok = true;
+            for (let g = 0; g < (x.t === 'frac' ? 2 : 1); g++) {
+                if (its[j] && its[j].t === 'lb') {
+                    let d = 0;
+                    for (; j < its.length; j++) {
+                        const y = its[j];
+                        if (y.t === 'lb') d++;
+                        else if (y.t === 'rb') {
+                            if (--d === 0) break;
+                        } else if (!(y.t === 'num' || y.t === 'frac' || y.t === 'fn' || y.t === 'pow' || y.t === 'open' || y.t === 'close' || (y.t === 'sym' && /^(\+|-|cdot)$/.test(String(y.v))))) ok = false;
+                    }
+                    j++;
+                } else if (its[j] && its[j].t === 'num') j++;
+                else ok = false;
+            }
+            if (!ok) return null;
+            els.push({ k: 'num' });
+            i = j;
+            continue;
+        }
+        if (x.t === 'sym' && (x.v === '+' || x.v === '-')) {
+            els.push({ k: 'pm' });
+            i++;
+            continue;
+        }
+        if (x.t === 'sym' && x.v === 'cdot') {
+            els.push({ k: 'dot' });
+            i++;
+            continue;
+        }
+        if (x.t === 'sym' && x.v === 'times') {
+            els.push({ k: 'cross' });
+            i++;
+            continue;
+        }
+        if (x.t === 'atom' && !x.star && !x.prime && !x.top && !x.inv) {
+            els.push({ k: 'atom', a: x });
+            i++;
+            continue;
+        }
+        // a unit after a number is a label (3 N e_x); \circ between vectors is the dot product
+        if (x.t === 'text' && i > 0 && (its[i - 1].t === 'num' || els[els.length - 1].k === 'lit') && /^[^␣]{1,6}$/.test(String(x.v))) {
+            i++;
+            continue;
+        }
+        if (x.t === 'unit' && els.length && (els[els.length - 1].k === 'lit' || els[els.length - 1].k === 'atom')) {
+            els.push({ k: 'dot' });
+            i++;
+            continue;
+        }
+        return null;
+    }
+    return els;
+}
+
+/**
+ * What a side is: num, lit (one written vector), comb (a sum of written
+ * vectors with numbers as factors), prod (dot or cross product of two
+ * written vectors), param (a letter times a written vector), names (a sum
+ * of letters), nameprod, namefactor, other.
+ */
+function sideClass(els: VecEl[]): SideClass {
+    const lits: VecLit[] = [];
+    const atoms: Item[] = [];
+    for (const e of els) {
+        if (e.k === 'lit') lits.push(e.lit);
+        else if (e.k === 'atom') atoms.push(e.a);
+    }
+    const k = (i: number) => (els[i] ? els[i].k : '');
+    if (!lits.length && !atoms.length) return { c: 'num' };
+    if (lits.length && atoms.length) return { c: 'param', lits };
+    if (lits.length) {
+        if (els.some((e, i) => e.k === 'lit' && k(i + 1) === 'lit')) return { c: 'other' };
+        const prod = els.some((e, i) => (e.k === 'dot' || e.k === 'cross') && k(i - 1) === 'lit' && k(i + 1) === 'lit');
+        // a cross product lives in space: (-1, 1) \times (-1, 1) is a product of intervals
+        if (prod) return lits.length === 2 && els.length === 3 && (els[1].k === 'dot' || lits.every((l) => l.n === 3)) ? { c: 'prod', lits } : { c: 'other' };
+        if (els.some((e) => e.k === 'cross')) return { c: 'other' };
+        return { c: els.length === 1 ? 'lit' : 'comb', lits };
+    }
+    const prod = els.some((e, i) => (e.k === 'dot' || e.k === 'cross') && k(i - 1) === 'atom' && k(i + 1) === 'atom');
+    const factor = els.some((e, i) => e.k === 'atom' && k(i + 1) === 'atom');
+    const numAfter = els.some((e, i) => e.k === 'num' && (k(i - 1) === 'atom' || (k(i - 1) === 'dot' && k(i - 2) === 'atom')));
+    return { c: prod ? 'nameprod' : factor || numAfter ? 'namefactor' : 'names', atoms, single: els.length === 1, scalar: els.some((e) => e.k === 'num') };
+}
+
+/** Split a list of items at its top-level commas and semicolons. */
+function commaSplit(its: Item[]): Item[][] {
+    const d = depths(its);
+    const out: Item[][] = [[]];
+    its.forEach((x, i) => {
+        if (d[i] === 0 && x.t === 'sym' && (x.v === ',' || x.v === ';')) out.push([]);
+        else out[out.length - 1].push(x);
+    });
+    return out;
+}
+
+/** The vector facts of one part. */
+function vectorFacts(parts0: Item[][], rels0: string[], defs: DefNames): Answers {
+    const f: Answers = {};
+    let parts = parts0;
+    let rels = rels0;
+    // "... \in R^2" after a vector is a remark; "= \dots =" stands for steps
+    if (rels.length && rels[rels.length - 1] === 'in' && parts[parts.length - 1].length === 1 && parts[parts.length - 1][0].t === 'bb') {
+        parts = parts.slice(0, -1);
+        rels = rels.slice(0, -1);
+    }
+    if (!rels.every((r) => r === 'eq' || r === 'approx')) return f;
+    parts = parts.filter((p) => !(p.length === 1 && p[0].t === 'sym' && p[0].v === '\\dots'));
+    if (!parts.length || parts.some((p) => !p.length)) return f;
+    const conclude = (lits: VecLit[], sure: boolean, soft: boolean) => {
+        const n = lits[0].n;
+        const letters = new Set(lits.flatMap((l) => [...l.letters]));
+        // 2 or 3 entries; one parameter letter at most, and in one entry only (a point that moves with t is a line)
+        if (!((n === 2 || n === 3) && lits.every((l) => l.n === n && l.withLetter <= 1) && letters.size <= 1)) return;
+        if (sure || lits.every((l) => l.definite)) f.vecLit = true;
+        else {
+            f.vecPlain = true;
+            f.vecSoft = soft || lits.every((l) => l.kind === 'binom');
+        }
+        f.vecZero = lits.every((l) => l.zero);
+        f.vecStoch = lits.some((l) => l.stoch);
+    };
+    // a list of written vectors: (1, 0), (0, 1)
+    if (parts.length === 1) {
+        const ch = commaSplit(parts[0]);
+        if (ch.length >= 2) {
+            const lits: VecLit[] = [];
+            for (const c of ch) {
+                const l = vecLiteral(c, 0);
+                if (!l || l.end !== c.length) return f;
+                lits.push(l);
+            }
+            conclude(lits, false, true);
+            return f;
+        }
+    }
+    // each side: a class, or unknown (something that is no vector expression: a fraction with |a|, a call)
+    const cls: SideClass[] = parts.map((p) => {
+        const s = vecSide(p);
+        return !s || !s.length || /^(pm|dot|cross)$/.test(s[s.length - 1].k) ? { c: 'unknown' } : sideClass(s);
+    });
+    const litsOf = (c: SideClass) => c.lits ?? [];
+    const atomsOf = (c: SideClass) => c.atoms ?? [];
+    // a tuple on one side of an equation: a pair of values, no curve
+    f.tupleSide = parts.length >= 2 && cls.some((c) => c.c === 'lit' && (litsOf(c)[0].kind === 'tuple' || litsOf(c)[0].kind === 'top'));
+    const headed = parts.length >= 2 && cls[0].c === 'names' && !!cls[0].single;
+    const head = headed ? atomsOf(cls[0])[0] : null;
+    const rest = headed ? cls.slice(1) : cls;
+    // the first side must be a name or a vector expression; a letter times a written vector anywhere is a line
+    // (an operator name with letters is a name too: \operatorname{proj}_a b = ...)
+    const opHead = parts.length >= 2 && parts[0][0].t === 'name' && parts[0].slice(1).every((x) => x.t === 'atom');
+    if (!headed && !opHead && (cls[0].c === 'unknown' || cls[0].c === 'other' || cls[0].c === 'num')) return f;
+    // V10: a capital times something on the first side is a matrix product, never a vector calculation
+    if (cls.some((s) => s.c === 'param') || (cls[0].c === 'namefactor' && atomsOf(cls[0]).some((x) => /^[A-Z]$/.test(String(x.base)) && !x.vec))) return f;
+    const conc = rest.filter((s) => s.c === 'lit' || s.c === 'comb' || s.c === 'prod');
+    let hasProd = false;
+    if (conc.length) {
+        hasProd = conc.some((s) => s.c === 'prod');
+        const numSide = rest.some((s) => s.c === 'num');
+        // the spelling is sure: a product, a sum or a multiple of written vectors, or a side of arrow names next to the tuple
+        const sure = hasProd || conc.some((s) => s.c === 'comb') || rest.some((s) => (s.c === 'names' || s.c === 'nameprod') && atomsOf(s).every((x) => x.vec));
+        if (!numSide || hasProd) conclude(conc.flatMap(litsOf), sure, false);
+    } else {
+        // a sum, a difference or a multiple of names
+        const side = rest.find((s) => s.c === 'names' && (atomsOf(s).length >= 2 || s.scalar));
+        if (side && rest.every((s) => s.c === 'names')) {
+            const a = atomsOf(side);
+            const distinct = new Set(a.map(dkey)).size === a.length;
+            if (a.every((x) => x.base === 'e' && /^[123xyz]$/.test(x.sub ?? '')) && distinct) {
+                if (a.every((x) => x.vec || x.hat)) f.vecBasis = true;
+                else f.vecBasisPlain = true;
+            } else if (a.every((x) => /^[ijk]$/.test(String(x.base)) && !x.sub) && distinct && a.length >= 2) {
+                if (a.every((x) => x.vec || x.hat)) f.vecBasis = true;
+                else f.vecBasisPlain = true;
+            } else if (a.every((x) => defs.sure.has(dkey(x)) || (x.vec && defs.vecs.has(dkey(x))))) f.vecNamesDef = true;
+        }
+    }
+    if (head) {
+        const base = String(head.base);
+        f.vecHeadDeco = !!head.vec || (!!head.hat && /^[a-z]$/.test(base));
+        f.vecHeadKnown = defs.sure.has(dkey(head)) || defs.deco.has(base);
+        f.vecHeadCap = /^[A-Z]$/.test(base) && !head.vec && !hasProd;
+        // x, y, z, b: the letters of a linear system and of data points; pi, mu, nu: distributions
+        f.vecHeadSys = /^[xyz]$/.test(base) || (base === 'b' && !head.vec);
+        // in a note on learning only a weight or normal vector without an index is an arrow (V7)
+        f.vecHeadData = !(/^[wn]$/.test(base) && !head.sub);
+        f.vecProb = /^(pi|mu|nu)$/.test(base);
+    }
+    if (!head) f.vecHeadData = true;
+    return f;
+}
+
+/** What one formula of the note defines: names with a written vector (sure: by its spelling or an arrow), numeric square matrices, arrow letters, real domains. */
+interface DefInfo {
+    vecs: string[];
+    sure: string[];
+    mats: string[];
+    mats3: string[];
+    deco: string[];
+    doms: string[];
+}
+
+const DEF_HINT = /\\begin\{|\\top|\^\s*\{?\s*T|\\vec|\\mathbf|\\overrightarrow|\\boldsymbol|\\binom|=\s*\(|\[\[|⃗/;
+const defMemo = new Map<string, DefInfo>();
+
+/** What one formula of the note defines (remembered per string). */
+function defInfo(d: string): DefInfo {
+    const known = defMemo.get(d);
+    if (known) return known;
+    const hit: DefInfo = { vecs: [], sure: [], mats: [], mats3: [], deco: [], doms: [] };
+    for (const m of d.matchAll(/\\(?:vec|mathbf|boldsymbol|bm|overrightarrow)\s*\{?\s*([A-Za-z])/g)) hit.deco.push(m[1]);
+    for (const m of d.matchAll(/([A-Za-z])⃗/g)) hit.deco.push(m[1]);
+    for (const m of d.matchAll(/(?:^|[^A-Za-z\\])([A-Z])(?:_\{?[A-Za-z0-9]+\}?)?\s*(?::?=|\\subseteq|\\subset(?![a-z])|⊆|⊂)\s*(?:\\left\s*)?(?:\\mathbb|ℝ|\[|\(|\\\{|\\lbrace)/g)) hit.doms.push(m[1]);
+    if (DEF_HINT.test(d)) {
+        try {
+            const its = parse(clean(normalize(d).tex));
+            for (const seg of segments(its).segs) {
+                const { parts, rels } = relSplit(seg);
+                if (rels[0] !== 'eq' || parts[0].length !== 1 || parts[0][0].t !== 'atom') continue;
+                const a = parts[0][0];
+                for (const side of parts.slice(1)) {
+                    const lit = vecLiteral(side, 0);
+                    if (lit && lit.end === side.length && (lit.n === 2 || lit.n === 3) && lit.letters.size <= 1 && (lit.definite || a.vec || /^[a-z]/.test(String(a.base)))) {
+                        hit.vecs.push(dkey(a));
+                        if (lit.definite || a.vec) hit.sure.push(dkey(a));
+                    }
+                    if (side.length === 1 && side[0].t === 'env' && side[0].name !== 'vmatrix') {
+                        const m = matrixInfo(side[0]);
+                        if (m.square && m.nums && m.letters.size === 0) (m.r === 2 ? hit.mats : hit.mats3).push(String(a.base));
+                    }
+                }
+            }
+        } catch {
+            // a formula the parser cannot read defines nothing
+        }
+    }
+    if (defMemo.size > 4000) defMemo.clear();
+    defMemo.set(d, hit);
+    return hit;
+}
+
+/** A set in braces: the side it is (q), what is inside, the separator's index in it (or -1), the element and the condition. */
+export interface SetBuilder {
+    q: number;
+    inner: Item[];
+    sep: number;
+    el: Item[];
+    cond: Item[];
+}
+
+/** The first side of a part (of the first three) that is one pair of set braces, or null. */
+function setBuilder(parts: Item[][], rels: string[]): SetBuilder | null {
+    if (!rels.every((r) => r === 'eq' || r === 'approx')) return null;
+    for (let q = 0; q < parts.length && q < 3; q++) {
+        const p = parts[q];
+        if (p.length < 3 || p[0].t !== 'sopen' || p[p.length - 1].t !== 'sclose') continue;
+        const dp = depths(p);
+        if (p.slice(1, -1).some((x, i) => x.t === 'sclose' && dp[i + 1] === 0)) continue;
+        const inner = p.slice(1, -1);
+        const di = depths(inner);
+        let sep = inner.findIndex((x, i) => di[i] === 0 && ((x.t === 'rel' && (x.v === 'mid' || x.v === 'colon')) || (x.t === 'sym' && x.v === '|')));
+        if (sep < 0) {
+            // a semicolon or a word (mit, with, such that) separates when a condition follows
+            const cand = inner.findIndex((x, i) => di[i] === 0 && ((x.t === 'sym' && x.v === ';') || (x.t === 'text' && W_SET.test(String(x.v)))));
+            if (cand > 0 && hasTopRel(inner.slice(cand + 1)) && inner.filter((x, i) => di[i] === 0 && x.t === 'sym' && x.v === ';').length <= 1) sep = cand;
+        }
+        return { q, inner, sep, el: sep > 0 ? inner.slice(0, sep) : [], cond: sep > 0 ? inner.slice(sep + 1) : [] };
+    }
+    return null;
+}
+
+/** A set of pairs given by ONE equation is a curve (rubric_r3.md S3): the equation, with the two coordinates named x and y; null otherwise. */
+function setCurve(sb: SetBuilder | null): Item[] | null {
+    if (!sb || sb.sep <= 0) return null;
+    const { el, cond } = sb;
+    const pair =
+        el.length >= 5 &&
+        el[0].t === 'open' &&
+        el[4].t === 'close' &&
+        el[2].t === 'sym' &&
+        el[2].v === ',' &&
+        el[1].t === 'atom' &&
+        el[3].t === 'atom' &&
+        (el.length === 5 || (el.length === 7 && el[5].t === 'rel' && el[5].v === 'in' && el[6].t === 'bb' && el[6].v === 'ℝ'));
+    const plane = el.length === 3 && el[0].t === 'atom' && el[1].t === 'rel' && el[1].v === 'in' && el[2].t === 'bb' && el[2].v === 'ℝ' && el[2].pow === '2';
+    if (!pair && !plane) return null;
+    const dc = depths(cond);
+    if (cond.some((x, i) => dc[i] === 0 && ((x.t === 'sym' && (x.v === ',' || x.v === ';')) || x.t === 'text'))) return null;
+    const { rels } = relSplit(cond);
+    if (rels.length !== 1 || rels[0] !== 'eq') return null;
+    if (!pair) return cond;
+    const a = el[1];
+    const b = el[3];
+    const std = (key(a) === 'x' && key(b) === 'y') || (key(a) === 'x_1' && key(b) === 'x_2');
+    if (std) return cond;
+    return cond.map((x): Item => (x.t !== 'atom' ? x : key(x) === key(a) ? { t: 'atom', base: 'x', sub: '' } : key(x) === key(b) ? { t: 'atom', base: 'y', sub: '' } : x));
 }
 
 /** The names of the features, in the order of the input vector (the meaning of each is in the design notes). */
@@ -780,7 +1350,9 @@ c_lhsX c_lhsT c_lhsAbs c_lhsCallX c_lhsX12 c_lhsHasZL c_rhsNum c_rhsAtom c_less 
 polarR
 ctxML ctxComplex ctxSignal ctxProb ctxSeq ctxPoint ctxInterval ctxVec
 paramPair anyLogic anyVec anyPm afterWord genericProgram laterEval bodyHasInit
-prose rowCont unreadable ctxLine c_lhsCtxVar ivHasInf laterSolve pointCoords`.split(/\s+/);
+prose rowCont unreadable ctxLine c_lhsCtxVar ivHasInf laterSolve pointCoords
+vecLit vecPlain vecNamesDef vecBasis vecBasisPlain vecHeadDeco vecHeadKnown vecHeadCap ctxVecWord ctxPointWord ctxTable
+hcRandom vecHeadSys vecHeadData vecProb vecZero vecStoch vecSoft noteVec ctxSolveWord ctxDim ivDef ivImage setCallBad tupleSide matAlone prodWritten prodMixed prodEval prodMap matKnown setCondRel setSpace setText setEmpty mapRuleLater`.split(/\s+/);
 const INDEX = new Map(FEATURES.map((n, i) => [n, i]));
 const at = (name: string): number => {
     const k = INDEX.get(name);
@@ -804,18 +1376,52 @@ function noteContext(ctx: RecognizeContext | undefined): Answers {
     f.ctxVec = /optimi|ganzzahlig|operations-research/.test(note) || /\\mathbb\{[RZ]\}\^n|\bLP\b|Relaxation|Ax \\le|Ax =/.test(c);
     f.ctxLine = /(Gerade|[Ll]ine|Linie|Parallele)\b[^.$]{0,12}\$?\s*\[F\]/.test(c);
     f.ctxPoint = f.ctxPoint || /(durch|through|[Ss]palten|columns?|entry|Eintrag|Punkte?n?|points?|[Vv]ektor(en)?|vectors?)\b[^.$]{0,25}\$?\s*\[F\]/.test(c);
+    // words right before the formula (rubric_r3.md V1, V2); other formulas may stand in between, a sentence end may not
+    const GAP = '(?:(?!\\.\\s)[^\\n]){0,45}\\[F\\]';
+    const before = c.split('[F]')[0];
+    f.ctxVecWord =
+        new RegExp(
+            '(vektor|vector|pfeil|arrow|richtung|direction|verschiebung|displacement|kraft|kräfte|force|geschwindigkeit|velocity|beschleunigung|acceleration|normale|\\bnormals?\\b|spalte|column|skalarprodukt|scalar product|dot product|kreuzprodukt|cross product|orthogonal|senkrecht|perpendicular|kollinear|collinear|parallel|projiz|projekt|project|spanned|aufgespannt|orthonormal|basis)' +
+                GAP,
+            'i'
+        ).test(c) ||
+        // the text right there writes letters with arrows, or the formula stands in a table row next to a matrix
+        /\\(vec|overrightarrow)(?![a-zA-Z])/.test(before.slice(-90)) ||
+        /\[F\]\s*(is |ist )?(a|ein|als|as a)\s+(vektor|vector)/i.test(c) ||
+        (/\s\|\s/.test(c) && /\\(begin|end)\{[pbB]?matrix\}/.test(c));
+    f.ctxPointWord = new RegExp('(punkt|point|ecke|eckpunkt|corner|vertex|vertices|koordinaten|coordinates?)\\w*\\b' + GAP, 'i').test(c);
+    f.ctxSolveWord = new RegExp(
+        '(lösung|solution|löst|lösen|solve[sd]?|gleichungssystem|linear system|\\bLGS\\b|optim|least squares|kleinste[nr]? quadrate|fixpunkt|fixed point|startwert|start value|iterat|homogen|verteilung|distribution|wahrscheinlichkeit|probabilit|data point|datenpunkt)' +
+            GAP.replace('45', '30'),
+        'i'
+    ).test(c);
+    // a general dimension in the text or in the formula: R^n, m x n (a generic matrix, no concrete map)
+    f.ctxDim = /\\mathbb\{?R\}?\^\{?[nmdk]|[mn]\s*\\times\s*[nmk]/.test(c);
+    f.ctxTable = /(kostenmatrix|cost matrix|kostentabelle|payoff|auszahlung|tabelle|table\b|zuordnung|assignment|ungarisch|hungarian|transport|distanz|distance|entfernung|adjazenz|adjacency|datenmatrix|data matrix|tableau|zeilenminim|spaltenminim|row minim|column minim)/i.test(c);
     f.ctxSubst = /(Subst\w*|[Ss]etze|Sei|Let|Mit|With|with|where|wobei|mit)\s*\$?\s*\[F\]/.test(c);
     return f;
 }
 
-/** The names of the functions (g(x) = ...) and matrices (A = \begin{pmatrix}) the note defines. */
+/**
+ * The names of the functions (g(x) = ...) and matrices (A = \begin{pmatrix})
+ * the note defines; round 3: the written vectors, numeric matrices, arrow
+ * letters and real domains of the note (noteValues), and whether the text
+ * or the formula speaks of a general dimension (R^n, m x n).
+ */
 interface DefNames {
     names: Set<string>;
     mats: Set<string>;
+    vecs: Set<string>;
+    sure: Set<string>;
+    nmats: Set<string>;
+    mats3: Set<string>;
+    deco: Set<string>;
+    doms: Set<string>;
+    ctxDim?: boolean;
 }
 
 function defNames(defs: unknown): DefNames {
-    const out: DefNames = { names: new Set(), mats: new Set() };
+    const out: DefNames = { names: new Set(), mats: new Set(), vecs: new Set(), sure: new Set(), nmats: new Set(), mats3: new Set(), deco: new Set(), doms: new Set() };
     for (const d of Array.isArray(defs) ? (defs as unknown[]) : []) {
         const m = /^\s*(\\?[A-Za-z]+)\s*\(\s*[a-z]\s*\)\s*:?=/.exec(String(d));
         if (m) out.names.add(m[1].replace('\\', ''));
@@ -825,15 +1431,44 @@ function defNames(defs: unknown): DefNames {
     return out;
 }
 
+/** The written vectors, numeric matrices, arrow letters and real domains the note names (its definitions and the formulas next to this one). */
+function noteValues(dn: DefNames, ctx: RecognizeContext | undefined): DefNames {
+    const take = (d: unknown) => {
+        const h = defInfo(String(d));
+        for (const k of h.vecs) dn.vecs.add(k);
+        for (const k of h.sure) dn.sure.add(k);
+        for (const k of h.mats) dn.nmats.add(k);
+        for (const k of h.mats3) dn.mats3.add(k);
+        for (const k of h.deco) dn.deco.add(k);
+        for (const k of h.doms) dn.doms.add(k);
+    };
+    for (const d of Array.isArray(ctx?.defs) ? ctx.defs : []) take(d);
+    const c = String(ctx?.context ?? '');
+    if (c.includes('$'))
+        c.split('$').forEach((piece, i) => {
+            if (i % 2 === 1 && piece.length > 2 && piece !== '[F]') take(piece);
+        });
+    return dn;
+}
+
 /** The head of a part: name(args) =, letter =, a name of capitals =, or an expression on the left. */
 type Head = { kind: 'call'; name: Item; args: Item[][]; abs?: boolean } | { kind: 'atom'; a: Item; coef: boolean } | { kind: 'name'; a: Item } | { kind: 'expr' };
 
-/** The features of one part. */
-function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: Answers; headBase: string | null } {
+/** A matrix applied to a vector over all of a side: which of the two is written out (lit) or named; big: 3 x 3 or in space. */
+interface Product {
+    M: 'lit' | 'name';
+    V: 'lit' | 'name';
+    m: Item;
+    v: Item[];
+    big: boolean;
+}
+
+/** The features of one part, its head's name, and the name of a map (f: D \to \mathbb{R}) it defines. */
+function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: Answers; headBase: string | null; mapName: string | null | undefined } {
     const f: Answers = {};
     const n = its.length;
     f.empty = n === 0;
-    if (!n) return { f, headBase: null };
+    if (!n) return { f, headBase: null, mapName: null };
     const d = depths(its);
     const { parts, rels } = relSplit(its);
     const P0 = parts[0];
@@ -995,7 +1630,9 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
         if (h[0].t === 'fn' && h[1] && h[1].t === 'open') h = [{ t: 'name', name: h[0].name }, ...h.slice(1)];
         const c = asCall(h);
         if (rels[0] === 'mapsto') {
+            const two = h.length === 5 && h[0].t === 'open' && h[4].t === 'close' && h[2].t === 'sym' && h[2].v === ',' && plainAtom([h[1]]) && plainAtom([h[3]]);
             if (plainAtom(h)) head = { kind: 'call', name: { t: 'atom', base: '↦', sub: '' }, args: [h] };
+            else if (two) head = { kind: 'call', name: { t: 'atom', base: '↦', sub: '' }, args: [[h[1]], [h[3]]] };
             else head = { kind: 'expr' };
         } else if (c) head = { kind: 'call', name: c.name, args: c.args, abs };
         else if (h.length === 1 && h[0].t === 'atom') head = { kind: 'atom', a: h[0], coef };
@@ -1117,6 +1754,7 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
             f.hcAbs = !!head.abs;
             f.hcPrime = !!nm.prime;
             f.hcSubCap = /^[A-Z]/.test(nm.sub ?? '') && (nm.sub ?? '').length <= 3 && !/^[A-Z]$/.test(nm.base ?? 'x') ? true : /^(X|Y|Z)$/.test(nm.sub ?? '');
+            f.hcRandom = /^[XYZ]$/.test(nm.base ?? '') && a.some((x) => x.some((y) => y.t === 'atom' && /^[oO]mega$/.test(String(y.base))));
             f.hn_word = nm.t === 'name' && String(nm.name).length >= 2;
             f.hn_sigma = nm.base === 'sigma';
             f.hn_r = nm.base === 'r' && !nm.sub;
@@ -1206,38 +1844,50 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
         f.rhsFn = lf(parts[parts.length - 1]);
     }
 
-    // sets
+    // sets: the first side that is one pair of set braces (alone, after a name, an image or a product, or before "= ...")
     {
-        let s = all;
-        if (rels[0] === 'eq' && P0.length <= 4 && parts.length >= 2) s = all.slice(P0.length + 1);
-        const o = s.findIndex((x) => x.t === 'sopen');
-        if (o === 0 && s[s.length - 1].t === 'sclose' && !s.slice(1, -1).some((x, i) => x.t === 'sclose' && depths(s)[i + 1] === 0)) {
-            const inner = s.slice(1, -1);
-            const di = depths(inner);
-            const sep = inner.findIndex((x, i) => di[i] === 0 && ((x.t === 'rel' && (x.v === 'mid' || x.v === 'colon')) || (x.t === 'sym' && x.v === '|')));
-            if (sep > 0) {
+        const sb = setBuilder(parts, rels);
+        if (sb && sb.sep > 0) {
+            f.setB = true;
+            const { el, cond } = sb;
+            f.setTuple = el[0].t === 'open';
+            const inR = el.some((x) => x.t === 'bb' && x.v === 'ℝ');
+            const tupleN = f.setTuple ? 1 + el.slice(0, el.findIndex((x) => x.t === 'close') + 1).filter((x) => x.t === 'sym' && x.v === ',').length : 0;
+            f.setSpace = tupleN >= 3 || el.some((x) => x.t === 'bb' && /^([3-9]|[1-9][0-9])$/.test(x.pow ?? ''));
+            f.setHasR = inR;
+            f.setBadElem =
+                el.some((x) => (x.t === 'bb' && (x.v !== 'ℝ' || /times/.test(x.pow ?? ''))) || x.cal) ||
+                (!inR && el[0].t === 'atom' && /^(Omega|omega|n|k|v|z|i|j|m|N)$/.test(String(el[0].base))) ||
+                (el[0].t === 'atom' && /^[A-Z]$/.test(String(el[0].base))) ||
+                el.some((x, i) => x.t === 'atom' && x.base === 'C' && el[i + 1] && (el[i + 1].t === 'open' || el[i + 1].t === 'pow'));
+            const cr = relSplit(cond);
+            const isC = (p: Item[]) => {
+                const c = asCall(p);
+                return !!c && c.name.t === 'atom' && c.args.length === 1;
+            };
+            f.setLhsCall = isC(cr.parts[0]);
+            f.setRhsCall = cr.parts.length > 1 && isC(cr.parts[cr.parts.length - 1]);
+            f.setLe = cr.rels.includes('le') || cr.rels.includes('lt');
+            f.setGe = cr.rels.includes('ge') || cr.rels.includes('gt');
+            f.setCondRel = cr.rels.some((r) => r === 'lt' || r === 'le' || r === 'gt' || r === 'ge' || r === 'eq' || r === 'ne' || r === 'approx');
+            // words inside the set other than und / and / oder / or
+            f.setCallBad = calls(cond).some((c) => !(c.inner.length === 1 && c.inner[0].t === 'atom' && c.inner[0].base === 'x' && !c.inner[0].sub) && !(c.name.t === 'name' && FNWORD.has(String(c.name.name))) && !(c.name.t === 'atom' && c.name.cal));
+            f.setText = [...el, ...cond].some((x) => x.t === 'text' && !/^[␣,]*(und|and|oder|or|sowie)[␣]*$/i.test(String(x.v)));
+        } else if (sb) {
+            // a set written by its condition only: \{x_1^2 + x_2^2 \le 4\} (two coordinates or one real variable)
+            const chunks = commaSplit(sb.inner).map((c) => relSplit(c).rels);
+            const ineq = (r: string) => r === 'lt' || r === 'le' || r === 'gt' || r === 'ge';
+            const lets = new Set(sb.inner.filter((x) => x.t === 'atom' && !((x.base === 'pi' || x.base === 'e') && !x.sub)).map(key));
+            const two = (lets.has('x') && lets.has('y')) || (lets.has('x_1') && lets.has('x_2'));
+            const one = lets.size === 1 && (lets.has('x') || lets.has('t'));
+            const r = relSplit(sb.inner);
+            if (chunks.every((q) => q.length >= 1 && q.every((v) => ineq(v) || v === 'eq')) && chunks.some((q) => q.some(ineq)) && (two || one) && [...lets].every((k) => /^(x|y|x_1|x_2|t|[a-dr])$/.test(k))) {
                 f.setB = true;
-                const el = inner.slice(0, sep);
-                const cond = inner.slice(sep + 1);
-                f.setTuple = el[0].t === 'open';
-                f.setHasR = el.some((x) => x.t === 'bb' && x.v === 'ℝ');
-                f.setBadElem = el.some((x) => (x.t === 'bb' && x.v !== 'ℝ') || (x.t === 'atom' && /^(Omega|omega|n|k|v|z)$/.test(String(x.base)) && el[0] === x));
-                const cr = relSplit(cond);
-                const isC = (p: Item[]) => {
-                    const c = asCall(p);
-                    return !!c && c.name.t === 'atom' && c.args.length === 1;
-                };
-                f.setLhsCall = isC(cr.parts[0]);
-                f.setRhsCall = cr.parts.length > 1 && isC(cr.parts[cr.parts.length - 1]);
-                f.setLe = cr.rels.includes('le') || cr.rels.includes('lt');
-                f.setGe = cr.rels.includes('ge') || cr.rels.includes('gt');
-            } else {
-                const r = relSplit(inner);
-                if (r.rels.length === 1 && r.rels[0] === 'eq' && anyAtom(r.parts[0]) && r.parts[1].length === 1) f.setLevel = true;
-                else f.setList = true;
-            }
+                f.setCondRel = true;
+            } else if (r.rels.length === 1 && r.rels[0] === 'eq' && anyAtom(r.parts[0]) && r.parts[1].length === 1) f.setLevel = true;
+            else f.setList = true;
         }
-        f.epiOp = has((x) => (x.t === 'name' || x.t === 'text') && /^epi$/.test(String(x.name ?? x.v)));
+        f.epiOp = n >= 2 && has((x) => (x.t === 'name' || x.t === 'text') && /^epi$/.test(String(x.name ?? x.v)));
     }
 
     // intervals
@@ -1254,6 +1904,24 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
         } else if (rels[0] === 'eq' && rels.length === 1 && plainAtom(P0)) {
             s = all.slice(P0.length + 1);
             f.ivNamed = true;
+        } else if (rels[0] === 'eq' && parts[1].length && parts[1][0].t === 'sopen' && P0.length >= 5 && P0[0].t === 'open') {
+            s = P0;
+            f.ivDef = true;
+        } else if (
+            rels[0] === 'eq' &&
+            rels.length === 1 &&
+            P0.length >= 4 &&
+            (P0[0].t === 'atom' || P0[0].t === 'name') &&
+            P0[1].t === 'open' &&
+            P0[P0.length - 1].t === 'close' &&
+            P0.slice(2, -1).some((x) => x.t === 'bb' || x.t === 'open')
+        ) {
+            s = all.slice(P0.length + 1);
+            f.ivImage = true;
+        } else if (rels[0] === 'eq' && rels.length === 1 && P0.length === 3 && P0[0].t === 'atom' && P0[2].t === 'atom' && P0[1].t === 'sym' && /^\\(cup|cap)$/.test(String(P0[1].v))) {
+            s = all.slice(P0.length + 1);
+            f.ivImage = true;
+            f.ivSetName = true;
         }
         if (s.length >= 5 && s[0].t === 'open' && s[s.length - 1].t === 'close') {
             const ds = depths(s);
@@ -1278,8 +1946,9 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
                     f.ivEndsAB = (let1(A) && let1(B)) || (num(A) && let1(B)) || (let1(A) && num(B));
                     f.ivEndsExpr = !f.ivEndsNum && !f.ivEndsAB;
                     const str = (p: Item[]) => p.map((x) => x.v ?? x.t).join('');
-                    f.ivZeroSym = f.ivEndsNum && str(A) !== str(B) && (str(A) === '0' || str(A) === '-' + str(B) || A.some((x) => x.t === 'inf') || B.some((x) => x.t === 'inf'));
                     f.ivHasInf = A.some((x) => x.t === 'inf') || B.some((x) => x.t === 'inf');
+                    if (f.ivImage && !(f.ivSquare || f.ivHasInf || f.ivSetName)) f.ivImage = false;
+                    f.ivZeroSym = f.ivEndsNum && str(A) !== str(B) && (str(A) === '0' || str(A) === '-' + str(B) || A.some((x) => x.t === 'inf') || B.some((x) => x.t === 'inf'));
                 } else if (seps.length >= 2) f.list3 = true;
             }
         }
@@ -1289,17 +1958,22 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
             f.ivMember = false;
             f.ivMemberAtom = false;
             f.ivNamed = false;
+            f.ivDef = false;
+            f.ivImage = false;
         }
     }
 
     // maps  name : domain -> codomain
-    if (rels[0] === 'colon' && rels.filter((r) => r === 'to').length === 1 && rels.length === 2 && anyAtom(P0)) {
+    if (rels[0] === 'colon' && rels.filter((r) => r === 'to').length === 1 && rels.length === 2 && (anyAtom(P0) || (P0.length === 1 && P0[0].t === 'fn'))) {
         f.mapForm = true;
         const dom = parts[1];
         const cod = parts[2];
-        f.mapCodR = (cod.length === 1 && cod[0].t === 'bb' && cod[0].v === 'ℝ' && !cod[0].pow) || (cod.length >= 5 && cod[0].t === 'open' && cod[cod.length - 1].t === 'close');
-        f.mapCodPow = cod.some((x) => x.t === 'bb' && x.pow);
-        f.mapDomAbstract = dom.every((x) => x.t === 'atom') || !dom.some((x) => x.t === 'bb' || x.t === 'open');
+        const dim = (x: Item) => x.t === 'bb' && /^([2-9]|[1-9][0-9]|[a-zA-Z])$|times/.test(x.pow ?? '');
+        f.mapCodR = (cod.length === 1 && cod[0].t === 'bb' && cod[0].v === 'ℝ' && !dim(cod[0])) || (cod.length >= 5 && cod[0].t === 'open' && cod[cod.length - 1].t === 'close');
+        f.mapCodPow = cod.some(dim);
+        // a domain letter is a real set when the note says so (D = [0, 1], D \subseteq R^2); D is the usual name of one
+        const known = dom.length === 1 && dom[0].t === 'atom' && !dom[0].cal && defs.doms.has(String(dom[0].base));
+        f.mapDomAbstract = !known && (dom.every((x) => x.t === 'atom') || !dom.some((x) => x.t === 'bb' || x.t === 'open') || dom.some((x) => x.t === 'bb' && /times|^([3-9]|[1-9][0-9])$/.test(x.pow ?? '')));
         f.mapHasC = [...dom, ...cod].some((x) => x.t === 'bb' && x.v !== 'ℝ');
     }
 
@@ -1331,8 +2005,74 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
         f.mat1 = mats.length === 1;
         f.mat2p = mats.length >= 2;
         const infos = mats.map(([x, i]) => ({ ...matrixInfo(x), i }));
-        const sq = infos.find((m) => m.square);
+        const cap = (x: Item | undefined) => !!x && x.t === 'atom' && /^[A-Z]$/.test(String(x.base)) && !x.star && !x.prime;
+        const low = (x: Item | undefined) => !!x && x.t === 'atom' && /^[a-z]$/.test(String(x.base)) && !x.star;
+        const noDots = (p: Item[]) => p.filter((x) => !(x.t === 'sym' && x.v === 'cdot'));
+        const matLit = (x: Item | undefined) => {
+            if (!x || x.t !== 'env' || x.name === 'vmatrix' || x.name === 'cases') return false;
+            const m = matrixInfo(x);
+            return m.square && m.nums && m.letters.size <= 1;
+        };
+        const lit2 = (p: Item[], i: number) => {
+            const l = vecLiteral(p, i);
+            return l && l.definite && l.letters.size <= 1 ? l : null;
+        };
+        /** [matrix][vector] over all of a side: which of the two is written out; big: a 3 x 3 matrix or a vector in space (no card) */
+        const prodOf = (p0: Item[]): Product | null => {
+            const p = noDots(p0);
+            if (p.length < 2) return null;
+            let mEnd = 1;
+            let M: 'lit' | 'name';
+            let big = false;
+            if (p[0].t === 'env') {
+                if (!matLit(p[0])) return null;
+                M = 'lit';
+                big = matrixInfo(p[0]).r === 3;
+            } else if (cap(p[0]) && !p[0].vec && !p[0].top && !p[0].inv) {
+                M = 'name';
+                // a matrix named with numbers in brackets: R(90°), S(2, 3); R_{90°}(2, 1)^\top is R times a written vector
+                const direct = lit2(p, 1);
+                if (direct && direct.end === p.length) {
+                    // the bracket is the vector
+                } else if (p[1].t === 'open' && p[1].v === '(') {
+                    let j = 2;
+                    while (j < p.length && (p[j].t === 'num' || p[j].t === 'unit' || (p[j].t === 'sym' && /^[,;-]$/.test(String(p[j].v))))) j++;
+                    if (j > 2 && j < p.length && p[j].t === 'close') mEnd = j + 1;
+                    else return null;
+                }
+                // a product of two numeric matrices of the note as the matrix: BA (1, 1)^T
+                if (mEnd === 1 && cap(p[1]) && !p[1].vec && defs.nmats.has(String(p[0].base)) && defs.nmats.has(String(p[1].base))) mEnd = 2;
+                big = defs.mats3.has(String(p[0].base)) && !defs.nmats.has(String(p[0].base));
+            } else return null;
+            const l = lit2(p, mEnd);
+            if (l && l.end === p.length) return { M, V: 'lit', m: p[0], v: p.slice(mEnd), big: big || l.n !== 2 };
+            const v = p[mEnd];
+            if (v && p.length === mEnd + 1 && ((low(v) && !v.top) || (v.t === 'num' && v.vec))) return { M, V: 'name', m: p[0], v: [v], big };
+            return null;
+        };
+        // alone: between the relations and commas around it there is only the matrix, with a number as a factor at most
+        const stop = (q: number) => d[q] === 0 && (all[q].t === 'rel' || (all[q].t === 'sym' && (all[q].v === ',' || all[q].v === ';')));
+        const aloneAt = (i: number) => {
+            let a = i;
+            while (a > 0 && !stop(a - 1)) a--;
+            if (i < n - 1 && !stop(i + 1)) return false;
+            const before = all.slice(a, i);
+            if (before.length === 0) return true;
+            const els = vecSide(before);
+            return !!els && els.every((e) => e.k === 'num' || e.k === 'dot' || e.k === 'pm');
+        };
+        const squares = infos.filter((m) => m.square);
+        const adjMat = squares.some((m) => squares.some((q) => q.i === m.i + 1 || (q.i === m.i + 2 && all[m.i + 1].t === 'sym' && all[m.i + 1].v === 'cdot')));
+        // the object: the first square matrix when it stands alone (A = M = L U), else the last one when the span
+        // multiplies no two written matrices (N = (I - Q)^{-1} = ... = M)
+        let sq = squares.length ? squares[0] : undefined;
+        if (sq && aloneAt(sq.i)) f.matAlone = true;
+        else if (sq && !adjMat && aloneAt(squares[squares.length - 1].i)) {
+            sq = squares[squares.length - 1];
+            f.matAlone = true;
+        }
         if (sq) {
+            const at0 = sq.i;
             f.matSq = true;
             const lt = [...sq.letters];
             f.matNumeric = lt.length === 0 && sq.nums;
@@ -1340,51 +2080,114 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
             f.matOneParam = lt.length === 1 && !f.matStateVar;
             f.matManyParams = lt.length >= 2;
             f.matDots = sq.dots;
-            f.matAdjVec = infos.some((m) => m.col && m.i === sq.i + 1);
+            f.matAdjVec = infos.some((m) => m.col && (m.i === at0 + 1 || (m.i === at0 + 2 && all[at0 + 1].t === 'sym' && all[at0 + 1].v === 'cdot')));
         }
         f.matCol = infos.some((m) => m.col);
+        // determinants: \det A, \det(A), \det of a written numeric matrix, a numeric vmatrix that leads its side
         const vm = envs.find(([x]) => x.name === 'vmatrix');
+        const shortHead = (q: number) => q === 0 || (q === 1 && rels[0] === 'eq' && parts[0].length <= 4);
         if (vm) {
             f.vmat = true;
             const mi = matrixInfo(vm[0]);
-            f.vmatNumeric = mi.square && mi.letters.size === 0;
+            f.vmatNumeric = mi.square && mi.letters.size === 0 && mi.nums && parts.some((p, q) => p[0] === vm[0] && shortHead(q));
         }
         f.detAny = has((x) => x.t === 'det');
-        if (all[0].t === 'det') {
+        const absDet = n >= 4 && all[0].t === 'sym' && all[0].v === '|' && all[n - 1].t === 'sym' && all[n - 1].v === '|' && all[1].t === 'det';
+        if (all[0].t === 'det' || absDet) {
             f.detLead = true;
-            const r = all.slice(1);
-            const cap = (x: Item | undefined) => !!x && x.t === 'atom' && /^[A-Z]$/.test(String(x.base)) && !x.inv;
-            f.detLone = (r.length === 1 && cap(r[0])) || (r.length === 3 && r[0].t === 'open' && cap(r[1]) && r[2].t === 'close');
-            const dm = r[0] && r[0].t === 'env' ? r[0] : r[0] && r[0].t === 'open' && r[1] && r[1].t === 'env' ? r[1] : null;
-            f.detMat = !!dm && matrixInfo(dm).letters.size === 0;
+            const r = absDet ? all.slice(2, -1) : all.slice(1);
+            const capD = (x: Item | undefined) => cap(x) && !x?.inv && !x?.top;
+            f.detLone = (r.length === 1 && capD(r[0])) || (r.length === 3 && r[0].t === 'open' && capD(r[1]) && r[2].t === 'close');
         }
-        const cap = (x: Item | undefined) => !!x && x.t === 'atom' && /^[A-Z]$/.test(String(x.base)) && !x.star && !x.prime;
-        const low = (x: Item | undefined) => !!x && x.t === 'atom' && /^[a-z]$/.test(String(x.base)) && !x.star;
-        if (n === 2 && cap(all[0]) && low(all[1])) {
-            f.prodVec = !!all[1].vec;
-            f.prodAv = /^[ABMSTQUP]$/.test(String(all[0].base)) && !all[0].sub && /^[vxuw]$/.test(String(all[1].base));
+        f.detMat = parts.some((p, q) => {
+            if (!p[0] || p[0].t !== 'det' || !shortHead(q)) return false;
+            const dm = p[1] && p[1].t === 'env' ? p[1] : p[1] && p[1].t === 'open' && p[2] && p[2].t === 'env' ? p[2] : null;
+            if (!dm) return false;
+            const mi = matrixInfo(dm);
+            return mi.square && mi.letters.size === 0 && mi.nums;
+        });
+        // matrix times vector (2 x 2 only: the card draws in the plane)
+        const eqOnly = rels.every((r) => r === 'eq' || r === 'approx');
+        const isDots = (p: Item[]) => p.length === 1 && p[0].t === 'sym' && p[0].v === '\\dots';
+        const P = parts.map(prodOf);
+        const kp = P.findIndex((x) => x);
+        const ctxDimHere = !!defs.ctxDim;
+        const pk = kp >= 0 ? P[kp] : null;
+        if (pk && !pk.big) {
+            const { M, V, m } = pk;
+            const v = pk.v[0];
+            // x, y, z without a value in the note are unknowns: A x = (1, 2) is a linear system
+            const known = V === 'lit' || v.t === 'num' || (v.t === 'atom' && (defs.vecs.has(dkey(v)) || !/^[xyz]$/.test(String(v.base))));
+            if (rels.length === 0) {
+                if (M === 'name' && V === 'name') {
+                    if (v.t === 'atom' && !/^[XWZ]$/.test(String(m.base))) {
+                        f.prodVec = !!v.vec;
+                        f.prodAv = /^[ABMSTQUP]$/.test(String(m.base)) && !m.sub && /^[vxuw]$/.test(String(v.base));
+                    } else if (v.t === 'num') f.prodVec = true;
+                } else if (M === 'lit' && V === 'lit') f.prodWritten = true;
+                else if (M === 'name' || v.vec || /^[vxuw]$/.test(String(v.base))) f.prodMixed = true;
+            } else if (eqOnly || rels[0] === 'mapsto') {
+                const after = parts.slice(kp + 1).filter((p) => !isDots(p));
+                const resultOk = after.every((p) => {
+                    const l = vecLiteral(p, 0);
+                    return !!l && l.end === p.length && l.n === 2;
+                });
+                const c0 = kp === 1 ? asCall(parts[0]) : null;
+                const mapHead =
+                    kp === 1 &&
+                    V === 'name' &&
+                    v.t === 'atom' &&
+                    ((rels[0] === 'mapsto' && anyAtom(parts[0]) && parts[0][0].base === v.base) || (!!c0 && c0.args.length === 1 && anyAtom(c0.args[0]) && c0.args[0][0].base === v.base));
+                if (mapHead && after.length === 0) {
+                    f.prodMap = true;
+                    f.matKnown = M === 'lit' || (defs.nmats.has(String(m.base)) && !ctxDimHere);
+                } else if (eqOnly && resultOk && after.length > 0 && parts.slice(0, kp).every((p) => p.length <= 3 && p.every((x) => x.t === 'atom'))) {
+                    if (M === 'lit' && V === 'lit') f.prodWritten = true;
+                    else if (V === 'lit' || (M === 'lit' && known)) f.prodMixed = true;
+                    else if (known) f.prodEval = true;
+                }
+            }
         }
-        if (rels.length === 1 && rels[0] === 'eq') {
-            const l = parts[0];
-            const r = parts[1];
-            if (l.length === 2 && cap(l[0]) && low(l[1]) && r.length === 2 && (r[0].t === 'atom' || r[0].t === 'num') && low(r[1]) && r[1].base === l[1].base && !low(r[0])) f.eig1 = true;
-            if (l.length === 2 && cap(l[0]) && low(l[1]) && r.length === 2 && r[0].t === 'atom' && r[0].base === 'lambda' && r[1].base === l[1].base) f.eig1 = true;
-            if (
-                l.length >= 6 &&
-                l[0].t === 'open' &&
-                cap(l[1]) &&
-                l[2].t === 'sym' &&
-                l[2].v === '-' &&
-                (l[3].t === 'atom' || l[3].t === 'num') &&
-                cap(l[4]) &&
-                l[5].t === 'close' &&
-                low(l[6]) &&
-                l.length === 7 &&
-                r.length === 1 &&
-                r[0].t === 'num' &&
-                r[0].v === '0'
-            )
-                f.eig2 = true;
+        if (f.prodWritten) f.matAdjVec = true;
+        // eigen equations: M v = s v (M a capital or a written 2 x 2 matrix, s a number or a Greek letter), also as a chain
+        // with the product worked out in between, and (M - s I) v = 0
+        if (rels.length >= 1 && eqOnly) {
+            const same = (a: Item[], b: Item[]) => a.length === b.length && a.every((x, i) => (x.t === 'atom' ? b[i].t === 'atom' && dkey(x) === dkey(b[i]) : JSON.stringify(x) === JSON.stringify(b[i])));
+            const sc = (x: Item | undefined) => !!x && (x.t === 'num' || (x.t === 'atom' && !low(x) && !cap(x)));
+            const scaled = (p0: Item[], v: Item[]) => {
+                let p = noDots(p0);
+                if (p[0] && p[0].t === 'sym' && p[0].v === '-') p = p.slice(1);
+                return p.length === v.length + 1 && sc(p[0]) && same(p.slice(1), v);
+            };
+            const A = P[0];
+            const Z = P[P.length - 1];
+            if (A && !A.big && scaled(parts[parts.length - 1], A.v)) f.eig1 = true;
+            else if (Z && !Z.big && rels.length === 1 && scaled(parts[0], Z.v)) f.eig1 = true;
+            // M v = v, written or named (eigenvalue 1, L7): P \mathbf{1} = \mathbf{1}, H_x(2) (1, 0)^T = (1, 0)^T
+            else if (A && !A.big && rels.length === 1 && same(noDots(parts[1]), A.v)) f.eig1 = true;
+            if (rels.length === 1) {
+                // transposed forms: P^T pi^T = pi^T, (P^T - I) pi^T = 0 (the signs are dropped, the vector may be a Greek letter)
+                const hadTop = all.some((x) => x.t === 'top');
+                const strip = (p: Item[]) =>
+                    noDots(p)
+                        .filter((x) => x.t !== 'top')
+                        .map((x) => (x.t === 'atom' && x.top ? { ...x, top: 0 } : x));
+                const l = strip(parts[0]);
+                const r = strip(parts[1]);
+                const vecL = (x: Item | undefined) => low(x) || (hadTop && !!x && x.t === 'atom' && /^(pi|mu|nu)$/.test(String(x.base)));
+                const big3 = (b: unknown) => defs.mats3.has(String(b)) && !defs.nmats.has(String(b));
+                const two = (l: Item[], r: Item[]) => {
+                    if (!(r.length === 1 && r[0].t === 'num' && r[0].v === '0' && l[0] && l[0].t === 'open')) return false;
+                    if (l.length === 7 && l[5].t === 'close' && vecL(l[6])) {
+                        if (l[2].t === 'sym' && l[2].v === '-' && cap(l[1]) && sc(l[3]) && cap(l[4])) return !big3(l[1].base);
+                        return l[3].t === 'sym' && l[3].v === '-' && sc(l[1]) && cap(l[2]) && cap(l[4]) && !big3(l[4].base);
+                    }
+                    // (P - I) v = 0: eigenvalue 1
+                    return l.length === 6 && l[4].t === 'close' && vecL(l[5]) && cap(l[1]) && l[2].t === 'sym' && l[2].v === '-' && cap(l[3]) && /^[IE]$/.test(String(l[3].base)) && !big3(l[1].base);
+                };
+                if (two(l, r) || two(r, l)) f.eig2 = true;
+                if (hadTop && l.length === 2 && cap(l[0]) && vecL(l[1]) && same(r, [l[1]]) && parts[0].filter((x) => x.t === 'top').length === 2) f.eig1 = true;
+            }
         }
     }
 
@@ -1447,8 +2250,10 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
             f.c_less = rels[0] === 'lt' || rels[0] === 'le';
         }
     }
+    Object.assign(f, vectorFacts(parts, rels, defs));
     f.polarR = all.some((x) => x.t === 'atom' && x.base === 'r' && !x.sub) && all.some((x) => x.t === 'atom' && (x.base === 'theta' || x.base === 'varphi') && !x.sub) && nEq === 1;
-    return { f, headBase };
+    // (A built-in as the name, \ln: ..., has no base: undefined, as in the frozen code, matches no head.)
+    return { f, headBase, mapName: f.mapForm ? P0[0].base : null };
 }
 
 /** The feature vectors of the parts of a formula, in order. Throws on a formula it cannot read. */
@@ -1457,19 +2262,29 @@ export function encode(tex: string, ctx?: RecognizeContext): Float32Array[] {
     const items = parse(clean(norm.tex));
     const first = segments(items);
     const cf = noteContext(ctx);
-    const dn = defNames(ctx?.defs);
+    const dn = noteValues(defNames(ctx?.defs), ctx);
+    dn.ctxDim = !!cf.ctxDim || /\\mathbb\{?R\}?\^\{?[nmdk]|[mn]\s*\\times\s*[nmk]/.test(String(tex));
+    cf.noteVec = dn.deco.size > 0;
     // the variable letters of the functions around the formula: K(q) = ... makes q a variable
     const ctxVars = new Set<string>();
     for (const src of [String(ctx?.context ?? ''), ...(Array.isArray(ctx?.defs) ? ctx.defs.map(String) : [])]) for (const m of src.matchAll(/[A-Za-z}']\s*\(\s*(\\?[a-zA-Z]+)\s*\)\s*(?::?=|\\approx)/g)) ctxVars.add(m[1].replace('\\', ''));
+    // a set of pairs given by one equation is read as that equation (a curve)
+    const fromSet = first.segs.map((sg) => {
+        const { parts, rels } = relSplit(sg);
+        return setCurve(setBuilder(parts, rels));
+    });
+    const segs1 = first.segs.map((sg, k) => fromSet[k] ?? sg);
+    const curveAt = new Set<number>();
     // a chain "head(x) = A = B" that does not end in a number: every "head(x) = part" is read by itself
     const segs: Item[][] = [];
     const side: boolean[] = [];
     const joins: string[] = [];
-    first.segs.forEach((sg, k) => {
+    segs1.forEach((sg, k) => {
         const { parts, rels } = relSplit(sg);
         const chain = rels.length >= 2 && rels.every((r) => r === 'eq' || r === 'approx') && !!asCall(parts[0]) && !isNumLike(parts[parts.length - 1]) && parts.every((q) => q.length);
         const list = chain ? parts.slice(1).map((b): Item[] => [...parts[0], { t: 'rel', v: 'eq' }, ...b]) : [sg];
         list.forEach((q, i) => {
+            if (fromSet[k]) curveAt.add(segs.length);
             segs.push(q);
             side.push(first.side[k]);
             if (k > 0 || i > 0) joins.push(i > 0 ? 'chain' : first.joins[k - 1]);
@@ -1506,6 +2321,9 @@ export function encode(tex: string, ctx?: RecognizeContext): Float32Array[] {
         put(v, cf);
         put(v, whole);
         if (side[i]) v[at('afterWord')] = 1;
+        if (curveAt.has(i)) v[at('ctxLine')] = 1;
+        // a map whose rule follows in the same span: the rule decides
+        if (raw[i].f.mapForm && raw.slice(i + 1).some((q) => q.f.hc && q.headBase === raw[i].mapName)) v[at('mapRuleLater')] = 1;
         if (i < raw.length - 1 && joins.includes('\\Rightarrow') && raw.slice(i + 1).some((q) => q.f.hcArgNum || q.f.hcArgExpr || q.f.hcArgMarked)) v[at('laterEval')] = 1;
         // a later part after an arrow solves for x or ends in a value: the chain is a calculation
         if (i < raw.length - 1 && joins.slice(i).some((j) => j === '\\Rightarrow' || j === '\\iff') && raw.slice(i + 1).some((q) => q.f.ha_x || (q.f.lastNumeric && q.f.eq1 && !q.f.hc && !q.f.hexpr))) v[at('laterSolve')] = 1;

@@ -1049,6 +1049,40 @@ if (started) {
             await obs.mouse.move({ x: 5, y: 5 });
             return `${card}; ${drawn.bars} bar, ${drawn.dots} dot`;
         });
+        await check('formulas (6.2.1): a vector opens the vector card that draws its arrow, and Insert chart writes a block that renders it', async () => {
+            const vectorNote = 'Vektor';
+            const tex = '\\vec v = \\begin{pmatrix} 2 \\\\ 1 \\end{pmatrix}';
+            await obs.writeNote(vectorNote, `Der Vektor $${tex}$ zeigt nach rechts oben.\n`);
+            await obs.openNote(vectorNote, { mode: 'reading' });
+            await obs.sleep(800);
+            const m = await marks();
+            assert(m[tex] === '1', `the mark of the vector: ${JSON.stringify(m)}`);
+            const card = await cardOf(tex);
+            assert(card && /Vector/.test(card), `the card of the vector: ${card}`);
+            await obs.sleep(600);
+            const drawn = await obs.call(() => {
+                const pop = document.querySelector('.etz-formula-pop');
+                const svg = pop.querySelector('.etz-formula-chart svg');
+                return {
+                    arrows: svg ? svg.querySelectorAll('path[marker-end]').length : 0,
+                    errors: pop.querySelectorAll('mjx-merror, [data-mjx-error]').length,
+                    buttons: Array.from(pop.querySelectorAll('.etz-formula-acts button')).map((b) => (b.textContent || '').trim()),
+                };
+            });
+            assert(drawn.arrows === 1 && drawn.errors === 0, `the vector card draws: ${JSON.stringify(drawn)}`);
+            await obs.mouse.click('.etz-formula-pop button.mod-cta');
+            await obs.sleep(600);
+            const text = await obs.readNote(vectorNote);
+            const block = /```easy-tikz\n([\s\S]*?)\n```/.exec(text);
+            assert(block && /^let v = \(2, 1\)$/m.test(block[1]) && /^draw v as an arrow/m.test(block[1]), `the note after Insert chart:\n${text}`);
+            await obs.sleep(400);
+            const charts = await obs.noteCharts();
+            assert(charts.length === 1 && charts[0].drawn && charts[0].issues === null, `the inserted chart: ${JSON.stringify(charts)}`);
+            const inNote = await obs.call(() => document.querySelectorAll('.workspace-leaf.mod-active .block-language-easy-tikz svg path[marker-end]').length);
+            assert(inNote === 1, `arrows in the inserted chart: ${inNote}`);
+            await obs.mouse.move({ x: 5, y: 5 });
+            return `${card}; ${drawn.arrows} arrow; ${block[1].split('\n').length} lines`;
+        });
         const linkedNote = 'Connected';
         const linked = (body) => ['```easy-tikz', 'size 6 x 2.4', ...body, '```', ''].join('\n');
         await check('connected sliders: moving one moves the same name in the other connected chart of the note, never the file', async () => {

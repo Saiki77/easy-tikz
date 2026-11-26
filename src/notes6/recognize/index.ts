@@ -1,16 +1,19 @@
 /*
  * Formula recognition (6.2): a small network, all of its weights written by
  * hand, decides whether a formula of a note gets a hover card and which
- * kind. One formula (TeX) and what is around it in, one of 19 labels out:
+ * kind. One formula (TeX) and what is around it in, one of 20 labels out:
  * none, or the card of src/formula.ts (function, surface, polar, implicit,
  * region), src/notes6/hover.ts (set, map, condition, interval, jensen,
- * epigraph), src/linear/hover.ts (matrix, product, det, eigen) or
- * src/iterate/hover.ts (recurrence, sum, domain). The network of round 2 of
- * the design (hover-ml designed2, the circuit best.mjs), ported line by line:
+ * epigraph), src/linear/hover.ts (matrix, product, det, eigen),
+ * src/iterate/hover.ts (recurrence, sum, domain) or, 6.2.1,
+ * src/linear/vector.ts (vector). The network of round 3 of the design
+ * (hover-ml designed3, the circuit best.mjs), ported line by line:
  *
- *   normalize.ts  the front end: canonical TeX (layout commands, comments, Unicode, sloppy spellings, a unit at the end),
- *                 and the flags prose, unreadable, rowCont
- *   features.ts   the encoder: tokens, items, parts, 223 features of 0 or 1 per part
+ *   normalize.ts  the front end: canonical TeX (layout commands, comments, Unicode, sloppy spellings, a unit at the end,
+ *                 v⃗, \R, ^\mathsf{T}, [[1, 2], [3, 4]]), and the flags prose, unreadable, rowCont
+ *   features.ts   the encoder: tokens, items, parts, 259 features of 0 or 1 per part; round 3 reads written vectors
+ *                 (columns, transposed tuples, \binom, angle brackets), set builders with ; : \middle| and words, a set
+ *                 of pairs with one equation as that equation (a curve), and the note's vectors, matrices and domains
  *   net.ts        the generic forward pass (three hidden layers of clipped sums, a linear output)
  *   weights.ts    the weights as named units (data)
  *
@@ -18,7 +21,7 @@
  * list of statements, a chain f(x) = A = B): the first part that earns a
  * card decides; a side part (after für, in a bracket at the end) never
  * gives a card when a main part stands before it; all parts none, none.
- * About 0.03 ms per formula. Pure: no DOM, no Obsidian.
+ * About 0.05 ms per formula. Pure: no DOM, no Obsidian.
  */
 import { FEATURES, RecognizeContext, encode } from './features';
 import { LABELS, Label, argmax, compile, forward } from './net';
