@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.2.4] - 2026-11-26
+
+### Fixed
+
+- **Dragging the chart of a formula card** follows the pointer in all four directions and keeps the plot's size and place, like the editor since 6.2.3. Cards whose y follows the curve (sequences, sums, many cards from notes) could not be moved up or down and jumped while moved sideways, and every card lagged behind the pointer. Now the first drag or zoom keeps the y range as it is drawn, so up and down work everywhere; the wheel zooms about the point under the pointer; a double click goes back to the start view; Insert chart after a pan writes the view you see.
+- **Primes typed as quotes** (`f‘(x)`, `f^{‘}(x)`, `f’(x)`, `` f`(x) ``, `f´(x)`, `f′(x)`, `f″(x)`), as keyboards and autocorrect write them, read as `f'(x)` and `f''(x)`: such derivatives get their mark and their card.
+
 ## [6.2.3] - 2026-11-26
 
 ### Added
