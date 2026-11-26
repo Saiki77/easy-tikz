@@ -8,10 +8,19 @@ The formula hover works in three steps:
 
 `src/readers/types.ts` defines one parse shape per card kind and the `Reader` interface. Reader 0 (`src/readers/reader0.ts`) is the regex readers of 6.2.1. Any other reader plugs in at step 2. This harness measures a reader.
 
+6.2.4: Smart reads with `smartReader` (`src/readers/smart.ts`):
+
+1. the vote of three hand-designed readers (`src/readers/vote`: a token tagger network, a structure network on the parse tree, canonical forms with templates; a port of the hover-ml readers' `best.mjs`);
+2. products and eigen equations that write their vector (`src/readers/written.ts`);
+3. reader 0.
+
+The first card of the network's kind wins, so no formula loses a card that reader 0 draws. Rules reads no parses.
+
 ## Run it
 
 ```sh
 node scripts/readers/gap.mjs                       # reader 0
+node scripts/readers/gap.mjs src/readers/smart.ts  # Smart's reader (6.2.4)
 node scripts/readers/gap.mjs path/to/reader.mjs    # your reader (.mjs, .js or .ts)
 node scripts/readers/gap.mjs reader.mjs --examples 5 --json out.json
 node scripts/readers/gap.mjs reader.mjs --stride 10   # a fast subset: every 10th formula
@@ -38,7 +47,8 @@ Export one of these:
 
 - `read(tex, kind, ctx)`,
 - `reader` with a method `read`,
-- a default export (a function or an object with `read`).
+- a default export (a function or an object with `read`),
+- 6.2.4: else any exported object with a method `read` (`smartReader`, `voteReader`).
 
 `read` returns a parse, a list of parses (best first) or `null`. An optional `async setup()` runs once before the first formula.
 
@@ -73,7 +83,7 @@ All shapes are plain JSON. `src/readers/types.ts` gives each field and examples.
 | matrix | `name`, `entries` (rows of cells), `factor` (a number before the matrix) |
 | product | `matrix` (a name) or `entries`, `vector` (a name) or `components` |
 | det | `matrix` (a name) or `entries` |
-| eigen | `matrix` (a name) or `entries`, `vector` |
+| eigen | `matrix` (a name) or `entries`, `vector` (a name) or `components` (6.2.4) |
 | recurrence | `state`, `index`, `step` |
 | sum | `index`, `lower`, `upper`, `body`, `value` |
 | domain | `name`, `body`, `variable` (z, or s) |
@@ -129,7 +139,38 @@ False cards (gold `none`):
 
 `--write-gold DIR` writes these files again and merges `DIR/review.jsonl` in. Run it after a change to reader 0 only.
 
-## Reader 0 (6.2.2)
+## Smart's reader (6.2.4), network of round 4
+
+| Kind | net=K | a | b | variants | c |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| function | 551 | 11 (2.0%) | 21 | 5056 | 7.1% |
+| surface | 78 | 2 (2.6%) | 3 | 840 | 2.9% |
+| polar | 10 | 0 | 1 | 223 | 11.7% |
+| implicit | 89 | 10 (11.2%) | 6 | 600 | 9.8% |
+| region | 112 | 2 (1.8%) | 10 | 214 | 32.7% |
+| set | 64 | 1 (1.6%) | 2 | 943 | 2.9% |
+| map | 40 | 0 | 0 | 566 | 0.0% |
+| condition | 124 | 0 | 2 | 739 | 0.0% |
+| interval | 112 | 0 | 3 | 774 | 0.0% |
+| jensen | 8 | 2 (25.0%) | 0 | 96 | 0.0% |
+| epigraph | 11 | 0 | 0 | 152 | 0.0% |
+| matrix | 151 | 0 | 11 | 683 | 0.0% |
+| product | 38 | 4 (10.5%) | 0 | 204 | 0.0% |
+| det | 8 | 0 | 0 | 121 | 0.0% |
+| eigen | 56 | 7 (12.5%) | 0 | 322 | 0.0% |
+| recurrence | 35 | 0 | 9 | 471 | 31.4% |
+| sum | 40 | 0 | 7 | 450 | 22.0% |
+| domain | 82 | 2 (2.4%) | 10 | 1076 | 8.6% |
+| vector | 210 | 0 | 6 | 1363 | 2.3% |
+| **all** | **1819** | **41 (2.3%)** | **91 (5.0%)** | **14893** | **6.3%** |
+
+False cards: of 8,855 gold-none formulas, the network of round 4 gives 89 a card; 77 show one, 78 get the mark. Reader 0 with the same network: a = 227 (12.5%).
+
+`b` and `c` count cards that draw something else than **reader 0's** gold parses. Most of them are quirks of reader 0 that the vote does not repeat: a recurrence step with the rest of the formula, a whole chain as a function's body, a program's first constraint only (DESIGN-READERS.md, section 6).
+
+Known gaps: lines with large constants (`2x_1 + x_2 = 100`) and `z` as a slider (`c_1 x_1 + c_2 x_2 = z`) draw nothing in view; two matrices in a row (`AB (1, 1)^\top`) and vectors of unknown size (`P \mathbf{1}`); Jensen with sums.
+
+## Reader 0 (6.2.2), network of round 3
 
 | Kind | net=K | a | b | variants | c |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -160,4 +201,6 @@ Reader 0's `b` is the hand-review fixes that change what the card draws. Its `c`
 
 ## Tests
 
-`tests/readers.test.ts` runs `measure` (in `harness.ts`) on `tests/readers-fixture.json`, a committed subset: 496 corpus formulas and 152 suite variants. When the corpus is on this machine, it also runs on all of it. Each run fails when reader 0 gets more gaps or false cards.
+`tests/readers.test.ts` runs `measure` (in `harness.ts`) on `tests/readers-fixture.json`, a committed subset: 496 corpus formulas and 152 suite variants. When the corpus is on this machine, it also runs on all of it. Each run fails when reader 0 or, 6.2.4, Smart's reader gets more gaps or false cards.
+
+`tests/readers-vote.test.ts` checks that the vote gives the frozen `best.mjs` parses (a committed fixture, and the corpus and both suites when they are on this machine).

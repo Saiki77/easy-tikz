@@ -1229,7 +1229,7 @@ if (started) {
         // 6.2: formula recognition (the setting Formula recognition: Smart by default, or Rules as 6.1).
         const recognitionNote = 'Formeln 6.2';
         const recognitionText =
-            'Die Stichprobenvarianz teilt die Summe der Quadrate durch $\\frac{1}{m-1}$ statt durch $m$, damit sie erwartungstreu ist.\n\nExponentielles Wachstum: $x(t) = x_0 e^{at}$ mit dem Startwert $x_0$.\n';
+            'Der Abstand zur Trennebene ist $\\lVert w\\rVert$ im Nenner.\n\nExponentielles Wachstum: $x(t) = x_0 e^{at}$ mit dem Startwert $x_0$.\n';
         /** The dotted mark of each drawn formula of the open note: TeX to data-etz-mark. */
         const marks = () => obs.call(() => Object.fromEntries(Array.from(document.querySelectorAll('.workspace-leaf.mod-active .markdown-reading-view .math')).map((m) => [m.dataset.etzTex, m.dataset.etzMark])));
         /** Rest the pointer on the drawn formula with this TeX: the name of the card that opens ("Chart of the formula (Function)"), or null. */
@@ -1258,32 +1258,33 @@ if (started) {
                 p.data.formulaRecognition = m;
                 p.refreshFormulaMarks();
             }, mode);
-        await check('formula recognition (6.2): Smart gives notation the rules charted no card and no dotted mark, and x(t) = x_0 e^{at} its function card', async () => {
+        await check('formula recognition (6.2): Smart gives notation the rules charted (a norm) no card and no dotted mark, and x(t) = x_0 e^{at} its function card', async () => {
             await obs.writeNote(recognitionNote, recognitionText);
             await obs.openNote(recognitionNote, { mode: 'reading' });
             await obs.sleep(800);
             const setting = await obs.call(() => app.plugins.plugins['easy-tikz'].data.formulaRecognition);
             assert(setting === 'smart', `the setting is ${setting} by default`);
             const m = await marks();
-            assert(m['\\frac{1}{m-1}'] === '0', `the mark of 1/(m-1): ${JSON.stringify(m)}`);
+            // 6.2.4: the network of round 4 reads 1/(m-1) as a function (rule C1, a bare expression in one small letter): the notation here is a norm.
+            assert(m['\\lVert w\\rVert'] === '0', `the mark of the norm: ${JSON.stringify(m)}`);
             assert(m['x(t) = x_0 e^{at}'] === '1', `the mark of x(t): ${JSON.stringify(m)}`);
-            const none = await cardOf('\\frac{1}{m-1}');
-            assert(none === null, `1/(m-1) opened a card: ${none}`);
+            const none = await cardOf('\\lVert w\\rVert');
+            assert(none === null, `the norm opened a card: ${none}`);
             const fn = await cardOf('x(t) = x_0 e^{at}');
             assert(fn && /Function/.test(fn), `the card of x(t): ${fn}`);
             const axis = await obs.call(() => Array.from(document.querySelectorAll('.etz-formula-pop .etz-formula-name')).map((n) => n.textContent));
             assert(axis.includes('a') && axis.includes('x_0'), `sliders of x(t): ${JSON.stringify(axis)}`);
             return `${JSON.stringify(m)}; ${fn}`;
         });
-        await check('formula recognition (6.2): Rules is 6.1 again: 1/(m-1) is marked and opens a function card, x(t) = x_0 e^{at} has none', async () => {
+        await check('formula recognition (6.2): Rules is 6.1 again: the norm is marked and opens a function card, x(t) = x_0 e^{at} has none', async () => {
             await setRecognition('rules');
             try {
                 await obs.sleep(300);
                 const m = await marks();
-                assert(m['\\frac{1}{m-1}'] === '1', `the mark of 1/(m-1) under Rules: ${JSON.stringify(m)}`);
+                assert(m['\\lVert w\\rVert'] === '1', `the mark of the norm under Rules: ${JSON.stringify(m)}`);
                 assert(m['x(t) = x_0 e^{at}'] === '0', `the mark of x(t) under Rules: ${JSON.stringify(m)}`);
-                const card = await cardOf('\\frac{1}{m-1}');
-                assert(card && /Function/.test(card), `the card of 1/(m-1) under Rules: ${card}`);
+                const card = await cardOf('\\lVert w\\rVert');
+                assert(card && /Function/.test(card), `the card of the norm under Rules: ${card}`);
                 const none = await cardOf('x(t) = x_0 e^{at}');
                 assert(none === null, `x(t) opened a card under Rules: ${none}`);
                 return JSON.stringify(m);
@@ -1291,6 +1292,33 @@ if (started) {
                 await setRecognition('smart');
                 await obs.mouse.move({ x: 5, y: 5 });
             }
+        });
+        await check('formula recognition (6.2.4): f(x)=e^{(x+1)} and a sum written \\sum^n_{k=0} get their dotted marks under Smart, and their cards draw (the sum with its value dashed)', async () => {
+            const realNote = 'Formeln 6.2.4';
+            const sum = '\\displaystyle \\sum^n_{k=0}q^k = \\frac{1-q^{n+1}}{1-q}';
+            await obs.writeNote(realNote, `Wir betrachten die Funktion $f(x)=e^{(x+1)}$ auf ganz $\\mathbb{R}$.\n\nDie geometrische Summe ist $${sum}$ für $q \\ne 1$.\n`);
+            await obs.openNote(realNote, { mode: 'reading' });
+            await obs.sleep(800);
+            const m = await marks();
+            assert(m['f(x)=e^{(x+1)}'] === '1', `the mark of f(x)=e^{(x+1)}: ${JSON.stringify(m)}`);
+            assert(m[sum] === '1', `the mark of the sum: ${JSON.stringify(m)}`);
+            /** What the open card draws: its curves, its dots and its dashed strokes. */
+            const drawn = () =>
+                obs.call(() => {
+                    const svg = document.querySelector('.etz-formula-pop .etz-formula-chart svg');
+                    if (!svg) return null;
+                    return { curves: svg.querySelectorAll('.etz-curves path, .etz-curves polyline').length, markers: svg.querySelectorAll('.etz-markers > *').length, dashed: svg.querySelectorAll('.etz-curves [stroke-dasharray]').length };
+                });
+            const fn = await cardOf('f(x)=e^{(x+1)}');
+            assert(fn && /Function/.test(fn), `the card of f(x)=e^{(x+1)}: ${fn}`);
+            const fd = await drawn();
+            assert(fd && fd.curves >= 1, `the card of f(x)=e^{(x+1)} draws ${JSON.stringify(fd)}`);
+            const sc = await cardOf(sum);
+            assert(sc, 'the sum opened no card');
+            const sd = await drawn();
+            assert(sd && sd.markers >= 1 && sd.dashed >= 1, `the sum card draws ${JSON.stringify(sd)}`);
+            await obs.mouse.move({ x: 5, y: 5 });
+            return `${fn}: ${JSON.stringify(fd)}; ${sc}: ${JSON.stringify(sd)}`;
         });
         await check('formulas (6.2): money signs before a formula do not give it another TeX (dollars paired as Obsidian pairs them)', async () => {
             const moneyNote = 'Geld';
@@ -1354,31 +1382,46 @@ if (started) {
                 });
             }
         });
-        await check('formulas (6.2.1): a condition in x_1 opens a card with a ray on an axis named x_1, and no MathJax error', async () => {
+        await check('formulas (6.2.1, 6.2.4): a bound on x_1 opens, under Smart, the half-plane in the x_1 x_2 plane (round 4: a region) and, under Rules, a card with a ray on an axis named x_1; no MathJax error', async () => {
             const conditionNote = 'Schranke';
             await obs.writeNote(conditionNote, 'Die Schranke $x_1 \\ge \\tfrac18$ gilt für jeden zulässigen Punkt.\n');
             await obs.openNote(conditionNote, { mode: 'reading' });
             await obs.sleep(800);
             const m = await marks();
             assert(m['x_1 \\ge \\tfrac18'] === '1', `the mark of x_1 >= 1/8: ${JSON.stringify(m)}`);
-            const card = await cardOf('x_1 \\ge \\tfrac18');
-            assert(card && /Condition/.test(card), `the card of x_1 >= 1/8: ${card}`);
+            const drawnNow = () =>
+                obs.call(() => {
+                    const pop = document.querySelector('.etz-formula-pop');
+                    const svg = pop.querySelector('.etz-formula-chart svg');
+                    return {
+                        errors: pop.querySelectorAll('mjx-merror, [data-mjx-error]').length,
+                        bars: svg ? svg.querySelectorAll('.etz-strokes > *').length : 0,
+                        dots: svg ? svg.querySelectorAll('.etz-markers > *').length : 0,
+                        fills: svg ? svg.querySelectorAll('.etz-fills > *').length : 0,
+                        text: (pop.querySelector('.etz-formula-chart')?.textContent || '').replace(/\s+/g, ' '),
+                    };
+                });
+            const region = await cardOf('x_1 \\ge \\tfrac18');
+            assert(region && /Region/.test(region), `the Smart card of x_1 >= 1/8: ${region}`);
             await obs.sleep(600);
-            const drawn = await obs.call(() => {
-                const pop = document.querySelector('.etz-formula-pop');
-                const svg = pop.querySelector('.etz-formula-chart svg');
-                return {
-                    errors: pop.querySelectorAll('mjx-merror, [data-mjx-error]').length,
-                    bars: svg ? svg.querySelectorAll('.etz-strokes > *').length : 0,
-                    dots: svg ? svg.querySelectorAll('.etz-markers > *').length : 0,
-                    text: (pop.querySelector('.etz-formula-chart')?.textContent || '').replace(/\s+/g, ' '),
-                };
-            });
-            assert(drawn.errors === 0, `the card shows ${drawn.errors} MathJax errors: ${drawn.text}`);
-            assert(drawn.bars >= 1 && drawn.dots >= 1, `the card draws no ray: ${JSON.stringify(drawn)}`);
-            assert(!drawn.text.includes('\\x'), `the card shows the TeX of an axis name: ${drawn.text}`);
-            await obs.mouse.move({ x: 5, y: 5 });
-            return `${card}; ${drawn.bars} bar, ${drawn.dots} dot`;
+            const shaded = await drawnNow();
+            assert(shaded.errors === 0, `the region card shows ${shaded.errors} MathJax errors: ${shaded.text}`);
+            assert(shaded.fills >= 1, `the region card shades nothing: ${JSON.stringify(shaded)}`);
+            await setRecognition('rules');
+            try {
+                await obs.sleep(300);
+                const card = await cardOf('x_1 \\ge \\tfrac18');
+                assert(card && /Condition/.test(card), `the Rules card of x_1 >= 1/8: ${card}`);
+                await obs.sleep(600);
+                const drawn = await drawnNow();
+                assert(drawn.errors === 0, `the card shows ${drawn.errors} MathJax errors: ${drawn.text}`);
+                assert(drawn.bars >= 1 && drawn.dots >= 1, `the card draws no ray: ${JSON.stringify(drawn)}`);
+                assert(!drawn.text.includes('\\x'), `the card shows the TeX of an axis name: ${drawn.text}`);
+                return `${region}, ${shaded.fills} fill; ${card}; ${drawn.bars} bar, ${drawn.dots} dot`;
+            } finally {
+                await setRecognition('smart');
+                await obs.mouse.move({ x: 5, y: 5 });
+            }
         });
         await check('formulas (6.2.1): a vector opens the vector card that draws its arrow, and Insert chart writes a block that renders it', async () => {
             const vectorNote = 'Vektor';

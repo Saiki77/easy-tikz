@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.2.4] - 2026-11-26
+
+### Changed
+
+- **Formula recognition, round 4:** the hand-designed network now reads the words and formulas around a formula as facts about the note: the nearest word before it (vector, point, value), the program of an optimisation note (a bound on x_1 or x_2 is a region, a bound on a parameter a condition with sliders), switches (letters in {0, 1}, Big-M) and names with an upper index (the bikes x^1 to x^7 of a table get no card). A bare expression in one small letter is a function (`n + 1`, `2^n` over n from 0 to 20).
+- **Formula cards read more spellings:** Smart reads each formula with three hand-designed readers that vote, and with the readers of 6.2.3 after them, so no formula loses its card. Bounds such as `1 \le x_1 \le 4` are regions in the x_1 x_2 plane, sets of pairs in θ_1 and θ_2 shade their region, and conditions such as `x \ge 0, x \ne 4` join their parts.
+
+### Fixed
+
+- `f(x)=e^{(x+1)}` and other powers of e in brackets get their card and their dotted mark (the bracket was read as an index, as in W^{(1)}).
+- Products and eigen equations that write their vector draw: `A (1, 1)^\top = (3, 3)^\top`, `S(1, 0)^T = (1, 0)^T`, `R(90°)\,(2, 1)^\top`, `P \begin{pmatrix} 1 \\ -5 \end{pmatrix} = 0.4 \begin{pmatrix} 1 \\ -5 \end{pmatrix}`, and a written matrix times a written vector.
+- A function or surface of a Greek letter inside bars (`f(\theta) = \lvert\theta\rvert`) draws its card; the renamed letter ran into the bar command.
+
 ## [6.2.3] - 2026-11-26
 
 ### Added
