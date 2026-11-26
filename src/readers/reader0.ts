@@ -15,7 +15,7 @@
  * builds them in order (src/notes6/recognize/decide.ts): the cards are the
  * cards of 6.2.1. Pure: no DOM, no Obsidian.
  */
-import { inVariables, readChart } from '../formula';
+import { inVariables, readChart, renameOne } from '../formula';
 import { readNotes6 } from '../notes6/hover';
 import { readLinear } from '../linear/hover';
 import { readIterate } from '../iterate/hover';
@@ -81,7 +81,19 @@ export const reader0: Reader = {
             }
             return out;
         }
-        for (const s of all) add(readOne(s.tex, kind));
+        // A transfer function in s (domainSpellings writes it in z): back in s, when the builder gets the same body back.
+        const inS = group === 'iterate' && STANDALONE_S.test(tex) && !STANDALONE_Z.test(tex);
+        for (const s of all) {
+            const p = readOne(s.tex, kind);
+            if (p && inS && p.kind === 'domain' && !p.variable) {
+                const body = renameOne(p.body, 'z', 's');
+                add(renameOne(body, 's', 'z') === p.body ? { ...p, body, variable: 's' } : p);
+            } else add(p);
+        }
         return out;
     },
 };
+
+/** s and z where they stand alone (as adapt.ts's domainSpellings asks). */
+const STANDALONE_S = /(?<![\\A-Za-z_]|_\{)s(?![A-Za-z_])/;
+const STANDALONE_Z = /(?<![\\A-Za-z_]|_\{)z(?![A-Za-z_])/;

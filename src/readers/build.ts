@@ -15,6 +15,7 @@
  */
 import { FormulaKind, chartLines, chartOfParse, chartableParse, formulaKindOf, inVariables } from '../formula';
 import { parseChartText } from '../text/parse';
+import { latexToPlain } from '../latex';
 import { HoverCard, NoteDefinition, buildNotes6 } from '../notes6/hover';
 import { LinearHoverCard, buildLinear } from '../linear/hover';
 import { IterateHoverCard, buildIterate } from '../iterate/hover';
@@ -154,37 +155,41 @@ export { formulaKindOf };
 const LABEL_ONLY = new Set(['tex', 'nameTex', 'names']);
 
 /**
- * A TeX string as parseKey compares it: no spaces or spacing commands, no
- * sizes, \dfrac and \tfrac as \frac, \leq as \le, a decimal comma as a
- * point, one sign after ^ or _ without braces, \cdot between factors out
- * (2 \cdot x is 2x; not in a vector's values, where it is a dot product).
+ * A TeX string as parseKey compares it: as the chart reads it (latexToPlain:
+ * \frac{1}{2} and \tfrac12 alike, | z | and \lvert z \rvert alike), without
+ * spaces, and 2 \cdot x as 2x (not in a vector's values, where \cdot is a
+ * dot product). Words the chart does not know stay (x^2 \nonumber is not
+ * x^2: the chart would read nonumber as a name).
  */
 export function texKey(s: string, keepCdot = false): string {
-    let t = s
-        .replace(/\\(?:left|right|middle|bigl?|bigr?|Bigl?|Bigr?|biggl?|biggr?|Biggl?|Biggr?)(?![A-Za-z])/g, '')
-        .replace(/\\(?:displaystyle|textstyle)(?![A-Za-z])/g, '')
+    let t: string;
+    // Spacing (~, \,, \quad) and an alignment & are layout only.
+    const plain = s
         .replace(/\\[dt]frac(?![A-Za-z])/g, '\\frac')
-        .replace(/\\(le|ge|ne)q(?![A-Za-z])/g, '\\$1')
-        .replace(/\\neq(?![A-Za-z])/g, '\\ne')
         .replace(/\{,\}/g, '.')
-        .replace(/\\[,;:! ]|~/g, ' ');
-    if (!keepCdot) t = t.replace(/\\cdot(?![A-Za-z])|\*/g, ' ');
-    // A space ends a command name before a letter: keep it as a mark, drop the others.
-    t = t.replace(/(\\[A-Za-z]+)\s+(?=[A-Za-z])/g, '$1\u0001').replace(/\s+/g, '').replace(/\u0001/g, ' ');
-    return t.replace(/([\^_])\{(\\?[A-Za-z0-9])\}/g, '$1$2');
+        .replace(/\\(?:q?quad|displaystyle|textstyle)(?![A-Za-z])|\\[,;:! ]|~|(?<!\\)&/g, ' ');
+    try {
+        t = latexToPlain(plain);
+    } catch {
+        t = s;
+    }
+    if (!keepCdot) t = t.replace(/\*/g, ' ');
+    return t.replace(/\s+/g, '');
 }
 
 /** A canonical string of a parse: two parses with the same key build the same card (labels aside). */
 export function parseKey(p: CardParse): string {
     const vector = p.kind === 'vector';
-    const norm = (v: unknown, key?: string): unknown => {
+    // A function's own name only names its graph (f or MC): left out too.
+    const label = (k: string, parent?: string) => (vector && LABEL_ONLY.has(k)) || (parent === 'functions' && k === 'name');
+    const norm = (v: unknown, key?: string, parent?: string): unknown => {
         if (typeof v === 'string') return key === 'kind' ? v : texKey(v, vector);
-        if (Array.isArray(v)) return v.map((x) => norm(x));
+        if (Array.isArray(v)) return v.map((x) => norm(x, undefined, key));
         if (v && typeof v === 'object') {
             const o = v as Record<string, unknown>;
             const out: Record<string, unknown> = {};
             for (const k of Object.keys(o).sort()) {
-                if (o[k] === undefined || (vector && LABEL_ONLY.has(k))) continue;
+                if (o[k] === undefined || label(k, parent)) continue;
                 out[k] = norm(o[k], k);
             }
             return out;

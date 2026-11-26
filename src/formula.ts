@@ -326,8 +326,8 @@ function standalone(v: string): RegExp {
     return new RegExp(`${head}\\s*_\\s*(?:\\{\\s*${sub}\\s*\\}${sub.length === 1 ? `|${sub}(?![0-9])` : ''})`, 'g');
 }
 
-/** One variable renamed: x_1 and x_2 as axesOf renames them (X1, X2), another one where it stands alone. */
-function renameOne(tex: string, from: string, to: string): string {
+/** One variable renamed: x_1 and x_2 as axesOf renames them (X1, X2), another one where it stands alone. 6.2.2: also for the angle of a polar curve and the variable of a function of z. */
+export function renameOne(tex: string, from: string, to: string): string {
     if (IS_X1.test(from.trim())) return tex.replace(X1, to);
     if (IS_X2.test(from.trim())) return tex.replace(X2, to);
     return tex.replace(standalone(from), to);
@@ -375,7 +375,7 @@ export function chartLines(p: ChartParse): { kind: FormulaKind; lines: string[];
     const variable = p.kind === 'function' && vx !== 'x' && /^[A-Za-z]$/.test(vx) ? vx : undefined;
     const inXY = (body: string) => inVariables(body, vx, p.kind === 'function' ? 'y' : vy, 'x', 'y');
     const fns = p.kind === 'function' ? p.functions.slice(0, COLOURS.length) : [];
-    const bodies = (p.kind === 'function' ? fns.map((f) => f.body) : [p.kind === 'implicit' ? p.equation : p.kind === 'region' ? p.condition : p.body]).map((b) => (p.kind === 'polar' ? b : inXY(b)));
+    const bodies = (p.kind === 'function' ? fns.map((f) => f.body) : [p.kind === 'implicit' ? p.equation : p.kind === 'region' ? p.condition : p.body]).map((b) => (p.kind === 'polar' ? (p.variable && p.variable.trim() !== '\\theta' ? renameOne(b, p.variable, '\\theta') : b) : inXY(b)));
     if (!bodies.length || bodies.some((b) => !b.trim())) return null;
     const free = Array.from(new Set(bodies.flatMap((b) => freeNames(b))));
     if (free.length > MAX_SLIDERS) return null;

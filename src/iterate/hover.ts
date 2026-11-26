@@ -16,6 +16,7 @@ import { readRecurrence } from '../values';
 import { readsLetter } from './forms';
 import { topEquals } from './tools';
 import type { IterateParse } from '../readers/types';
+import { renameOne } from '../formula';
 
 export type IterateHoverKind = 'recurrence' | 'sum' | 'domain';
 
@@ -162,11 +163,13 @@ export function buildIterate(p: IterateParse): IterateHoverCard | null {
             };
         }
         case 'domain': {
-            const letters = freeLetters(p.body, ['z']);
+            // The complex variable as the chart writes it: z (H(s) = \frac{1}{s + 1} is \frac{1}{z + 1}).
+            const body = p.variable && p.variable.trim() !== 'z' ? renameOne(p.body, p.variable, 'z') : p.body;
+            const letters = freeLetters(body, ['z']);
             return {
                 kind: 'domain',
                 note: 'iterate.hover.domainNote',
-                lines: ['show x from -2 to 2 and y from -2 to 2', 'equal scale', ...letters.map((l) => `slider ${l} from -2 to 2, starting at 1`), `colour the plane by $${p.name ? `${p.name}(z) = ` : ''}${p.body}$`],
+                lines: ['show x from -2 to 2 and y from -2 to 2', 'equal scale', ...letters.map((l) => `slider ${l} from -2 to 2, starting at 1`), `colour the plane by $${p.name ? `${p.name}(z) = ` : ''}${body}$`],
             };
         }
     }

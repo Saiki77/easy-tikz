@@ -112,8 +112,10 @@ export interface SurfaceParse {
  */
 export interface PolarParse {
     kind: 'polar';
-    /** The radius, in \theta. */
+    /** The radius, in the angle. */
     body: Tex;
+    /** The angle as written (\varphi, \phi, t; default \theta). */
+    variable?: string;
 }
 
 /**
@@ -178,7 +180,7 @@ export interface ConditionParse {
     kind: 'condition';
     /** The one variable (x, x_1, \lambda, \alpha_1): the card draws on an axis named after it. */
     variable: string;
-    /** The whole condition, in that variable. */
+    /** The whole condition, in that variable; several joined by \text{ and } (x \ge 0 \text{ and } x \ne 4: a comma does not read). */
     condition: Tex;
 }
 
@@ -300,15 +302,17 @@ export interface SumParse {
 }
 
 /**
- * domain: a function of a complex variable. f(z) = \frac{z^2 - 1}{z^2 + 1}, z^3 - 1, H(s) = \frac{1}{s + 1} (as z).
- * JSON: {"kind":"domain","name":"f","body":"\\frac{z^2 - 1}{z^2 + 1}"}
+ * domain: a function of a complex variable. f(z) = \frac{z^2 - 1}{z^2 + 1}, z^3 - 1, H(s) = \frac{1}{s + 1}.
+ * JSON: {"kind":"domain","name":"f","body":"\\frac{z^2 - 1}{z^2 + 1}"}   {"kind":"domain","name":"H","body":"\\frac{1}{s + 1}","variable":"s"}
  */
 export interface DomainParse {
     kind: 'domain';
     /** The function's name, when the formula has a head f(z) =. */
     name?: string;
-    /** The function, in z. */
+    /** The function (one side: G(s) = \frac{3}{5s} = \frac{0.6}{s} is \frac{3}{5s}), in its variable. */
     body: Tex;
+    /** The complex variable as written (s for a transfer function; default z). */
+    variable?: string;
 }
 
 // ------------------------------------------------------------------ vectors (src/linear/vector.ts)
