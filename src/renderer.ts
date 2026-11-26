@@ -14,8 +14,8 @@ import { AnnotationSize, FillPattern, FunctionParameters, MarkerSize, RendererCo
 import { COLOR_MAP, THICKNESS_MAP, mixHex, resolveCssColor } from './colors';
 import { marchingGrid, sampleCurve, stripLatex, tickValues } from './util';
 import { AxisTicks, Tick, autoTickSteps, axisTicks } from './ticks';
-import { ensureMathJax, extractMathSource, renderMathLabel, flushMathRenders } from './mathlabel';
-import { FunctionInfo, FunctionKind, MathContext, labelDisplayText } from './mathcontext';
+import { ensureMathJax, extractMathSource, renderMathLabel, renderMixedLabel, flushMathRenders } from './mathlabel';
+import { FunctionInfo, FunctionKind, MathContext, labelDisplayText, labelParts } from './mathcontext';
 // 6.0 A
 import { valueDefinitions } from './values/defs';
 import {
@@ -269,13 +269,16 @@ interface DrawnLabel {
 
 /** 6.1: a canvas to measure plain label text with (the pill of a value label fits its text). */
 let measureCanvas: CanvasRenderingContext2D | null | undefined;
+/** 6.2.1: the theme's text font, read once per render (render() clears it). */
+let measureFamily: string | null = null;
 
 /** 6.1: the width of a plain text at `fs` px in the theme's text font, or null where nothing can measure it. */
 function measuredWidth(text: string, fs: number, weight: string | null): number | null {
     try {
         if (measureCanvas === undefined) measureCanvas = createEl('canvas').getContext('2d');
         if (!measureCanvas || typeof activeDocument === 'undefined') return null;
-        const family = getComputedStyle(activeDocument.body).getPropertyValue('--font-text').trim() || 'sans-serif';
+        if (measureFamily === null) measureFamily = getComputedStyle(activeDocument.body).getPropertyValue('--font-text').trim() || 'sans-serif';
+        const family = measureFamily;
         measureCanvas.font = `${weight || '400'} ${fs}px ${family}`;
         const w = measureCanvas.measureText(text).width;
         return Number.isFinite(w) && w > 0 ? w : null;
@@ -484,6 +487,7 @@ export class SVGRenderer {
     render(): SVGElement {
         const cfg = this.config;
         this.ids = `etz-${++renderCount}-`;
+        measureFamily = null;
         this.patterns.clear();
         this.arrows.clear();
         this.usedMath = false;
@@ -1042,10 +1046,12 @@ export class SVGRenderer {
 
     /**
      * Draw `text` at (x, y) in viewBox units: real LaTeX via Obsidian's
-     * MathJax when it is a single `$...$` or `\(...\)` expression, else the
-     * text read the way the export reads it (labelDisplayText: text as
-     * typed, LaTeX commands resolved, math through the `stripLatex()`
-     * Unicode approximation). MathJax output lives in a
+     * MathJax when it is a single `$...$` or `\(...\)` expression; 6.2.1:
+     * words and math in one line when it mixes them (the words in the text
+     * font, the math from MathJax); else the text read the way the export
+     * reads it (labelDisplayText: text as typed, LaTeX commands resolved,
+     * math through the `stripLatex()` Unicode approximation), which is also
+     * the fallback while MathJax is not loaded. MathJax output lives in a
      * `<foreignObject>`; its data-export-* attributes let the SVG / PNG copy
      * path swap it for a plain `<text>` (MathJax only renders inside the
      * app document). Returns null for blank text.
@@ -1056,9 +1062,10 @@ export class SVGRenderer {
         // Baseline for <text>: 'above' puts the text's bottom at y, 'below' its top, 'middle' its centre.
         const baseline = o.vAnchor === 'above' ? y - 0.22 * fs : o.vAnchor === 'below' ? y + 0.78 * fs : y + 0.35 * fs;
         const mathSource = extractMathSource(text);
-        if (mathSource !== null) {
+        const parts = mathSource === null ? labelParts(text, stripLatex) : null;
+        if (mathSource !== null || parts) {
             try {
-                const { el, width, height } = renderMathLabel(mathSource, o.color, fs);
+                const { el, width, height } = parts ? renderMixedLabel(parts, o.color, fs, o.weight) : renderMathLabel(mathSource ?? '', o.color, fs);
                 this.usedMath = true;
                 const w = Math.max(width, 1);
                 const h = Math.max(height, 1);
@@ -1078,6 +1085,11 @@ export class SVGRenderer {
                     'data-export-fill': o.color,
                     'data-export-font-size': String(fs),
                 });
+                if (parts) {
+                    // A copy writes the words and the math as one plain text, read as the fallback reads it.
+                    fo.setAttribute('data-export-plain', labelDisplayText(text, stripLatex));
+                    if (o.weight) fo.setAttribute('font-weight', o.weight);
+                }
                 // 6.2.1: a stroke cannot reach into HTML, so the halo of a math label is a ring of text
                 // shadows in the colour under it: shaped like the glyphs, not a box.
                 if (o.halo) {
@@ -1119,7 +1131,8 @@ export class SVGRenderer {
         const t = this.el('text', { ...attrs, ...(o.attrs || {}) });
         t.textContent = plain;
         parent.appendChild(t);
-        const tw = plain.length * fs * CHAR_WIDTH_EM;
+        // 6.2.1: its real width where the theme's font can be measured (the legend box, keeping texts inside), else the estimate.
+        const tw = measuredWidth(plain, fs, o.weight ?? null) ?? plain.length * fs * CHAR_WIDTH_EM;
         return { el: t, width: tw, height: fs * 1.2, x0: o.hAnchor === 'middle' ? x - tw / 2 : o.hAnchor === 'end' ? x - tw : x, y0: baseline - 0.95 * fs };
     }
 

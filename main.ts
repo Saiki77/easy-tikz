@@ -1635,9 +1635,11 @@ class InlineChart {
         // 6.0 B: what was drawn, for the questions of a click.
         if (this.live && renderer.layout && renderer.drawn) this.askDrawn = { layout: renderer.layout, drawn: renderer.drawn, pixelScale };
         // A new `$...$` label is measured before MathJax has styled it: draw once more when it has.
+        // 6.2.1: also while the chart is not on the page yet (Reading view draws its sections before it
+        // attaches them): up to 6.2.0 such a chart kept the first, too small boxes of its formulas.
         void renderer.mathSettled?.then((redraw) => {
             if (!redraw) this.mathRedraws = 0;
-            else if (this.chartEl === svg && svg.isConnected && this.mathRedraws < MATH_REDRAW_LIMIT) {
+            else if (this.chartEl === svg && this.mathRedraws < MATH_REDRAW_LIMIT) {
                 this.mathRedraws++;
                 this.render('full');
             }

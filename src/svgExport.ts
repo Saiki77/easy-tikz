@@ -60,7 +60,8 @@ export function exportableSvg(svg: SVGElement, doc: Document, opts: { white?: bo
             t.setAttribute('stroke-linejoin', 'round');
             t.setAttribute('paint-order', 'stroke');
         }
-        t.textContent = stripLatex(fo.getAttribute('data-export-text') || '');
+        // 6.2.1: a label of words and math carries its plain text as the fallback writes it.
+        t.textContent = fo.getAttribute('data-export-plain') ?? stripLatex(fo.getAttribute('data-export-text') || '');
         fo.replaceWith(t);
     });
 

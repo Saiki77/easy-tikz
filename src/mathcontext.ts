@@ -1946,7 +1946,11 @@ function skipGroups(toks: LabelToken[], from: number, count: number): number {
  * 'R&D', '\"a' shows 'ä').
  */
 export function labelDisplayText(s: string, mathText: (src: string) => string): string {
-    const toks = labelTokens(str(s));
+    return tokensText(labelTokens(str(s)), mathText);
+}
+
+/** The preview text of label tokens (labelDisplayText). */
+function tokensText(toks: LabelToken[], mathText: (src: string) => string): string {
     let out = '';
     for (let j = 0; j < toks.length; j++) {
         const tok = toks[j];
@@ -1993,6 +1997,45 @@ export function labelDisplayText(s: string, mathText: (src: string) => string): 
             }
         }
     }
+    return out;
+}
+
+/** 6.2.1: one piece of a label that mixes words and math: text to show in the chart's font, or LaTeX source for MathJax. */
+export interface LabelPart {
+    math: boolean;
+    text: string;
+}
+
+/**
+ * 6.2.1: a label that mixes words and math ('LP 3: $\max 2x_1 + x_2$ –
+ * eine Kante', 'Preis $f_1$', '$x^2$ konkav'), in pieces: each math
+ * segment as its LaTeX source, the text between them read as
+ * labelDisplayText reads it (`mathText` for math-only commands in the
+ * text). The preview typesets the math pieces with MathJax and writes the
+ * words in its text font, in one line. Null for a label without math and
+ * for one that is a single math segment as a whole (labelMathSource).
+ */
+export function labelParts(s: string, mathText: (src: string) => string): LabelPart[] | null {
+    const text = str(s);
+    if (labelMathSource(text) !== null) return null;
+    const toks = labelTokens(text);
+    if (!toks.some((t) => t.k === 'math')) return null;
+    const out: LabelPart[] = [];
+    let run: LabelToken[] = [];
+    const flush = () => {
+        const words = tokensText(run, mathText);
+        if (words) out.push({ math: false, text: words });
+        run = [];
+    };
+    for (const tok of toks) {
+        if (tok.k !== 'math') {
+            run.push(tok);
+            continue;
+        }
+        flush();
+        out.push({ math: true, text: tok.src });
+    }
+    flush();
     return out;
 }
 
