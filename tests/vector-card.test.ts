@@ -147,7 +147,8 @@ test('vector card: a dot product of written vectors draws both arrows, a cross p
     assert.equal(card('\\langle(1,-1),(1,1)\\rangle=1-1=0').card.shape, 'dot');
     const { card: cross, scene } = card('\\vec a \\times \\vec b = \\begin{pmatrix} -2 \\\\ 10 \\\\ -6 \\end{pmatrix}', ['\\vec a = (1, 2, 3)', '\\vec b = \\begin{pmatrix} 3 \\\\ 0 \\\\ -1 \\end{pmatrix}']);
     assert.equal(cross.shape, 'cross');
-    assert.ok(cross.lines.includes('draw $a \\times b$ as an arrow in red, labelled'), cross.lines.join(' / '));
+    // In space the labels are the letters (a 3D label shows an arrow over a letter badly).
+    assert.ok(cross.lines.includes('draw a as an arrow in blue, labelled "$a$"') && cross.lines.includes('draw $a \\times b$ as an arrow in red, labelled "$a \\times b$"'), cross.lines.join(' / '));
     assert.equal((scene as Scene3D).segments.length, 3);
 });
 

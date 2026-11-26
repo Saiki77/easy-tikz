@@ -583,11 +583,14 @@ function cardOfPart(part: string, values: ReadonlyMap<string, NoteVector>): Vect
         if (a.kind !== 'vec' || b.kind !== 'vec' || a.v.length !== b.v.length) continue;
         if (p.cross && a.v.length !== 3) continue;
         const dim = a.v.length as 2 | 3;
-        const arrow = (src: string, colour: string): { line: string; name: string } => {
-            if (ID.test(src) && lets.has(src)) return { line: `draw ${src} as an arrow in ${colour}, ${labelOf(texName(src) ?? `\\vec{${src}}`)}`, name: src };
+        const arrow = (src: string, colour: string): { line: string; name: string; tex: string } => {
+            if (ID.test(src) && lets.has(src)) {
+                const tex = texName(src) ?? `\\vec{${src}}`;
+                return { line: `draw ${src} as an arrow in ${colour}, ${labelOf(tex)}`, name: src, tex };
+            }
             const n = spare();
             lets.set(n, src);
-            return { line: `draw ${n} as an arrow in ${colour}, ${labelOf(texOfValue(src))}`, name: n };
+            return { line: `draw ${n} as an arrow in ${colour}, ${labelOf(texOfValue(src))}`, name: n, tex: texOfValue(src) };
         };
         if (!p.cross && !agrees(evaluate(`${p.a} \\cdot ${p.b}`, lets, sliders))) continue;
         if (p.cross && !agrees(evaluate(`${p.a} \\times ${p.b}`, lets, sliders))) continue;
@@ -599,7 +602,7 @@ function cardOfPart(part: string, values: ReadonlyMap<string, NoteVector>): Vect
             const c = evaluate(`${A.name} \\times ${B.name}`, lets, sliders);
             if (c.kind === 'vec') {
                 points.push(c.v);
-                draws.push(`draw $${A.name} \\times ${B.name}$ as an arrow in red, labelled`);
+                draws.push(`draw $${A.name} \\times ${B.name}$ as an arrow in red, ${labelOf(`${A.tex} \\times ${B.tex}`)}`);
             }
         }
         return finish(p.cross ? 'cross' : 'dot', dim, points, lets, sliders, draws, fromNote);
@@ -717,5 +720,7 @@ function finish(shape: VectorShape, dim: 2 | 3, points: number[][], lets: Lets, 
     const letLines = [...lets].filter(([n]) => need.has(n)).map(([n, v]) => `let ${n} = ${inMath(v)}`);
     const sliderLines = sliders.filter((n) => need.has(n)).map(SLIDER);
     const from = [...fromNote].filter(([n]) => need.has(n)).map(([, line]) => line);
-    return { kind: 'vector', shape, lines: [...viewLines(points, dim), ...sliderLines, ...letLines, ...draws], dim, fromNote: from };
+    // In space the labels are text: an arrow over a letter (a combining sign) shows badly there, the letter alone well.
+    const drawLines = dim === 3 ? draws.map((d) => d.replace(/labelled "([^"]*)"/, (_m: string, l: string) => `labelled "${l.replace(/\\(?:vec|overrightarrow|mathbf|boldsymbol|bm)\s*\{([^{}]*)\}/g, '$1')}"`)) : draws;
+    return { kind: 'vector', shape, lines: [...viewLines(points, dim), ...sliderLines, ...letLines, ...drawLines], dim, fromNote: from };
 }
