@@ -93,7 +93,8 @@ function defaultValues(): Record<string, unknown> {
         // tells a JSON block of 6.1 from an older complete dump (settleLook).
         look: AUTO,
         // 6.2.1: the chart's own axis lines ('thin', 'thick'), arrows ('on', 'off'), names ('always', 'named') and
-        // number size ('small', 'large'), else ('auto') the settings under Chart look and the look (src/look.ts).
+        // number size ('small', 'large'): `thick axes`, `axes with arrows`, `with axis names`, `small numbers` and their
+        // opposites, or the Chart tab. Else ('auto') the settings under Chart look and the look (src/look.ts).
         axis_lines: AUTO,
         axis_arrows: AUTO,
         axis_names: AUTO,

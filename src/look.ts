@@ -23,7 +23,9 @@
  * lines (thin or thick), Axis arrows, Axis names (x and y always, or only
  * names the chart gives) and Axis numbers (small or large), each As the look
  * by default. A chart can set each of them itself (axis_lines, axis_arrows,
- * axis_names, axis_numbers), and what it sets wins (resolveAxes).
+ * axis_names, axis_numbers: the lines `thick axes`, `axes with arrows`,
+ * `with axis names`, `small numbers` and their opposites, or the editor's
+ * Chart tab), and what it sets wins (resolveAxes).
  *
  * Pure: no DOM, no Obsidian. The settings are module state, set by the
  * plugin when it loads (like the interface language).
@@ -161,8 +163,9 @@ export function axisSettingsOf(stored: { axisLines?: unknown; axisArrows?: unkno
 
 /**
  * What a chart sets itself (the chart fields axis_lines, axis_arrows,
- * axis_names and axis_numbers, written as `set` lines): one of their values,
- * else null, left open ('auto', the default). Arrows also take true and false.
+ * axis_names and axis_numbers: `thin axes`, `axes without arrows`, `no axis
+ * letters`, `large numbers`, ...): one of their values, else null, left open
+ * ('auto', the default). Arrows also take true and false.
  */
 export function ownAxes(fields: { line?: unknown; arrows?: unknown; names?: unknown; numbers?: unknown }): { line: AxisLine | null; arrows: boolean | null; names: AxisNames | null; numbers: AxisNumberSize | null } {
     const arrows = fields.arrows === true || fields.arrows === 'on' ? true : fields.arrows === false || fields.arrows === 'off' ? false : null;

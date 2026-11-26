@@ -530,8 +530,13 @@ function labelLine(min: Data, full: Data): string {
 
 // ----------------------------------------------------------------- chart
 
-/** 6.2.1: the words the chart fields axis_lines, axis_arrows, axis_names and axis_numbers take ('auto' is left open). */
-const AXIS_WORDS = new Set(['auto', 'thin', 'thick', 'on', 'off', 'always', 'named', 'small', 'large']);
+/** 6.2.1: the lines of the chart's own axis lines, arrows, names and number size (src/look.ts); other values print as set lines. */
+const AXIS_LINES: Record<string, Record<string, string>> = {
+    axis_lines: { thin: 'thin axes', thick: 'thick axes' },
+    axis_arrows: { on: 'axes with arrows', off: 'axes without arrows', true: 'axes with arrows', false: 'axes without arrows' },
+    axis_names: { always: 'with axis names', named: 'no axis letters' },
+    axis_numbers: { small: 'small numbers', large: 'large numbers' },
+};
 
 /** The chart lines, each with the fields it covers, in the order a block lists them. */
 const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): string[] }> = [
@@ -611,6 +616,16 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
             return out;
         },
     },
+    // 6.2.1: thick axes, axes with arrows, with axis names, small numbers.
+    ...Object.entries(AXIS_LINES).map(([k, words]) => ({
+        keys: [k],
+        print: (m: Data) => {
+            if (!(k in m)) return [];
+            const v = m[k];
+            const word = typeof v === 'string' || typeof v === 'boolean' ? words[String(v)] : undefined;
+            return [word ?? `set ${k} = ${JSON.stringify(v)}`];
+        },
+    })),
     {
         keys: ['showLargeGrid', 'showSmallGrid'],
         print: (m) => {
@@ -627,14 +642,6 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
             return out;
         },
     },
-    // 6.2.1: the chart's own axis lines, arrows, names and number size (src/look.ts), as set lines with the bare word.
-    ...(['axis_lines', 'axis_arrows', 'axis_names', 'axis_numbers'] as const).map((k) => ({
-        keys: [k],
-        print: (m: Data) => {
-            const v = m[k];
-            return k in m ? [`set ${k} = ${typeof v === 'string' && AXIS_WORDS.has(v) ? v : JSON.stringify(v)}`] : [];
-        },
-    })),
     // The grid's opacity, after the grid lines; without the line it is the default, 0.5.
     {
         keys: ['gridOpacity'],

@@ -69,7 +69,7 @@ export const plugin = {
     'plugin.settings.colours.export': 'As in the LaTeX export',
     'plugin.settings.look.name': 'Chart look',
     'plugin.settings.look.desc':
-        'Clean (default): axes through the middle without arrows, a light grid, small grey numbers, no axis letters unless the chart names its axes, slightly thicker curves and values in soft labels, in the note and in the LaTeX export. Classic: the look of version 6.0. A chart that sets its own look keeps it (axes in a box, with a grid, no grid, grid opacity, axis names, a thickness). The four settings below change the axes of either look one by one.',
+        'Clean (default): axes through the middle without arrows, a light grid, small grey numbers, no axis letters unless the chart names its axes, slightly thicker curves and values in soft labels, in the note and in the LaTeX export. Classic: the look of version 6.0. A chart that sets its own look keeps it (axes in a box, with a grid, no grid, grid opacity, axis names, a thickness). The four settings below change the axes of either look one by one; one chart can choose its own in the Chart tab of the editor.',
     'plugin.settings.look.clean': 'Clean',
     'plugin.settings.look.classic': 'Classic',
     // 6.2.1: the axes, one by one, in a group under the heading Chart look.

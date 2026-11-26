@@ -48,6 +48,9 @@ export const panels: Messages<typeof en> = {
     'panels.chart.styleAxes': '軸線',
     'panels.chart.styleNone': 'なし',
     'panels.chart.axisLabels': '軸ラベル',
+    // 6.2.1：このグラフだけの軸の線、矢印、名前、数値の大きさ
+    'panels.chart.asTheDefault': '設定に合わせる',
+    'panels.chart.asTheDefaultHint': '設定に合わせる：プラグインの設定「グラフの見た目」に従います。ここで選ぶと、このグラフだけの指定になります（テキストでは thick axes などの行）。',
     'panels.chart.equalScale': '縦横同じ縮尺',
     'panels.chart.equalScalePolar': '縦横同じ縮尺（極座標では常にオン）',
     'panels.chart.axisLabel': '{axis} 軸ラベル',

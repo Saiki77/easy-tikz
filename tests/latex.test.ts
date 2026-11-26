@@ -793,6 +793,8 @@ const AXES: Record<string, { text: string; look: ChartLook; axes: Partial<AxisSe
     classicSmallNumbers: { text: TANGENT, look: 'classic', axes: { numbers: 'small' } },
     classicThinNoArrows: { text: ['show x from 0 to 6 and y from 0 to 4', 'axes on the edges', 'plot f(x) = sqrt(x)'].join('\n'), look: 'classic', axes: { line: 'thin', arrows: 'off' } },
     cleanLargeEdges: { text: ['show x from 1 to 9 and y from 2 to 8', 'plot f(x) = x - 1', 'xlabel time'].join('\n'), look: 'clean', axes: { numbers: 'large', arrows: 'on' } },
+    // A chart's own lines against every setting the other way: thin, no arrows, no letters, small numbers in Classic.
+    ownAgainstSettings: { text: [TANGENT, 'thin axes', 'axes without arrows', 'no axis letters', 'small numbers'].join('\n'), look: 'classic', axes: { line: 'thick', arrows: 'on', names: 'always', numbers: 'large' } },
     surfaceThinSmall: { text: ['3d', 'show x from -2 to 2 and y from -2 to 2', 'plot z = x^2 - y^2'].join('\n'), look: 'clean', axes: { line: 'thin', numbers: 'small', names: 'named' } },
 };
 

@@ -2,7 +2,9 @@
  * The axes, one by one (6.2.1, src/look.ts): the settings Axis lines, Axis
  * arrows, Axis names and Axis numbers under Chart look change the axes of
  * either look; each is As the look by default, and what a chart sets itself
- * (axis_lines, axis_arrows, axis_names, axis_numbers, as `set` lines) wins.
+ * (axis_lines, axis_arrows, axis_names, axis_numbers: `thick axes`, `axes
+ * with arrows`, `with axis names`, `small numbers` and their opposites, the
+ * same words in Full LaTeX's \axis[...], or the Chart tab) wins.
  * Resolution (chart x setting x look), the renderer config, the export
  * options of both looks and 3D, and the text round trip. pdflatex compiles
  * two of them in tests/latex.test.ts.
@@ -119,7 +121,7 @@ test('Axis names: Always writes x and y in Clean, Only when named drops them in 
     assert.deepEqual(labels('3d\nplot z = x y', 'clean', 'named'), ['', '', '']);
     assert.deepEqual(labels('3d\nzlabel height\nplot z = x y', 'classic', 'named'), ['', '', 'height']);
     // The chart's own axis_names wins over the setting; set show_axis_label = false keeps every name off.
-    assert.deepEqual(labels('set axis_names = always\nplot f(x) = x', 'clean', 'named'), ['x', 'y', 'z']);
+    assert.deepEqual(labels('with axis names\nplot f(x) = x', 'clean', 'named'), ['x', 'y', 'z']);
     assert.equal(withSettings('clean', { names: 'always' }, () => settings('set show_axis_label = false\nplot f(x) = x').toRendererConfig().showAxisLabels), false);
 });
 
@@ -186,14 +188,14 @@ test('Clean + large numbers: 10 pt numbers in the clean grey, steps with room fo
 });
 
 test('what a chart sets wins over the settings, in the export too', () => {
-    const own = ['set axis_lines = thin', 'set axis_arrows = off', 'set axis_names = named', 'set axis_numbers = small', TANGENT].join('\n');
+    const own = ['thin axes', 'axes without arrows', 'no axis letters', 'small numbers', TANGENT].join('\n');
     // Classic with these four set is Classic's export with the clean axes: thin, no arrows, no letters, small numbers.
     const opts = axisOptions(tikz(own, 'classic', { line: 'thick', arrows: 'on', names: 'always', numbers: 'large' }));
     assert.ok(opts.includes('axis line style={draw=etzAxis, line width=0.45pt, -}'), opts.join('\n'));
     assert.ok(opts.includes('tick label style={font=\\scriptsize}'));
     assert.ok(!opts.some((o) => o.startsWith('xlabel')));
     // Clean, with the chart asking for large numbers while the setting says small.
-    assert.ok(axisOptions(tikz(`set axis_numbers = large\n${TANGENT}`, 'clean', { numbers: 'small' })).includes('tick label style={text=etzTick}'));
+    assert.ok(axisOptions(tikz(`large numbers\n${TANGENT}`, 'clean', { numbers: 'small' })).includes('tick label style={text=etzTick}'));
 });
 
 test('3D: small numbers, the box in thin lines, no z name for Only when named; arrows never', () => {
@@ -212,32 +214,66 @@ test('3D: small numbers, the box in thin lines, no z name for Only when named; a
 
 // ------------------------------------------------------------ the chart text
 
-test('the four chart fields: left open by default, set lines with the bare word, the same in words, Full LaTeX and JSON', () => {
+test('the four chart fields: left open by default; their lines in words and Full LaTeX, printed and read back the same', () => {
     const data = new SettingsManager().serialize();
     for (const k of ['axis_lines', 'axis_arrows', 'axis_names', 'axis_numbers']) assert.equal(data[k], 'auto', k);
     assert.deepEqual(minimize(parseChartText('plot f(x) = x').data), minimize(parseChartText('set axis_lines = auto\nplot f(x) = x').data));
-    const text = ['set axis_lines = thick', 'set axis_arrows = on', 'set axis_names = always', 'set axis_numbers = small', 'plot f(x) = x^2'].join('\n');
-    const parsed = parseChartText(text);
-    assert.deepEqual(parsed.problems, []);
-    const chart = SettingsManager.fromJSON(parsed.data).serialize();
-    assert.equal(chart.axis_lines, 'thick');
-    assert.equal(chart.axis_arrows, 'on');
-    assert.equal(chart.axis_names, 'always');
-    assert.equal(chart.axis_numbers, 'small');
-    // Words: printed back as written.
-    const printed = printChartText(chart);
-    for (const line of text.split('\n').slice(0, 4)) assert.ok(printed.split('\n').includes(line), `${line} in\n${printed}`);
-    assert.deepEqual(minimize(parseChartText(printed).data), minimize(parsed.data));
-    // Full LaTeX: \axis[axis_lines=thick, ...], read back the same.
-    const full = printFullText(chart);
-    assert.ok(/axis_lines=thick/.test(full) && /axis_arrows=on/.test(full) && /axis_names=always/.test(full) && /axis_numbers=small/.test(full), full);
-    const back = readBlock(full);
-    assert.ok(typeof back !== 'string', String(back));
-    if (typeof back !== 'string') {
-        assert.deepEqual(back.problems, []);
-        assert.deepEqual(minimize(back.data), minimize(parsed.data));
+    // Every value of the four, as its line: the field it sets, printed back as written, the same through Full LaTeX.
+    const lines: Array<[string, string, string]> = [
+        ['thin axes', 'axis_lines', 'thin'],
+        ['thick axes', 'axis_lines', 'thick'],
+        ['axes with arrows', 'axis_arrows', 'on'],
+        ['axes without arrows', 'axis_arrows', 'off'],
+        ['with axis names', 'axis_names', 'always'],
+        ['no axis letters', 'axis_names', 'named'],
+        ['small numbers', 'axis_numbers', 'small'],
+        ['large numbers', 'axis_numbers', 'large'],
+    ];
+    for (const [line, key, value] of lines) {
+        const text = `show x from -3 to 3 and y from -1 to 5\naxes in the middle\n${line}\nplot f(x) = x^2`;
+        const parsed = parseChartText(text);
+        assert.deepEqual(parsed.problems, [], line);
+        assert.equal(parsed.data[key], value, line);
+        const chart = SettingsManager.fromJSON(parsed.data).serialize();
+        const printed = printChartText(chart);
+        assert.ok(printed.split('\n').includes(line), `${line} in\n${printed}`);
+        assert.deepEqual(minimize(parseChartText(printed).data), minimize(parsed.data), line);
+        // Full LaTeX: the same words as a flag of \axis, read back the same.
+        const full = printFullText(chart);
+        assert.ok(new RegExp(`\\\\axis\\[[^\\n]*\\b${line}\\b`).test(full), `${line} in\n${full}`);
+        const back = readBlock(full);
+        assert.ok(typeof back !== 'string', String(back));
+        if (typeof back !== 'string') {
+            assert.deepEqual(back.problems, [], full);
+            assert.deepEqual(minimize(back.data), minimize(parsed.data), full);
+        }
     }
-    // true and false read as on and off.
+    // All four in one chart, typed in Full LaTeX by hand, and in any order in words.
+    const four = ['thick axes', 'axes with arrows', 'with axis names', 'small numbers'];
+    const words = parseChartText(['plot f(x) = x^2', ...four.slice().reverse()].join('\n'));
+    const latex = readBlock(['\\begin{chart}', `\\axis[${four.join(', ')}]`, '\\addplot{x^2}', '\\end{chart}'].join('\n'));
+    assert.ok(typeof latex !== 'string' && !latex.problems.length, JSON.stringify(latex));
+    const fours = (d: Record<string, unknown>) => [d.axis_lines, d.axis_arrows, d.axis_names, d.axis_numbers];
+    if (typeof latex !== 'string') assert.deepEqual(fours(latex.data), fours(words.data));
+    assert.deepEqual(fours(words.data), ['thick', 'on', 'always', 'small']);
+    // set lines and JSON reach the same fields; true and false read as on and off.
+    assert.deepEqual(minimize(parseChartText(['plot f(x) = x^2', 'set axis_lines = thick', 'set axis_arrows = on', 'set axis_names = always', 'set axis_numbers = small'].join('\n')).data), minimize(words.data));
     const yes = withSettings('clean', {}, () => SettingsManager.fromJSON({ v: 4, axis_arrows: true }).toRendererConfig().axes);
     assert.equal(yes?.arrows, true);
+    // Unknown words keep their problem messages: `axes with grid`, `with axis`, `no axis`.
+    for (const bad of ['axes with grid', 'with axis', 'no axis']) assert.ok(parseChartText(`${bad}\nplot f(x) = x`).problems.length > 0, bad);
+});
+
+test('a chart that sets its own axes in words wins over the settings: Clean + thin + no names + small, against Classic and every setting the other way', () => {
+    const own = [TANGENT, 'thin axes', 'axes without arrows', 'no axis letters', 'small numbers'].join('\n');
+    const opposite: Partial<AxisSettings> = { line: 'thick', arrows: 'on', names: 'always', numbers: 'large' };
+    const config = withSettings('classic', opposite, () => settings(own).toRendererConfig());
+    assert.deepEqual(config.axes, LOOK_AXES.clean);
+    assert.equal(config.look, 'classic');
+    assert.equal(config.xLabel, '');
+    const opts = axisOptions(tikz(own, 'classic', opposite));
+    assert.ok(opts.includes('axis line style={draw=etzAxis, line width=0.45pt, -}') && opts.includes('tick label style={font=\\scriptsize}'), opts.join('\n'));
+    // And the other way: Classic's axes in a chart drawn in Clean with the clean settings.
+    const classicOwn = [TANGENT, 'thick axes', 'axes with arrows', 'with axis names', 'large numbers'].join('\n');
+    assert.deepEqual(withSettings('clean', { line: 'thin', arrows: 'off', names: 'named', numbers: 'small' }, () => settings(classicOwn).toRendererConfig().axes), LOOK_AXES.classic);
 });

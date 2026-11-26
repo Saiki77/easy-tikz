@@ -512,6 +512,9 @@ class Builder {
     }
 }
 
+/** 6.2.1: `thin axes`, `thick axes`, `small numbers`, `large numbers`: the chart's own axis lines and number size. */
+const AXIS_LINES_OF = /^(?:(thin|thick)\s+axes|(small|large)\s+numbers)\s*$/i;
+
 /** Lines about the chart itself, and sliders: their words are their own, and they take no options. */
 // 6.0 F4: not `turning`: its line takes an option after a comma (`turning, speed 2`).
 const CHART_WORDS = new Set(['view', 'show', 'axes', 'no', 'grid', 'with', 'size', 'equal', 'polar', '3d', 'snippet', 'variables', 'set', 'slider', 'frames']); // frames: 6.0 C
@@ -1059,6 +1062,15 @@ function statement(b: Builder, line: string) {
     // A formula that starts with a name like a word of the syntax (`mark + x = 3`, a slider called mark) is a formula.
     if (/^(show|no|with|plot|draw|mark|write|double|use|data|transform|colour|color)$/.test(word) && /^(?:[*/^=<>!]|[-+]\s)/.test(rest.text)) return formulaLine(b, name, body, options); // transform: 6.0 D; colour, color: 6.0 E
 
+    // 6.2.1: the chart's own axis lines and number size: `thick axes`, `thin axes`, `small numbers`, `large numbers`.
+    const own = AXIS_LINES_OF.exec(t);
+    if (own) {
+        if (split.bar >= 0) b.problem(split.bar, msg('problems.text.noOptions', { word: (own[1] ?? own[2]).toLowerCase() }));
+        if (own[1]) b.chart.axis_lines = own[1].toLowerCase();
+        else b.chart.axis_numbers = own[2].toLowerCase();
+        return;
+    }
+
     switch (word) {
         case 'view':
         case 'show':
@@ -1069,6 +1081,8 @@ function statement(b: Builder, line: string) {
             if (/^axes$/i.test(rest.text.trim())) b.chart.showAxis = false;
             // 6.1: no grid, also where the chart look draws one.
             else if (/^grid$/i.test(rest.text.trim())) b.chart.showLargeGrid = false;
+            // 6.2.1: no axis letters: x and y only where the chart names its axes (Axis names: Only when the chart names them).
+            else if (/^axis\s+letters$/i.test(rest.text.trim())) b.chart.axis_names = 'named';
             else b.problem(body.at, msg('problems.text.didYouMean', { phrase: /^g/i.test(rest.text.trim()) ? 'no grid' : 'no axes' }));
             return;
         case 'with':
@@ -1240,7 +1254,10 @@ function axes(b: Builder, rest: Piece) {
         .trim()
         .toLowerCase()
         .replace(/^(?:on|in|at)\s+(?:the\s+|a\s+)?/, '');
-    if (style === 'none') b.chart.showAxis = false;
+    // 6.2.1: axes with arrows, axes without arrows (Axis arrows).
+    const arrows = /^(with|without|no)\s+arrows$/.exec(style.replace(/\s+/g, ' '));
+    if (arrows) b.chart.axis_arrows = arrows[1] === 'with' ? 'on' : 'off';
+    else if (style === 'none') b.chart.showAxis = false;
     else if (AXIS_STYLES[style]) b.chart.axis_style = AXIS_STYLES[style];
     else b.problem(rest.at, msg('problems.text.axesTakes'));
 }
@@ -1254,6 +1271,8 @@ function withLine(b: Builder, rest: Piece) {
     else if (g === 'fine grid') b.chart.showLargeGrid = b.chart.showSmallGrid = true;
     else if (g === 'minor grid') b.chart.showSmallGrid = true;
     else if (g === 'equal scale') b.chart.equalScale = true;
+    // 6.2.1: with axis names: x and y too, unless the chart names its axes otherwise (Axis names: Always).
+    else if (/^axis\s+names$/.test(g)) b.chart.axis_names = 'always';
     else b.problem(rest.at, msg('problems.text.withTakes'));
 }
 
