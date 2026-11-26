@@ -98,7 +98,7 @@ export const notes6: Messages<typeof en> = {
     'notes6.hover.kind.jensen': '不等式（イェンセン）',
     'notes6.hover.kind.epigraph': 'エピグラフ',
     'notes6.hover.fromLine': '{formula}（このノートの定義）',
-    'notes6.hover.exampleLine': '例 {formula}（このノートには {name} の定義がありません）',
+    'notes6.hover.exampleLine': '例：{formula}（このノートには {name} の定義がありません）',
     'notes6.hover.plane': 'n = 2 では {name}(x) を {name}(|x|) と読みます。x² は x₁² + x₂² です。',
     'notes6.hover.dimension': '次元 n',
     'notes6.hover.n1': 'n = 1',
