@@ -21,6 +21,7 @@
 import { MathContext } from '../mathcontext';
 import { isReservedName } from '../expr';
 import { compileValue } from '../values';
+import type { VectorParse, VectorStatement } from '../readers/types';
 
 /** What a vector card draws. */
 export type VectorShape = 'one' | 'sum' | 'multiple' | 'dot' | 'cross' | 'list';
@@ -512,27 +513,61 @@ export function vectorHoverKind(tex: string, values: ReadonlyMap<string, NoteVec
 
 /** The chart of a concrete vector, a sum, a multiple, a product or a list of vectors; null when the formula holds none. */
 export function vectorHoverCard(tex: string, values: ReadonlyMap<string, NoteVector> = new Map()): VectorHoverCard | null {
+    const p = readVector(tex);
+    return p ? buildVector(p, values) : null;
+}
+
+/**
+ * 6.2.2, reader 0 of the vector card: the statements of a formula (its
+ * first four parts), each a name and its sides as values of the chart
+ * language (src/readers/types.ts); null when no part reads.
+ */
+export function readVector(tex: string): VectorParse | null {
     let parts: string[];
     try {
         parts = partsOf(tex);
     } catch {
         return null;
     }
+    const statements: VectorStatement[] = [];
     for (const part of parts.slice(0, 4)) {
+        let r: ReturnType<typeof readPart>;
         try {
-            const card = cardOfPart(part, values);
-            if (card) return card;
+            r = readPart(part);
         } catch {
             // a part the reader cannot take: the next one
+            continue;
+        }
+        if (!r) continue;
+        statements.push({
+            ...(r.head && r.headTex ? { name: r.head, nameTex: r.headTex } : {}),
+            sides: r.sides.map((value, i) => ({ value, tex: r?.raw[i] ?? value })),
+            names: Object.fromEntries(r.names),
+        });
+    }
+    return statements.length ? { kind: 'vector', statements } : null;
+}
+
+/** 6.2.2, the builder of the vector card: the first statement (of four at most) that draws, with the note's vectors; null when none does. */
+export function buildVector(p: VectorParse, values: ReadonlyMap<string, NoteVector> = new Map()): VectorHoverCard | null {
+    for (const st of p.statements.slice(0, 4)) {
+        try {
+            const card = cardOfStatement(st, values);
+            if (card) return card;
+        } catch {
+            // a statement the builder cannot draw: the next one
         }
     }
     return null;
 }
 
-function cardOfPart(part: string, values: ReadonlyMap<string, NoteVector>): VectorHoverCard | null {
-    const r = readPart(part);
-    if (!r) return null;
-    const { head, headTex, sides, raw, names } = r;
+function cardOfStatement(st: VectorStatement, values: ReadonlyMap<string, NoteVector>): VectorHoverCard | null {
+    if (!st.sides.length) return null;
+    const head = st.name && st.nameTex ? st.name : null;
+    const headTex = head ? (st.nameTex ?? null) : null;
+    const sides = st.sides.map((s) => s.value);
+    const raw = st.sides.map((s) => s.tex);
+    const names = new Map(Object.entries(st.names));
     // A list of vectors: (1, 0), (0, 1).
     if (!head && sides.length === 1) {
         const items = splitTopLevel(sides[0], [',']);

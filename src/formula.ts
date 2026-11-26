@@ -18,6 +18,7 @@ import { latexToPlain, splitLetterRuns } from './latex';
 import { RESERVED_NAMES } from './migrate';
 import { settleLook } from './look'; // 6.1
 import { lineSpans, mathSpans } from './mathspans'; // 6.2
+import type { ChartParse } from './readers/types'; // 6.2.2
 
 /** The inline formula `$...$` around column `ch` of a line: its TeX and where it sits (dollars included); 6.2: the dollars paired as Obsidian pairs them (src/mathspans.ts). */
 export function formulaAt(line: string, ch: number): { tex: string; from: number; to: number } | null {
@@ -252,6 +253,17 @@ const COLOURS = ['blue', 'red', 'green'];
  * each in its own colour.
  */
 export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; lines: string[]; axis?: string } | null {
+    const p = readChart(texIn, row);
+    return p ? chartLines(p) : null;
+}
+
+/**
+ * 6.2.2, reader 0 of the chart: what a formula (or row `row` of an aligned
+ * block) draws, as a parse of src/readers/types.ts: its first part with a
+ * chart decides the kind; a function takes the other functions of the
+ * formula too (up to three). Null: it has no chart.
+ */
+export function readChart(texIn: string, row?: number): ChartParse | null {
     // The rows of an aligned block: the one under the pointer, or all of them.
     const rows = formulaRows(texIn);
     const chosen = (row !== undefined && rows[row] !== undefined ? [rows[row]] : rows).filter((r) => r.length > 0);
@@ -269,29 +281,70 @@ export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; 
     if (!parts.length) return null;
     const first = parts[0].found;
     const axis = parts[0].axis;
-    const kind = first.kind;
     // The axis keeps the formula's own letter; 6.2.1: x_1 and x_2 name the axes they became (as math).
     const named = parts[0].axisNames ?? {};
-    const xName = axis ? `xlabel ${axis}` : named.x ? `xlabel $${named.x}$` : null;
+    // A surface in another letter (z = 2t: no x, so t became x) names its x-axis after it.
+    const xAxis = named.x ?? (first.kind !== 'function' ? axis : undefined);
+    const axes = xAxis || named.y ? { axes: { ...(xAxis ? { x: xAxis } : {}), ...(named.y ? { y: named.y } : {}) } } : {};
+    switch (first.kind) {
+        case 'function': {
+            const fns = parts.filter((p) => p.found.kind === 'function').slice(0, COLOURS.length);
+            return { kind: 'function', functions: fns.map((p) => ({ ...(p.found.name ? { name: p.found.name } : {}), body: p.found.body })), ...(axis ? { variable: axis } : {}), ...axes };
+        }
+        case 'surface':
+            return { kind: 'surface', body: first.body, ...axes };
+        case 'polar':
+            return { kind: 'polar', body: first.body };
+        case 'region':
+            return { kind: 'region', condition: first.body, ...axes };
+        default:
+            return { kind: 'implicit', equation: first.body, ...axes };
+    }
+}
+
+/** 6.2.2: a chart parse's kind as src/formula.ts names it (implicit is an equation). */
+export function formulaKindOf(p: ChartParse): FormulaKind {
+    return p.kind === 'implicit' ? 'equation' : p.kind;
+}
+
+/** A name a chart may plot a function under: a letter or a word, no reserved one (sin, e, pi, x). */
+const PLOT_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
+
+/**
+ * 6.2.2, the builder of the chart cards: the chart lines of a parse, without
+ * the view (formulaLines' result), and the formula's variable (a sequence's
+ * n, the axis the chart's x stands for). Each other letter becomes a slider;
+ * more than four: null (notation, not a chart).
+ */
+export function chartLines(p: ChartParse): { kind: FormulaKind; lines: string[]; axis?: string } | null {
+    const kind = formulaKindOf(p);
+    const variable = p.kind === 'function' ? p.variable : undefined;
+    const named = p.kind === 'polar' ? {} : p.axes ?? {};
+    // A letter names its axis as text (xlabel t), anything else as math (xlabel $x_1$).
+    const axisLabel = (name: string) => (/^[A-Za-z]$/.test(name) ? `xlabel ${name}` : `xlabel $${name}$`);
+    const xName = variable ? axisLabel(variable) : named.x ? axisLabel(named.x) : null;
     const yName = named.y && kind !== 'polar' ? `ylabel $${named.y}$` : null;
     const label = [xName, yName].filter((l): l is string => !!l);
-    const fns = kind === 'function' ? parts.filter((p) => p.found.kind === 'function').slice(0, COLOURS.length) : [];
-    const bodies = kind === 'function' ? fns.map((p) => p.found.body) : [first.body];
+    const fns = p.kind === 'function' ? p.functions.slice(0, COLOURS.length) : [];
+    const bodies = p.kind === 'function' ? fns.map((f) => f.body) : [p.kind === 'implicit' ? p.equation : p.kind === 'region' ? p.condition : p.body];
+    if (!bodies.length || bodies.some((b) => !b.trim())) return null;
     const free = Array.from(new Set(bodies.flatMap((b) => freeNames(b))));
     if (free.length > MAX_SLIDERS) return null;
     const sliders = free.map((n) => `slider ${n} from -5 to 5, starting at 1`);
     const body = bodies[0];
-    switch (kind) {
+    switch (p.kind) {
         case 'function': {
             // 6.0 B: each function keeps the note's name (g stays g); f, g, h for the others, never one taken.
+            const own = fns.map((f) => (f.name && PLOT_NAME.test(f.name) && !RESERVED_NAMES.has(f.name) ? f.name : undefined));
             const taken = new Set<string>(free);
-            const names = fns.map((p) => {
-                const own = p.found.name;
-                const name = own && !taken.has(own) ? own : ['f', 'g', 'h', 'p', 'q', 'u'].find((n) => !taken.has(n) && !fns.some((q) => q.found.name === n)) ?? 'f';
+            const names = own.map((o) => {
+                const name = o && !taken.has(o) ? o : ['f', 'g', 'h', 'p', 'q', 'u'].find((n) => !taken.has(n) && !own.includes(n)) ?? 'f';
                 taken.add(name);
                 return name;
             });
-            return { kind, axis, lines: [...label, ...sliders, ...bodies.map((b, i) => `plot $${names[i]}(x) = ${b}$ in ${COLOURS[i]}, thick`)] };
+            // A domain (no reader of 6.2.1 gives one): the graph from x = a to b.
+            const domain = p.domain ? ` from x = ${p.domain.from} to ${p.domain.to}` : '';
+            return { kind, axis: variable, lines: [...label, ...sliders, ...bodies.map((b, i) => `plot $${names[i]}(x) = ${b}$${domain} in ${COLOURS[i]}, thick`)] };
         }
         case 'surface':
             // 6.2.1: a view that shows the height (seen from 45 degrees, max(x_1, x_2) was a flat diamond), and the
@@ -308,7 +361,13 @@ export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; 
 
 /** A formula as a whole chart: its lines with a view fitted to what they draw, or null when it does not draw. */
 export function formulaChart(tex: string, row?: number): string[] | null {
-    const found = formulaLines(tex, row);
+    const p = readChart(tex, row);
+    return p ? chartOfParse(p) : null;
+}
+
+/** 6.2.2: a chart parse as a whole chart: its lines with a view fitted to what they draw, or null when it does not draw. */
+export function chartOfParse(p: ChartParse): string[] | null {
+    const found = chartLines(p);
     if (!found) return null;
     const { kind, lines } = found;
     // Functions go on forever: x from -5 to 5 (the fit then takes y), a sequence (in n or k) from 0 to 20;
@@ -518,5 +577,24 @@ export function chartable(tex: string, row?: number): boolean {
     }
     if (chartableMemo.size > 500) chartableMemo.clear();
     chartableMemo.set(key, ok);
+    return ok;
+}
+
+const parseMemo = new Map<string, boolean>();
+
+/** 6.2.2: does a chart parse draw without an error (chartable for a parse)? */
+export function chartableParse(p: ChartParse): boolean {
+    const key = JSON.stringify(p);
+    const hit = parseMemo.get(key);
+    if (hit !== undefined) return hit;
+    let ok = false;
+    try {
+        const lines = chartOfParse(p);
+        ok = !!lines && drawable(lines);
+    } catch {
+        ok = false;
+    }
+    if (parseMemo.size > 500) parseMemo.clear();
+    parseMemo.set(key, ok);
     return ok;
 }

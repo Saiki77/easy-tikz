@@ -15,6 +15,7 @@ import { BUILTIN_FUNCTION_NAMES, CONSTANT_NAMES } from '../expr';
 import { readRecurrence } from '../values';
 import { readsLetter } from './forms';
 import { topEquals } from './tools';
+import type { IterateParse } from '../readers/types';
 
 export type IterateHoverKind = 'recurrence' | 'sum' | 'domain';
 
@@ -74,66 +75,93 @@ export function iterateHoverKind(tex: string): IterateHoverKind | null {
     return iterateHoverCard(tex)?.kind ?? null;
 }
 
-/** The chart of a formula of this part; null when it has none. */
+/** The chart of a formula of this part; null when it has none. 6.2.2: reader 0 (readIterate), then the builder (buildIterate). */
 export function iterateHoverCard(texIn: string): IterateHoverCard | null {
+    const p = readIterate(texIn);
+    return p ? buildIterate(p) : null;
+}
+
+/** A recurrence's step the cards cannot iterate: a gradient, a matrix or a sum in it. */
+const NOT_A_STEP = /\\nabla|\\begin|\\sum/;
+
+/**
+ * 6.2.2, reader 0 of this part: what a formula says (src/readers/types.ts):
+ * a recurrence, a sum or a function of z; null for any other formula.
+ */
+export function readIterate(texIn: string): IterateParse | null {
     const tex = normalize(texIn);
     if (!tex) return null;
     const rec = readRecurrence(tex);
     if (rec) {
-        if (/\\nabla|\\begin|\\sum/.test(rec.formula)) return null;
-        const letters = freeLetters(rec.formula, [rec.state]);
-        if (/^(z|w|zeta)$/.test(rec.state)) {
-            // A complex recurrence: the orbit of 0 with its first letter c = a + bi on two sliders.
-            const c = letters[0];
-            const sliders = c ? ['slider a from -2 to 1, starting at -0.12', 'slider b from -1.5 to 1.5, starting at 0.75'] : [];
-            const rest = letters.slice(1).map((l) => `slider ${l} from -2 to 2, starting at 1`);
-            const given = c ? `, $${c} = a + b i$` : '';
-            // Behind the orbit, faint: the plane of c, each point coloured by its own orbit (the Mandelbrot set for z^2 + c).
-            const plane = c ? [`colour the plane by $${tex}$, $${rec.state}_0 = 0$, $${c} = x + i y$, 100 steps, opacity 0.35`] : [];
-            return {
-                kind: 'recurrence',
-                note: 'iterate.hover.recurrenceNote',
-                lines: ['show x from -2 to 1 and y from -1.5 to 1.5', 'equal scale', ...sliders, ...rest, ...plane, `draw the orbit of $${tex}$, $${rec.state}_0 = 0$${given}, 40 steps`],
-            };
-        }
-        const sliders = letters.map((l, i) => `slider ${l} from 0 to 4, starting at ${i === 0 ? 3.7 : 1}`);
-        return {
-            kind: 'recurrence',
-            note: 'iterate.hover.cobwebNote',
-            lines: ['show x from 0 to 1 and y from 0 to 1', ...sliders, `draw the cobweb of $${tex}$ from 0.2, 40 steps`],
-        };
+        if (NOT_A_STEP.test(rec.formula)) return null;
+        // The state as written: a Greek state keeps its backslash (\theta_{n+1}).
+        return { kind: 'recurrence', state: tex.startsWith('\\') ? `\\${rec.state}` : rec.state, index: rec.index, step: rec.formula };
     }
     const sum = sumParts(tex);
-    if (sum) {
-        const letters = freeLetters(sum.body, [sum.k, 'x']).filter((l) => l !== sum.hi);
-        const extra = letters.map((l) => `slider ${l} from -2 to 2, starting at 1`);
-        const n = /^[A-Za-z]$/.test(sum.hi) && !['x', sum.k].includes(sum.hi) ? sum.hi : 'n';
-        const slider = `slider ${n} from 1 to 30, starting at 5, in steps of 1`;
-        if (readsLetter(sum.body, 'x')) {
-            return {
-                kind: 'sum',
-                note: 'iterate.hover.sumNote',
-                lines: ['show x from -7 to 7', slider, ...extra, `plot $S(x) = \\sum_{${sum.k}=${sum.lo}}^{${n}} ${sum.body}$ in blue, thick`],
-            };
-        }
-        const m = n === 'm' ? 'j' : 'm';
-        return {
-            kind: 'sum',
-            note: 'iterate.hover.sumNote',
-            lines: [`show x from 0 to ${n} + 1`, slider, ...extra, `mark the points $\\{(${m}, \\sum_{${sum.k}=${sum.lo}}^{${m}} ${sum.body}) : ${m} = 1, \\dots, ${n}\\}$`],
-        };
-    }
+    if (sum) return { kind: 'sum', index: sum.k, lower: sum.lo, upper: sum.hi, body: sum.body };
     // A function of z: f(z) = ..., or a formula in z alone.
     const eq = topEquals(tex);
     const head = eq >= 0 ? /^\s*([A-Za-z][A-Za-z0-9_]*)\s*\(\s*z\s*\)\s*$/.exec(tex.slice(0, eq)) : null;
     const body = head ? tex.slice(eq + 1).trim() : eq < 0 ? tex : '';
-    if (body && readsLetter(body, 'z') && !readsLetter(body, 'x') && !readsLetter(body, 'y') && (head || /\\frac|\^|[*/]|\bi\b/.test(body))) {
-        const letters = freeLetters(body, ['z']);
-        return {
-            kind: 'domain',
-            note: 'iterate.hover.domainNote',
-            lines: ['show x from -2 to 2 and y from -2 to 2', 'equal scale', ...letters.map((l) => `slider ${l} from -2 to 2, starting at 1`), `colour the plane by $${head ? `${head[1]}(z) = ` : ''}${body}$`],
-        };
-    }
+    if (body && readsLetter(body, 'z') && !readsLetter(body, 'x') && !readsLetter(body, 'y') && (head || /\\frac|\^|[*/]|\bi\b/.test(body))) return { kind: 'domain', ...(head ? { name: head[1] } : {}), body };
     return null;
+}
+
+/** 6.2.2: the card of a parse of this part (a recurrence, a sum, a function of z); null when it has none. */
+export function buildIterate(p: IterateParse): IterateHoverCard | null {
+    switch (p.kind) {
+        case 'recurrence': {
+            if (NOT_A_STEP.test(p.step)) return null;
+            const state = p.state.replace(/^\\/, '');
+            const tex = `${p.state}_{${p.index}+1} = ${p.step}`;
+            const letters = freeLetters(p.step, [state]);
+            if (/^(z|w|zeta)$/.test(state)) {
+                // A complex recurrence: the orbit of 0 with its first letter c = a + bi on two sliders.
+                const c = letters[0];
+                const sliders = c ? ['slider a from -2 to 1, starting at -0.12', 'slider b from -1.5 to 1.5, starting at 0.75'] : [];
+                const rest = letters.slice(1).map((l) => `slider ${l} from -2 to 2, starting at 1`);
+                const given = c ? `, $${c} = a + b i$` : '';
+                // Behind the orbit, faint: the plane of c, each point coloured by its own orbit (the Mandelbrot set for z^2 + c).
+                const plane = c ? [`colour the plane by $${tex}$, $${state}_0 = 0$, $${c} = x + i y$, 100 steps, opacity 0.35`] : [];
+                return {
+                    kind: 'recurrence',
+                    note: 'iterate.hover.recurrenceNote',
+                    lines: ['show x from -2 to 1 and y from -1.5 to 1.5', 'equal scale', ...sliders, ...rest, ...plane, `draw the orbit of $${tex}$, $${state}_0 = 0$${given}, 40 steps`],
+                };
+            }
+            const sliders = letters.map((l, i) => `slider ${l} from 0 to 4, starting at ${i === 0 ? 3.7 : 1}`);
+            return {
+                kind: 'recurrence',
+                note: 'iterate.hover.cobwebNote',
+                lines: ['show x from 0 to 1 and y from 0 to 1', ...sliders, `draw the cobweb of $${tex}$ from 0.2, 40 steps`],
+            };
+        }
+        case 'sum': {
+            const letters = freeLetters(p.body, [p.index, 'x']).filter((l) => l !== p.upper);
+            const extra = letters.map((l) => `slider ${l} from -2 to 2, starting at 1`);
+            const n = /^[A-Za-z]$/.test(p.upper) && !['x', p.index].includes(p.upper) ? p.upper : 'n';
+            const slider = `slider ${n} from 1 to 30, starting at 5, in steps of 1`;
+            if (readsLetter(p.body, 'x')) {
+                return {
+                    kind: 'sum',
+                    note: 'iterate.hover.sumNote',
+                    lines: ['show x from -7 to 7', slider, ...extra, `plot $S(x) = \\sum_{${p.index}=${p.lower}}^{${n}} ${p.body}$ in blue, thick`],
+                };
+            }
+            const m = n === 'm' ? 'j' : 'm';
+            return {
+                kind: 'sum',
+                note: 'iterate.hover.sumNote',
+                lines: [`show x from 0 to ${n} + 1`, slider, ...extra, `mark the points $\\{(${m}, \\sum_{${p.index}=${p.lower}}^{${m}} ${p.body}) : ${m} = 1, \\dots, ${n}\\}$`],
+            };
+        }
+        case 'domain': {
+            const letters = freeLetters(p.body, ['z']);
+            return {
+                kind: 'domain',
+                note: 'iterate.hover.domainNote',
+                lines: ['show x from -2 to 2 and y from -2 to 2', 'equal scale', ...letters.map((l) => `slider ${l} from -2 to 2, starting at 1`), `colour the plane by $${p.name ? `${p.name}(z) = ` : ''}${p.body}$`],
+            };
+        }
+    }
 }
