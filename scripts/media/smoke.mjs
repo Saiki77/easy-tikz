@@ -578,6 +578,37 @@ if (started) {
             assert(fns.length === 1 && fns[0] === 'x^2', `functions now: ${JSON.stringify(fns)}`);
             return 'prose and field pastes left alone';
         });
+        await check('examples (6.2.1): Open an example searches every example and loads the one chosen', async () => {
+            await obs.call(() => document.querySelector('.modal.tikz-modal .etz-header button[aria-label="Examples and templates"]').click());
+            await obs.waitFor(() => obs.call(() => !!document.querySelector('.menu')), { timeout: 2000, message: 'the menu' });
+            await obs.call(() => Array.from(document.querySelectorAll('.menu .menu-item')).find((i) => i.textContent === 'Open an example...').click());
+            await obs.waitFor(() => obs.call(() => !!document.querySelector('.prompt .etz-example-suggestion')), { timeout: 3000, message: 'the example search' });
+            const all = await obs.call(() => document.querySelectorAll('.prompt .suggestion-item').length);
+            const input = await obs.call(() => !!document.querySelector('.prompt input.prompt-input'));
+            assert(input && all >= 20, `the search shows ${all} examples`);
+            await obs.call(() => {
+                const el = document.querySelector('.prompt input.prompt-input');
+                el.value = 'chi-square';
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            await obs.sleep(300);
+            const first = await obs.call(() => (document.querySelector('.prompt .suggestion-item .etz-example-suggestion-title') || {}).textContent || '');
+            assert(/chi-square/i.test(first), `the first match for chi-square: ${first}`);
+            await obs.call(() => document.querySelector('.prompt .suggestion-item').click());
+            await obs.sleep(300);
+            // A chart in the editor asks "Replace the current chart?" first, as the menu's examples always did.
+            const asked = await obs.call(() => {
+                const dialog = Array.from(document.querySelectorAll('.modal.etz-dialog')).pop();
+                const button = dialog && dialog.querySelector('.etz-dialog-actions .mod-cta');
+                if (button) button.click();
+                return !!button;
+            });
+            if (asked) await obs.waitFor(() => obs.call(() => !document.querySelector('.modal.etz-dialog')), { timeout: 5000, message: 'the replace dialog to close' });
+            await obs.waitForRender({ settle: 200 });
+            const kinds = await obs.call(() => window.__etzMedia.requireEditor().settings.getValue('tools').map((t) => t.kind || t.type));
+            assert(kinds.some((k) => /chi/i.test(String(k))), `loaded tools: ${kinds.join()}`);
+            return `${all} examples in the search; "${first}" loaded`;
+        });
         await check('paste (6.2.1): Paste a chart in the menu and the command New chart from the clipboard', async () => {
             // The clipboard of this computer stays untouched: readText answers with the chart for this check only.
             const stub = (text) =>
@@ -596,6 +627,8 @@ if (started) {
                 await obs.waitFor(() => obs.call(() => !!document.querySelector('.menu')), { timeout: 2000, message: 'the menu' });
                 const items = await obs.call(() => Array.from(document.querySelectorAll('.menu .menu-item-title')).map((t) => t.textContent));
                 assert(items[0] === 'Paste a chart', `the menu starts with ${JSON.stringify(items.slice(0, 3))}`);
+                // 6.2.1: a short menu; the examples are in a search box.
+                assert(items.length <= 4 && items.includes('Open an example...'), `the menu holds ${items.length} items: ${JSON.stringify(items.slice(0, 6))}`);
                 await obs.call(() => Array.from(document.querySelectorAll('.menu .menu-item')).find((i) => i.textContent === 'Paste a chart').click());
                 await obs.sleep(300);
                 await obs.waitForRender({ settle: 200 });

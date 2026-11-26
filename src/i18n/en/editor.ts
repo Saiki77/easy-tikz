@@ -7,7 +7,9 @@ export const editor = {
     'editor.header.cartesian': 'Cartesian',
     'editor.header.polar': 'Polar',
     'editor.header.examplesAndTemplates': 'Examples and templates',
-    'editor.menu.examples': 'Examples',
+    'editor.menu.examples': 'Open an example...',
+    // 6.2.1: the menu holds no list of examples any more; this searches them.
+    'editor.menu.examplesSearch': 'Search the examples',
     'editor.menu.manageTemplates': 'Manage saved templates...',
     // 6.2.1: a chart from the clipboard (Cmd/Ctrl+V in the editor, this menu, the command).
     'editor.menu.paste': 'Paste a chart',

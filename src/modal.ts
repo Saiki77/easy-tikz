@@ -1,4 +1,4 @@
-import { App, MarkdownView, Menu, Modal, Notice, Platform, TFile, loadMathJax } from 'obsidian';
+import { App, FuzzyMatch, FuzzySuggestModal, MarkdownView, Menu, Modal, Notice, Platform, TFile, loadMathJax } from 'obsidian';
 import { cloneData, errorText, fitPixelScale, niceInterval } from './util';
 import { exportableSvg, svgToPng } from './svgExport';
 import { issueText, mergeViewErrors } from './issues';
@@ -11,7 +11,7 @@ import { MathContext, renameIdentifier, renameToolReferences } from './mathconte
 import { SceneCache, SceneIssue } from './scene';
 import { FitResult, fitSettings } from './fit';
 import { View } from './geometry';
-import { EXAMPLES, defaultParameter } from './migrate';
+import { ChartExample, EXAMPLES, defaultParameter } from './migrate';
 import { V6_EXAMPLES, showcaseExamples } from './guides'; // 6.0 F2: V6_EXAMPLES
 import { beyondToolReads, renameInBeyondTool } from './beyond/tools';
 import { motionToolReads, renameInMotionTool } from './motion6/tools'; // 6.0 C
@@ -411,6 +411,40 @@ function draftTime(savedAt: number): string {
     const today = new Date();
     if (date.toDateString() === today.toDateString()) return time;
     return t('editor.draft.dateTime', { date: date.toLocaleDateString(locale, { month: 'short', day: 'numeric' }), time });
+}
+
+/**
+ * 6.2.1: every example in a search box, with its description: the examples
+ * of the Build and Help tabs, in their order (the version 6 ones after the
+ * others). Names stay as src/migrate.ts writes them.
+ */
+class ExampleSearch extends FuzzySuggestModal<ChartExample> {
+    constructor(
+        app: App,
+        private readonly choose: (example: ChartExample) => void
+    ) {
+        super(app);
+        this.setPlaceholder(t('editor.menu.examplesSearch'));
+    }
+
+    getItems(): ChartExample[] {
+        return [...showcaseExamples(), ...EXAMPLES, ...V6_EXAMPLES];
+    }
+
+    getItemText(example: ChartExample): string {
+        return `${example.title} ${example.is3D ? '3D ' : ''}${example.description}`;
+    }
+
+    renderSuggestion(match: FuzzyMatch<ChartExample>, el: HTMLElement): void {
+        const example = match.item;
+        el.addClass('etz-example-suggestion');
+        el.createDiv({ cls: 'etz-example-suggestion-title', text: example.is3D ? `${example.title} (3D)` : example.title });
+        if (example.description) el.createDiv({ cls: 'etz-example-suggestion-desc', text: example.description });
+    }
+
+    onChooseItem(example: ChartExample): void {
+        this.choose(example);
+    }
 }
 
 export class TikzModal extends Modal implements PanelHost {
@@ -1167,18 +1201,13 @@ export class TikzModal extends Modal implements PanelHost {
                 .setIcon('clipboard-paste')
                 .onClick(() => void this.pasteFromClipboard())
         );
-        menu.addSeparator();
-        menu.addItem((item) => item.setTitle(t('editor.menu.examples')).setIsLabel(true));
-        // Example names stay as src/migrate.ts writes them (the Build and Help tabs show the same names).
-        // 6.0 F2: the examples of version 6 after the others, as in the Build tab.
-        for (const example of [...showcaseExamples(), ...EXAMPLES, ...V6_EXAMPLES]) {
-            menu.addItem((item) =>
-                item
-                    .setTitle(example.is3D ? `${example.title} (3D)` : example.title)
-                    .setIcon(example.is3D ? 'box' : 'line-chart')
-                    .onClick(() => this.loadChart(example.data))
-            );
-        }
+        // 6.2.1: the examples in a search box (the menu listed all of them and ran off the screen).
+        menu.addItem((item) =>
+            item
+                .setTitle(t('editor.menu.examples'))
+                .setIcon('library')
+                .onClick(() => new ExampleSearch(this.app, (example) => this.loadChart(example.data)).open())
+        );
         menu.addSeparator();
         menu.addItem((item) =>
             item

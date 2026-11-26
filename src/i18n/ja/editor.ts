@@ -9,7 +9,8 @@ export const editor: Messages<typeof en> = {
     'editor.header.cartesian': '直交座標',
     'editor.header.polar': '極座標',
     'editor.header.examplesAndTemplates': 'サンプルとテンプレート',
-    'editor.menu.examples': 'サンプル',
+    'editor.menu.examples': 'サンプルを開く…',
+    'editor.menu.examplesSearch': 'サンプルを検索',
     // 6.2.1: a chart from the clipboard (Cmd/Ctrl+V in the editor, this menu, the command).
     'editor.menu.paste': 'グラフを貼り付け',
     'editor.paste.pasted': 'クリップボードのグラフを貼り付けました',
