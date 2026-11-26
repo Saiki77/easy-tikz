@@ -12,7 +12,7 @@
  */
 import type { Label } from './net';
 import { splitLetterRuns } from '../../latex';
-import { isPointPair } from '../hover';
+import { isEmptyPair } from '../hover';
 
 /** The builder a label's card comes from. */
 export type CardGroup = 'chart' | 'notes6' | 'linear' | 'iterate';
@@ -298,8 +298,8 @@ function intervalSpellings(tex: string): Spelling[] {
     const out: Spelling[] = [{ tex: s }];
     const member = /^\s*(\\?[A-Za-z]+)(?:\s*_\s*\{?\w+\}?)?\s*\\in\s*([[(][\s\S]*[\])])\s*$/.exec(s);
     if (member) out.push({ tex: `x \\in ${member[2]}` });
-    // 6.2.1: two plain numbers in round brackets alone, (1, 2), are a point: no x in them.
-    else if (/^\s*[[(][^,]+,[^,]+[\])]\s*$/.test(s) && !isPointPair(s)) out.push({ tex: `x \\in ${s.trim()}` });
+    // 6.2.1: a pair of equal or reversed numbers alone, (1,1), is a point: no x in it.
+    else if (/^\s*[[(][^,]+,[^,]+[\])]\s*$/.test(s) && !isEmptyPair(s)) out.push({ tex: `x \\in ${s.trim()}` });
     return out;
 }
 

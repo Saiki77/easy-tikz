@@ -6,7 +6,7 @@
  *   maps          g: \mathbb{R}^n \to \mathbb{R}
  *   conditions    g(x) \le 0, x > 0, |x| < 1, x_1 \ge 2 (in one variable): a set on the x-axis,
  *                 named after the variable (x_1, \lambda, \alpha_1)
- *   intervals     \lambda \in [0, 1], [a, b], (a, b]; two plain numbers alone, (1, 2), are a point
+ *   intervals     \lambda \in [0, 1], [a, b], (a, b]; a pair of equal or reversed numbers alone, (1, 1), is a point
  *   Jensen        g(\lambda x + (1 - \lambda) y) \le \lambda g(x) + (1 - \lambda) g(y): a chord with a slider λ
  *   epigraphs     \operatorname{epi} g = \{(x, t) \mid g(x) \le t\}: the shade above the graph
  *
@@ -171,11 +171,21 @@ function texVariable(tex: string, name: string): string | null {
 
 /** A plain number as LaTeX writes it: 2, -0.5, 0{,}5, \tfrac12, \frac{4}{3}. */
 const PLAIN_NUMBER = String.raw`[+-]?\s*(?:\d+(?:\.\d+|\{,\}\d+)?|\.\d+|\\[dt]?frac\s*(?:\{\s*\d+\s*\}|\d)\s*(?:\{\s*\d+\s*\}|\d))`;
-const POINT_PAIR = new RegExp(String.raw`^\(\s*${PLAIN_NUMBER}\s*[,;]\s*${PLAIN_NUMBER}\s*\)$`);
+const NUMBER_PAIR = new RegExp(String.raw`^([[(])\s*(${PLAIN_NUMBER})\s*[,;]\s*(${PLAIN_NUMBER})\s*([\])])$`);
 
-/** A pair of two plain numbers in round brackets, alone: (1, 2), (3{,}5; 3{,}5), (\tfrac43, \tfrac83). A point, never an interval. */
-export function isPointPair(tex: string): boolean {
-    return POINT_PAIR.test(normalize(tex));
+/**
+ * A pair of two plain numbers alone whose interval is empty or a single
+ * point: equal ends, (1,1) or (3{,}5; 3{,}5), or reversed ends, (2, 1). A
+ * point, never an interval card. (0, 1) or (-2, 2) stays an interval when
+ * the network says interval; [1, 1] is the point 1 as an interval.
+ */
+export function isEmptyPair(tex: string): boolean {
+    const m = NUMBER_PAIR.exec(normalize(tex));
+    if (!m) return false;
+    const a = endValue(m[2]);
+    const b = endValue(m[3]);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+    return m[1] === '(' || m[4] === ')' ? a >= b : a > b;
 }
 
 let endMath: ReturnType<SettingsManager['createMathContext']> | null = null;
@@ -286,8 +296,8 @@ function parse(texIn: string): Parsed | null {
         const v = canonicalVariable(inInterval[1]);
         return { kind: 'interval', cond: `${v} \\in ${inInterval[2]}`, variable: v };
     }
-    // A pair of two plain numbers alone, (1, 2), is a point: no interval.
-    if (isPointPair(tex)) return null;
+    // A pair of equal or reversed numbers alone, (1,1) or (2, 1), is a point: no interval (an empty one).
+    if (isEmptyPair(tex)) return null;
     const bareInterval = /^([[(])\s*(-?[\d.]+|-?\\infty|[A-Za-z])\s*,\s*(-?[\d.]+|\\infty|[A-Za-z])\s*([\])])$/.exec(tex);
     if (bareInterval) return { kind: 'interval', cond: `x \\in ${tex}`, variable: 'x' };
     // Jensen: g(λx + (1 - λ)y) <= λ g(x) + (1 - λ) g(y).

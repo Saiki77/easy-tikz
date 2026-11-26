@@ -9,7 +9,7 @@ import { parseChartText } from '../src/text/parse';
 import { SettingsManager } from '../src/settings';
 import { computeScene2D, labelMetricsFor, Scene2D } from '../src/scene';
 import { generateTikz2D } from '../src/export';
-import { hoverCard, hoverKind, isPointPair } from '../src/notes6/hover';
+import { hoverCard, hoverKind, isEmptyPair } from '../src/notes6/hover';
 import { axisVariable, namedSetLabel } from '../src/notes6/sets';
 import { chartable, formulaChart, formulaLines } from '../src/formula';
 import { definedFunctions, productsOf, spellings } from '../src/notes6/recognize/adapt';
@@ -116,19 +116,22 @@ test('issue 5: a letter before a bracket that is no function of the note is a pr
     assert.ok(spellings('x \\le b + M(1 - y)', 'region').some((s) => s.tex === 'x \\le b + M \\cdot (1 - y)'));
 });
 
-test('issue 6: a bare pair of two plain numbers, (1,1), is a point: no interval card; x \\in (0, 1) keeps its card', () => {
-    for (const tex of ['(1,1)', '(1, 2)', '(0,0)', '(3,0)', '(-1, 2.5)', '(3{,}5;\\ 3{,}5)', '(\\tfrac43, \\tfrac83)']) {
-        assert.equal(isPointPair(tex), true, tex);
+test('issue 6: a bare pair of equal or reversed numbers, (1,1), is a point: no interval card; (0, 1) and x \\in (0, 1) keep theirs', () => {
+    // Empty or a single point: equal ends, reversed ends.
+    for (const tex of ['(1,1)', '(0,0)', '(3{,}5;\\ 3{,}5)', '(2, 1)', '(3,0)', '[2, 1]', '(1, 1]', '(\\tfrac83, \\tfrac43)']) {
+        assert.equal(isEmptyPair(tex), true, tex);
         assert.equal(hoverKind(tex), null, tex);
         assert.equal(hoverCard(tex, new Map()), null, tex);
         // Smart: no spelling makes it an interval.
         assert.equal(smartNotes6(tex, 'interval', new Map()), null, tex);
         assert.equal(rulesMark(tex, undefined, tex), false, tex);
     }
-    for (const tex of ['x \\in (0, 1)', '[1, 2]', '(0, \\infty)', '(a, b]', '\\lambda \\in [0,1]']) {
-        assert.equal(hoverKind(tex), 'interval', tex);
+    // A real interval keeps its card when the network says interval (the words around it decide, as gold does).
+    for (const tex of ['(0, 1)', '(-1,1)', '(-2, 2)', '(1, 2)', '(\\tfrac43, \\tfrac83)', '[1, 1]', 'x \\in (0, 1)', '[1, 2]', '(0, \\infty)', '(a, b]', '\\lambda \\in [0,1]']) {
+        assert.equal(isEmptyPair(tex), false, tex);
         assert.ok(smartNotes6(tex, 'interval', new Map()), tex);
     }
+    assert.equal(hoverKind('(0, 1)'), 'interval');
 });
 
 test('issue 8: the card is of the kind the network gives (a = x \\cdot y labelled surface is the surface z = x y), the same rule for every builder', () => {
