@@ -30,7 +30,7 @@ A Python block with NumPy and matplotlib draws in the chart and can play over ti
 
 ### A matrix moves the plane
 
-<img src="docs/media/v6-matrix.png" alt="The grid, the basis vectors î and ĵ and the unit square, half way through the move to the matrix A = [[1.5, 1], [0.5, 2]]: the grid lines lean, the old grid stays faint behind them, the square reads area = 1.786 on its way, and the strip under the chart shows Pause and Step 2 of 3. Beside it the finished picture with the eigenvectors labelled λ₁ = 2.5 and λ₂ = 1 and the square labelled det A = 2.5." width="100%">
+<img src="docs/media/v6-matrix.png" alt="The grid, the basis vectors î and ĵ and the unit square, half way through the move to the matrix A = [[1.5, 1], [0.5, 2]]: the grid lines lean, the old grid stays faint behind them, the square's area changes on its way, and the strip under the chart shows Pause and Step 2 of 3. Beside it the finished picture with the eigenvectors labelled λ₁ = 2.5 and λ₂ = 1 and the square labelled det A = 2.5." width="100%">
 
 Draw the grid and î, ĵ, then transform the plane by a matrix or by z ↦ z². Press Play and the plane moves, with det A and the eigenvectors.
 
@@ -48,7 +48,7 @@ Click a curve and ask: where is f ≤ 0, where do f and g cross, the tangent her
 
 ### Notes that read sets and maps
 
-<img src="docs/media/v6-hover.png" alt="A note that defines g(x) = x² − 4 and says that the set {x ∈ ℝⁿ ∣ g(x) ≤ 0} is convex. The pointer rests on the set, and its card shows the parabola with the set marked on the x-axis from −2 to 2, a switch n = 1 / n = 2, and the line: g(x) = x^2 − 4 comes from this note." width="100%">
+<img src="docs/media/v6-hover.png" alt="A note that defines g(x) = x² − 4 and says that the set {x ∈ ℝⁿ ∣ g(x) ≤ 0} is convex. The pointer rests on the set, and its card shows the parabola with the set marked on the x-axis from −2 to 2, a small switch n = 1 / n = 2, the line g(x) = x² − 4, from this note, and the buttons Open in the editor and Insert chart." width="100%">
 
 Sets, maps, intervals, inequalities, matrices, recurrences and sums in your notes open a chart too, with g taken from the note.
 

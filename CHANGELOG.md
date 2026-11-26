@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.1.0] - 2026-11-26
+
+Charts and hover cards look like the 6.0 film by default.
+
+### Added
+
+- **Chart look** setting: **Clean** (the new default) or **Classic** (exactly the look of 6.0). One chart can choose its own look in JSON (`"look": "classic"`).
+- `no grid` turns the grid off in a chart.
+
+### Changed
+
+- **The clean look** for every 2D chart that does not set its own look, also charts already in notes: axes through the middle without arrowheads (at the edge when 0 is outside the view), a light grid, small grey numbers that skip 0 and keep clear of marked points, no axis letters x and y unless the chart names its axes, curves as bold as `thick`, extrema as dots without the words min and max, and values the plugin writes (sets, chords, Riemann sums, regression lines, det A, Ask answers) in soft white pills. The PDF and TikZ export draw the same look. A chart that sets its own look (`axes in a box`, `with a grid`, `grid opacity`, axis names, a thickness) keeps it; polar and 3D charts are unchanged.
+- **Hover cards** show only the chart: no header row and no type chip. A function's card is framed on its real roots, extrema and y-intercept instead of fitting y to the whole x range, with the roots and extrema marked as dots. "Open in the editor" and "Insert chart" are always visible, small at the bottom; the close button shows on pointer or keyboard focus (always on phones). Set cards keep their n = 1 / n = 2 switch, small at the bottom, with one grey line that says where g comes from.
+- **The slider strip** under a chart has no box: the slider's name in math italic, a thin track, the value at the end.
+- Editor saves from before 6.1 stored every default (a box, no grid, thin lines): such JSON blocks are read as "left open", so they get the clean look too; values written by hand or by an AI tool stay as written.
+
 ## [6.0.0] - 2026-11-25
 
 Every idea deserves a picture. Formulas take complex numbers, vectors, matrices and sums; a matrix moves the plane; vector fields flow; orbits, cobwebs and fractals colour the plane; charts play in steps; a click on a curve asks it questions; and charts can be written in Python or GeoGebra. The 6.0 film: https://www.youtube.com/watch?v=X--vCnK-u7Q
