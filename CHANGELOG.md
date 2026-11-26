@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.2.3] - 2026-11-26
+
+### Added
+
+- **Covered numbers:** Hide (the default) or Show. With Show, axis numbers that a curve or a point covers stay, with an outline in the colour behind them, so a density like the Student t keeps 0.25 and 0.3. For all charts under Settings › Chart look, for one chart in the editor's Chart tab, or in its text (`keep all numbers`, `hide covered numbers`; Full LaTeX `\axis[keep all numbers]`). The LaTeX export matches.
+- **Long formulas in the editor:** a formula field grows to up to six lines instead of scrolling sideways, a long or nested formula gets a small typeset preview under it (the Student t density as a fraction with Γ, a root and a power), and the bracket that matches the one at the cursor is marked. Short formulas look as before; Enter and the other keys behave as before.
+
+### Fixed
+
+- **Dragging a chart in the editor** no longer makes the plot shrink, grow or jump when a number or an axis comes into view or leaves it: the plot keeps its size and place during a drag, a wheel zoom or arrow keys, the content follows the pointer exactly, and after the gesture it settles without a jump (charts nobody moves look as before; the LaTeX export does not change).
+- **A sum with its value** (`\sum^n_{k=0} q^k = \frac{1-q^{n+1}}{1-q}`) draws its partial sums from the left side, with the value as a dashed curve over n, so the dots lie on it. In 6.2.2 the value stayed in the terms and the card was empty ("Use == to compare"). Its sliders start at 0.5, where the value exists.
+
 ## [6.2.2] - 2026-11-26
 
 ### Fixed
