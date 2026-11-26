@@ -12,7 +12,7 @@ import { SettingsManager } from '../src/settings';
 import { computeScene2D, labelMetricsFor, Scene2D } from '../src/scene';
 import { hoverCard, noteDefinitions } from '../src/notes6/hover';
 import { noteDomains, spellings } from '../src/notes6/recognize/adapt';
-import { smartChart, smartNotes6 } from '../src/notes6/recognize/decide';
+import { smartChart, smartLinear, smartNotes6 } from '../src/notes6/recognize/decide';
 
 /** The scene of a card's lines (2D). */
 function sceneOf(lines: string[]): Scene2D {
@@ -131,4 +131,22 @@ test('interval reader: an interval after an image or a set operation, and the in
         assert.ok(c && c.kind === 'interval', `${tex}: ${c ? c.kind : 'no card'}`);
         assert.ok(c.lines.some((l) => l.includes(want)), `${tex}: ${c.lines.join(' / ')}`);
     }
+});
+
+test('linear readers: a vector with an arrow, x as the vector, a result after the product, the chain of an eigen check, |\\det A|', () => {
+    const values = new Map([
+        ['A', '\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}'],
+        ['v', '\\begin{pmatrix} 2 \\\\ 1 \\end{pmatrix}'],
+    ]);
+    for (const tex of ['A\\vec x', 'A\\vec v = \\begin{pmatrix} 1\\cdot 2 + 2 \\cdot 1 \\\\ 3 \\cdot 2 + 4 \\cdot 1 \\end{pmatrix} = \\begin{pmatrix} 4 \\\\ 10 \\end{pmatrix}', 'G(\\vec x) = A\\vec x', 'T(\\mathbf{v})=A\\mathbf{v}']) {
+        const c = smartLinear(tex, 'product', values);
+        assert.ok(c && c.kind === 'product', `${tex}: ${c ? c.kind : 'no card'}`);
+        assert.deepEqual(sceneOf(c.lines).issues, [], tex);
+    }
+    for (const tex of ['(A - \\lambda I)\\vec v = 0', '(A - 5I)v = 0', 'A \\vec v_2 = (3, 3)^\\top = 3 \\vec v_2', 'Tv=2v']) {
+        const c = smartLinear(tex, 'eigen', values);
+        assert.ok(c && c.kind === 'eigen', `${tex}: ${c ? c.kind : 'no card'}`);
+    }
+    const det = smartLinear('|\\det A|', 'det', values);
+    assert.ok(det && det.kind === 'det', det?.kind);
 });

@@ -491,13 +491,43 @@ function detSpellings(tex: string): Spelling[] {
     const s = tex.replace(/\\(begin|end)\s*\{\s*vmatrix\s*\}/g, '\\$1{pmatrix}');
     const first = topSplit(s, EQUALS).pieces[0].trim();
     const m = /^(?:\\det\s*)?\(?\s*(\\begin\{pmatrix\}[\s\S]*?\\end\{pmatrix\})\s*\)?$/.exec(first);
-    return m ? [{ tex: m[1] }] : [];
+    // 6.2.1: the area factor |\det A| (L5)
+    const abs = /^\|\s*(\\det\s*\(?\s*[A-Z]\s*\)?)\s*\|$/.exec(first.replace(/\\[lr]?vert(?![A-Za-z])/g, '|'));
+    return m ? [{ tex: m[1] }] : abs ? [{ tex: abs[1] }] : [];
 }
 
-/** (A - \lambda I) v = 0 as A v = \lambda v. */
-function eigenSpellings(tex: string): Spelling[] {
-    const m = /^\s*\(\s*([A-Z])\s*-\s*\\lambda(?:\s*_\s*\{?\w+\}?)?\s*I\s*\)\s*([a-z])\s*=\s*0\s*$/.exec(tex);
-    return m ? [{ tex: `${m[1]} ${m[2]} = \\lambda ${m[2]}` }] : [];
+/** 6.2.1: a vector's name without its arrow or bold, and without a subscript (\vec v_2 is v): the linear card reads one letter. */
+const plainVector = (tex: string) =>
+    tex
+        .replace(/\\(?:vec|mathbf|boldsymbol|bm)\s*\{\s*([a-z])\s*\}/g, '$1')
+        .replace(/\\(?:vec|mathbf|boldsymbol|bm)\s+([a-z])/g, '$1')
+        .replace(/(?<![A-Za-z\\])([a-z])\s*_\s*(?:\{\s*\w+\s*\}|\w)/g, '$1');
+
+/**
+ * (A - \lambda I) v = 0 as A v = \lambda v; 6.2.1, round 3: also with a
+ * number for λ ((A - 5I)v = 0), A v = 2 v, the chain of a numeric check
+ * (A \vec v_2 = (3, 3)^\top = 3 \vec v_2) and a vector with an arrow.
+ */
+function eigenSpellings(texIn: string): Spelling[] {
+    const tex = plainVector(texIn);
+    const m = /^\s*\(\s*([A-Z])\s*-\s*(?:\\[a-z]+|[0-9.]+)(?:\s*_\s*\{?\w+\}?)?\s*I\s*\)\s*([a-z])\s*=\s*0\s*$/.exec(tex);
+    if (m) return [{ tex: `${m[1]} ${m[2]} = \\lambda ${m[2]}` }];
+    const sides = topSplit(tex, EQUALS).pieces.map((p) => p.trim());
+    const left = /^([A-Z])\s*([a-z])$/.exec(sides[0]);
+    const right = /^(?:-?\s*[0-9.]+|\\[a-z]+)\s*([a-z])$/.exec(sides[sides.length - 1]);
+    return sides.length >= 2 && left && right && right[1] === left[2] ? [{ tex: `${left[1]} ${left[2]} = \\lambda ${left[2]}` }] : [];
+}
+
+/** 6.2.1, round 3: a matrix applied to a named vector as the card reads it (A v): A\vec v = ... with its result, G(\vec x) = A\vec x, \vec x \mapsto A\vec x. */
+function productSpellings(texIn: string): Spelling[] {
+    const tex = plainVector(texIn);
+    const sides = topSplit(tex, EQUALS).pieces.map((p) => p.trim());
+    const product = /^([A-Z])\s*(?:\\cdot\s*)?([a-z])$/;
+    const out: Spelling[] = [];
+    if (sides.length >= 2 && product.test(sides[0])) out.push({ tex: sides[0] });
+    const last = sides[sides.length - 1].replace(/^[\s\S]*\\mapsto\s*/, '');
+    if (product.test(last) && last !== tex.trim()) out.push({ tex: last });
+    return out;
 }
 
 /** X_n = ... X_{n-1} ... as X_{n+1} = ... X_n ... (the card reads the step forward). */
@@ -601,6 +631,7 @@ const OWN: Partial<Record<Label, (tex: string, domains?: ReadonlyMap<string, str
     interval: intervalSpellings,
     condition: conditionSpellings,
     matrix: matrixSpellings,
+    product: productSpellings,
     det: detSpellings,
     eigen: eigenSpellings,
     recurrence: recurrenceSpellings,
