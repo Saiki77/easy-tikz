@@ -70,16 +70,25 @@ All shapes are plain JSON. `src/readers/types.ts` gives each field and examples.
 | interval | `variable`, `left`, `lower`, `upper`, `right` |
 | jensen | `name`, `weight` |
 | epigraph | `name` |
-| matrix | `name`, `entries` (rows of cells) |
-| product | `matrix`, `vector` (names) |
+| matrix | `name`, `entries` (rows of cells), `factor` (a number before the matrix) |
+| product | `matrix` (a name) or `entries`, `vector` (a name) or `components` |
 | det | `matrix` (a name) or `entries` |
-| eigen | `matrix`, `vector` |
+| eigen | `matrix` (a name) or `entries`, `vector` |
 | recurrence | `state`, `index`, `step` |
 | sum | `index`, `lower`, `upper`, `body`, `value` |
 | domain | `name`, `body`, `variable` (z, or s) |
 | vector | `statements` [{`name`, `nameTex`, `sides` [{`value`, `tex`}], `names`}] |
 
 Write bodies in the formula's own variables, as written. Name these variables in `variables` or `variable`. The builder renames them into the chart's x, y, θ or z (`inVariables` in `src/formula.ts`).
+
+### What the builders cannot draw yet
+
+A right parse can still give no card. Known cases (6.2.2):
+
+- `r` in an equation or a region (`x^2 + y^2 = r^2`): the chart reads `r` as the polar radius, not as a slider.
+- A condition list with commas (`x \ge 0, x \ne 4`): join the parts with `\text{ and }`.
+- More than four free letters in a chart body: no card (notation, not a chart).
+- A set's condition with a free letter (`|\theta_1| + |\theta_2| \le t`): `t` gets no slider.
 
 ## What it counts
 
