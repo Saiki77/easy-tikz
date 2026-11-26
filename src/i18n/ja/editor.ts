@@ -13,7 +13,7 @@ export const editor: Messages<typeof en> = {
     // 6.2.1: a chart from the clipboard (Cmd/Ctrl+V in the editor, this menu, the command).
     'editor.menu.paste': 'グラフを貼り付け',
     'editor.paste.pasted': 'クリップボードのグラフを貼り付けました',
-    'editor.paste.noChart': 'クリップボードにグラフがありません。グラフの行（plot f(x) = x^2 など）か ```easy-tikz のブロック全体をコピーして、もう一度貼り付けてください。',
+    'editor.paste.noChart': 'クリップボードにグラフがありません。グラフの行か easy-tikz のブロックをコピーしてください。',
     'editor.menu.manageTemplates': '保存したテンプレートを管理…',
 
     'editor.tabs.sections': 'エディタのセクション',

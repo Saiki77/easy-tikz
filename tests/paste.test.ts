@@ -72,7 +72,7 @@ test('paste: a fenced block that is meant as a chart says what is wrong', () => 
     const json = readPasted('```easy-tikz\n{"v": 4, "functions": [\n```');
     assert.ok(json.kind === 'problem' && /not valid JSON/.test(json.message), JSON.stringify(json));
     assert.equal(pasteMessage({ kind: 'none' }, ''), 'The clipboard is empty.');
-    assert.match(pasteMessage({ kind: 'none' }, 'some words'), /^The clipboard holds no chart\./);
+    assert.equal(pasteMessage({ kind: 'none' }, 'some words'), 'No chart on the clipboard. Copy chart lines or an easy-tikz block.');
 });
 
 test('paste: the AI tab keeps its rules (sliders alone count there, its own message)', () => {

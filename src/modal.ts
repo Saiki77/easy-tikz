@@ -163,6 +163,8 @@ const FLASH_MS = 4000;
 const AUTOSAVE_DELAY_MS = 1000;
 const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const UNDO_VISIBLE_MS = 6000;
+/** 6.2.1: how long a notice about a pasted chart's problem stays (it names a line and a column to read). */
+const NOTICE_MS = 10000;
 const COPIED_LABEL_MS = 2000;
 /**
  * Stacked layout (preview above the editor): always below STACK_WIDTH of
@@ -905,6 +907,8 @@ export class TikzModal extends Modal implements PanelHost {
         }
         const pasted = readPasted(read.text, true);
         if (pasted.kind === 'chart') this.pasteChart(pasted.data);
+        // A problem names its line and column: too long for the bar, so a notice says it.
+        else if (pasted.kind === 'problem') new Notice(pasted.message, NOTICE_MS);
         else this.showMessage(pasteMessage(pasted, read.text));
     }
 
@@ -954,7 +958,7 @@ export class TikzModal extends Modal implements PanelHost {
             if (pasted.kind === 'none') return;
             e.preventDefault();
             if (pasted.kind === 'chart') this.pasteChart(pasted.data);
-            else this.showMessage(pasted.message);
+            else new Notice(pasted.message, NOTICE_MS);
         };
         this.pasteHandler = handler;
         doc.addEventListener('paste', handler);

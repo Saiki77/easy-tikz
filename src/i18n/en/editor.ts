@@ -12,7 +12,7 @@ export const editor = {
     // 6.2.1: a chart from the clipboard (Cmd/Ctrl+V in the editor, this menu, the command).
     'editor.menu.paste': 'Paste a chart',
     'editor.paste.pasted': 'Pasted the chart from the clipboard',
-    'editor.paste.noChart': 'The clipboard holds no chart. Copy chart lines (such as plot f(x) = x^2) or a whole ```easy-tikz block, then paste again.',
+    'editor.paste.noChart': 'No chart on the clipboard. Copy chart lines or an easy-tikz block.',
 
     // Tabs.
     'editor.tabs.sections': 'Editor sections',

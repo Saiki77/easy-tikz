@@ -336,12 +336,12 @@ function computeDistribution(t: DistributionTool, ctx: SceneCtx): SceneOutput {
     const { view } = ctx;
     const color = str(t.color) || 'blue';
     const kind = kindOf(t.kind);
-    /** The bars of P(X = k), those too small to see left out. */
-    const bars = (pmf: number[]) => {
+    /** The bars of P(X = k), those too small to see left out (`seen`: the share of the highest a bar must reach). */
+    const bars = (pmf: number[], seen = 1e-9) => {
         const peak = Math.max(...pmf);
         const rings: Pt[][] = [];
         pmf.forEach((h, k) => {
-            if (!(h > peak * 1e-9)) return;
+            if (!(h > peak * seen)) return;
             rings.push(bar(k, h));
         });
         const opacity = Number.isFinite(t.fillOpacity) ? t.fillOpacity : 0.35;
@@ -367,7 +367,8 @@ function computeDistribution(t: DistributionTool, ctx: SceneCtx): SceneOutput {
         if (!(lambda > 0 && lambda <= MAX_LAMBDA)) return fail(out, t.name, 'lambda', msg('beyond.problem.lambdaRange', { max: MAX_LAMBDA }));
         const pmf = poissonPmf(lambda);
         out.beyond = { distribution: { kind: 'poisson', lambda, pmf } };
-        bars(pmf);
+        // Its bars run on to the right: those lower than a 500th of the highest would only outline the x-axis.
+        bars(pmf, 1 / POISSON_SEEN);
         return out;
     }
     // 6.2.1: the densities of the other kinds.

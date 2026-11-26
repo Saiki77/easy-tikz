@@ -607,7 +607,7 @@ if (started) {
                 await obs.call(() => Array.from(document.querySelectorAll('.menu .menu-item')).find((i) => i.textContent === 'Paste a chart').click());
                 await obs.sleep(200);
                 const bar = await obs.call(() => (document.querySelector('.modal.tikz-modal .etz-undo:not(.tikz-hidden)') || {}).textContent || '');
-                assert(bar.startsWith('The clipboard holds no chart.'), `the bar says "${bar}"`);
+                assert(bar === 'No chart on the clipboard. Copy chart lines or an easy-tikz block.', `the bar says "${bar}"`);
                 await obs.closeEditor();
                 await stub('plot the Poisson distribution with mean 4\nshade P(X <= 2), labelled');
                 const ran = await obs.call((id) => app.commands.executeCommandById(`${id}:new-chart-from-clipboard`), PLUGIN_ID);
