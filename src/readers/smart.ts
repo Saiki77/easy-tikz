@@ -1,7 +1,8 @@
 /*
  * The reader of Smart (6.2.4): the voting reader first (src/readers/vote:
- * three hand-designed designs and their vote), reader 0 after it (the
- * regex readers of 6.2.1, src/readers/reader0.ts). The hover builds the
+ * three hand-designed designs and their vote), then the products and eigen
+ * equations that write their vector (src/readers/written.ts), reader 0 last
+ * (the regex readers of 6.2.1, src/readers/reader0.ts). The hover builds the
  * parses in order and the first card of the network's kind wins, so the
  * vote's robust parse leads, and a formula whose card only reader 0 reads
  * keeps it. Rules does not read parses (src/notes6/recognize/decide.ts).
@@ -12,8 +13,9 @@
 import { reader0 } from './reader0';
 import type { CardKind, CardParse, ReadContext, Reader } from './types';
 import { readVote } from './vote';
+import { writtenLinear } from './written';
 
-/** The vote, then reader 0; the same parse once. */
+/** The vote, the written vectors of a product or an eigen equation, then reader 0; the same parse once. */
 function readSmart(tex: string, kind: CardKind, ctx: ReadContext): CardParse[] {
     const out: CardParse[] = [];
     const seen = new Set<string>();
@@ -26,6 +28,7 @@ function readSmart(tex: string, kind: CardKind, ctx: ReadContext): CardParse[] {
         }
     };
     add(readVote(tex, kind, ctx));
+    add(writtenLinear(tex, kind));
     add(reader0.read(tex, kind, ctx));
     return out;
 }

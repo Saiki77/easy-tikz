@@ -267,8 +267,8 @@ export interface DetParse {
 }
 
 /**
- * eigen: an eigenvector equation. A v = \lambda v, (A - \lambda I) v = 0.
- * JSON: {"kind":"eigen","matrix":"A","vector":"v"}
+ * eigen: an eigenvector equation. A v = \lambda v, (A - \lambda I) v = 0, 6.2.4: A (1, 1)^\top = 3 (1, 1)^\top.
+ * JSON: {"kind":"eigen","matrix":"A","vector":"v"}   {"kind":"eigen","matrix":"A","components":["1","1"]}
  */
 export interface EigenParse {
     kind: 'eigen';
@@ -277,7 +277,9 @@ export interface EigenParse {
     /** The written matrix (square, 2 x 2), when the formula writes it (\begin{pmatrix} 2 & 1 \\ 1 & 2 \end{pmatrix} v = 3 v). */
     entries?: Tex[][];
     /** The eigenvector's name (v). */
-    vector: string;
+    vector?: string;
+    /** 6.2.4: the written eigenvector's entries (A (1, 1)^\top = 3 (1, 1)^\top), when the formula writes it. */
+    components?: Tex[];
 }
 
 // ------------------------------------------------------------------ iteration (src/iterate/hover.ts)

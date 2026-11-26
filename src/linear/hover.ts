@@ -158,6 +158,8 @@ export function buildLinear(p: LinearParse, defs: ReadonlyMap<string, string>): 
     }
     const dim = dimOf(matrix);
     if (dim === 3 && (p.kind === 'product' || p.kind === 'eigen')) return null;
+    // 6.2.4: a written eigenvector of another size than the matrix: no card.
+    if (p.kind === 'eigen' && p.components && p.components.length !== dim) return null;
     const slider = `slider ${S} from 0 to 1, starting at 1, in steps of 0.01`;
     const moving = `transform ${dim === 3 ? 'space' : 'the plane'} by $(1 - ${S}) \\cdot ${IDENTITY[dim]} + ${S} ${name}$`;
     const head =

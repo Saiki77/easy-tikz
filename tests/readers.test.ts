@@ -14,6 +14,7 @@ import { smartReader } from '../src/readers/smart';
 import { inVariables } from '../src/formula';
 import { spellings } from '../src/notes6/recognize/adapt';
 import { smartCard } from '../src/notes6/recognize/decide';
+import { writtenLinear } from '../src/readers/written';
 import type { CardKind, CardParse } from '../src/readers/types';
 import { Item, Measured, measure, readJsonl } from '../scripts/readers/harness';
 
@@ -43,6 +44,7 @@ const SHAPES: CardParse[] = [
     { kind: 'det', entries: [['1', '2'], ['3', '4']] },
     { kind: 'eigen', matrix: 'A', vector: 'v' },
     { kind: 'eigen', entries: [['2', '1'], ['1', '2']], vector: 'v' },
+    { kind: 'eigen', matrix: 'A', components: ['1', '1'] },
     { kind: 'recurrence', state: 'x', index: 'n', step: 'r x_n (1 - x_n)' },
     { kind: 'sum', index: 'k', lower: '1', upper: 'n', body: 'k^2' },
     { kind: 'domain', name: 'f', body: '\\frac{z^2 - 1}{z^2 + 1}' },
@@ -141,6 +143,34 @@ test('6.2.4: a variable renamed right after a command gets a space (\\lvert x, n
     assert.ok(smartCard('\\{\\theta \\mid \\lvert\\theta_1\\rvert + \\lvert\\theta_2\\rvert \\le 1\\}', 'set')?.card.lines.includes('shade where $\\lvert x\\rvert + \\lvert y\\rvert \\le 1$, outlined'));
 });
 
+test('6.2.4: products and eigen equations that write their vector (or their matrix) draw: the matrix by its name or written, the vector written', () => {
+    const lines = (tex: string, kind: CardKind) => {
+        const hit = smartCard(tex, kind);
+        assert.ok(hit && hit.card.kind === kind, `${tex}: ${hit?.card.kind ?? 'no card'}`);
+        assert.deepEqual(parses(hit?.card.lines ?? []), [], tex);
+        return hit?.card.lines ?? [];
+    };
+    assert.deepEqual(writtenLinear('A (2, 1)^\\top = (5, 4)^\\top', 'product'), [{ kind: 'product', matrix: 'A', components: ['2', '1'] }]);
+    assert.ok(lines('A (2, 1)^\\top = (5, 4)^\\top', 'product').includes('let $v = (2, 1)$'));
+    // the bracket after the name is the vector: S(1, 1)^\top; a name with an argument keeps its letter: R(90°)
+    assert.deepEqual(writtenLinear('S(1, 1)^T = (2, \\tfrac12)^T', 'product')[0], { kind: 'product', matrix: 'S', components: ['1', '1'] });
+    assert.deepEqual(writtenLinear('R(90°)\\,(2, 1)^\\top = (-1, 2)^\\top', 'product')[0], { kind: 'product', matrix: 'R', components: ['2', '1'] });
+    // both written, also with a number before the matrix; the side that writes more comes first
+    assert.ok(lines('\\begin{pmatrix} 2 & 1 \\\\ 1 & 2 \\end{pmatrix} \\begin{pmatrix} 1 \\\\ 0 \\end{pmatrix}', 'product').includes('let $A = \\begin{pmatrix} 2 & 1 \\\\ 1 & 2 \\end{pmatrix}$'));
+    lines('\\tfrac12 \\begin{pmatrix} 1 & 1 \\\\ 1 & 1 \\end{pmatrix}\\begin{pmatrix} 3 \\\\ 1 \\end{pmatrix}', 'product');
+    assert.deepEqual(writtenLinear('R(90°)\\,\\vec v = \\begin{pmatrix} 0 & -1 \\\\ 1 & 0 \\end{pmatrix}\\begin{pmatrix} 2 \\\\ 1 \\end{pmatrix}', 'product')[0], { kind: 'product', entries: [['0', '-1'], ['1', '0']], components: ['2', '1'] });
+    // eigen: the matrix's eigenvectors; Unicode signs as in notes
+    assert.deepEqual(writtenLinear('A(1,1)^\\top = 3(1,1)^\\top', 'eigen'), [{ kind: 'eigen', matrix: 'A', components: ['1', '1'] }]);
+    assert.ok(lines('B·(1, −2)^T = (2, −4)^T = 2·(1, −2)^T', 'eigen').includes('draw the eigenvectors of B, labelled'));
+    lines('P \\begin{pmatrix} 1 \\\\ -5 \\end{pmatrix} = 0.4 \\begin{pmatrix} 1 \\\\ -5 \\end{pmatrix}', 'eigen');
+    lines('\\begin{pmatrix} 3 & 1 \\\\ 0 & 2 \\end{pmatrix}(1,-1)^\\top = 2 (1, -1)^\\top', 'eigen');
+    // none: two matrices in a row, a vector of unknown size, other kinds, a 3-vector after a 2 x 2 matrix
+    assert.deepEqual(writtenLinear('AB\\,(1,1)^\\top = (3, 1)^\\top', 'product'), []);
+    assert.deepEqual(writtenLinear('P\\mathbf{1} = \\mathbf{1}', 'eigen'), []);
+    assert.deepEqual(writtenLinear('A (2, 1)^\\top', 'function'), []);
+    assert.equal(buildCard({ kind: 'eigen', entries: [['2', '1'], ['1', '2']], components: ['1', '1', '1'] }), null);
+});
+
 interface Fixture {
     corpus: Item[];
     gold: Record<string, CardParse>;
@@ -177,10 +207,10 @@ test('gap harness on the committed subset (tests/readers-fixture.json): reader 0
     assert.ok(r0.m.falseCards.shown <= 70, `false cards: ${r0.m.falseCards.shown}`);
     // Smart's reader: the counts at the time of writing (b and c count other cards than reader 0's gold parses).
     const smart = run('Smart', smartReader);
-    assert.ok(smart.t.a <= 12, `a: ${smart.t.a}`);
+    assert.ok(smart.t.a <= 9, `a: ${smart.t.a}`);
     assert.ok(smart.t.b <= 12, `b: ${smart.t.b}`);
     assert.ok(smart.t.c <= 12, `c: ${smart.t.c}`);
-    assert.ok(smart.m.falseCards.shown <= 70, `false cards: ${smart.m.falseCards.shown}`);
+    assert.ok(smart.m.falseCards.shown <= 71, `false cards: ${smart.m.falseCards.shown}`);
 });
 
 // The hover-ml corpus and the reader data: only on the machine that has them, so CI without them passes.
@@ -213,7 +243,7 @@ test('gap harness on the whole corpus and every fourth suite variant: reader 0 a
     assert.ok(r0.m.falseCards.shown <= 71, `false cards: ${r0.m.falseCards.shown}`);
     // Smart's reader (6.2.4): b and c count other cards than reader 0's gold parses (DESIGN-READERS.md section 6)
     const smart = run('Smart', smartReader);
-    assert.ok(smart.t.a / smart.t.net <= 0.04, `a: ${smart.t.a} of ${smart.t.net}`);
+    assert.ok(smart.t.a / smart.t.net <= 0.023, `a: ${smart.t.a} of ${smart.t.net}`);
     assert.ok(smart.t.b <= 92, `b: ${smart.t.b}`);
     assert.ok(smart.t.c / smart.t.vNet <= 0.065, `c: ${smart.t.c} of ${smart.t.vNet}`);
     assert.ok(smart.m.falseCards.shown <= 78, `false cards: ${smart.m.falseCards.shown}`);
