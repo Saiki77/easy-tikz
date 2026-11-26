@@ -758,7 +758,9 @@ function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, pape
     const yNamed = config.showAxisLabels && !!labelText(String(config.yLabel ?? ''));
     if (place.x === 'zero' && config.showAxisLabels && labelText(String(config.xLabel ?? ''))) opts.push(`xlabel style={at={(axis description cs:1,${fmtNum(fy)})}, anchor=west, xshift=3pt}`);
     if (place.y === 'zero' && yNamed) {
-        opts.push(`ylabel style={at={(axis description cs:${fmtNum(fx)},1)}, anchor=south, rotate=-90, yshift=3pt}`);
+        // 6.2.1: upright, as in the preview: pgfplots does not turn the name of an axis through the middle (up to 6.2.0 a
+        // rotate=-90 here laid it on its side).
+        opts.push(`ylabel style={at={(axis description cs:${fmtNum(fx)},1)}, anchor=south, yshift=3pt}`);
         if (labelText(ctx.formatTemplate(String(config.title ?? '')))) opts.push(`title style={yshift=${MIDDLE_TITLE_LIFT_PT}pt}`);
     }
     // The grid: the light ink at the chart's grid opacity.
