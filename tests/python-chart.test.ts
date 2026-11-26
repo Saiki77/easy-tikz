@@ -315,3 +315,46 @@ test('a frame(t) that fails names its line', () => {
     const scene = sceneOf('show x from 0 to 1 and y from 0 to 1\npython:\n    def frame(t):\n        return 1 / 0');
     assert.ok(scene.issues.some((i) => i.message === 'Line 2 of the script, in frame(t): division by zero'), JSON.stringify(scene.issues));
 });
+
+test('draw order as matplotlib: lines and arrows over the scatter dots go over the markers; scatter alpha is kept (6.2.1)', () => {
+    const s = sceneOf(`show x from -1 to 5 and y from -1 to 3
+python:
+    import matplotlib.pyplot as plt
+    plt.arrow(0, 0, 1, 1, color='C3')
+    plt.scatter([0, 2, 4], [1, 1, 1], s=900, alpha=0.4)
+    plt.arrow(0, 2, 1, 0, color='C1')
+    plt.plot([0, 4], [0.5, 0.5])
+    plt.plot([0, 4], [2.5, 2.5], zorder=0)
+    plt.annotate('', xy=(2, 1), xytext=(0, 1), arrowprops=dict(arrowstyle='->'))`);
+    const item = s.items.find((i) => i.source === 'PY1');
+    assert.ok(item);
+    const arrows = item.strokes.filter((p) => p.arrow);
+    const lines = item.strokes.filter((p) => !p.arrow);
+    // plt.arrow is zorder 1 like scatter: under the dots before it, over them after it; annotate is 3.
+    assert.deepEqual(arrows.map((a) => !!a.front), [false, true, true]);
+    // plot is zorder 2: over the dots; zorder=0 puts it under them.
+    assert.deepEqual(lines.map((l) => !!l.front), [true, false]);
+    assert.ok(item.markers.length === 3 && item.markers.every((m) => m.opacity === 0.4), JSON.stringify(item.markers));
+});
+
+test('a script without scatter dots keeps every line in the stroke layer (6.2.1)', () => {
+    const s = sceneOf(`show x from -1 to 5 and y from -1 to 3
+python:
+    import matplotlib.pyplot as plt
+    plt.plot([0, 4], [0.5, 0.5], 'o-')
+    plt.arrow(0, 2, 1, 0)`);
+    const item = s.items.find((i) => i.source === 'PY1');
+    assert.ok(item && item.strokes.length === 2 && item.strokes.every((p) => !p.front));
+});
+
+test('the export draws an arrow over the scatter dots after them, and the dots see-through (6.2.1)', () => {
+    const tikz = settingsOf(`show x from -1 to 5 and y from -1 to 3
+python:
+    import matplotlib.pyplot as plt
+    plt.scatter([0, 2], [1, 1], s=900, alpha=0.4)
+    plt.annotate('', xy=(2, 1), xytext=(0, 1), arrowprops=dict(arrowstyle='->'))`).generateTikzCode();
+    const dots = tikz.indexOf('only marks');
+    const arrow = tikz.indexOf('->', dots);
+    assert.ok(dots > 0 && arrow > dots, tikz);
+    assert.ok(/only marks[^\n]*opacity=0\.4/.test(tikz), tikz);
+});

@@ -428,6 +428,8 @@ class Layers {
     readonly strokes: Array<PathCmd | string> = [];
     readonly guides: Array<PathCmd | string> = [];
     readonly markers: string[] = [];
+    /** 6.2.1: lines over the markers (StrokePrim.front). */
+    readonly front: Array<PathCmd | string> = [];
     readonly braces: string[] = [];
     readonly texts: string[] = [];
     readonly labels: string[] = [];
@@ -436,7 +438,7 @@ class Layers {
 
     paths(): PathCmd[] {
         const out: PathCmd[] = [];
-        for (const list of [this.fills, this.strokes, this.guides]) for (const e of list) if (typeof e !== 'string') out.push(e);
+        for (const list of [this.fills, this.strokes, this.guides, this.front]) for (const e of list) if (typeof e !== 'string') out.push(e);
         return out;
     }
 
@@ -468,7 +470,7 @@ class Layers {
         // the axes over markers on the border, such as an LP corner (0, 0).
         const fills = flat(this.fills);
         if (fills.length) out.push('\\begin{pgfonlayer}{axis background}', ...fills, '\\end{pgfonlayer}');
-        for (const list of [this.functions, this.strokes, this.guides, this.markers, this.braces, this.texts, this.labels]) {
+        for (const list of [this.functions, this.strokes, this.guides, this.markers, this.front, this.braces, this.texts, this.labels]) {
             out.push(...flat(list));
         }
         return out;
@@ -1058,7 +1060,9 @@ function strokeCmds(s: StrokePrim, colors: ColorSet, view: View, guide: boolean)
 function addStrokes(layers: Layers, item: SceneItem2D, colors: ColorSet, view: View): void {
     if (!(item.strokes || []).length) return;
     layers.strokes.push(comment(item.source));
-    for (const s of item.strokes) layers.strokes.push(...strokeCmds(s, colors, view, false));
+    if (item.strokes.some((s) => s.front)) layers.front.push(comment(item.source));
+    // 6.2.1: a line over the markers goes to the layer after them, as in the preview.
+    for (const s of item.strokes) (s.front ? layers.front : layers.strokes).push(...strokeCmds(s, colors, view, false));
 }
 
 /** Layer 6a: drop lines, dashed and thin like the preview's guides. */
@@ -1078,13 +1082,15 @@ function addMarkers(layers: Layers, item: SceneItem2D, colors: ColorSet, view: V
         // 6.0 ML: a dot with matplotlib's radius in points (3 points: the normal 2pt).
         const sizes = cleanNow ? CLEAN_MARK_SIZE : MARK_SIZE; // 6.1
         const size = m.radius !== undefined && Number.isFinite(m.radius) ? `${fmtNum(Math.max(0.2, (m.radius * 2) / 3))}pt` : sizes[m.size] || sizes.normal;
-        const key = `${c}|${size}|${m.dim ? 1 : 0}|${m.open ? 1 : 0}`;
+        const see = !m.dim && typeof m.opacity === 'number' && m.opacity >= 0 && m.opacity < 1 ? m.opacity : 1; // 6.2.1: scatter's alpha
+        const key = `${c}|${size}|${m.dim ? 1 : 0}|${m.open ? 1 : 0}|${see}`;
         let g = groups.length ? groups[groups.length - 1] : null;
         if (!g || g.key !== key) {
             // 6.0 B, C: an open dot (an open end of a set, a rest point that is not stable) is a ring in its colour filled with white.
             const look = m.open ? `mark options={fill=white, draw=${c}, line width=0.8pt}` : `mark options={draw=white, line width=${cleanNow ? '0.8pt' : '0.4pt'}}`;
             const opts = ['only marks', 'mark=*', `mark size=${size}`, c, look];
             if (m.dim) opts.push(`opacity=${fmtNum(DIM_OPACITY)}`);
+            else if (see < 1) opts.push(`opacity=${fmtNum(see)}`);
             opts.push('forget plot');
             g = { key, opts: opts.join(', '), pts: [] };
             groups.push(g);

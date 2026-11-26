@@ -551,6 +551,7 @@ export class SVGRenderer {
         this.drawStrokes(svg, items);
         this.drawLive(svg, items); // 6.0 F4
         this.drawMarks(svg, items);
+        this.drawFrontStrokes(svg, items); // 6.2.1
         this.drawBraces(svg, items);
         this.drawTexts(svg, items);
         this.drawAnnotations(svg, items);
@@ -1788,9 +1789,22 @@ export class SVGRenderer {
         for (const item of items) {
             const from = g.children.length;
             const plan = this.entering.get(item);
-            for (const s of item.strokes || []) this.drawStroke(g, s, false, plan ? this.strokeShape(item, plan, s) : undefined);
+            for (const s of item.strokes || []) if (!s.front) this.drawStroke(g, s, false, plan ? this.strokeShape(item, plan, s) : undefined);
             this.tag(g, from, item.source);
             // 6.0 entrances: lines of a region or a set sweep with their fill, a field's or a grid's ripple, a brace fades.
+            if (plan) this.enterEls(kidsFrom(g, from), item, plan.kind === 'sweep' || plan.kind === 'ripple' || plan.kind === 'fade' ? plan.kind : 'none');
+        }
+        this.attach(svg, g);
+    }
+
+    /** 6.2.1: lines and arrows that go over the markers (a script's arrow over its scatter dots), right after them. */
+    private drawFrontStrokes(svg: SVGElement, items: SceneItem2D[]): void {
+        const g = this.layer('etz-front', true);
+        for (const item of items) {
+            const from = g.children.length;
+            const plan = this.entering.get(item);
+            for (const s of item.strokes || []) if (s.front) this.drawStroke(g, s, false, plan ? this.strokeShape(item, plan, s) : undefined);
+            this.tag(g, from, item.source);
             if (plan) this.enterEls(kidsFrom(g, from), item, plan.kind === 'sweep' || plan.kind === 'ripple' || plan.kind === 'fade' ? plan.kind : 'none');
         }
         this.attach(svg, g);
@@ -1884,6 +1898,7 @@ export class SVGRenderer {
             'stroke-width': rim,
         };
         if (m.dim) attrs.opacity = '0.45';
+        else if (typeof m.opacity === 'number' && m.opacity >= 0 && m.opacity < 1) attrs.opacity = num(m.opacity); // 6.2.1: scatter's alpha
         // 6.0 B, C: an open dot (an end a set does not hold, a rest point that is not stable) is a ring in the colour around the background.
         if (m.open) {
             attrs.fill = BACKGROUND;

@@ -311,7 +311,19 @@ function drawInto(out: SceneOutput, raw: readonly Draw[], view: View, fit: Pt[] 
     const keep = (pts: Pt[]) => {
         if (fit) for (const p of pts) fit.push(p);
     };
-    for (const d of draws) {
+    // 6.2.1: matplotlib paints by zorder, then in the order of the calls; the chart paints markers over lines.
+    // A line or arrow the script paints over all its scatter dots goes over the markers (StrokePrim.front).
+    let topDot = -Infinity;
+    let topDotAt = -1;
+    draws.forEach((d, i) => {
+        if (d.k === 'dots' && drawZ(d) >= topDot) {
+            topDot = drawZ(d);
+            topDotAt = i;
+        }
+    });
+    const overDots = (d: Draw, i: number): boolean => topDotAt >= 0 && (drawZ(d) > topDot || (drawZ(d) === topDot && i > topDotAt));
+    const mf2 = (p: StrokePrim, d: Draw, i: number): StrokePrim => ms(overDots(d, i) ? { ...p, front: true } : p);
+    for (const [i, d] of draws.entries()) {
         switch (d.k) {
             case 'line': {
                 const runs = finiteRuns(d.pts);
@@ -319,7 +331,8 @@ function drawInto(out: SceneOutput, raw: readonly Draw[], view: View, fit: Pt[] 
                 if (!d.markerOnly && runs.some((r) => r.length > 1)) {
                     const stroke: StrokePrim = { lines: runs.filter((r) => r.length > 1), color: d.color, width: d.width, dashed: d.dashed };
                     if (d.opacity < 1) stroke.opacity = d.opacity;
-                    out.strokes.push(ms(stroke));
+                    // A line with its own markers stays under them (they are one artist in matplotlib).
+                    out.strokes.push(d.marker ? ms(stroke) : mf2(stroke, d, i));
                 }
                 if (d.marker || d.markerOnly) for (const r of runs) for (const p of r) out.markers.push(mm(withRadius({ x: p.x, y: p.y, color: d.color, size: d.markerSize === 'normal' ? 'small' : d.markerSize }, d.markerRadius)));
                 break;
@@ -327,7 +340,9 @@ function drawInto(out: SceneOutput, raw: readonly Draw[], view: View, fit: Pt[] 
             case 'dots':
                 d.pts.forEach(([x, y], i) => {
                     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-                    out.markers.push(mm(withRadius({ x, y, color: d.colors[i % d.colors.length] ?? 'blue', size: d.size }, d.radii ? d.radii[i % d.radii.length] : undefined))); // 6.0 ML: scatter's s
+                    const dot = withRadius({ x, y, color: d.colors[i % d.colors.length] ?? 'blue', size: d.size }, d.radii ? d.radii[i % d.radii.length] : undefined); // 6.0 ML: scatter's s
+                    if (d.opacity < 1) dot.opacity = d.opacity; // 6.2.1: scatter's alpha
+                    out.markers.push(mm(dot));
                     if (fit) fit.push({ x, y });
                 });
                 break;
@@ -344,7 +359,7 @@ function drawInto(out: SceneOutput, raw: readonly Draw[], view: View, fit: Pt[] 
                 const b = { x: d.to[0], y: d.to[1] };
                 if (![a.x, a.y, b.x, b.y].every(Number.isFinite)) break;
                 keep([a, b]);
-                out.strokes.push(ms({ lines: [[a, b]], color: d.color, width: d.width, dashed: false, arrow: 'forward', exact: true }));
+                out.strokes.push(mf2({ lines: [[a, b]], color: d.color, width: d.width, dashed: false, arrow: 'forward', exact: true }, d, i));
                 break;
             }
             case 'text':
@@ -354,11 +369,11 @@ function drawInto(out: SceneOutput, raw: readonly Draw[], view: View, fit: Pt[] 
                 out.texts.push(textSpec(d.x, d.y, d.text, d.color, d.size, d.anchor));
                 break;
             case 'hline':
-                if (Number.isFinite(d.y)) out.strokes.push(ms({ lines: [[{ x: view.xmin, y: d.y }, { x: view.xmax, y: d.y }]], color: d.color, width: d.width, dashed: d.dashed, exact: true }));
+                if (Number.isFinite(d.y)) out.strokes.push(mf2({ lines: [[{ x: view.xmin, y: d.y }, { x: view.xmax, y: d.y }]], color: d.color, width: d.width, dashed: d.dashed, exact: true }, d, i));
                 if (fit) fit.push({ x: NaN, y: d.y });
                 break;
             case 'vline':
-                if (Number.isFinite(d.x)) out.strokes.push(ms({ lines: [[{ x: d.x, y: view.ymin }, { x: d.x, y: view.ymax }]], color: d.color, width: d.width, dashed: d.dashed, exact: true }));
+                if (Number.isFinite(d.x)) out.strokes.push(mf2({ lines: [[{ x: d.x, y: view.ymin }, { x: d.x, y: view.ymax }]], color: d.color, width: d.width, dashed: d.dashed, exact: true }, d, i));
                 if (fit) fit.push({ x: d.x, y: NaN });
                 break;
             case 'circle': {
@@ -385,6 +400,27 @@ function drawInto(out: SceneOutput, raw: readonly Draw[], view: View, fit: Pt[] 
                 break;
             }
         }
+    }
+}
+
+/**
+ * 6.2.1: matplotlib's zorder of a draw: the call's zorder=, else the default
+ * of its kind (patches, collections such as scatter, and plt.arrow 1; lines
+ * 2; texts and annotations 3; pictures 0).
+ */
+function drawZ(d: Draw): number {
+    if (d.zorder !== undefined) return d.zorder;
+    switch (d.k) {
+        case 'line':
+        case 'hline':
+        case 'vline':
+            return 2;
+        case 'text':
+            return 3;
+        case 'image':
+            return 0;
+        default:
+            return 1;
     }
 }
 

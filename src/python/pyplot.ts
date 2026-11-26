@@ -17,7 +17,13 @@ import type { Colormap } from '../types';
 export type Pt2 = [number, number];
 export type Size = 'small' | 'normal' | 'large';
 
-export type Draw =
+/**
+ * What a script drew. 6.2.1: `zorder` is the zorder the call gave (zorder=),
+ * absent for matplotlib's default of that kind (python/scene.ts drawZ).
+ */
+export type Draw = DrawKind & { zorder?: number };
+
+type DrawKind =
     | { k: 'line'; pts: Pt2[]; color: string; width: string; dashed: boolean; opacity: number; label: string | null; marker: boolean; markerSize: Size; markerOnly: boolean; closed?: boolean; markerRadius?: number }
     | { k: 'dots'; pts: Pt2[]; colors: string[]; size: Size; label: string | null; opacity: number; radii?: number[] }
     | { k: 'fill'; ring: Pt2[]; color: string; opacity: number; label: string | null; edge: string | null }
@@ -453,7 +459,8 @@ function axesCalls(fig: Figure, push: (d: Draw) => void): Map<string, Call> {
         const xyt = arg(args, kw, 2, 'xytext', null);
         const at = xyt === null ? xy : iterate(xyt).map((v) => num(v));
         const color = chartColour(kwv(kw, 'color'), null, 'black') ?? 'black';
-        if (xyt !== null && kwv(kw, 'arrowprops') !== undefined) push({ k: 'arrow', from: [at[0], at[1]], to: [xy[0], xy[1]], color, width: 'thin' });
+        // 6.2.1: an annotation (and its arrow) is matplotlib's zorder 3: over lines and dots.
+        if (xyt !== null && kwv(kw, 'arrowprops') !== undefined) push({ k: 'arrow', from: [at[0], at[1]], to: [xy[0], xy[1]], color, width: 'thin', zorder: zorderOf(kw) ?? 3 });
         push({ k: 'text', x: at[0], y: at[1], text, color, size: fontSize(kwv(kw, 'fontsize', 'size')), anchor: xyt === null ? 'above right' : 'center' });
         return null;
     });
@@ -775,6 +782,14 @@ function axesCalls(fig: Figure, push: (d: Draw) => void): Map<string, Call> {
     return calls;
 }
 
+/** 6.2.1: a call's zorder= as a number, or undefined (matplotlib's default for what it draws). */
+function zorderOf(kw: Kwargs | null | undefined): number | undefined {
+    const v = kw?.get('zorder');
+    if (v === undefined || v === null) return undefined;
+    const n = num(v);
+    return Number.isFinite(n) ? n : undefined;
+}
+
 /** The draw of each patch object (plt.Circle, plt.Polygon, plt.Rectangle), for add_patch. */
 const PATCHES = new WeakMap<PyModule, Draw>();
 
@@ -885,15 +900,27 @@ export const MAP_RGB: { fn: (map: Colormap | 'cyclic', t: number) => [number, nu
 
 /** matplotlib.pyplot over one figure; `block()` says which block of the chart is running. */
 export function pyplotModule(fig: Figure, block: () => number): { plt: PyModule; matplotlib: PyModule } {
+    // 6.2.1: the zorder= of the drawing call that runs now, for every draw it pushes.
+    let zorder: number | undefined;
     const push = (d: Draw) => {
         if (fig.draws.length >= 20000) throw new PyError('MemoryError', 'python.plot.tooMany', { count: 20000 });
+        if (zorder !== undefined && d.zorder === undefined) d.zorder = zorder;
         fig.draws.push(d);
         fig.blocks.push(block());
     };
     const calls = axesCalls(fig, push);
     const attrs = new Map<string, PyValue>();
     const axAttrs = new Map<string, PyValue>();
-    for (const [name, f] of calls) {
+    for (const [name, call] of calls) {
+        const f: typeof call = (a, kw) => {
+            const before = zorder;
+            zorder = zorderOf(kw);
+            try {
+                return call(a, kw);
+            } finally {
+                zorder = before;
+            }
+        };
         const b = new PyBuiltin(name, f);
         if (!name.startsWith('set_') && name !== 'add_patch' && name !== 'add_artist' && name !== 'set_aspect') attrs.set(name, b);
         axAttrs.set(name, b);
@@ -944,14 +971,14 @@ export function pyplotModule(fig: Figure, block: () => number): { plt: PyModule;
         const xy = iterate(a[0] ?? new PyTuple([0, 0])).map((v) => num(v));
         const r = num(arg(a, kw, 1, 'radius', 5));
         const look = patchLook(kw, true);
-        return patch({ k: 'circle', x: xy[0], y: xy[1], r, color: look.edge ?? 'blue', fill: look.face, opacity: look.opacity, width: look.width, dashed: look.dashed });
+        return patch({ k: 'circle', x: xy[0], y: xy[1], r, color: look.edge ?? 'blue', fill: look.face, opacity: look.opacity, width: look.width, dashed: look.dashed, zorder: zorderOf(kw) });
     });
     const polygon = new PyBuiltin('Polygon', (a, kw) => {
         const ring = iterate(a[0] ?? []).map((p) => iterate(p).map((v) => num(v)) as Pt2);
         const closed = kw?.has('closed') ? truthy(kw.get('closed') ?? true) : true;
         const look = patchLook(kw, true);
-        if (look.face) return patch({ k: 'fill', ring, color: look.face, opacity: look.opacity, label: null, edge: look.edge });
-        return patch({ k: 'line', pts: closed ? [...ring, ring[0]] : ring, color: look.edge ?? 'blue', width: look.width, dashed: look.dashed, opacity: 1, label: null, marker: false, markerSize: 'normal', markerOnly: false });
+        if (look.face) return patch({ k: 'fill', ring, color: look.face, opacity: look.opacity, label: null, edge: look.edge, zorder: zorderOf(kw) });
+        return patch({ k: 'line', pts: closed ? [...ring, ring[0]] : ring, color: look.edge ?? 'blue', width: look.width, dashed: look.dashed, opacity: 1, label: null, marker: false, markerSize: 'normal', markerOnly: false, zorder: zorderOf(kw) ?? 1 }); // a patch outline: matplotlib's zorder 1
     });
     const rectangle = new PyBuiltin('Rectangle', (a, kw) => {
         const xy = iterate(a[0] ?? new PyTuple([0, 0])).map((v) => num(v));
@@ -959,8 +986,8 @@ export function pyplotModule(fig: Figure, block: () => number): { plt: PyModule;
         const h = num(arg(a, kw, 2, 'height', 1));
         const ring: Pt2[] = [[xy[0], xy[1]], [xy[0] + w, xy[1]], [xy[0] + w, xy[1] + h], [xy[0], xy[1] + h]];
         const look = patchLook(kw, true);
-        if (look.face) return patch({ k: 'fill', ring, color: look.face, opacity: look.opacity, label: null, edge: look.edge });
-        return patch({ k: 'line', pts: [...ring, ring[0]], color: look.edge ?? 'blue', width: look.width, dashed: look.dashed, opacity: 1, label: null, marker: false, markerSize: 'normal', markerOnly: false });
+        if (look.face) return patch({ k: 'fill', ring, color: look.face, opacity: look.opacity, label: null, edge: look.edge, zorder: zorderOf(kw) });
+        return patch({ k: 'line', pts: [...ring, ring[0]], color: look.edge ?? 'blue', width: look.width, dashed: look.dashed, opacity: 1, label: null, marker: false, markerSize: 'normal', markerOnly: false, zorder: zorderOf(kw) ?? 1 }); // a patch outline: matplotlib's zorder 1
     });
     attrs.set('Circle', circle);
     attrs.set('Polygon', polygon);

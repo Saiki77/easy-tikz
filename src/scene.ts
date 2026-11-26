@@ -98,6 +98,9 @@ export interface StrokePrim {
     // 6.0 F4
     /** Part of the still frame of something that moves: the preview's live canvas draws it instead (src/motion6/liveprims.ts). */
     still?: boolean;
+    // 6.2.1
+    /** Drawn over the markers (points, dots): a script's line or arrow that matplotlib draws over its scatter dots. */
+    front?: boolean;
 }
 
 export interface MarkerPrim {
@@ -116,6 +119,9 @@ export interface MarkerPrim {
     // 6.0 ML
     /** The dot's radius in points of a matplotlib figure (scatter's sqrt(s) / 2); 3, matplotlib's default, is the normal size. */
     radius?: number;
+    // 6.2.1
+    /** See-through dot (scatter's alpha), below 1; absent: opaque. */
+    opacity?: number;
 }
 
 /** Side of its anchor point a scene text sits on: the annotation anchors plus the four diagonals. */
