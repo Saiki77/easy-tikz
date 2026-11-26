@@ -4,6 +4,36 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.2.1] - 2026-11-26
+
+Vectors get their own card, the axes are yours to set, and charts can be pasted in.
+
+### Added
+
+- **Vector cards:** a concrete vector in a note, written as a column, a tuple or with an arrow (`\vec v = \begin{pmatrix} 2 \\ 1 \end{pmatrix}`, `\mathbf u = (3, -1, 2)^\top`), opens a card that draws it as an arrow; three entries draw in 3D. A sum is drawn tip to tail, a dot or cross product with both arrows, and vectors the note names elsewhere are used. Insert chart writes the arrows.
+- **Formula recognition, round 3:** the hand-designed network now knows vectors and reads matrices, matrix times vector, eigen equations, sets and maps in many more spellings (sets with `;`, `:`, `\middle|` or words; maps with `\colon`, an interval or a named set as the domain; `\ln \colon (0, \infty) \to \mathbb{R}` draws ln). On 2,021 formulas from new study notes it never saw, it finds 199 of 257 cards (6.2.0: 122) and makes 29 % fewer mistakes, while it stays as good as 6.2.0 on the older test notes.
+- **Axis controls** (issue #11): Axis lines (thin, thick), Axis arrows (with, without), Axis names (always, only when the chart names them) and Axis numbers (small, large), for all charts under Settings › Chart look, or for one chart in the editor's Chart tab and in its text (`thick axes`, `axes with arrows`, `with axis names`, `no axis letters`, `small numbers`, `large numbers`; Full LaTeX `\axis[...]`). Each starts on "As the look", so nothing changes until you choose. The LaTeX export matches.
+- **No axes in 3D:** `no axes` in a 3D chart draws no box edges, ticks, numbers or names; a grid only when the chart asks for one. The editor's axes style has **None** (2D and 3D).
+- **Default 3D chart for formulas:** a second setting next to Default chart for formulas sets how 3D formula cards look (box, colours by height, mesh, view, axes, grid); Edit opens the editor on a surface.
+- **Paste a chart** (issue #10): Cmd/Ctrl+V in the editor opens a copied chart (words, Full LaTeX or JSON, with or without the code fences), with Undo; also **Paste a chart** in the Examples and templates menu and the command **New chart from the clipboard**.
+- **Distributions:** `plot the t distribution with df = 5`, the chi-square, exponential, uniform, Poisson, gamma and beta distributions, with sliders and `shade P(...)` (exact probabilities). `gamma(x)` (also `\Gamma(x)`) works in formulas. Five new examples: Student t against the normal curve, a chi-square tail, an exponential waiting time, Poisson bars and the t density written with gamma().
+- **Python charts** paint in matplotlib's order: a line or arrow drawn after the scatter dots (or with a higher `zorder=`) lies on top of them, and scatter's `alpha` is kept.
+
+### Changed
+
+- **Labels on filled shapes** get an outline in the colour of the fill under them instead of a dark (or white) box, on screen, in copies and in the LaTeX export.
+- **Words and math in one label** (titles, axis names, `write` texts, legends: `title LP 3: $\max 2x_1 + x_2$`) show the math as math and the words in the chart font.
+- **The legend** moves to the corner where it covers no label, point or number.
+- **3D formula cards** are seen from a lower, turned view, so a ridge like `max(x_1, x_2)` shows its height; cards in x_1 and x_2 name their axes x_1 and x_2.
+
+### Fixed
+
+- Math labels of a chart in a note without other math showed as plain text (`x^* = 1/4`) until the editor was opened; the chart now loads MathJax and draws again. The plain-text fallback writes `x*`, `f′` and `cᵀ`.
+- Condition cards in x_1, x_2 or Greek letters (`x_1 \ge \tfrac18`) were empty with a red MathJax error; they draw their ray now.
+- `(x-1)^2 + 2 \to \min` opens its function card; `M(1 - y)` reads as a product; a point like `(1,1)` no longer opens an empty interval; a card always has the kind recognition chose (`a = x \cdot y` is a surface); intervals with fraction ends are centred and name their own letter.
+- Axis numbers no longer vanish under points near the axis; `write` texts near the border stay inside the chart.
+- LaTeX export: legends with `\to` and texts with →, ≤, ≥, Greek letters, v̂ or ṽ compile; a 2D chart with `no axes` and a grid keeps its grid; the y name of a middle y-axis stands upright.
+
 ## [6.2.0] - 2026-11-26
 
 The hover knows which formulas are charts.
