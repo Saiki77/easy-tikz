@@ -309,6 +309,9 @@ export interface SceneInput2D {
     // 6.1
     /** Drawn in the clean look (src/look.ts): extrema are dots without the words min and max. Absent: Classic. */
     clean?: boolean;
+    // 6.2.1
+    /** The names of the axes as the chart writes them (xlabel, ylabel: x, $\lambda$, $x_1$): a set on an axis named after a variable is a set of that variable. */
+    axisNames?: { x?: string; y?: string };
 }
 
 // 6.0 AI
@@ -530,6 +533,9 @@ interface Ctx {
     // 6.1
     /** The clean look (SceneInput2D.clean). */
     clean?: boolean;
+    // 6.2.1
+    /** The names of the axes (SceneInput2D.axisNames). */
+    axisNames?: { x?: string; y?: string };
 }
 
 interface CacheState {
@@ -2221,6 +2227,7 @@ function scene2D(input: SceneInput2D): Scene2D {
         metrics: validMetrics(input.labelMetrics),
         equalScale: !!input.equalScale || !!input.polar,
         clean: !!input.clean, // 6.1
+        axisNames: input.axisNames, // 6.2.1
     };
 
     const nodes: SceneNode[] = [];

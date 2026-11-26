@@ -597,6 +597,7 @@ function checkChart(data: Data, sliders: Record<string, number>): Report {
             labelMetrics: labelMetricsFor(config.paperWidthCm ?? 10, config.paperHeightCm ?? 10),
             equalScale: !!config.equalScale, // 6.0 AI: as the renderer draws it
             report: report6, // 6.0 AI
+            axisNames: { x: String(config.xLabel ?? ''), y: String(config.yLabel ?? '') }, // 6.2.1
         });
         issues.push(...scene.issues);
         for (const info of infos) {

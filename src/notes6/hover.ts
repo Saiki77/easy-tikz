@@ -4,8 +4,9 @@
  *
  *   sets          \{x \in \mathbb{R}^n \mid g(x) \le 0\}, \{x \mid ...\}, \{(x, y) \mid ...\}
  *   maps          g: \mathbb{R}^n \to \mathbb{R}
- *   conditions    g(x) \le 0, x > 0, |x| < 1 (in one variable): a set on the x-axis
- *   intervals     \lambda \in [0, 1], [a, b], (a, b]
+ *   conditions    g(x) \le 0, x > 0, |x| < 1, x_1 \ge 2 (in one variable): a set on the x-axis,
+ *                 named after the variable (x_1, \lambda, \alpha_1)
+ *   intervals     \lambda \in [0, 1], [a, b], (a, b]; two plain numbers alone, (1, 2), are a point
  *   Jensen        g(\lambda x + (1 - \lambda) y) \le \lambda g(x) + (1 - \lambda) g(y): a chord with a slider λ
  *   epigraphs     \operatorname{epi} g = \{(x, t) \mid g(x) \le t\}: the shade above the graph
  *
@@ -20,6 +21,7 @@ import { latexToPlain } from '../latex';
 import { BUILTIN_FUNCTION_NAMES, CONSTANT_NAMES } from '../expr';
 import { SettingsManager } from '../settings';
 import { parseChartText } from '../text/parse';
+import { compileCondition, solveSet } from './sets';
 
 export type HoverKind = 'set' | 'map' | 'condition' | 'interval' | 'jensen' | 'epigraph';
 
@@ -112,12 +114,116 @@ export function noteDefinitions(formulas: string[]): Map<string, NoteDefinition>
 
 /** The letter as a chart writes it: \lambda is lambda. */
 const bare = (v: string) => v.replace(/^\\/, '');
-/** Replace the variable `v` (a letter or a command such as \lambda) by `to`, where it stands alone. */
+const escapeRe = (s: string) => s.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+
+/**
+ * Where the variable `v` stands alone: a letter or a command such as
+ * \lambda, with a subscript or none (x_1, x_{12}, \alpha_1; x_1 also as
+ * x_{1}). Never inside a command or a longer name; x is not the x of x_1.
+ */
+function variablePattern(v: string): RegExp {
+    const m = /^(\\?[A-Za-z]+)(?:_(?:\{([^{}]+)\}|(.)))?$/.exec(v);
+    const base = m ? m[1] : v;
+    const sub = m ? (m[2] ?? m[3]) : undefined;
+    const head = base.startsWith('\\') ? `${escapeRe(base)}(?![A-Za-z])` : `(?<![\\\\A-Za-z_])${escapeRe(base)}(?![A-Za-z])`;
+    const s = sub === undefined ? '' : escapeRe(sub);
+    const tail = sub === undefined ? '(?!\\s*_)' : `\\s*_\\s*(?:\\{\\s*${s}\\s*\\}${sub.length === 1 ? `|${s}` : ''})`;
+    return new RegExp(head + tail, 'g');
+}
+
+/** Replace the variable `v` (a letter or a command such as \lambda, maybe with a subscript: x_1) by `to`, where it stands alone. */
 function renameVariable(tex: string, v: string, to: string): string {
     if (v === to) return tex;
-    const esc = v.replace(/\\/g, '\\\\');
-    const re = v.startsWith('\\') ? new RegExp(`${esc}(?![A-Za-z])`, 'g') : new RegExp(`(?<![\\\\A-Za-z_])${esc}(?![A-Za-z])`, 'g');
-    return tex.replace(re, to);
+    return tex.replace(variablePattern(v), to);
+}
+
+/** A variable as a head writes it: a letter or a command (\lambda), maybe with a subscript (x_1, x_{12}). */
+const VARIABLE = String.raw`(?:[A-Za-z]|\\[a-z]+)(?:\s*_\s*(?:\{\s*[A-Za-z0-9]+\s*\}|[A-Za-z0-9]))?`;
+
+/** A variable written one way: no spaces, a subscript of one sign without braces (x_{1} is x_1). */
+const canonicalVariable = (v: string) => v.replace(/\s+/g, '').replace(/_\{([A-Za-z0-9])\}$/, '_$1');
+
+/** Greek letters that may be a variable. */
+const GREEK =/^(?:alpha|beta|gamma|delta|varepsilon|epsilon|zeta|eta|theta|vartheta|kappa|lambda|mu|nu|xi|rho|sigma|tau|varphi|phi|chi|psi|omega)$/;
+
+/**
+ * The variable of a formula as LaTeX writes it, from the name latexToPlain
+ * gives it: x, x_1 (written x_1 or x_{1}), x_{12}, \lambda, \alpha_1. Null
+ * when the formula does not write it so (a name the card cannot draw on an
+ * axis).
+ */
+function texVariable(tex: string, name: string): string | null {
+    const letter = /^([A-Za-z])(?:_([A-Za-z0-9]+))?$/.exec(name);
+    const greek = /^([A-Za-z]+)(?:\s*_([A-Za-z0-9]+))?$/.exec(name);
+    let v: string | null = null;
+    if (letter) v = letter[2] === undefined ? letter[1] : `${letter[1]}_${letter[2].length === 1 ? letter[2] : `{${letter[2]}}`}`;
+    else if (greek && GREEK.test(greek[1])) {
+        // latexToPlain reads \varepsilon as epsilon: the formula's own spelling.
+        const name = [greek[1], `var${greek[1]}`].find((g) => GREEK.test(g) && new RegExp(String.raw`\\${g}(?![A-Za-z])`).test(tex)) ?? greek[1];
+        // latexToPlain drops the subscript of a Greek letter: \alpha_1 reads as alpha.
+        const sub = new RegExp(String.raw`\\${name}(?![A-Za-z])\s*_\s*(?:\{\s*([A-Za-z0-9]+)\s*\}|([A-Za-z0-9]))`).exec(tex);
+        const s = sub ? (sub[1] ?? sub[2]) : greek[2];
+        v = s === undefined ? `\\${name}` : `\\${name}_${s.length === 1 ? s : `{${s}}`}`;
+    }
+    if (!v) return null;
+    return tex.search(variablePattern(v)) >= 0 ? v : null;
+}
+
+/** A plain number as LaTeX writes it: 2, -0.5, 0{,}5, \tfrac12, \frac{4}{3}. */
+const PLAIN_NUMBER = String.raw`[+-]?\s*(?:\d+(?:\.\d+|\{,\}\d+)?|\.\d+|\\[dt]?frac\s*(?:\{\s*\d+\s*\}|\d)\s*(?:\{\s*\d+\s*\}|\d))`;
+const POINT_PAIR = new RegExp(String.raw`^\(\s*${PLAIN_NUMBER}\s*[,;]\s*${PLAIN_NUMBER}\s*\)$`);
+
+/** A pair of two plain numbers in round brackets, alone: (1, 2), (3{,}5; 3{,}5), (\tfrac43, \tfrac83). A point, never an interval. */
+export function isPointPair(tex: string): boolean {
+    return POINT_PAIR.test(normalize(tex));
+}
+
+let endMath: ReturnType<SettingsManager['createMathContext']> | null = null;
+
+/** The value of an interval's end as LaTeX writes it (2, -0.5, 0{,}5, -\tfrac12, \frac{13}{3}, \pi); NaN for a letter or \infty. */
+function endValue(s: string): number {
+    const t = s.trim();
+    if (/^[+-]?\s*(?:\d+(?:\.\d+)?|\.\d+)$/.test(t)) return Number(t.replace(/\s+/g, ''));
+    if (/\\infty|∞/.test(t)) return NaN;
+    try {
+        endMath ??= SettingsManager.fromJSON({}).createMathContext({ memo: false });
+        return endMath.value(latexToPlain(t.replace(/\{,\}/g, '.')));
+    } catch {
+        return NaN;
+    }
+}
+
+/** Where the view of a set looks for its ends: near 0 finely, then far out. */
+const SET_REACHES = [12, 1000];
+/** A set with more ends than this (sin x >= 0) keeps the plain view. */
+const SET_MAX_ENDS = 4;
+
+/**
+ * The view of a set on the x-axis (its condition in x, no function): -4 to
+ * 4, wider where an end of the set lies beyond, so each end shows with room
+ * beside it (x \le 6 shows x from -4 to 7, 0 \le K < 60 from -4 to 66).
+ */
+function setView(cond: string): string {
+    const plain = 'show x from -4 to 4';
+    const ends: number[] = [];
+    try {
+        endMath ??= SettingsManager.fromJSON({}).createMathContext({ memo: false });
+        const c = compileCondition(endMath, cond, 'x');
+        for (const reach of SET_REACHES) {
+            for (const p of solveSet(c, -reach, reach)) {
+                for (const v of [p.a, p.b]) if (Number.isFinite(v) && Math.abs(v) < reach && !ends.some((e) => Math.abs(e - v) < 1e-6 * Math.max(1, Math.abs(v)))) ends.push(v);
+            }
+        }
+    } catch {
+        // A condition the chart reads otherwise: the plain view.
+        return plain;
+    }
+    if (!ends.length || ends.length > SET_MAX_ENDS) return plain;
+    const span = Math.max(8, Math.max(...ends) - Math.min(...ends));
+    const room = Math.max(1, 0.08 * span);
+    const lo = Math.min(-4, Math.floor(Math.min(...ends) - room));
+    const hi = Math.max(4, Math.ceil(Math.max(...ends) + room));
+    return `show x from ${lo} to ${hi}`;
 }
 
 /** g(x) read in the plane: x is the distance to 0, so x² is x₁² + x₂². */
@@ -168,15 +274,20 @@ function parse(texIn: string): Parsed | null {
             }
             return { kind: 'set', cond, pair: [pair[1], pair[2]], fn };
         }
-        const one = /^([A-Za-z]|\\[a-z]+)(?:\s*\\in\s*(.+))?$/.exec(head);
+        const one = new RegExp(String.raw`^(${VARIABLE})(?:\s*\\in\s*(.+))?$`).exec(head);
         if (!one) return null;
         const space = one[2] ? SPACE.exec(one[2].trim()) : null;
         if (one[2] && !space) return null;
-        return { kind: 'set', cond, variable: one[1], space: !!space && !!space[1] && space[1] !== '1', fn: calledNames(cond)[0] };
+        return { kind: 'set', cond, variable: canonicalVariable(one[1]), space: !!space && !!space[1] && space[1] !== '1', fn: calledNames(cond)[0] };
     }
-    // An interval: lambda in [0, 1], or [a, b] alone.
-    const inInterval = /^([A-Za-z]|\\[a-z]+)\s*\\in\s*([[(]\s*[^,]+,[^,]+[\])])$/.exec(tex);
-    if (inInterval) return { kind: 'interval', cond: `${inInterval[1]} \\in ${inInterval[2]}`, variable: inInterval[1] };
+    // An interval: lambda in [0, 1], x_1 in [0, 4], or [a, b] alone.
+    const inInterval = new RegExp(String.raw`^(${VARIABLE})\s*\\in\s*([[(]\s*[^,]+,[^,]+[\])])$`).exec(tex);
+    if (inInterval) {
+        const v = canonicalVariable(inInterval[1]);
+        return { kind: 'interval', cond: `${v} \\in ${inInterval[2]}`, variable: v };
+    }
+    // A pair of two plain numbers alone, (1, 2), is a point: no interval.
+    if (isPointPair(tex)) return null;
     const bareInterval = /^([[(])\s*(-?[\d.]+|-?\\infty|[A-Za-z])\s*,\s*(-?[\d.]+|\\infty|[A-Za-z])\s*([\])])$/.exec(tex);
     if (bareInterval) return { kind: 'interval', cond: `x \\in ${tex}`, variable: 'x' };
     // Jensen: g(λx + (1 - λ)y) <= λ g(x) + (1 - λ) g(y).
@@ -187,9 +298,10 @@ function parse(texIn: string): Parsed | null {
     if (REL.test(tex) && !/=/.test(tex.replace(/\\(?:le|ge|leq|geq)|<=|>=/g, ''))) {
         const vars = letters(tex);
         if (vars.length === 1) {
-            const v = vars[0];
-            const raw = /^[A-Za-z]$/.test(v) ? v : `\\${v}`;
-            return { kind: 'condition', cond: tex, variable: tex.includes(`\\${v}`) ? `\\${v}` : raw, fn: calledNames(tex)[0] };
+            // The variable as the formula writes it (x_1, \lambda, \alpha_1): the card draws on an axis named after it.
+            const v = texVariable(tex, vars[0]);
+            if (!v) return null;
+            return { kind: 'condition', cond: tex, variable: v, fn: calledNames(tex)[0] };
         }
     }
     return null;
@@ -282,15 +394,16 @@ export function hoverCard(texIn: string, defs: Map<string, NoteDefinition>): Hov
             const v = p.variable ?? 'x';
             const cond = renameVariable(p.cond, v, 'x');
             const label = v !== 'x' ? [`xlabel $${v}$`] : [];
-            const lines = ['show x from -4 to 4', ...label, ...plot, `mark where $${cond}$ on the x-axis, labelled`];
+            const lines = [fn ? 'show x from -4 to 4' : setView(cond), ...label, ...plot, `mark where $${cond}$ on the x-axis, labelled`];
             return card(lines, { ...(p.space ? { lines2: [...plane, ...hidden, `shade where $${inPlane(cond)}$, outlined`] } : {}), ...(v !== 'x' ? { variable: v } : {}) });
         }
         case 'interval': {
             if (!p.cond) return null;
             const v = p.variable ?? 'x';
             const m = /([[(])\s*([^,]+?)\s*,\s*([^,]+?)\s*([\])])\s*$/.exec(p.cond);
+            // The view around the ends, also ends such as -\tfrac12 or \frac{13}{3}.
             const num = (s: string | undefined, fallback: number) => {
-                const n = Number(String(s ?? '').trim());
+                const n = endValue(String(s ?? ''));
                 return Number.isFinite(n) ? n : fallback;
             };
             // Ends that are letters (a, b) become sliders.
@@ -308,7 +421,8 @@ export function hoverCard(texIn: string, defs: Map<string, NoteDefinition>): Hov
             if (!p.cond) return null;
             const v = p.variable ?? 'x';
             const label = v !== 'x' ? [`xlabel $${v}$`] : [];
-            return card(['show x from -4 to 4', ...label, ...plot, `mark where $${renameVariable(p.cond, v, 'x')}$ on the x-axis, labelled`], v !== 'x' ? { variable: v } : {});
+            const cond = renameVariable(p.cond, v, 'x');
+            return card([fn ? 'show x from -4 to 4' : setView(cond), ...label, ...plot, `mark where $${cond}$ on the x-axis, labelled`], v !== 'x' ? { variable: v } : {});
         }
     }
 }

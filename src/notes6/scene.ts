@@ -14,7 +14,7 @@ import { addIssue, fail, newOutput, publish, textBoxPt } from '../scene';
 import { t as msg } from '../i18n';
 import { errorText } from '../util';
 import { decimal } from '../beyond/maths';
-import { compileCondition, intervalCondition, setLabel, setTex, solveSet } from './sets';
+import { compileCondition, intervalCondition, namedSetLabel, setTex, solveSet } from './sets';
 
 /** The tool types of this part: drawn in 2D charts only. */
 export const NOTES6_TYPES: ReadonlySet<string> = new Set(['axisSet', 'chord']);
@@ -122,7 +122,8 @@ function computeAxisSet(t: AxisSetTool, ctx: SceneCtx): SceneOutput {
         if (label) out.texts.push(spec);
         else {
             // 6.0 F1: a label wider than most of the plot (a small chart, a long union) is the set alone, so it fits on one line.
-            const whole = setLabel(axis, ctx.math.tex(intervalCondition(src, axis)), pieces);
+            // 6.2.1: on an axis named after a variable (λ, x_1), the set of that variable: {λ | 0 ≤ λ ≤ 1}.
+            const whole = namedSetLabel(axis, ctx.axisNames?.[axis], ctx.math.tex(intervalCondition(src, axis)), pieces);
             out.texts.push({ ...spec, literal: fitsPlot(whole, ctx) ? whole : `$${setTex(pieces)}$` });
         }
     }

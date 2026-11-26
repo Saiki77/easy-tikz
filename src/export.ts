@@ -606,6 +606,7 @@ function tikz2D(settings: SettingsManager, ctx: MathContext, config: RendererCon
         // 6.0 C: moving particles are drawn still, at time 0 or the chart's stillTime.
         motion: stillFrame(settings.getValue('stillTime')),
         clean: cleanNow, // 6.1
+        axisNames: { x: String(config.xLabel ?? ''), y: String(config.yLabel ?? '') }, // 6.2.1
     });
     const items = scene.items || [];
     const colors = new ColorSet();

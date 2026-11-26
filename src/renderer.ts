@@ -837,6 +837,7 @@ export class SVGRenderer {
                 // 6.0 C: the clock's time and the step shown (absent: the still frame).
                 motion: cfg.motion,
                 clean: this.clean, // 6.1
+                axisNames: { x: String(cfg.xLabel ?? ''), y: String(cfg.yLabel ?? '') }, // 6.2.1
             });
             if (this.cache) lastGoodScene.set(this.cache, scene);
             this.movedFns = new Set(scene.movedFunctions ?? []); // 6.0 D
