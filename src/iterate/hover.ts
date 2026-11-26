@@ -53,11 +53,20 @@ function freeLetters(tex: string, skip: string[]): string[] {
     return out;
 }
 
-/** `\sum_{k=1}^{n} body`: its index, bounds and body. */
-function sumParts(tex: string): { k: string; lo: string; hi: string; body: string } | null {
-    const m = /^\\sum\s*_\s*\{\s*([A-Za-z])\s*=\s*([^{}]+?)\s*\}\s*\^\s*(?:\{\s*([^{}]+?)\s*\}|([A-Za-z0-9]))\s*([\s\S]+)$/.exec(tex);
-    if (!m) return null;
-    return { k: m[1], lo: m[2], hi: m[3] ?? m[4], body: m[5].trim() };
+/**
+ * `\sum_{k=1}^{n} body`: its index, bounds and body. 6.2.2: also with the
+ * upper bound first (`\sum^n_{k=1} k`, as many notes write it) and with
+ * `\limits`.
+ */
+function sumParts(texIn: string): { k: string; lo: string; hi: string; body: string } | null {
+    const tex = texIn.replace(/^\\sum\s*\\(?:no)?limits(?![A-Za-z])/, '\\sum');
+    const hi = String.raw`(?:\{\s*([^{}]+?)\s*\}|([A-Za-z0-9]))`;
+    const lo = String.raw`\{\s*([A-Za-z])\s*=\s*([^{}]+?)\s*\}`;
+    const m = new RegExp(String.raw`^\\sum\s*_\s*${lo}\s*\^\s*${hi}\s*([\s\S]+)$`).exec(tex);
+    if (m) return { k: m[1], lo: m[2], hi: m[3] ?? m[4], body: m[5].trim() };
+    const r = new RegExp(String.raw`^\\sum\s*\^\s*${hi}\s*_\s*${lo}\s*([\s\S]+)$`).exec(tex);
+    if (r) return { k: r[3], lo: r[4], hi: r[1] ?? r[2], body: r[5].trim() };
+    return null;
 }
 
 /** What a formula's card of this part is, or null. */

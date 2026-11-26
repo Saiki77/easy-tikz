@@ -240,3 +240,14 @@ test('recipes of Iterate and Colour the plane build charts that draw with no pro
         assert.ok(!/^raw /m.test(printChartText(settings.serialize())), id);
     }
 });
+
+test('hover cards: a sum with the upper bound written first, with \\displaystyle or \\limits (6.2.2)', () => {
+    for (const tex of ['\\displaystyle \\sum^n_{k=1}k=\\frac{n(n+1)}{2}', '\\sum^{n}_{k=0}q^k = \\frac{1-q^{n+1}}{1-q}', '\\sum\\limits_{k=1}^{n} k^2', '\\sum\\limits^n_{k=1} \\frac{1}{k}']) {
+        const card = iterateHoverCard(tex);
+        assert.ok(card && card.kind === 'sum', tex);
+        const r = parseChartText(card.lines.join('\n'));
+        assert.deepEqual(r.problems, [], card.lines.join('\n'));
+        // The chart writes the usual order, lower bound first.
+        assert.ok(card.lines.some((l) => /\\sum_\{k=[01]\}\^/.test(l)), card.lines.join('\n'));
+    }
+});
