@@ -749,6 +749,17 @@ const CLEAN: Record<string, { text: string; table?: NoteTable | null }> = {
     },
     negative: { text: ['show x from -9 to -1 and y from -8 to -2', 'title Below and left of 0', 'xlabel time', 'ylabel height', 'plot f(x) = x/2 - 3, thin', 'x numbers every 2', 'with a minor grid'].join('\n') },
     noGrid: { text: ['show x from -2 to 2 and y from -1 to 3', 'no grid', 'axes on the edges', 'plot $f(x) = e^x$, thick', 'y numbers at 1 "one", 2'].join('\n') },
+    // 6.2.1: numbers moved off large dots (\raisebox, \kern), a legend entry with \to in the corner the label leaves free,
+    // a title of words and math, and a text written at the edge moved back in (xshift).
+    movedNumbers: {
+        text: ['show x from -1 to 4 and y from -1 to 3', 'title Case 1: $\\max 2x_1 + x_2$ – an edge', 'mark (1, 0), (2, 0) and (0, 2) in red, large', 'write "a text written at the right edge" at (3.5, 1), right'].join('\n'),
+    },
+    unicodeText: {
+        text: ['show x from -4.5 to 4.5 and y from -1 to 3', 'axes in a box', 'write "P0: v\u0302 = 4.875 \u2192 branch, \u1e7d = 4.75" at (0, 2.25), above', 'write "y = 1: x \u2264 -2 + 6(1 - y), x \u2265 2, \u03b1 \u2208 [0, 1]" at (0, 1), above', 'title Cut $x_2 \u2264 2$'].join('\n'),
+    },
+    arrowLegend: {
+        text: ['show x from -1.5 to 3.5 and y from -6.5 to 6.5', 'plot f(x) = (x - 1)^2 + 2 in blue, with the legend "$f(x) = (x-1)^2 + 2 \\to \\min$"', 'plot g(x) = -(x - 1)^2 - 2 in red, with the legend "$-f(x) \\to \\max$"', 'draw x = 1 in gray, dashed, labelled "$x^* = 1$"'].join('\n'),
+    },
 };
 
 // --------------------------------------------------------------- compile
