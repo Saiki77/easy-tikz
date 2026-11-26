@@ -224,7 +224,7 @@ test('Classic gives the export of 6.0 exactly', () => {
     assert.equal(tikz(PARABOLA, 'classic'), PARABOLA_600);
 });
 
-test('clean export: middle axes without arrowheads, light grid, small grey numbers, semithick function, no letters', () => {
+test('clean export: middle axes without arrowheads, light grid, small grey numbers, thick function, no letters', () => {
     const code = tikz(PARABOLA);
     assert.ok(code.includes('axis x line=middle, axis y line=middle'), code);
     assert.ok(code.includes('axis line style={draw=etzAxis, line width=0.45pt, -}'), 'no arrowheads');
@@ -233,7 +233,7 @@ test('clean export: middle axes without arrowheads, light grid, small grey numbe
     assert.ok(code.includes('grid=major'));
     assert.ok(code.includes('major grid style={draw=etzGrid, draw opacity=0.12}'));
     assert.ok(code.includes('\\definecolor{etzGrid}{HTML}{61719B}'));
-    assert.ok(code.includes('\\addplot[etBlue, semithick, domain=-4:4'), 'a function without a thickness is semithick');
+    assert.ok(code.includes('\\addplot[etBlue, thick, domain=-4:4'), 'a function without a thickness is thick');
     assert.ok(!/xlabel=|ylabel=|axis lines=/.test(code), code);
     // The value of the set sits in a pill; its dots are the clean look's.
     assert.ok(/\\node\[etTeal, anchor=[a-z ]+, font=\\footnotesize, fill=white, draw=etzPill, [^\]]*\] at \(axis cs:[-0-9.]+,0\)/.test(code), code);
@@ -278,7 +278,7 @@ test('clean export: what a chart sets wins (a box is Classic, no grid, grid opac
     assert.ok(tikz('grid opacity 1\nplot f(x) = x').includes('major grid style={draw=etzGrid, draw opacity=0.24}'));
     assert.ok(tikz('with a minor grid\nplot f(x) = x').includes('grid=both, minor tick num=5'));
     const widths = tikz('plot f(x) = x, very thin\nplot g(x) = 2x, thin\nplot h(x) = 3x\nplot k(x) = 4x, thick');
-    assert.ok(/\\addplot\[black, very thin,/.test(widths) && /\\addplot\[black, thin,/.test(widths) && /\\addplot\[black, semithick,/.test(widths) && /\\addplot\[black, thick,/.test(widths), widths);
+    assert.ok(/\\addplot\[black, very thin,/.test(widths) && /\\addplot\[black, thin,/.test(widths) && (widths.match(/\\addplot\[black, thick,/g) || []).length === 2, widths);
     const named = tikz('title A title\nxlabel t\nylabel h\nplot f(x) = x');
     assert.ok(named.includes('xlabel={t}, ylabel={h}'), named);
     assert.ok(named.includes('title style={yshift=15pt}'), 'the title is lifted over the y name above the axis');

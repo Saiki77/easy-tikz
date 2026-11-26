@@ -95,10 +95,10 @@ export function settleLook<T extends Record<string, unknown>>(data: T): T {
 
 // ------------------------------------------------------------ the clean look's sizes and colours
 
-/** Width in px of a function's line that sets no thickness (Classic: thin, 1.5 px; thick is 2.5 px). */
-export const CLEAN_LINE_PX = 2.2;
-/** The same line in the export: between thin (0.4pt) and thick (0.8pt). */
-export const CLEAN_LINE_TIKZ = 'semithick';
+/** Width in px of a function's line that sets no thickness (Classic: thin, 1.5 px): as bold as thick (2.5 px), like the 6.0 film. */
+export const CLEAN_LINE_PX = 2.5;
+/** The same line in the export: thick (0.8pt), as on screen. */
+export const CLEAN_LINE_TIKZ = 'thick';
 /** Tick numbers in pt of the exported figure (\scriptsize); Classic sets them at 10 pt. */
 export const CLEAN_TICK_PT = 7;
 /** Axis lines in px. */

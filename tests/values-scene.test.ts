@@ -183,8 +183,8 @@ test('a function with no pgfmath form (a gradient) exports as its points; let fu
     const settings = settingsOf('show x from -3 to 3 and y from -1 to 10\nlet $f(x, y) = x^2 + 4y^2$\nplot g(x) = norm(grad(f, x, 1)) in red\nshade where $f(x, y) \\le 4$\ndraw f(x, y) = 1');
     const math = settings.createMathContext();
     const tex = settings.generateTikzCode(math);
-    // 6.1: a function that sets no thickness has the clean look's line (semithick; Classic: thin).
-    assert.match(tex, /% g\n\\addplot\[etRed, semithick, forget plot\] coordinates \{/);
+    // 6.1: a function that sets no thickness has the clean look's line (thick; Classic: thin).
+    assert.match(tex, /% g\n\\addplot\[etRed, thick, forget plot\] coordinates \{/);
     const s = sceneOf('show x from -3 to 3 and y from -2 to 2\nlet $f(x, y) = x^2 + 4y^2$\nshade where $f(x, y) \\le 4$\ndraw f(x, y) = 1');
     assert.deepEqual(issues(s), []);
     assert.ok(s.items.find((i) => i.source === 'R1')?.fills.length);
