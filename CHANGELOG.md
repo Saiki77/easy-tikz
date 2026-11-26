@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.2.2] - 2026-11-26
+
+### Fixed
+
+- Sums written with the upper bound first, as many notes do (`\displaystyle \sum^n_{k=1} k = \frac{n(n+1)}{2}`, `\sum^{n}_{k=0} q^k`), or with `\limits`, get their card and their dotted mark again, also row by row in an `align` block. Recognition chose the sum card, but the card could not read the bounds, so nothing was shown (in Smart and in Rules).
+
 ## [6.2.1] - 2026-11-26
 
 Vectors get their own card, the axes are yours to set, and charts can be pasted in.
