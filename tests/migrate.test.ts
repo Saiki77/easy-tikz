@@ -1228,7 +1228,10 @@ test('recipes: the documented lists, unique ids, sections and plain-language tex
             'points-list', 'intersections', 'corner-points', 'optimum', 'lattice',
             'segment', 'arrow', 'polyline', 'brace',
             'data-table', 'data-points', 'regression',
-            'normal-distribution', 'binomial-distribution', 'probability',
+            'normal-distribution', 'binomial-distribution',
+            // 6.2.1
+            't-distribution', 'chi-square-distribution', 'exponential-distribution', 'uniform-distribution', 'poisson-distribution', 'gamma-distribution', 'beta-distribution',
+            'probability',
             'riemann-sum', 'slope-field', 'solution',
             // 6.0 C
             'vector-field', 'vector-field-particles', 'rest-points', 'trajectory',

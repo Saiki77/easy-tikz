@@ -5,6 +5,7 @@
  * used. Pure: no DOM, no Obsidian.
  */
 import type { Tool } from '../types';
+import { DISTRIBUTION_FIELDS } from './kinds'; // 6.2.1
 
 export interface Renamer {
     /** A formula field with the name replaced. */
@@ -28,10 +29,8 @@ export function renameInBeyondTool(t: Tool, r: Renamer): void {
             t.label = r.tpl(t.label);
             break;
         case 'distribution':
-            t.mean = r.expr(t.mean);
-            t.sd = r.expr(t.sd);
-            t.n = r.expr(t.n);
-            t.p = r.expr(t.p);
+            // 6.2.1: every kind's fields (a field another kind reads keeps its name too).
+            for (const f of DISTRIBUTION_FIELDS) if (typeof t[f] === 'string') t[f] = r.expr(t[f]);
             break;
         case 'probability':
             if (r.kind === 'tool') t.distribution = r.ref(t.distribution);
@@ -63,7 +62,7 @@ export function beyondToolReads(t: Tool, reads: (src: string | undefined, templa
         case 'dataPlot':
             return reads(t.label, true);
         case 'distribution':
-            return reads(t.mean) || reads(t.sd) || reads(t.n) || reads(t.p);
+            return DISTRIBUTION_FIELDS.some((f) => reads(t[f]));
         case 'probability':
             return reads(t.event) || reads(t.label, true);
         case 'riemann':

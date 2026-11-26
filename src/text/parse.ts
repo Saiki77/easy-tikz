@@ -27,6 +27,8 @@ import { MessageKey, t as msg } from '../i18n';
 import { stripMathDollars } from '../latex';
 import { FULL_OPTION_HELP, isFullText, mapFull, readFull } from './full';
 import { eventNames } from '../beyond/event';
+import type { DistributionField } from '../beyond/kinds'; // 6.2.1
+import type { DistributionKind } from '../types';
 import { boxRatioOf } from '../box3d';
 // 6.0 C
 import { MOTION_KINDS, MOTION_KIND_WORDS, MOTION_OPTION_HELP, isMotionOption, motionOption, ownName, readMotionDraw, readMotionMark, thenPrefix } from '../motion6/text';
@@ -1865,15 +1867,113 @@ function distributionParts(text: string): Record<string, string> | null {
     return out;
 }
 
-/** `plot the normal distribution with mean 0 and sd 1`, `plot the binomial distribution with n = 10 and p = 0.4`. True when the line was one. */
+/** 6.2.1: the head of a distribution line, each kind in its own group (the first two are the normal and binomial ones of 5.0). */
+const DISTRIBUTION_HEAD = /^the\s+(?:(standard\s+)?(normal|binomial)|((?:student(?:'?s)?\s+)?t)|(chi[-\s]?squared?|χ²|χ2)|(exponential)|(uniform)|(poisson)|(gamma)|(beta))[-\s]+distribution\b\s*([\s\S]*)$/i;
+
+/** 6.2.1: the kinds of the groups of DISTRIBUTION_HEAD, from the third. */
+const HEAD_KINDS: readonly DistributionKind[] = ['studentT', 'chiSquare', 'exponential', 'uniform', 'poisson', 'gamma', 'beta'];
+
+/** 6.2.1: the names the parameters of each new kind may be written with (one letter as typed, the others in any case), and their fields. */
+const PARAMETER_NAMES: Partial<Record<DistributionKind, Array<[string, DistributionField]>>> = {
+    studentT: [['degrees of freedom', 'df'], ['df', 'df'], ['nu', 'df'], ['\\nu', 'df'], ['ν', 'df']],
+    chiSquare: [['degrees of freedom', 'df'], ['df', 'df'], ['k', 'df'], ['nu', 'df'], ['\\nu', 'df'], ['ν', 'df']],
+    exponential: [['rate', 'rate'], ['lambda', 'rate'], ['\\lambda', 'rate'], ['λ', 'rate']],
+    uniform: [['a', 'from'], ['b', 'to']],
+    poisson: [['mean', 'lambda'], ['lambda', 'lambda'], ['\\lambda', 'lambda'], ['λ', 'lambda'], ['rate', 'lambda'], ['mu', 'lambda'], ['\\mu', 'lambda'], ['μ', 'lambda']],
+    gamma: [['shape', 'shape'], ['k', 'shape'], ['alpha', 'shape'], ['\\alpha', 'shape'], ['α', 'shape'], ['rate', 'rate'], ['beta', 'rate'], ['\\beta', 'rate'], ['β', 'rate']],
+    beta: [['a', 'alpha'], ['alpha', 'alpha'], ['\\alpha', 'alpha'], ['α', 'alpha'], ['b', 'beta'], ['beta', 'beta'], ['\\beta', 'beta'], ['β', 'beta']],
+};
+
+/**
+ * 6.2.1: the parameters of a t, chi-square, exponential, uniform, Poisson,
+ * gamma or beta distribution: `with df = 5` (`with 5 degrees of freedom`),
+ * `with rate 2`, `from 0 to 1`, `with mean 3`, `with shape 2 and rate 1`,
+ * `with a = 2 and b = 5`, by field; null when a part does not read.
+ */
+function kindParts(kind: DistributionKind, text: string): Record<string, string> | null {
+    const out: Record<string, string> = {};
+    const t = text.trim();
+    if (!t) return out;
+    if (kind === 'uniform') {
+        const range = /^(?:from\s+)?(.+?)\s+to\s+(.+)$/i.exec(t);
+        if (range && !/^with\s/i.test(t)) {
+            out.from = range[1].trim();
+            out.to = range[2].trim();
+            return out;
+        }
+    }
+    const names = PARAMETER_NAMES[kind] ?? [];
+    const body = t.replace(/^with\s+/i, '');
+    for (const part of splitTop(body, ' and ')) {
+        const p = part.text.trim();
+        // `5 degrees of freedom`
+        const dof = /^(.+?)\s+degrees\s+of\s+freedom$/i.exec(p);
+        if (dof && (kind === 'studentT' || kind === 'chiSquare')) {
+            out.df = dof[1].trim();
+            continue;
+        }
+        let read = false;
+        for (const [name, field] of names) {
+            const word = name.length === 1 ? name : name.toLowerCase();
+            const head = name.length === 1 ? p.slice(0, name.length) : p.slice(0, name.length).toLowerCase().replace(/\s+/g, ' ');
+            if (head !== word) continue;
+            const after = p.slice(name.length);
+            const m = /^\s*=(?!=)\s*(.+)$/.exec(after) ?? /^\s+(.+)$/.exec(after);
+            if (!m || /^[A-Za-z0-9_]/.test(after)) continue;
+            out[field] = m[1].trim();
+            read = true;
+            break;
+        }
+        if (!read) return null;
+    }
+    return out;
+}
+
+/** 6.2.1: how a line of each kind is written, for the message of a line whose parameters do not read. */
+export const DISTRIBUTION_FORMS: Readonly<Record<DistributionKind, string>> = {
+    normal: 'plot the normal distribution with mean 0 and sd 1',
+    binomial: 'plot the binomial distribution with n = 10 and p = 0.4',
+    studentT: 'plot the t distribution with df = 5',
+    chiSquare: 'plot the chi-square distribution with df = 3',
+    exponential: 'plot the exponential distribution with rate 1',
+    uniform: 'plot the uniform distribution from 0 to 1',
+    poisson: 'plot the Poisson distribution with mean 3',
+    gamma: 'plot the gamma distribution with shape 2 and rate 1',
+    beta: 'plot the beta distribution with a = 2 and b = 5',
+};
+
+/**
+ * `plot the normal distribution with mean 0 and sd 1`, `plot the binomial distribution with n = 10 and p = 0.4`;
+ * 6.2.1: the t, chi-square, exponential, uniform, Poisson, gamma and beta distributions. True when the line was one.
+ */
 function distribution(b: Builder, name: string | null, rest: Piece, all: Piece[]): boolean {
-    if (!/^the\s+(standard\s+)?(normal|binomial)\s+distribution\b/i.test(rest.text.trim())) return false;
+    if (!DISTRIBUTION_HEAD.test(rest.text.trim())) return false;
     // Options the words did not catch (`..., sparkly`) are named, not read as a parameter.
     const { formula, options } = formulaOptions(rest, all);
-    const m = /^the\s+(standard\s+)?(normal|binomial)\s+distribution\b\s*(.*)$/i.exec(formula.text.trim());
+    const m = DISTRIBUTION_HEAD.exec(formula.text.trim());
     if (!m) return false;
+    const at = m.slice(3, 10).findIndex((g) => g !== undefined);
+    if (at >= 0) {
+        const kind = HEAD_KINDS[at];
+        let parts = kindParts(kind, m[10]);
+        let own = options;
+        // `with alpha = 3 and beta = 2` reads like options (key = value): they are the parameters of this kind.
+        if (parts && !m[10].trim() && options.length && /^with\s/i.test(options[0].text)) {
+            const read = kindParts(kind, options[0].text);
+            if (read && Object.keys(read).length) {
+                parts = read;
+                own = options.slice(1);
+            }
+        }
+        if (!parts) {
+            b.problem(rest.at, msg('beyond.text.distributionForm', { form: DISTRIBUTION_FORMS[kind] }));
+            return true;
+        }
+        addTool(b, 'distribution', name, { kind, ...parts }, own, 'distribution');
+        return true;
+    }
     const kind = m[2].toLowerCase();
-    const parts = distributionParts(m[3]);
+    const parts = distributionParts(m[10]);
     const fields: Data = { kind };
     const allowed = kind === 'normal' ? ['mean', 'sd'] : ['n', 'p'];
     if (!parts || Object.keys(parts).some((k) => !allowed.includes(k)) || (m[1] && kind !== 'normal')) {

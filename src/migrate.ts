@@ -28,6 +28,7 @@ import { geogebraRecipes } from './geogebra/recipes';
 import { PYTHON_PREFIX, completePythonTool, pythonDefaults } from './python/tools';
 import { pythonRecipes } from './python/recipes';
 import { headName } from './ml/heads'; // 6.0 ML
+import { DISTRIBUTION_KINDS } from './beyond/kinds'; // 6.2.1
 import { notes6Recipes } from './notes6/recipes';
 // 6.0 D
 import { LINEAR_PREFIX, basisVectorsDefaults, completeLinearTool, eigenvectorsDefaults, planeGridDefaults, spanDefaults, transformDefaults, unitSquareDefaults } from './linear/tools';
@@ -718,7 +719,27 @@ function dataPlotDefaults(): DataPlotBody {
 }
 
 function distributionDefaults(): DistributionBody {
-    return { type: 'distribution', color: 'blue', kind: 'normal', mean: '0', sd: '1', n: '10', p: '0.5', thickness: 'thin', dashed: false, fillOpacity: 0.35 };
+    return {
+        type: 'distribution',
+        color: 'blue',
+        kind: 'normal',
+        mean: '0',
+        sd: '1',
+        n: '10',
+        p: '0.5',
+        // 6.2.1: the parameters of the other kinds.
+        df: '5',
+        rate: '1',
+        from: '0',
+        to: '1',
+        lambda: '3',
+        shape: '2',
+        alpha: '2',
+        beta: '5',
+        thickness: 'thin',
+        dashed: false,
+        fillOpacity: 0.35,
+    };
 }
 
 function riemannDefaults(): RiemannBody {
@@ -1343,11 +1364,19 @@ function completeDistribution(src: Record<string, unknown>): DistributionBody {
     return {
         type: 'distribution',
         color: colorOf(src.color, d.color),
-        kind: oneOf(src.kind, ['normal', 'binomial'] as const, d.kind),
+        kind: oneOf(src.kind, DISTRIBUTION_KINDS, d.kind),
         mean: str(src.mean, d.mean),
         sd: str(src.sd, d.sd),
         n: str(src.n, d.n),
         p: str(src.p, d.p),
+        df: str(src.df, d.df),
+        rate: str(src.rate, d.rate),
+        from: str(src.from, d.from),
+        to: str(src.to, d.to),
+        lambda: str(src.lambda, d.lambda),
+        shape: str(src.shape, d.shape),
+        alpha: str(src.alpha, d.alpha),
+        beta: str(src.beta, d.beta),
         thickness: thicknessOf(src.thickness, d.thickness),
         dashed: bool(src.dashed, d.dashed),
         fillOpacity: opacityOf(src.fillOpacity, d.fillOpacity),
@@ -1736,6 +1765,30 @@ function newData(opts: ToolOpts): DataTool {
 function newDataPlot(opts: ToolOpts): DataPlotTool {
     return { ...dataPlotDefaults(), ...identity('dataPlot', opts) };
 }
+
+/** 6.2.1: the recipes of the other distributions: their id, kind and the fields they start with. */
+const NEW_DISTRIBUTIONS: ReadonlyArray<[string, 'studentT' | 'chiSquare' | 'exponential' | 'uniform' | 'poisson' | 'gamma' | 'beta', Partial<DistributionTool>]> = [
+    ['t-distribution', 'studentT', { df: '5' }],
+    ['chi-square-distribution', 'chiSquare', { df: '3' }],
+    ['exponential-distribution', 'exponential', { rate: '1' }],
+    ['uniform-distribution', 'uniform', { from: '0', to: '1' }],
+    ['poisson-distribution', 'poisson', { lambda: '3' }],
+    ['gamma-distribution', 'gamma', { shape: '2', rate: '1' }],
+    ['beta-distribution', 'beta', { alpha: '2', beta: '5' }],
+];
+
+/** 6.2.1: the event "Probability as an area" shades under each kind of distribution. */
+const DEFAULT_EVENTS: Partial<Record<DistributionTool['kind'], string>> = {
+    normal: '-1 <= X <= 1',
+    binomial: 'X <= 3',
+    studentT: '-2 <= X <= 2',
+    chiSquare: 'X >= 6',
+    exponential: 'X <= 1',
+    uniform: '0.2 <= X <= 0.5',
+    poisson: 'X <= 2',
+    gamma: 'X <= 2',
+    beta: 'X <= 0.5',
+};
 
 function newDistribution(opts: ToolOpts): DistributionTool {
     return { ...distributionDefaults(), ...identity('distribution', opts) };
@@ -2336,6 +2389,17 @@ function beyondRecipes(in2D: (ctx: RecipeContext) => boolean): Recipe[] {
             available: in2D,
             build: (ctx) => ({ kind: 'tool', tool: { ...newDistribution(toolOpts(ctx)), kind: 'binomial', n: '10', p: '0.4' } }),
         },
+        // 6.2.1: the other distributions.
+        ...NEW_DISTRIBUTIONS.map(
+            ([id, kind, fields]): Recipe => ({
+                id,
+                section: 'Probability',
+                label: t(`beyond.recipe.${kind}`),
+                hint: t(`beyond.recipeHint.${kind}`),
+                available: in2D,
+                build: (ctx) => ({ kind: 'tool', tool: { ...newDistribution(toolOpts(ctx)), kind, ...fields } }),
+            })
+        ),
         {
             id: 'probability',
             section: 'Probability',
@@ -2346,7 +2410,7 @@ function beyondRecipes(in2D: (ctx: RecipeContext) => boolean): Recipe[] {
                 const shade = (c: RecipeContext, dist: Tool): ProbabilityTool => ({
                     ...newProbability(toolOpts(c)),
                     distribution: dist.name,
-                    event: dist.type === 'distribution' && dist.kind === 'binomial' ? 'X <= 3' : '-1 <= X <= 1',
+                    event: dist.type === 'distribution' ? DEFAULT_EVENTS[dist.kind] ?? '-1 <= X <= 1' : '-1 <= X <= 1',
                     valueLabel: true,
                 });
                 const existing = ctx.tools.filter((x) => x.type === 'distribution');

@@ -651,6 +651,51 @@ const BEYOND: Record<string, { text: string; table?: NoteTable | null }> = {
             'draw the solution through (0, r) in green',
         ].join('\n'),
     },
+    // 6.2.1: the t distribution on a slider against the normal one, its two tails, a title with the slider.
+    studentT: {
+        text: [
+            'show x from -5 to 5 and y from 0 to 0.45',
+            'title Student t PDF (df = {df})',
+            'slider df from 1 to 30, starting at 5, in steps of 1',
+            'plot the t distribution with df = df in blue, thick',
+            'plot the normal distribution with mean 0 and sd 1 in gray, dashed',
+            'shade P(-2 <= X <= 2) of X1, labelled',
+            'shade P(X >= 3) of X1 in red, pattern north-east, labelled',
+        ].join('\n'),
+    },
+    // 6.2.1: chi-square with a right tail, and with df = 1 (a pole at 0, cut above the view).
+    chiSquare: {
+        text: [
+            'show x from 0 to 15 and y from 0 to 0.5',
+            'plot the chi-square distribution with df = 3, thick',
+            'shade P(X >= 7.815) in red, labelled',
+            'plot the chi-square distribution with df = 1 in green, dashed',
+            'shade $P(X \\le 0.5)$ in green, labelled',
+        ].join('\n'),
+    },
+    // 6.2.1: exponential, uniform, gamma and beta densities with their probabilities.
+    densities: {
+        text: [
+            'show x from -0.5 to 6 and y from 0 to 1.2',
+            'plot the exponential distribution with rate 1, thick',
+            'shade P(X <= 1), labelled',
+            'plot the uniform distribution from 2 to 5 in purple',
+            'shade P(3 < X < 4) in purple, labelled',
+            'plot the gamma distribution with shape 2 and rate 1.5 in green',
+            'shade P(X > 2) in green, labelled "{p:4}"',
+            'plot the beta distribution with a = 0.5 and b = 0.5 in teal, dashed',
+        ].join('\n'),
+    },
+    // 6.2.1: Poisson bars on a slider, one value, a right tail.
+    poisson: {
+        text: [
+            'show x from -1 to 15 and y from 0 to 0.3',
+            'slider lambda from 0.5 to 10, starting at 4',
+            'plot the Poisson distribution with mean lambda',
+            'shade P(X = 4), labelled',
+            'shade P(X >= 9) in red, labelled',
+        ].join('\n'),
+    },
     // Binomial bars, strict bounds, one value, a tiny probability as a power of ten.
     binomial: {
         text: [

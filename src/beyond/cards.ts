@@ -10,6 +10,7 @@ import type {
     DataPlotStyle,
     DataPlotTool,
     DataTool,
+    DistributionKind,
     DistributionTool,
     FillPattern,
     FunctionParameters,
@@ -23,12 +24,13 @@ import type {
 } from '../types';
 import type { ValidateResult } from '../mathcontext';
 import type { PanelHost } from '../ui/host';
-import { DropdownOption, LiveSliderHandle, SegmentedHandle, chip, dropdown, field, liveSlider, segmented } from '../ui/kit';
+import { DropdownHandle, DropdownOption, LiveSliderHandle, SegmentedHandle, chip, dropdown, field, liveSlider, segmented } from '../ui/kit';
 import { FILL_PATTERN_OPTIONS } from '../colors';
 import { readEvent } from './event';
 import { LayerCardActions, LayerItem, ToolCard, percent, registerToolCard, sizeOptions, squash } from '../ui/layerCards';
 import { defaultTool, recipes } from '../migrate';
-import { t } from '../i18n';
+import { MessageKey, t } from '../i18n';
+import { DISTRIBUTION_FIELDS, DISTRIBUTION_KINDS, DistributionField, KIND_FIELDS, isDiscrete, kindOf } from './kinds'; // 6.2.1
 
 const OK: ValidateResult = { ok: true };
 
@@ -318,9 +320,11 @@ function dataText(d: DataTool): string {
 // ------------------------------------------------------------ distribution
 
 class DistributionCard extends ToolCard<DistributionTool> {
-    private kindSeg!: SegmentedHandle<DistributionTool['kind']>;
-    private normalRows: HTMLElement[] = [];
-    private binomialRows: HTMLElement[] = [];
+    private kindSelect!: DropdownHandle<DistributionKind>;
+    /** 6.2.1: the rows of each field (shown for the kinds that read it), the line row (densities) and the bars row. */
+    private fieldRows = new Map<DistributionField, HTMLElement>();
+    private lineRows: HTMLElement[] = [];
+    private barRows: HTMLElement[] = [];
 
     constructor(parent: HTMLElement, item: LayerItem, tool: DistributionTool, host: PanelHost, actions: LayerCardActions) {
         super(parent, item, tool, host, actions);
@@ -330,39 +334,32 @@ class DistributionCard extends ToolCard<DistributionTool> {
 
     private build(): void {
         const tool = this.tool;
-        this.kindSeg = segmented<DistributionTool['kind']>(this.body, {
+        // 6.2.1: nine kinds: a dropdown instead of the two segments of 5.0.
+        const kindRow = field(this.body, { label: t('beyond.dist.kind'), layout: 'inline' });
+        this.kindSelect = dropdown<DistributionKind>(kindRow.controlEl, {
             label: t('beyond.dist.kind'),
-            value: tool.kind,
-            fill: true,
-            options: [
-                { value: 'normal', text: t('beyond.dist.normal') },
-                { value: 'binomial', text: t('beyond.dist.binomial') },
-            ],
+            options: DISTRIBUTION_KINDS.map((k) => ({ value: k, text: t(KIND_LABELS[k]) })),
+            value: kindOf(tool.kind),
             onChange: (v) => {
                 tool.kind = v;
                 this.changed();
             },
         });
-        const fields: Array<{ id: 'mean' | 'sd' | 'n' | 'p'; label: string; rows: HTMLElement[] }> = [
-            { id: 'mean', label: t('beyond.dist.mean'), rows: this.normalRows },
-            { id: 'sd', label: t('beyond.dist.sd'), rows: this.normalRows },
-            { id: 'n', label: t('beyond.dist.n'), rows: this.binomialRows },
-            { id: 'p', label: t('beyond.dist.p'), rows: this.binomialRows },
-        ];
-        for (const f of fields) {
-            const row = field(this.body, { label: f.label, layout: 'inline' });
+        for (const f of DISTRIBUTION_FIELDS) {
+            const label = t(FIELD_LABELS[f]);
+            const row = field(this.body, { label, layout: 'inline' });
             const input = this.exprField(row.controlEl, {
-                id: f.id,
-                label: f.label,
+                id: f,
+                label,
                 kind: 'value',
                 required: true,
-                get: () => tool[f.id],
+                get: () => tool[f],
                 set: (v) => {
-                    tool[f.id] = v;
+                    tool[f] = v;
                 },
             });
             row.bind(input.h.input);
-            f.rows.push(row.el);
+            this.fieldRows.set(f, row.el);
         }
         const line = this.lineRow({
             thickness: () => tool.thickness,
@@ -379,7 +376,7 @@ class DistributionCard extends ToolCard<DistributionTool> {
                 },
             ],
         });
-        this.normalRows.push(line.el);
+        this.lineRows.push(line.el);
         const bars = field(this.body, { label: t('build.card.fillOpacity'), layout: 'inline' });
         const opacity = liveSlider(bars.controlEl, {
             min: 0,
@@ -393,23 +390,77 @@ class DistributionCard extends ToolCard<DistributionTool> {
                 this.frame();
             },
         });
-        this.binomialRows.push(bars.el);
+        this.barRows.push(bars.el);
         this.onSync(() => {
-            this.kindSeg.setValue(tool.kind);
+            this.kindSelect.setValue(kindOf(tool.kind));
             opacity.setValue(tool.fillOpacity);
         });
     }
 
     protected syncState(): void {
-        const binomial = this.tool.kind === 'binomial';
-        for (const row of this.normalRows) row.toggleClass('tikz-hidden', binomial);
-        for (const row of this.binomialRows) row.toggleClass('tikz-hidden', !binomial);
+        const kind = kindOf(this.tool.kind);
+        const own = KIND_FIELDS[kind];
+        this.fieldRows.forEach((row, f) => row.toggleClass('tikz-hidden', !own.includes(f)));
+        const discrete = isDiscrete(kind);
+        for (const row of this.lineRows) row.toggleClass('tikz-hidden', discrete);
+        for (const row of this.barRows) row.toggleClass('tikz-hidden', !discrete);
     }
 
     protected summary(): string {
-        const tool = this.tool;
-        if (tool.kind === 'binomial') return t('beyond.dist.summaryBinomial', { n: squash(tool.n) || '?', p: squash(tool.p) || '?' });
-        return t('beyond.dist.summaryNormal', { mean: squash(tool.mean) || '?', sd: squash(tool.sd) || '?' });
+        return distributionSummary(this.tool, (v) => squash(v) || '?');
+    }
+}
+
+/** 6.2.1: the name of each kind in the card's dropdown. */
+const KIND_LABELS: Record<DistributionKind, MessageKey> = {
+    normal: 'beyond.dist.normal',
+    binomial: 'beyond.dist.binomial',
+    studentT: 'beyond.dist.studentT',
+    chiSquare: 'beyond.dist.chiSquare',
+    exponential: 'beyond.dist.exponential',
+    uniform: 'beyond.dist.uniform',
+    poisson: 'beyond.dist.poisson',
+    gamma: 'beyond.dist.gamma',
+    beta: 'beyond.dist.beta',
+};
+
+/** 6.2.1: the label of each field's row. */
+const FIELD_LABELS: Record<DistributionField, MessageKey> = {
+    mean: 'beyond.dist.mean',
+    sd: 'beyond.dist.sd',
+    n: 'beyond.dist.n',
+    p: 'beyond.dist.p',
+    df: 'beyond.dist.df',
+    rate: 'beyond.dist.rate',
+    from: 'beyond.dist.from',
+    to: 'beyond.dist.to',
+    lambda: 'beyond.dist.lambda',
+    shape: 'beyond.dist.shape',
+    alpha: 'beyond.dist.a',
+    beta: 'beyond.dist.b',
+};
+
+/** A distribution in a few words (its card's summary, the probability card's dropdown), its fields shown by `show`. */
+function distributionSummary(d: DistributionTool, show: (v: string) => string): string {
+    switch (kindOf(d.kind)) {
+        case 'binomial':
+            return t('beyond.dist.summaryBinomial', { n: show(d.n), p: show(d.p) });
+        case 'studentT':
+            return t('beyond.dist.summaryStudentT', { df: show(d.df) });
+        case 'chiSquare':
+            return t('beyond.dist.summaryChiSquare', { df: show(d.df) });
+        case 'exponential':
+            return t('beyond.dist.summaryExponential', { rate: show(d.rate) });
+        case 'uniform':
+            return t('beyond.dist.summaryUniform', { from: show(d.from), to: show(d.to) });
+        case 'poisson':
+            return t('beyond.dist.summaryPoisson', { lambda: show(d.lambda) });
+        case 'gamma':
+            return t('beyond.dist.summaryGamma', { shape: show(d.shape), rate: show(d.rate) });
+        case 'beta':
+            return t('beyond.dist.summaryBeta', { a: show(d.alpha), b: show(d.beta) });
+        default:
+            return t('beyond.dist.summaryNormal', { mean: show(d.mean), sd: show(d.sd) });
     }
 }
 
@@ -453,7 +504,7 @@ class ProbabilityCard extends ToolCard<ProbabilityTool> {
             options: () => {
                 const opts: DropdownOption<string>[] = this.distributions().map((d) => ({
                     value: d.name,
-                    text: `${d.name}: ${d.kind === 'binomial' ? t('beyond.dist.summaryBinomial', { n: d.n, p: d.p }) : t('beyond.dist.summaryNormal', { mean: d.mean, sd: d.sd })}`,
+                    text: `${d.name}: ${distributionSummary(d, (v) => v)}`,
                 }));
                 if (!tool.distribution) opts.unshift({ value: '', text: t('beyond.prob.chooseDistribution') });
                 return opts;
