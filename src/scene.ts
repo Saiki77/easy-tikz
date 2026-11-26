@@ -138,6 +138,9 @@ export interface TextPrim {
     weight?: 'bold';
     /** Draw a background-coloured halo (labels on top of fills). */
     halo: boolean;
+    // 6.1
+    /** A value the plugin writes (an object `labelled` without a text of its own): the clean look sets it in a pill. */
+    value?: boolean;
     /**
      * Extra shift of the text away from its anchor point, in pt of the
      * exported figure (x right, y up). Set by the label placer when every
@@ -303,6 +306,9 @@ export interface SceneInput2D {
     // 6.0 AI
     /** Filled with what each object computed, by its name (the AI checker, src/ai/report6.ts). */
     report?: SceneReport;
+    // 6.1
+    /** Drawn in the clean look (src/look.ts): extrema are dots without the words min and max. Absent: Classic. */
+    clean?: boolean;
 }
 
 // 6.0 AI
@@ -521,6 +527,9 @@ interface Ctx {
     // 6.0 D
     /** 3D: the z range of the box (the view holds x and y). */
     zRange?: [number, number];
+    // 6.1
+    /** The clean look (SceneInput2D.clean). */
+    clean?: boolean;
 }
 
 interface CacheState {
@@ -1203,6 +1212,8 @@ function computeDecorations(f: FunctionParameters, info: FunctionInfo, ctx: Ctx)
         for (const [index, e] of getExtrema().entries()) {
             out.markers.push({ x: e.x, y: e.y, color, size: 'normal' });
             addHandle(out, { ref: { part: 'extremum', index }, point: { x: e.x, y: e.y } });
+            // 6.1: in the clean look the dot says it: no min and max.
+            if (ctx.clean) continue;
             const min = e.type === 'minimum';
             // Below a minimum, above a maximum, unless a line (the tangent, another curve) runs there.
             out.texts.push({
@@ -2209,6 +2220,7 @@ function scene2D(input: SceneInput2D): Scene2D {
         functions: params,
         metrics: validMetrics(input.labelMetrics),
         equalScale: !!input.equalScale || !!input.polar,
+        clean: !!input.clean, // 6.1
     };
 
     const nodes: SceneNode[] = [];
@@ -2228,7 +2240,7 @@ function scene2D(input: SceneInput2D): Scene2D {
     forgetOnRemoval(state, new Set([...Array.from(ctx.toolsByName.keys()), ...math.functions().map((f) => f.name)]));
     // The language too: a cached output keeps its problem messages.
     const m = ctx.metrics;
-    const frameKey = `${view.xmin},${view.xmax},${view.ymin},${view.ymax}|${grid.nx}x${grid.ny}|${axisStyle}|${language()}|${m ? `${m.w}x${m.h}` : ''}|${ctx.equalScale ? 'eq' : ''}`;
+    const frameKey = `${view.xmin},${view.xmax},${view.ymin},${view.ymax}|${grid.nx}x${grid.ny}|${axisStyle}|${language()}|${m ? `${m.w}x${m.h}` : ''}|${ctx.equalScale ? 'eq' : ''}|${ctx.clean ? 'clean' : ''}`;
     const seen = new Set<string>();
     const outs = runNodes(nodes, ctx, state, frameKey, (node) => compute2D(node, ctx), seen);
     prune(state, seen);
@@ -2286,6 +2298,7 @@ function scene2D(input: SceneInput2D): Scene2D {
         const formatter = labelFormatter(node, math, issues);
         for (const b of moved?.braces.get(k) ?? out.braces) item.braces.push({ from: b.from, to: b.to, color: b.color, label: formatter({ template: 'label' }) }); // 6.0 D
         const rank = labelRank(node);
+        const value = valueLabelled(node); // 6.1
         for (const [index, spec] of (moved?.texts.get(k) ?? out.texts).entries()) {
             const text = formatter(spec);
             if (!text.trim()) continue;
@@ -2312,6 +2325,7 @@ function scene2D(input: SceneInput2D): Scene2D {
                 box: -1,
                 own: -1,
                 kept: false,
+                value,
             });
         }
     }
@@ -2341,6 +2355,7 @@ function scene2D(input: SceneInput2D): Scene2D {
         const prim: TextPrim = { x: job.x, y: job.y, text: job.text, color: spec.color, anchor: job.anchor, size: spec.size, halo };
         if (spec.weight) prim.weight = spec.weight;
         if (job.offset) prim.offset = job.offset;
+        if (job.value && !spec.region) prim.value = true; // 6.1
         job.item.texts.push(prim);
     }
     // 6.0 D
@@ -2588,6 +2603,9 @@ interface TextJob {
     kept: boolean;
     /** The slide line in plot pt, built on first use; null without one. */
     track?: Track | null;
+    // 6.1
+    /** Its object writes its value (labelled without a text of its own): TextPrim.value. */
+    value?: boolean;
 }
 
 /** Axis-aligned box in plot pt (origin bottom-left, y up). */
@@ -2670,6 +2688,12 @@ function movingNodes(nodes: SceneNode[], math: MathContext): Set<SceneNode> {
  * labels, condition labels, segment labels. Fixed sides and region labels
  * go before all of them.
  */
+/** 6.1: the node's tool writes its value (`labelled` without a text of its own): its texts are values (TextPrim.value). */
+function valueLabelled(node: SceneNode): boolean {
+    const t = node.tool as (Tool & { valueLabel?: unknown; label?: unknown }) | undefined;
+    return !!t && t.valueLabel === true && !str(t.label).trim();
+}
+
 function labelRank(node: SceneNode): number {
     const t = node.tool;
     if (!t) return 1;

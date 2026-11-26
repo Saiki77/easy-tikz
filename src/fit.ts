@@ -253,7 +253,6 @@ export function fitSettings(settings: SettingsManager, math: MathContext, free?:
         const v = settings.getValue<unknown>(key);
         return Array.isArray(v) ? (v as T[]) : [];
     };
-    const style = settings.getValue('axis_style');
     return fitChart({
         is3D: settings.getValue('dimension') === true,
         polar: settings.getValue('coordinateSystem') === 'polar',
@@ -261,7 +260,7 @@ export function fitSettings(settings: SettingsManager, math: MathContext, free?:
         functions3D: list<Function3DParameters>('functions3D'),
         tools: list<Tool>('tools'),
         annotations: list<Annotation>('annotations'),
-        axisStyle: style === 'middle' || style === 'axes' ? style : 'box',
+        axisStyle: settings.resolvedLook().axisStyle, // 6.1: or the look's
         math,
         view: settings.resolveView(math).view,
         free,

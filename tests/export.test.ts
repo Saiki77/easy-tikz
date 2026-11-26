@@ -8,6 +8,10 @@ import { RANGE_DEFAULTS, SettingsManager } from '../src/settings';
 import { EXAMPLES } from '../src/migrate';
 import { Function3DParameters, FunctionParameters, RendererConfig, Tool } from '../src/types';
 import { stableSvgIds } from '../src/svgExport';
+import { setChartLook } from '../src/look';
+
+// 6.1: these checks pin the export of 6.0 exactly: they run in the Classic look. The clean look's export is checked in tests/look.test.ts.
+setChartLook('classic');
 
 // ----------------------------------------------------------------- helpers
 

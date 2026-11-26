@@ -10,7 +10,7 @@
  * 'off'), `numbers_step_a` (the step's formula) and `numbers_at_a` (the
  * values). The step and the values stay stored when the mode changes.
  */
-import { formatTick, tickValues } from './util';
+import { formatTick, niceInterval, tickValues } from './util';
 
 export type NumbersMode = 'auto' | 'every' | 'at' | 'off';
 export type TickAxis = 'x' | 'y' | 'z';
@@ -214,4 +214,44 @@ export function tickOptions(axis: TickAxis, t: AxisTicks, num: (v: number) => st
         opts.push(`${axis}ticklabels={${labels.map((l) => `{${l}}`).join(',')}}`);
     }
     return opts;
+}
+
+// 6.1
+/** Rough advance width of one character of a number, in em (the renderer's CHAR_WIDTH_EM). */
+const NUMBER_CHAR_EM = 0.56;
+/** y gets this share of x's target tick count (the renderer's Y_TICK_RATIO). */
+const Y_TICK_RATIO = 0.75;
+
+/** The next nice step above `step` (1, 2, 5 times a power of ten). */
+function nextNiceStep(step: number): number {
+    const mag = Math.pow(10, Math.floor(Math.log10(step) + 1e-9));
+    const k = Math.round(step / mag);
+    return (k < 2 ? 2 : k < 5 ? 5 : 10) * mag;
+}
+
+/**
+ * The 2D preview's own major tick steps for x and y (6.1: shared with the
+ * export of the clean look, which lists them, so the PDF shows the
+ * preview's numbers). From the 'Major divisions' target; equal scale uses
+ * one step on both axes. Steps grow (1, 2, 5, 10, ...) until the numbers,
+ * set at `fs`, have room in a plot of about `plotW` x `plotH` (any one
+ * unit for the three). y gets `yRatio` of x's target (0.75 when absent;
+ * the clean look gives the plot's own height to width, for square cells).
+ */
+export function autoTickSteps(view: { xmin: number; xmax: number; ymin: number; ymax: number }, o: { target: number; equal: boolean; compact: boolean; plotW: number; plotH: number; fs: number; yRatio?: number }): [number, number] {
+    const dx = view.xmax - view.xmin;
+    const dy = view.ymax - view.ymin;
+    let sx = o.equal ? niceInterval(Math.max(dx, dy), o.target) : niceInterval(dx, o.target);
+    let sy = o.equal ? sx : niceInterval(dy, Math.max(2, Math.round(o.target * (o.yRatio ?? Y_TICK_RATIO))));
+    if (o.compact) return [sx, sy];
+    const fitsX = (step: number) => {
+        const ticks = tickValues(view.xmin, view.xmax, step);
+        const widest = ticks.reduce((m, t) => Math.max(m, formatTick(t).length), 1) * o.fs * NUMBER_CHAR_EM;
+        return ticks.length < 2 || (o.plotW * step) / dx >= widest + o.fs * 0.8;
+    };
+    const fitsY = (step: number) => (o.plotH * step) / dy >= o.fs * 1.6;
+    for (let k = 0; k < 8 && !(fitsX(sx) && (!o.equal || fitsY(sx))); k++) sx = nextNiceStep(sx);
+    if (o.equal) return [sx, sx];
+    for (let k = 0; k < 8 && !fitsY(sy); k++) sy = nextNiceStep(sy);
+    return [sx, sy];
 }

@@ -196,6 +196,7 @@ export const panels = {
     'panels.words.what.noAxes': 'No axes',
     'panels.words.what.withAGrid': 'A grid',
     'panels.words.what.withAFineGrid': 'A grid with minor lines too',
+    'panels.words.what.noGrid': 'No grid, also in the clean chart look',
     'panels.words.what.gridOpacity': 'How strong the grid is, 0 to 1: grid opacity 0.3',
     'panels.words.what.numbers': 'The numbers on an axis: x numbers every 0.5, x numbers at 1, 3, x numbers off',
     'panels.words.what.equalScale': 'The same unit on both axes',

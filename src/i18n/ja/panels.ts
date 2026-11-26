@@ -195,6 +195,7 @@ export const panels: Messages<typeof en> = {
     'panels.words.what.noAxes': '軸なし',
     'panels.words.what.withAGrid': 'グリッド',
     'panels.words.what.withAFineGrid': '補助グリッドもあるグリッド',
+    'panels.words.what.noGrid': 'グリッドなし（すっきりした見た目でも）',
     'panels.words.what.gridOpacity': 'グリッドの不透明度（0 から 1）：grid opacity 0.3',
     'panels.words.what.numbers': '軸の目盛りの数値：x numbers every 0.5、x numbers at 1, 3、x numbers off',
     'panels.words.what.equalScale': '両方の軸で同じ単位の長さ',

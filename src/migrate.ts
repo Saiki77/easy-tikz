@@ -616,7 +616,7 @@ function functionDefaults(): FunctionParameters {
         dashed: false,
         tangentPoint: '',
         extrema: false,
-        thickness: 'thin',
+        thickness: '', // 6.1: left open, the chart look decides (Classic: thin)
         parametric: false,
         expressionY: '',
     };
@@ -2588,7 +2588,7 @@ function exampleChart(overrides: Record<string, unknown>): Record<string, unknow
         axis_label_x: 'x',
         axis_label_y: 'y',
         showAxis: true,
-        showLargeGrid: false,
+        showLargeGrid: 'auto', // 6.1: the chart look decides
         showSmallGrid: false,
         gridOpacity: GRID_OPACITY,
         gridSize: 5,
@@ -2599,7 +2599,8 @@ function exampleChart(overrides: Record<string, unknown>): Record<string, unknow
         ymax: '5',
         zmin: '-5',
         zmax: '5',
-        axis_style: 'box',
+        axis_style: 'auto', // 6.1: the chart look decides
+        look: 'auto',
         coordinateSystem: 'cartesian',
         axis_label_x_polar: '',
         axis_label_y_polar: '',

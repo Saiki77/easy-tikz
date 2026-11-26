@@ -581,7 +581,7 @@ export function transformItems(specs: PassSpec[], ctx: SceneCtx, motion: MotionF
         }
         for (const [index, fns] of drawn) {
             const item = specs[index].item;
-            const curves: StrokePrim[] = fns.map(({ info, f }) => ({ lines: sampleFunction(info, view), color: str(f.color) || 'black', width: str(f.thickness) || 'thick', dashed: !!f.dashed }));
+            const curves: StrokePrim[] = fns.map(({ info, f }) => ({ lines: sampleFunction(info, view), color: str(f.color) || 'black', width: str(f.thickness), dashed: !!f.dashed })); // 6.1: an empty thickness is the look's line (Classic: thin)
             item.strokes = [...curves, ...item.strokes];
         }
     }

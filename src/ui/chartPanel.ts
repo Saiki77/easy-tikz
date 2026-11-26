@@ -265,7 +265,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
             const styleField = field(g.body, { label: t('panels.chart.style'), layout: 'inline' });
             axisStyle = segmented(styleField.controlEl, {
                 label: t('panels.chart.axisStyle'),
-                value: str(settings.getValue('axis_style')) || 'box',
+                value: settings.resolvedLook().axisStyle, // 6.1: the chart's, or the look's when it leaves it open
                 options: [
                     { value: 'box', text: t('panels.chart.styleBox') },
                     { value: 'middle', text: t('panels.chart.styleMiddle') },
@@ -359,7 +359,7 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
         const chips = g.body.createDiv({ cls: 'etz-chip-row' });
         gridMajor = chip(chips, {
             label: t('panels.chart.majorGrid'),
-            value: settings.getValue('showLargeGrid') === true,
+            value: settings.resolvedLook().gridMajor, // 6.1: the chart's, or the look's when it leaves it open
             onChange: (on) => {
                 settings.setValue('showLargeGrid', on);
                 host.requestUpdate();
@@ -537,12 +537,12 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
                 if (handle.input !== active && handle.getValue() !== value) handle.setValue(value);
             });
             fitHint?.toggleClass('tikz-hidden', settings.getValue('fitY') !== true); // 6.0 B
-            gridMajor?.setValue(settings.getValue('showLargeGrid') === true);
+            gridMajor?.setValue(settings.resolvedLook().gridMajor); // 6.1
             gridMinor?.setValue(settings.getValue('showSmallGrid') === true);
             gridOpacity?.setValue(opacityValue(settings.getValue('gridOpacity'), GRID_OPACITY));
             elevation?.setValue(num(settings.getValue('rotationX'), 30));
             azimuth?.setValue(num(settings.getValue('rotationZ'), 45));
-            axisStyle?.setValue(str(settings.getValue('axis_style')) || 'box');
+            if (!host.is3D()) axisStyle?.setValue(settings.resolvedLook().axisStyle); // 6.1
         },
         hasErrors: () => Array.from(ranges.values()).some((h) => h.hasError()),
     };

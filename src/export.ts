@@ -30,9 +30,11 @@ import {
     edgeLabelSide3D,
     labelMetricsFor,
 } from './scene';
-import { sampleCurve } from './util';
+import { sampleCurve, tickValues } from './util';
 import { boxFactors } from './box3d';
-import { TickAxis, axisTicks, tickOptions } from './ticks';
+import { AxisTicks, Tick, TickAxis, autoTickSteps, axisTicks, tickOptions } from './ticks';
+// 6.1 clean look
+import { AxisPlace, CLEAN_COLOURS, CLEAN_GRID_ALPHA, CLEAN_LINE_TIKZ, CLEAN_TICK_PT, CleanAxisFrame, TickObstacles, axisPlace, cleanTickSpots } from './look';
 import { stillFrame } from './motion6/clock'; // 6.0 C
 import { pixelsTikz } from './iterate/export'; // 6.0 E
 import { pythonComments } from './python/text'; // 6.0 P
@@ -107,6 +109,10 @@ const MIDDLE_TITLE_LIFT_PT = 15;
 const BRACE_LABEL_SHIFT = 9;
 
 const MARK_SIZE: Record<MarkerSize, string> = { small: '1.5pt', normal: '2pt', large: '2.8pt' };
+/** 6.1: the clean look's dots, a little larger with a wider white rim, as in the preview. */
+const CLEAN_MARK_SIZE: Record<MarkerSize, string> = { small: '1.75pt', normal: '2.4pt', large: '3.1pt' };
+/** The same dots' radius in pt, for the numbers of the axes to keep clear of. */
+const CLEAN_MARK_PT: Record<MarkerSize, number> = { small: 1.75, normal: 2.4, large: 3.1 };
 const FONT: Record<AnnotationSize, string> = { small: '\\footnotesize', normal: '\\small', large: '\\large' };
 /** Legend text size, that of small labels: the default \normalsize legend covers about half as much again of the plot. */
 const LEGEND_FONT = '\\footnotesize';
@@ -129,6 +135,8 @@ const DIM_OPACITY = 0.45;
  * background-coloured halo; the outer sep keeps it off a 2.8pt marker.
  */
 const HALO = 'fill=white, fill opacity=0.7, text opacity=1, inner sep=1pt, rounded corners=1pt, outer sep=2pt';
+/** 6.1: a value label of the clean look: a soft white pill with a thin line, as in the preview. */
+const PILL = 'fill=white, draw=etzPill, line width=0.4pt, rounded corners=4pt, inner xsep=3.5pt, inner ysep=1.5pt, outer sep=1pt';
 /** Bold labels (region names) are drawn in a darker shade of their colour. */
 const BOLD_INK = '!70!black';
 
@@ -223,13 +231,24 @@ class ColorSet {
         return name;
     }
 
+    /** 6.1: a colour of the clean look under its own name (etzAxis, etzGrid, ...). */
+    named(name: string, hex: string): string {
+        this.defs.set(name, hex);
+        return name;
+    }
+
     lines(): string[] {
         return Array.from(this.defs.entries()).map(([name, hex]) => `\\definecolor{${name}}{HTML}{${hex}}`);
     }
 }
 
+/** 6.1: the 2D picture being written is in the clean look (set by generateTikz2D for its run). */
+let cleanNow = false;
+
+/** A TikZ line width; an empty one (a function that sets none) is the look's line: semithick in the clean look, thin in Classic. */
 function lineWidth(width: string): string {
     const w = String(width ?? '').trim();
+    if (cleanNow && (w === '' || w === CLEAN_LINE_TIKZ)) return CLEAN_LINE_TIKZ;
     return LINE_WIDTHS.has(w) || Object.prototype.hasOwnProperty.call(THICKNESS_MAP, w) ? w : 'thin';
 }
 
@@ -560,6 +579,17 @@ function axisBlock(options: string[]): string[] {
  */
 export function generateTikz2D(settings: SettingsManager, ctx: MathContext): string {
     const config = settings.toRendererConfig(ctx);
+    // 6.1: the look of the picture, for the widths, dots and pills written on the way.
+    const outer = cleanNow;
+    cleanNow = config.look === 'clean';
+    try {
+        return tikz2D(settings, ctx, config);
+    } finally {
+        cleanNow = outer;
+    }
+}
+
+function tikz2D(settings: SettingsManager, ctx: MathContext, config: RendererConfig): string {
     const view: View = { xmin: config.xmin, xmax: config.xmax, ymin: config.ymin, ymax: config.ymax };
     const polar = config.coordinateSystem === 'polar';
     const paperCm = settings.paperSize();
@@ -575,6 +605,7 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
         equalScale: !!config.equalScale,
         // 6.0 C: moving particles are drawn still, at time 0 or the chart's stillTime.
         motion: stillFrame(settings.getValue('stillTime')),
+        clean: cleanNow, // 6.1
     });
     const items = scene.items || [];
     const colors = new ColorSet();
@@ -602,16 +633,21 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
     // Middle axes: the labels sit just beyond the arrow tips (x right of its
     // tip, y above its tip), where they cannot collide with the plot, as in
     // the preview. pgfplots' default puts them inside the plot next to the tips.
-    if (config.axisStyle === 'middle') {
-        opts.push('axis lines=middle, xlabel style={anchor=west}, ylabel style={anchor=south}');
-        // The y label now stands above the tip of its axis, which is where pgfplots puts the title: with
-        // the y axis in the middle of the plot the two would print on top of each other. The preview
-        // draws the title above the label, so lift it by the label's line.
-        const titled = !!labelText(ctx.formatTemplate(String(config.title ?? '')));
-        if (titled && config.showAxisLabels && labelText(String(config.yLabel ?? ''))) opts.push(`title style={yshift=${MIDDLE_TITLE_LIFT_PT}pt}`);
-    } else if (config.axisStyle === 'axes') opts.push('axis lines=left');
-    opts.push(...gridOptions(config));
-    opts.push(...numbersOptions(config, ctx, [['x', view.xmin, view.xmax], ['y', view.ymin, view.ymax]]));
+    if (cleanNow) {
+        // 6.1: the clean look's axes, grid and numbers.
+        opts.push(...cleanOptions(config, ctx, view, settings.paperSize(), items, colors));
+    } else {
+        if (config.axisStyle === 'middle') {
+            opts.push('axis lines=middle, xlabel style={anchor=west}, ylabel style={anchor=south}');
+            // The y label now stands above the tip of its axis, which is where pgfplots puts the title: with
+            // the y axis in the middle of the plot the two would print on top of each other. The preview
+            // draws the title above the label, so lift it by the label's line.
+            const titled = !!labelText(ctx.formatTemplate(String(config.title ?? '')));
+            if (titled && config.showAxisLabels && labelText(String(config.yLabel ?? ''))) opts.push(`title style={yshift=${MIDDLE_TITLE_LIFT_PT}pt}`);
+        } else if (config.axisStyle === 'axes') opts.push('axis lines=left');
+        opts.push(...gridOptions(config));
+        opts.push(...numbersOptions(config, ctx, [['x', view.xmin, view.xmax], ['y', view.ymin, view.ymax]]));
+    }
     // Without rad, pgfplots evaluates sin(x) in degrees.
     opts.push('trig format plots=rad');
     // NaN and out-of-range samples become gaps instead of errors or straight connectors.
@@ -627,6 +663,133 @@ export function generateTikz2D(settings: SettingsManager, ctx: MathContext): str
 
     const picture = ['\\begin{tikzpicture}', ...pythonComments(config.tools) /* 6.0 P */, ...colors.lines(), ...layers.boxes, ...axisBlock(opts), ...pictures, ...layers.render(view), '\\end{axis}', '\\end{tikzpicture}']; // pictures: 6.0 E
     return wrap(settings.isStandalone(), libs, picture);
+}
+
+// ----------------------------------------------------------------- 6.1 clean look
+
+/** TeX pt per cm. */
+const PT_PER_CM = 72.27 / 2.54;
+/** The gap between an axis line and its numbers, in pt (the preview's TICK_GAP_PT plus its 2 px). */
+const CLEAN_GAP_PT = 2.75;
+/** A number's character width in em (the preview's CHAR_WIDTH_EM). */
+const NUMBER_CHAR_EM = 0.56;
+
+/** pgfplots' place for an axis line: through 0, or at an edge. */
+const X_LINE: Record<AxisPlace, string> = { zero: 'middle', low: 'bottom', high: 'top' };
+const Y_LINE: Record<AxisPlace, string> = { zero: 'middle', low: 'left', high: 'right' };
+
+/**
+ * 6.1: the axes, grid and numbers of the clean look, as the preview draws
+ * them: thin light grey axis lines without arrowheads (at the near edge
+ * where 0 is outside the view), no tick marks, the light grid, and small
+ * grey numbers listed with the preview's steps, the ones the preview
+ * leaves out (the 0 where the axes cross, numbers on a marked point or
+ * under a curve) left empty. Axis names stand beyond the ends of the axes.
+ */
+function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, paper: { w: number; h: number }, items: SceneItem2D[], colors: ColorSet): string[] {
+    const opts: string[] = [];
+    const place = config.axisStyle === 'axes' ? { x: 'low' as const, y: 'low' as const } : { x: axisPlace(view.ymin, view.ymax), y: axisPlace(view.xmin, view.xmax) };
+    const axis = colors.named('etzAxis', CLEAN_COLOURS.axis.slice(1));
+    const tick = colors.named('etzTick', CLEAN_COLOURS.tick.slice(1));
+    opts.push(`axis x line=${X_LINE[place.x]}, axis y line=${Y_LINE[place.y]}`);
+    opts.push(`axis line style={draw=${axis}, line width=0.45pt, -}`);
+    opts.push('major tick length=0pt, minor tick length=0pt');
+    opts.push(`tick label style={font=\\scriptsize, text=${tick}}`);
+    // The names beyond the ends of the axes, where the axes lie.
+    const fx = place.y === 'low' ? 0 : place.y === 'high' ? 1 : (0 - view.xmin) / (view.xmax - view.xmin);
+    const fy = place.x === 'low' ? 0 : place.x === 'high' ? 1 : (0 - view.ymin) / (view.ymax - view.ymin);
+    const yNamed = config.showAxisLabels && !!labelText(String(config.yLabel ?? ''));
+    if (config.showAxisLabels && labelText(String(config.xLabel ?? ''))) opts.push(`xlabel style={at={(axis description cs:1,${fmtNum(fy)})}, anchor=west, xshift=3pt}`);
+    if (yNamed) opts.push(`ylabel style={at={(axis description cs:${fmtNum(fx)},1)}, anchor=south, rotate=-90, yshift=3pt}`);
+    if (yNamed && labelText(ctx.formatTemplate(String(config.title ?? '')))) opts.push(`title style={yshift=${MIDDLE_TITLE_LIFT_PT}pt}`);
+    // The grid: the light ink at the chart's grid opacity.
+    if (config.gridMajor || config.gridMinor) {
+        const grid = colors.named('etzGrid', CLEAN_COLOURS.grid.slice(1));
+        const g = opacityValue(config.gridOpacity, GRID_OPACITY) * CLEAN_GRID_ALPHA;
+        if (config.gridMinor) opts.push(`grid=${config.gridMajor ? 'both' : 'minor'}, minor tick num=${Math.max(1, Math.round(num(config.minorTickNum, 5)))}`);
+        else opts.push('grid=major');
+        opts.push(`major grid style={draw=${grid}, draw opacity=${fmtNum(Math.round(g * 1000) / 1000)}}, minor grid style={draw=${grid}, draw opacity=${fmtNum(Math.round(g * 500) / 1000)}}`);
+    }
+    // The numbers: the preview's steps and the ones it shows, in a plot of the paper's size.
+    const W = paper.w * PT_PER_CM - 8;
+    const H = paper.h * PT_PER_CM - 8;
+    const sx = (v: number) => ((v - view.xmin) / (view.xmax - view.xmin)) * W;
+    const sy = (v: number) => H - ((v - view.ymin) / (view.ymax - view.ymin)) * H;
+    const frame: CleanAxisFrame = {
+        sx,
+        sy,
+        ox: place.y === 'low' ? 0 : place.y === 'high' ? W : sx(0),
+        oy: place.x === 'low' ? H : place.x === 'high' ? 0 : sy(0),
+        place,
+        fs: CLEAN_TICK_PT,
+        gap: CLEAN_GAP_PT,
+        charEm: NUMBER_CHAR_EM,
+    };
+    const obstacles = cleanObstacles(config, ctx, view, items, sx, sy);
+    const [stepX, stepY] = autoTickSteps(view, {
+        target: config.majorTickNum > 0 ? config.majorTickNum : 8,
+        equal: !!config.equalScale,
+        compact: false,
+        plotW: paper.w * PT_PER_CM * 0.85,
+        plotH: paper.h * PT_PER_CM * 0.8,
+        fs: CLEAN_TICK_PT,
+        yRatio: (paper.h * 0.8) / (paper.w * 0.85),
+    });
+    for (const [a, lo, hi, step] of [['x', view.xmin, view.xmax, stepX], ['y', view.ymin, view.ymax, stepY]] as const) {
+        const n = config.numbers ? config.numbers[a] : { mode: 'auto' as const, step: '', at: '' };
+        const t: AxisTicks = axisTicks(n, lo, hi, tickValues(lo, hi, step), (src) => ctx.value(src));
+        if (t.mode === 'off') {
+            opts.push(...tickOptions(a, t, fmtNum, labelText));
+            continue;
+        }
+        if (!t.ticks.length) {
+            opts.push(`${a}tick=\\empty`);
+            continue;
+        }
+        const spots = cleanTickSpots(a, t.ticks, (k: Tick) => k.text, { step: t.mode === 'every' && t.step ? t.step : step, listed: t.mode === 'at', frame, obstacles });
+        const labels = spots.map((sp) => {
+            if (!sp.show) return '{}';
+            const k = sp.tick;
+            return `{${k.label !== undefined ? labelText(k.label) : k.piTex !== undefined ? k.piTex : `$\\pgfmathprintnumber{${fmtNum(k.value)}}$`}}`;
+        });
+        opts.push(`${a}tick={${t.ticks.map((k) => fmtNum(k.value)).join(',')}}`, `${a}ticklabels={${labels.join(',')}}`);
+    }
+    return opts;
+}
+
+/** 6.1: the marked points and function curves of the picture, in the plot's pt (y down), for the numbers to keep clear of. */
+function cleanObstacles(config: RendererConfig, ctx: MathContext, view: View, items: SceneItem2D[], sx: (v: number) => number, sy: (v: number) => number): TickObstacles {
+    const dots: TickObstacles['dots'] = [];
+    for (const item of items) {
+        for (const m of item.markers || []) {
+            if (!finitePt(m) || !inView(m, view, 0)) continue;
+            dots.push({ x: sx(m.x), y: sy(m.y), r: CLEAN_MARK_PT[m.size] || CLEAN_MARK_PT.normal });
+        }
+    }
+    const lines: TickObstacles['lines'] = [];
+    const funcs = config.functions || [];
+    for (const info of ctx.functions()) {
+        const f = funcs[info.index];
+        if (!f || info.hidden || info.error || info.domainError || !String(f.expression ?? '').trim()) continue;
+        let runs: Pt[][] = [];
+        try {
+            if (info.kind === 'cartesian') {
+                const d = info.domain;
+                const lo = d ? Math.max(d[0], view.xmin) : view.xmin;
+                const hi = d ? Math.min(d[1], view.xmax) : view.xmax;
+                if (hi > lo) runs = sampleCurve((x) => ({ x, y: info.fn(x) }), lo, hi, PREVIEW_SAMPLES, view);
+            } else {
+                const [lo, hi] = info.domain || [0, 2 * Math.PI];
+                const fy = info.fnY;
+                if (info.kind === 'parametric' && fy) runs = sampleCurve((t) => ({ x: info.fn(t), y: fy(t) }), lo, hi, PREVIEW_SAMPLES, view);
+                else if (info.kind === 'polar') runs = sampleCurve((th) => ({ x: info.fn(th) * Math.cos(th), y: info.fn(th) * Math.sin(th) }), lo, hi, PREVIEW_SAMPLES, view);
+            }
+        } catch {
+            runs = [];
+        }
+        for (const run of runs) lines.push(run.filter(finitePt).map((p) => ({ x: sx(p.x), y: sy(p.y) })));
+    }
+    return { dots, lines };
 }
 
 /** Layer 2: fills as even-odd polygons; a pattern is a second, full-opacity hatch pass over the tint. */
@@ -902,12 +1065,13 @@ function addMarkers(layers: Layers, item: SceneItem2D, colors: ColorSet, view: V
         if (!finitePt(m) || !inView(m, view, 0)) continue;
         const c = colors.use(m.color);
         // 6.0 ML: a dot with matplotlib's radius in points (3 points: the normal 2pt).
-        const size = m.radius !== undefined && Number.isFinite(m.radius) ? `${fmtNum(Math.max(0.2, (m.radius * 2) / 3))}pt` : MARK_SIZE[m.size] || MARK_SIZE.normal;
+        const sizes = cleanNow ? CLEAN_MARK_SIZE : MARK_SIZE; // 6.1
+        const size = m.radius !== undefined && Number.isFinite(m.radius) ? `${fmtNum(Math.max(0.2, (m.radius * 2) / 3))}pt` : sizes[m.size] || sizes.normal;
         const key = `${c}|${size}|${m.dim ? 1 : 0}|${m.open ? 1 : 0}`;
         let g = groups.length ? groups[groups.length - 1] : null;
         if (!g || g.key !== key) {
             // 6.0 B, C: an open dot (an open end of a set, a rest point that is not stable) is a ring in its colour filled with white.
-            const look = m.open ? `mark options={fill=white, draw=${c}, line width=0.8pt}` : 'mark options={draw=white, line width=0.4pt}';
+            const look = m.open ? `mark options={fill=white, draw=${c}, line width=0.8pt}` : `mark options={draw=white, line width=${cleanNow ? '0.8pt' : '0.4pt'}}`;
             const opts = ['only marks', 'mark=*', `mark size=${size}`, c, look];
             if (m.dim) opts.push(`opacity=${fmtNum(DIM_OPACITY)}`);
             opts.push('forget plot');
@@ -996,11 +1160,13 @@ function nodeCmd(
     at: string,
     text: string,
     weight?: TextPrim['weight'],
-    offset?: Pt
+    offset?: Pt,
+    pill = false
 ): string {
     const bold = weight === 'bold';
     const opts = [bold ? color + BOLD_INK : color, `anchor=${anchor}`, `font=${FONT[size] || FONT.normal}${bold ? '\\bfseries' : ''}`];
-    if (halo) opts.push(HALO);
+    if (pill) opts.push(PILL);
+    else if (halo) opts.push(HALO);
     if (offset && finitePt(offset)) {
         const pt = (v: number) => `${fmtNum(Math.round(v * 100) / 100)}pt`;
         if (Math.abs(offset.x) >= 0.005) opts.push(`xshift=${pt(offset.x)}`);
@@ -1015,7 +1181,10 @@ function addTexts(layers: Layers, item: SceneItem2D, colors: ColorSet, view: Vie
     for (const t of item.texts || []) {
         const text = labelText(t.text);
         if (!text || !finitePt(t) || !inView(t, view, TEXT_SLACK)) continue;
-        lines.push(nodeCmd(colors.use(t.color), ANCHOR[t.anchor] || 'center', t.size, !!t.halo, axisCs(t, view), text, t.weight, t.offset));
+        // 6.1: a value the plugin writes sits in a pill in the clean look.
+        const pill = cleanNow && !!t.value && t.weight !== 'bold';
+        if (pill) colors.named('etzPill', CLEAN_COLOURS.pillLine.slice(1));
+        lines.push(nodeCmd(colors.use(t.color), ANCHOR[t.anchor] || 'center', t.size, !!t.halo, axisCs(t, view), text, t.weight, t.offset, pill));
     }
     if (!lines.length) return;
     layers.texts.push(comment(item.source), ...lines);

@@ -12,8 +12,8 @@
  */
 import { AnnotationSize, FillPattern, FunctionParameters, MarkerSize, RendererConfig, Tool } from './types';
 import { COLOR_MAP, THICKNESS_MAP, mixHex, resolveCssColor } from './colors';
-import { niceInterval, formatTick, marchingGrid, sampleCurve, stripLatex, tickValues } from './util';
-import { AxisTicks, Tick, axisTicks } from './ticks';
+import { marchingGrid, sampleCurve, stripLatex, tickValues } from './util';
+import { AxisTicks, Tick, autoTickSteps, axisTicks } from './ticks';
 import { extractMathSource, renderMathLabel, flushMathRenders } from './mathlabel';
 import { FunctionInfo, FunctionKind, MathContext, labelDisplayText } from './mathcontext';
 // 6.0 A
@@ -41,6 +41,8 @@ import type { LiveLayer } from './motion6/live'; // 6.0 F4
 import { themedColor } from './motion6/liveprims'; // 6.0 F4
 // 6.0 entrances
 import { EntranceKind, StepEntrance, clipLines, clipSegment, grownLine, labelStart, middleOf, nearestOn, partialLines, popDelay, riseAt, rippleStops, toolKind } from './motion6/entrances';
+// 6.1 clean look
+import { AxisPlace, CLEAN_AXIS_PX, CLEAN_GRID_ALPHA, CLEAN_LINE_PX, CLEAN_TICK_PT, CLEAN_VARS, CleanAxisFrame, TickObstacles, axisPlace, cleanTickSpots } from './look';
 
 /** 6.0 entrances: how a scene item whose step comes in enters (its object's kind, its start, where its points start popping). */
 interface ItemEntrance {
@@ -150,12 +152,13 @@ const SAMPLES_PER_FUNCTION = 500;
 
 /** Default target tick counts used when no user override is supplied. */
 const DEFAULT_TARGET_TICKS_X = 8;
-const Y_TICK_RATIO = 0.75;
 
 /** The 3.x default view, used when a config arrives with an unusable range. */
 const DEFAULT_VIEW: View = { xmin: -0.5, xmax: 10, ymin: -0.5, ymax: 5 };
 
 const MARKER_RADIUS: Record<MarkerSize, number> = { small: 3, normal: 4, large: 5.5 };
+/** 6.1: the clean look's dots, a little larger, with a wider white rim (the film's). */
+const CLEAN_MARKER_RADIUS: Record<MarkerSize, number> = { small: 3.5, normal: 4.75, large: 6.25 };
 // 6.0 ML
 /** matplotlib's default dot radius in points (scatter's s = 36): a dot with MarkerPrim.radius this big has the normal size. */
 const MATPLOTLIB_NORMAL_PT = 3;
@@ -253,6 +256,9 @@ interface DrawnLabel {
     el: SVGElement;
     width: number;
     height: number;
+    /** 6.1: its top left corner (viewBox units), for the pill of a value label. */
+    x0: number;
+    y0: number;
 }
 
 interface LegendEntry {
@@ -285,13 +291,6 @@ function num(n: number): string {
 /** Arrowhead length in px: grows with the line width like TikZ tips, but less than proportionally. */
 function arrowLength(width: number): number {
     return 7 + 2 * width;
-}
-
-/** The next nice step above `step` (1, 2, 5 times a power of ten). */
-function nextNiceStep(step: number): number {
-    const mag = Math.pow(10, Math.floor(Math.log10(step) + 1e-9));
-    const n = Math.round(step / mag);
-    return (n < 2 ? 2 : n < 5 ? 5 : 10) * mag;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -383,6 +382,11 @@ export class SVGRenderer {
     drawn: DrawnScene | null = null;
     /** 6.0 D: the functions a transform moves (the scene draws them; their curves are left out). */
     private movedFns: ReadonlySet<number> = new Set();
+    // 6.1
+    /** Drawn in the clean look (src/look.ts): RendererConfig.look. */
+    private readonly clean: boolean;
+    /** Function polylines sampled this render (by function index), shared by the axes' numbers and the curves. */
+    private readonly sampled = new Map<number, Pt[][]>();
     /** 6.0 F4: the live canvas, and whether it draws this render's moving parts (their still frame is hidden then). */
     private readonly live: LiveLayer | null;
     private liveOn = false;
@@ -424,6 +428,7 @@ export class SVGRenderer {
         this.cache = opts ? opts.cache : undefined;
         this.quality = opts && opts.quality === 'draft' ? 'draft' : 'full';
         this.live = opts?.live ?? null; // 6.0 F4
+        this.clean = config.look === 'clean'; // 6.1
         this.width = Number.isFinite(config.width) && config.width > 0 ? config.width : 760;
         this.height = Number.isFinite(config.height) && config.height > 0 ? config.height : 480;
         this.compact = this.width < COMPACT_MAX_WIDTH || this.height < COMPACT_MAX_HEIGHT;
@@ -446,6 +451,7 @@ export class SVGRenderer {
         this.usedMath = false;
         this.textInk = null;
         this.issues = [];
+        this.sampled.clear(); // 6.1
         if (this.ownsMath) this.math.setParams(cfg.parameters || []);
         const [stepX, stepY] = this.tickSteps();
         const v = this.view;
@@ -495,7 +501,9 @@ export class SVGRenderer {
         this.dark = typeof activeDocument !== 'undefined' && !!activeDocument.body && activeDocument.body.hasClass('theme-dark'); // 6.0 F4
         this.drawGrid(svg);
         this.drawFills(svg, items);
-        this.drawAxes(svg);
+        // 6.1: the clean look's axes and numbers.
+        if (this.clean) this.drawCleanAxes(svg, fns, items);
+        else this.drawAxes(svg);
         const curves: DrawnCurve[] = [];
         const legend = this.drawCurves(svg, fns, curves);
         this.drawn = { items, curves };
@@ -526,6 +534,11 @@ export class SVGRenderer {
         return pt * this.ptPx;
     }
 
+    /** 6.1: tick numbers in pt: small in the clean look. */
+    private tickPt(): number {
+        return this.clean ? CLEAN_TICK_PT : TICK_PT;
+    }
+
     /** Estimated width of a line of label text (MathJax and plain text alike), in viewBox units. */
     private textWidth(text: string, fs: number): number {
         const plain = labelDisplayText(String(text ?? ''), stripLatex);
@@ -545,6 +558,7 @@ export class SVGRenderer {
      */
     private padding(): [Padding, number] {
         if (this.compact) return [{ top: COMPACT_PADDING, right: COMPACT_PADDING, bottom: COMPACT_PADDING, left: COMPACT_PADDING }, 0];
+        if (this.clean) return this.cleanPadding(); // 6.1
         const cfg = this.config;
         const tickFs = this.fontPx(TICK_PT);
         const axisFs = this.fontPx(AXIS_LABEL_PT);
@@ -599,6 +613,72 @@ export class SVGRenderer {
         return { x, y, w, h };
     }
 
+    /**
+     * 6.1: where the axis lines lie in the clean look: the x-axis (at y = 0)
+     * and the y-axis (at x = 0), each through 0, or at the near edge of the
+     * view when 0 is outside it. Axes on the edges lie at the low edges.
+     */
+    private cleanPlaces(): { x: AxisPlace; y: AxisPlace } {
+        if (this.config.axisStyle === 'axes') return { x: 'low', y: 'low' };
+        const v = this.view;
+        return { x: axisPlace(v.ymin, v.ymax), y: axisPlace(v.xmin, v.xmax) };
+    }
+
+    /** 6.1: the gap between an axis line and its numbers in the clean look. */
+    private cleanGap(): number {
+        return TICK_GAP_PT * this.ptPx + 2;
+    }
+
+    /**
+     * 6.1: room around the plot in the clean look. The grid runs to the
+     * edges; only the numbers of an axis at an edge, numbers that would not
+     * fit between an axis near an edge and that edge, the axis names beyond
+     * the ends of the axes and the title take room.
+     */
+    private cleanPadding(): [Padding, number] {
+        const cfg = this.config;
+        const v = this.view;
+        const tickFs = this.fontPx(CLEAN_TICK_PT);
+        const axisFs = this.fontPx(AXIS_LABEL_PT);
+        const pt = (n: number) => n * this.ptPx;
+        const edge = pt(EDGE_PT);
+        const gap = this.cleanGap();
+        const yt = this.ticks('y').ticks;
+        const xt = this.ticks('x').ticks;
+        const yTickW = yt.reduce((m, k) => Math.max(m, tickText(k).length * tickFs * CHAR_WIDTH_EM), 0);
+        const lastX = xt.length ? tickText(xt[xt.length - 1]).length * tickFs * CHAR_WIDTH_EM : 0;
+        const firstX = xt.length ? tickText(xt[0]).length * tickFs * CHAR_WIDTH_EM : 0;
+        const titleH = String(cfg.title ?? '').trim() ? this.fontPx(TITLE_PT) * 1.25 : 0;
+        const title = titleH ? titleH + pt(TITLE_GAP_PT) : 0;
+        const place = this.cleanPlaces();
+        // Roughly the plot size (the paddings are not known yet).
+        const estW = this.width * 0.92;
+        const estH = this.height * 0.9;
+        // Numbers at the ends of the axes fit inside the chart: half a number beyond each edge of the plot.
+        const p: Padding = { top: tickFs * 0.6 + edge, right: lastX / 2 + edge, bottom: tickFs * 0.6 + edge, left: firstX / 2 + edge };
+        const needX = gap + tickFs * 1.1;
+        if (place.x === 'low') p.bottom = Math.max(p.bottom, needX + edge);
+        else if (place.x === 'high') p.top = Math.max(p.top, needX + edge);
+        else {
+            const room = ((0 - v.ymin) / (v.ymax - v.ymin)) * estH;
+            if (room < needX) p.bottom = Math.max(p.bottom, needX - room + edge);
+        }
+        const needY = gap + yTickW;
+        if (place.y === 'low') p.left = Math.max(p.left, needY + edge);
+        else if (place.y === 'high') p.right = Math.max(p.right, needY + edge);
+        else {
+            const room = ((0 - v.xmin) / (v.xmax - v.xmin)) * estW;
+            if (room < needY) p.left = Math.max(p.left, needY - room + edge);
+        }
+        // Names beyond the ends of the axes, as the middle axes of Classic have them.
+        if (this.hasAxisLabel(cfg.xLabel)) p.right = Math.max(p.right, pt(LABEL_GAP_PT) + this.textWidth(String(cfg.xLabel), axisFs) + edge);
+        if (this.hasAxisLabel(cfg.yLabel)) p.top = Math.max(p.top, pt(LABEL_GAP_PT) + axisFs * 1.2 + edge);
+        p.top += title;
+        const kx = Math.min(1, (MAX_PADDING_SHARE * this.width) / Math.max(1, p.left + p.right));
+        const ky = Math.min(1, (MAX_PADDING_SHARE * this.height) / Math.max(1, p.top + p.bottom));
+        return [{ left: p.left * kx, right: p.right * kx, top: p.top * ky, bottom: p.bottom * ky }, titleH * ky];
+    }
+
     private sx(x: number): number {
         const v = this.view;
         return this.plot.x + ((x - v.xmin) / (v.xmax - v.xmin)) * this.plot.w;
@@ -646,28 +726,18 @@ export class SVGRenderer {
      * room: pgfplots spaces its ticks out the same way.
      */
     private computeTickSteps(): [number, number] {
-        const v = this.view;
         const target = this.config.majorTickNum > 0 ? this.config.majorTickNum : DEFAULT_TARGET_TICKS_X;
-        const dx = v.xmax - v.xmin;
-        const dy = v.ymax - v.ymin;
-        const equal = this.config.equalScale || this.polar;
-        let sx = equal ? niceInterval(Math.max(dx, dy), target) : niceInterval(dx, target);
-        let sy = equal ? sx : niceInterval(dy, Math.max(2, Math.round(target * Y_TICK_RATIO)));
-        if (this.compact) return [sx, sy];
         // Roughly the plot size; the paddings follow from these steps, so the exact plot is not known yet.
-        const plotW = this.width * 0.85;
-        const plotH = this.height * 0.8;
-        const fs = this.fontPx(TICK_PT);
-        const fitsX = (step: number) => {
-            const ticks = tickValues(v.xmin, v.xmax, step);
-            const widest = ticks.reduce((m, t) => Math.max(m, formatTick(t).length), 1) * fs * CHAR_WIDTH_EM;
-            return ticks.length < 2 || (plotW * step) / dx >= widest + fs * 0.8;
-        };
-        const fitsY = (step: number) => (plotH * step) / dy >= fs * 1.6;
-        for (let k = 0; k < 8 && !(fitsX(sx) && (!equal || fitsY(sx))); k++) sx = nextNiceStep(sx);
-        if (equal) return [sx, sx];
-        for (let k = 0; k < 8 && !fitsY(sy); k++) sy = nextNiceStep(sy);
-        return [sx, sy];
+        return autoTickSteps(this.view, {
+            target,
+            equal: this.config.equalScale || this.polar,
+            compact: this.compact,
+            plotW: this.width * 0.85,
+            plotH: this.height * 0.8,
+            fs: this.fontPx(this.tickPt()), // 6.1: the clean look's numbers are smaller
+            // 6.1: the clean look's y target follows the plot's shape, so a square chart gets square grid cells.
+            yRatio: this.clean ? (this.height * 0.8) / (this.width * 0.85) : undefined,
+        });
     }
 
     // ------------------------------------------------------- scene and issues
@@ -738,6 +808,7 @@ export class SVGRenderer {
                 keepLabels: this.quality === 'draft' && !!this.cache,
                 // 6.0 C: the clock's time and the step shown (absent: the still frame).
                 motion: cfg.motion,
+                clean: this.clean, // 6.1
             });
             if (this.cache) lastGoodScene.set(this.cache, scene);
             this.movedFns = new Set(scene.movedFunctions ?? []); // 6.0 D
@@ -797,10 +868,25 @@ export class SVGRenderer {
         for (let i = from; i < kids.length; i++) kids[i].setAttribute('data-etz-item', name);
     }
 
-    /** Stroke width in px for a thickness key; thinner on thumbnails. */
+    /**
+     * Stroke width in px for a thickness key; thinner on thumbnails. 6.1: an
+     * empty thickness (a function that sets none) and 'semithick' are the
+     * look's line: a little thicker in the clean look, thin in Classic.
+     */
     private strokeWidth(thickness: string | undefined): number {
-        const w = (thickness && THICKNESS_MAP[thickness]) || 1.5;
+        const own = this.clean && (thickness === '' || thickness === 'semithick') ? CLEAN_LINE_PX : 0;
+        const w = own || (thickness && THICKNESS_MAP[thickness]) || 1.5;
         return this.compact ? w * 0.6 : w;
+    }
+
+    /** 6.1: a function's polylines this render (sampled once, for the axes' numbers and the curve). */
+    private linesOf(info: FunctionInfo): Pt[][] {
+        let lines = this.sampled.get(info.index);
+        if (!lines) {
+            lines = this.sampleFunction(info);
+            this.sampled.set(info.index, lines);
+        }
+        return lines;
     }
 
     /** Palette key -> preview colour ('black' follows the theme's text colour). */
@@ -959,7 +1045,7 @@ export class SVGRenderer {
                 }
                 for (const [k, v] of Object.entries(o.attrs || {})) outer.setAttribute(k, v);
                 parent.appendChild(outer);
-                return { el: outer, width: w, height: h };
+                return { el: outer, width: w, height: h, x0: fx, y0: fy };
             } catch {
                 // MathJax rejected the source (unbalanced braces, unknown
                 // environment, ...); fall through to the plain-text path.
@@ -985,7 +1071,8 @@ export class SVGRenderer {
         const t = this.el('text', { ...attrs, ...(o.attrs || {}) });
         t.textContent = plain;
         parent.appendChild(t);
-        return { el: t, width: plain.length * fs * CHAR_WIDTH_EM, height: fs * 1.2 };
+        const tw = plain.length * fs * CHAR_WIDTH_EM;
+        return { el: t, width: tw, height: fs * 1.2, x0: o.hAnchor === 'middle' ? x - tw / 2 : o.hAnchor === 'end' ? x - tw : x, y0: baseline - 0.95 * fs };
     }
 
     /**
@@ -1219,9 +1306,11 @@ export class SVGRenderer {
         const { x: left, y: top, w, h } = this.plot;
         const xT = this.ticks('x');
         const yT = this.ticks('y');
-        const opacity = opacityValue(cfg.gridOpacity, GRID_OPACITY);
+        // 6.1: the clean look's grid is its own light ink, at the chart's opacity (0.5 by default: about #eceef3 on white).
+        const opacity = opacityValue(cfg.gridOpacity, GRID_OPACITY) * (this.clean ? CLEAN_GRID_ALPHA : 1);
+        const ink = this.clean ? CLEAN_VARS.grid : BORDER;
         const draw = (xs: number[], ys: number[], width: string, alpha: number) => {
-            const attrs = { stroke: BORDER, 'stroke-width': width, 'stroke-opacity': String(alpha) };
+            const attrs = { stroke: ink, 'stroke-width': width, 'stroke-opacity': String(alpha) };
             for (const x of xs) g.appendChild(this.line(this.sx(x), top, this.sx(x), top + h, attrs));
             for (const y of ys) g.appendChild(this.line(left, this.sy(y), left + w, this.sy(y), attrs));
         };
@@ -1434,13 +1523,100 @@ export class SVGRenderer {
         svg.appendChild(g);
     }
 
-    /** One tick label with its baseline at (x, y). */
-    private tickLabel(g: SVGElement, text: string, x: number, y: number, anchor: HAnchor, fs: number): void {
+    /**
+     * 6.1: a soft pill behind the label drawn at child `at` of g: the
+     * background colour, a thin line, fully rounded (the film's value labels).
+     */
+    private pillBehind(g: SVGElement, at: number, label: DrawnLabel, fs: number): void {
+        const padX = 0.45 * fs;
+        const padY = 0.2 * fs;
+        const h = label.height + 2 * padY;
+        const rect = this.el('rect', {
+            x: num(label.x0 - padX),
+            y: num(label.y0 - padY),
+            width: num(label.width + 2 * padX),
+            height: num(h),
+            rx: num(h / 2),
+            fill: BACKGROUND,
+            stroke: CLEAN_VARS.pillLine,
+            'stroke-width': '1',
+            class: 'etz-pill',
+        });
+        const first = g.children[at];
+        if (first) g.insertBefore(rect, first);
+        else g.appendChild(rect);
+    }
+
+    /**
+     * 6.1: what the axes' numbers keep clear of in the clean look: the
+     * marked points and the drawn function curves, in viewBox units.
+     */
+    private tickObstacles(fns: ChartFunction[], items: SceneItem2D[]): TickObstacles {
+        const dots: TickObstacles['dots'] = [];
+        for (const item of items) {
+            for (const m of item.markers || []) {
+                if (!finitePt(m) || !this.inView(m.x, m.y, 0)) continue;
+                dots.push({ x: this.sx(m.x), y: this.sy(m.y), r: CLEAN_MARKER_RADIUS[m.size] || CLEAN_MARKER_RADIUS.normal });
+            }
+        }
+        const lines: TickObstacles['lines'] = [];
+        for (const { info, f } of fns) {
+            if (info.hidden || info.error || info.domainError || isBlank(f) || this.movedFns.has(info.index)) continue;
+            for (const run of this.linesOf(info)) lines.push(run.map((p) => ({ x: this.sx(p.x), y: this.sy(p.y) })));
+        }
+        return { dots, lines };
+    }
+
+    /**
+     * 6.1, layer 3 in the clean look: thin light axis lines without
+     * arrowheads (at the near edge where 0 is outside the view), no tick
+     * marks, small grey numbers without the 0 where the axes cross, left out
+     * where they would sit on a marked point or a curve or run off the
+     * chart, and the axes' names (only names the chart gives) beyond their ends.
+     */
+    private drawCleanAxes(svg: SVGElement, fns: ChartFunction[], items: SceneItem2D[]): void {
+        const cfg = this.config;
+        const g = this.el('g', { class: 'etz-axes' });
+        const { x: left, y: top, w, h } = this.plot;
+        const right = left + w;
+        const bottom = top + h;
+        const place = this.cleanPlaces();
+        const oy = place.x === 'low' ? bottom : place.x === 'high' ? top : this.sy(0);
+        const ox = place.y === 'low' ? left : place.y === 'high' ? right : this.sx(0);
+        const axisAttrs = { stroke: CLEAN_VARS.axis, 'stroke-width': num(this.compact ? 1 : CLEAN_AXIS_PX) };
+        g.appendChild(this.line(left, oy, right, oy, axisAttrs));
+        g.appendChild(this.line(ox, top, ox, bottom, axisAttrs));
+        if (!this.compact) {
+            const [stepX, stepY] = this.tickSteps();
+            const xT = this.ticks('x');
+            const yT = this.ticks('y');
+            const fs = this.fontPx(CLEAN_TICK_PT);
+            const frame: CleanAxisFrame = { sx: (v) => this.sx(v), sy: (v) => this.sy(v), ox, oy, place, fs, gap: this.cleanGap(), charEm: CHAR_WIDTH_EM };
+            const obstacles = this.tickObstacles(fns, items);
+            const inCanvas = (b: { x0: number; x1: number; y0: number; y1: number }) => b.x0 >= 0.5 && b.x1 <= this.width - 0.5 && b.y0 >= 0.5 && b.y1 <= this.height - 0.5;
+            for (const [axis, t, step] of [['x', xT, stepX], ['y', yT, stepY]] as const) {
+                for (const spot of cleanTickSpots(axis, t.ticks, tickText, { step, listed: t.mode === 'at', frame, obstacles })) {
+                    if (spot.show && inCanvas(spot.box)) this.tickLabel(g, spot.text, spot.x, spot.y, spot.anchor, fs, CLEAN_VARS.tick);
+                }
+            }
+            if (cfg.showAxisLabels) {
+                const axisFs = this.fontPx(AXIS_LABEL_PT);
+                const lgap = LABEL_GAP_PT * this.ptPx;
+                const label = (hAnchor: HAnchor, vAnchor: VAnchor, axis: 'x' | 'y'): LabelOptions => ({ color: TEXT_MUTED, fontSize: axisFs, hAnchor, vAnchor, weight: '500', attrs: { 'data-etz-axis-name': axis } });
+                this.drawLabel(g, String(cfg.xLabel ?? ''), right + lgap, oy, label('start', 'middle', 'x'));
+                this.drawLabel(g, String(cfg.yLabel ?? ''), ox, top - lgap, label('middle', 'above', 'y'));
+            }
+        }
+        svg.appendChild(g);
+    }
+
+    /** One tick label with its baseline at (x, y); `fill`: 6.1, the clean look's grey. */
+    private tickLabel(g: SVGElement, text: string, x: number, y: number, anchor: HAnchor, fs: number, fill = TEXT_MUTED): void {
         const t = this.el('text', {
             x: num(x),
             y: num(y),
             'text-anchor': anchor,
-            fill: TEXT_MUTED,
+            fill,
             'font-size': num(fs),
             'font-family': 'var(--font-text)',
         });
@@ -1464,7 +1640,7 @@ export class SVGRenderer {
             }
             const color = this.css(f.color);
             const width = this.strokeWidth(f.thickness);
-            const lines = this.sampleFunction(info);
+            const lines = this.linesOf(info); // 6.1: sampled once per render
             if (lines.length) {
                 drawn.push({ name: info.name, index: info.index, kind: info.kind, lines });
                 // 6.0 entrances: a function that comes in draws itself, its pieces left to right.
@@ -1615,8 +1791,9 @@ export class SVGRenderer {
     /** `scale`: 6.0 entrances, how far the marker has popped in (1: whole). */
     private drawMarker(g: SVGElement, m: MarkerPrim, scale = 1): void {
         if (!finitePt(m) || !this.inView(m.x, m.y, 0)) return;
-        let r = (MARKER_RADIUS[m.size] || MARKER_RADIUS.normal) * (this.compact ? 0.6 : 1);
-        let rim = this.compact ? '1' : '1.5';
+        const radii = this.clean ? CLEAN_MARKER_RADIUS : MARKER_RADIUS; // 6.1
+        let r = (radii[m.size] || radii.normal) * (this.compact ? 0.6 : 1);
+        let rim = this.compact ? '1' : this.clean ? '2' : '1.5';
         // 6.0 ML: a dot with matplotlib's radius in points: the colour that wide (3 points is the normal size), a thin rim outside it.
         if (m.radius !== undefined) {
             const k = (MARKER_RADIUS.normal / MATPLOTLIB_NORMAL_PT) * (this.compact ? 0.6 : 1);
@@ -1733,13 +1910,17 @@ export class SVGRenderer {
             for (const t of item.texts || []) {
                 if (!finitePt(t) || !this.inView(t.x, t.y, TEXT_SLACK)) continue;
                 const bold = t.weight === 'bold';
-                this.drawPlaced(g, t.text, t.x, t.y, t.anchor, t.size, {
+                // 6.1: a value the plugin writes sits in a soft pill in the clean look.
+                const pill = this.clean && !!t.value && !bold;
+                const at = g.children.length;
+                const drawnText = this.drawPlaced(g, t.text, t.x, t.y, t.anchor, t.size, {
                     color: bold ? this.boldInk(t.color) : this.css(t.color),
-                    halo: !!t.halo,
+                    halo: !!t.halo && !pill,
                     weight: bold ? '600' : undefined,
                     offset: finitePt(t.offset) ? t.offset : undefined,
                     attrs: t.still ? this.stillAttrs(t, {}) : undefined, // 6.0 ML: a frame(t) text the live canvas draws
                 });
+                if (pill && drawnText) this.pillBehind(g, at, drawnText, this.fontPx(FONT_PT[t.size || 'normal'] || FONT_PT.normal));
             }
             this.tag(g, from, item.source);
             if (this.entering.has(item)) this.enterEls(kidsFrom(g, from), item, 'rise'); // 6.0 entrances: just after its object

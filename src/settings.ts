@@ -14,6 +14,8 @@ import { exportsFrames, framesTikz } from './motion6/frames'; // 6.0 C
 // 6.0 B
 import { FIT_Y, followY } from './notes6/yfit';
 import { pythonAxes, pythonView } from './python/scene'; // 6.0 P
+// 6.1 clean look
+import { AUTO, ChartLook, lookOf, resolveLook, settleLook } from './look';
 
 /** The six axis range keys. */
 export type RangeKey = 'xmin' | 'xmax' | 'ymin' | 'ymax' | 'zmin' | 'zmax';
@@ -62,7 +64,8 @@ function defaultValues(): Record<string, unknown> {
         axis_label_x: 'x',
         axis_label_y: 'y',
         showAxis: true,
-        showLargeGrid: false,
+        // 6.1: the major grid on or off, or left open ('auto'): the chart look decides (src/look.ts).
+        showLargeGrid: AUTO,
         showSmallGrid: false,
         // Opacity of the major grid lines (minor lines at half), see src/opacity.ts.
         gridOpacity: GRID_OPACITY,
@@ -84,7 +87,11 @@ function defaultValues(): Record<string, unknown> {
         ...RANGE_DEFAULTS,
         // 6.0 B: y follows what is drawn (a chart whose text gives x and no y), see src/notes6/yfit.ts.
         [FIT_Y]: false,
-        axis_style: 'box',
+        // 6.1: 'box', 'middle', 'axes', or left open ('auto'): the chart look decides (src/look.ts).
+        axis_style: AUTO,
+        // 6.1: the chart's own look ('clean' or 'classic'), else the setting Chart look. Its presence also
+        // tells a JSON block of 6.1 from an older complete dump (settleLook).
+        look: AUTO,
         // Polar treats function expressions as r(theta).
         coordinateSystem: 'cartesian',
         // Separate axis labels for polar mode so toggling Cartesian <-> Polar
@@ -184,7 +191,8 @@ export class SettingsManager {
      */
     static fromJSON(data: Record<string, unknown>): SettingsManager {
         const mgr = new SettingsManager();
-        const migrated = migrateSettings(data && typeof data === 'object' ? data : {});
+        // 6.1: an older complete dump reads its stored defaults as left open (src/look.ts).
+        const migrated = migrateSettings(data && typeof data === 'object' ? settleLook(data) : {});
         for (const [key, value] of Object.entries(migrated)) {
             // 6.0 B: stored as they are (setValue would let a stored y range end fitY, whatever the order of the keys).
             if (value !== undefined) mgr.values.set(key, value);
@@ -282,14 +290,13 @@ export class SettingsManager {
         }
         // 6.0 B: y follows what is drawn over the x range.
         if (this.getValue(FIT_Y) === true && this.getValue('dimension') !== true) {
-            const style = this.getValue('axis_style');
             const y = followY(
                 this,
                 {
                     functions: arrayValue<FunctionParameters>(this.getValue('functions')),
                     tools: this.tools(),
                     annotations: arrayValue<Annotation>(this.getValue('annotations')),
-                    axisStyle: style === 'middle' || style === 'axes' ? style : 'box',
+                    axisStyle: this.resolvedLook().axisStyle, // 6.1
                     polar: this.getValue('coordinateSystem') === 'polar',
                 },
                 ctx,
@@ -391,7 +398,12 @@ export class SettingsManager {
             if (axes && xLabel === 'x' && axes.xlabel) xLabel = axes.xlabel;
             if (axes && yLabel === 'y' && axes.ylabel) yLabel = axes.ylabel;
         }
-        const axisStyle = this.getValue<AxisStyle | undefined>('axis_style');
+        // 6.1: the clean look writes no axis letters x and y, only names the chart gives its axes.
+        const look = this.resolvedLook();
+        if (look.look === 'clean') {
+            if (xLabel.trim() === 'x') xLabel = '';
+            if (yLabel.trim() === 'y') yLabel = '';
+        }
         return {
             width,
             height,
@@ -404,8 +416,9 @@ export class SettingsManager {
             xLabel,
             yLabel,
             showAxisLabels: this.getValue('show_axis_label') !== false,
-            axisStyle: axisStyle === 'middle' || axisStyle === 'axes' ? axisStyle : 'box',
-            gridMajor: this.getValue('showLargeGrid') === true,
+            axisStyle: look.axisStyle, // 6.1: or the look's, when the chart leaves it open
+            gridMajor: look.gridMajor,
+            look: look.look, // 6.1
             gridMinor: this.getValue('showSmallGrid') === true,
             gridOpacity: opacityValue(this.getValue('gridOpacity'), GRID_OPACITY),
             numbers: { x: this.axisNumbers('x'), y: this.axisNumbers('y'), z: this.axisNumbers('z') },
@@ -431,6 +444,20 @@ export class SettingsManager {
             paperWidthCm: paper.w,
             paperHeightCm: paper.h,
         };
+    }
+
+    /**
+     * 6.1: the look this chart is drawn in (its own `look`, else the setting
+     * Chart look), with the axis style and major grid it gets: what the
+     * chart sets, else the look's (src/look.ts).
+     */
+    resolvedLook(): { look: ChartLook; axisStyle: AxisStyle; gridMajor: boolean } {
+        return resolveLook(lookOf(this.getValue('look')), {
+            axisStyle: this.getValue('axis_style'),
+            grid: this.getValue('showLargeGrid'),
+            polar: this.getValue('coordinateSystem') === 'polar',
+            is3D: this.getValue('dimension') === true,
+        });
     }
 
     /** CONTRACT (v4): `ctx` defaults to createMathContext(). */
