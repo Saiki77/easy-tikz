@@ -12,6 +12,8 @@ import { buildCard, parseKey, sameParse } from '../src/readers/build';
 import { reader0 } from '../src/readers/reader0';
 import { smartReader } from '../src/readers/smart';
 import { inVariables } from '../src/formula';
+import { spellings } from '../src/notes6/recognize/adapt';
+import { smartCard } from '../src/notes6/recognize/decide';
 import type { CardKind, CardParse } from '../src/readers/types';
 import { Item, Measured, measure, readJsonl } from '../scripts/readers/harness';
 
@@ -109,9 +111,34 @@ test('parseKey: two parses are the same when the chart reads them the same (a fu
     assert.ok(sameParse(f('x^2', 'MC'), f('x^2', 'f')));
     assert.ok(!sameParse(f('x^2 \\nonumber'), f('x^2')));
     assert.ok(!sameParse(f('x^2'), f('x^3')));
+    // 6.2.4: sizes are layout (the key held alphabig for \\alpha\\big)
+    const c = (condition: string): CardParse => ({ kind: 'condition', variable: '\\alpha', condition });
+    assert.ok(sameParse(c('\\alpha\\big \\le 1'), c('\\alpha \\le 1')));
+    assert.ok(sameParse(f('\\Big( x + 1 \\Big)^2'), f('(x + 1)^2')));
+    assert.ok(sameParse(f('\\biggl[ x \\biggr]'), f('[x]')));
+    assert.ok(!parseKey(c('\\alpha\\big \\le 1')).includes('big'));
     // a vector's TeX only labels its arrows
     const v = (tex: string): CardParse => ({ kind: 'vector', statements: [{ name: 'a', nameTex: tex, sides: [{ value: '(1, 2)', tex: '(1, 2)' }], names: {} }] });
     assert.equal(parseKey(v('\\vec a')), parseKey(v('\\vec{a}')));
+});
+
+test('6.2.4: a variable renamed right after a command gets a space (\\lvert x, not \\lvertx), in the spellings of reader 0 and in the cards', () => {
+    // reader 0's spellings: a function or a surface of a Greek letter, read through f(x) = ... and z = ...
+    assert.deepEqual(spellings('f(\\theta) = \\lvert\\theta\\rvert', 'function').map((s) => s.tex), ['f(\\theta) = \\lvert\\theta\\rvert', 'f(x) = \\lvert x\\rvert']);
+    assert.ok(spellings('F(\\alpha, \\beta) = \\lvert\\alpha\\rvert + \\beta^2', 'surface').some((s) => s.tex === 'z = \\lvert x\\rvert + y^2'));
+    for (const [tex, kind] of [
+        ['g(\\lambda) = \\lvert\\lambda - 1\\rvert', 'function'],
+        ['\\{\\theta \\mid \\lvert\\theta_1\\rvert + \\lvert\\theta_2\\rvert \\le 1\\}', 'set'],
+        ['\\lvert\\lambda\\rvert < 1', 'condition'],
+    ] as const) {
+        const hit = smartCard(tex, kind);
+        assert.ok(hit && hit.card.kind === kind, `${tex}: ${hit?.card.kind}`);
+        const lines = hit?.card.lines ?? [];
+        assert.ok(!lines.some((l) => /\\[lr]vert[a-z]/.test(l)), lines.join(' / '));
+        assert.deepEqual(parses(lines), [], tex);
+    }
+    // the set of pairs in theta_1 and theta_2: the region |x| + |y| <= 1
+    assert.ok(smartCard('\\{\\theta \\mid \\lvert\\theta_1\\rvert + \\lvert\\theta_2\\rvert \\le 1\\}', 'set')?.card.lines.includes('shade where $\\lvert x\\rvert + \\lvert y\\rvert \\le 1$, outlined'));
 });
 
 interface Fixture {

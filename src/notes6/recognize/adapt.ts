@@ -187,7 +187,17 @@ function alone(v: string): RegExp {
 }
 
 const uses = (tex: string, v: string) => alone(v).test(tex);
-const rename = (tex: string, v: string, to: string) => tex.replace(alone(v), to);
+
+/** 6.2.4: re replaced by `to`; a letter put in right after a command gets a space (\lvert x, not \lvertx: \lvert\theta renamed into x). */
+function putIn(tex: string, re: RegExp, to: string): string {
+    return tex.replace(re, (_m: string, ...rest: unknown[]) => {
+        const at = rest.find((r) => typeof r === 'number') as number;
+        return /^[A-Za-z]/.test(to) && /\\[A-Za-z]+$/.test(tex.slice(0, at)) ? ` ${to}` : to;
+    });
+}
+const rename = (tex: string, v: string, to: string) => putIn(tex, alone(v), to);
+/** The stand-ins of two coordinates as x and y. */
+const standInsXY = (tex: string) => putIn(putIn(tex, /\uE000/g, 'x'), /\uE001/g, 'y');
 
 /** A function name the formula does not use: f, g, h, p, q or u. */
 function freshName(tex: string): string {
@@ -421,7 +431,7 @@ function setSpellings(tex: string): Spelling[] {
         // x \ge 0 for a vector x in the plane: both coordinates
         const vec = /^([A-Za-z])_1$/.exec(a);
         if (vec) cond = cond.replace(new RegExp(`(?<![A-Za-z\\\\])${vec[1]}\\s*(\\\\ge|\\\\geq|\\\\le|\\\\leq|>|<)\\s*0(?![0-9.])`, 'g'), `${a} $1 0, ${vec[1]}_2 $1 0`);
-        if (!(a === 'x' && b === 'y')) cond = renameCoordinate(renameCoordinate(cond, a, '\uE000'), b, '\uE001').replace(/\uE000/g, 'x').replace(/\uE001/g, 'y');
+        if (!(a === 'x' && b === 'y')) cond = standInsXY(renameCoordinate(renameCoordinate(cond, a, '\uE000'), b, '\uE001'));
         return [{ tex: `\\{(x, y) \\mid ${cond}\\}` }];
     }
     return [{ tex: `\\{${head} \\mid ${cond}\\}` }];
@@ -446,7 +456,7 @@ function setCurveSpellings(tex: string): Spelling[] {
     let eq = cond;
     if (!(a === 'x' && b === 'y')) {
         // through a stand-in, so a coordinate named y does not meet the new y
-        eq = renameCoordinate(renameCoordinate(eq, a, '\uE000'), b, '\uE001').replace(/\uE000/g, 'x').replace(/\uE001/g, 'y');
+        eq = standInsXY(renameCoordinate(renameCoordinate(eq, a, '\uE000'), b, '\uE001'));
     }
     return [{ tex: eq.trim() }];
 }

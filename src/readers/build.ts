@@ -156,15 +156,18 @@ const LABEL_ONLY = new Set(['tex', 'nameTex', 'names']);
 
 /**
  * A TeX string as parseKey compares it: as the chart reads it (latexToPlain:
- * \frac{1}{2} and \tfrac12 alike, | z | and \lvert z \rvert alike), without
+ * \frac{1}{2} and \tfrac12 alike, | z | and \lvert z \rvert alike, \big( and (
+ * alike), without
  * spaces, and 2 \cdot x as 2x (not in a vector's values, where \cdot is a
  * dot product). Words the chart does not know stay (x^2 \nonumber is not
  * x^2: the chart would read nonumber as a name).
  */
 export function texKey(s: string, keepCdot = false): string {
     let t: string;
-    // Spacing (~, \,, \quad) and an alignment & are layout only.
+    // Spacing (~, \,, \quad) and an alignment & are layout only. 6.2.4: so are the sizes \big, \Big, \bigg, \Bigg (with l, r or m): the
+    // chart would read \alpha\big as alpha big.
     const plain = s
+        .replace(/\\(?:big|Big|bigg|Bigg)[lrm]?(?![A-Za-z])/g, ' ')
         .replace(/\\[dt]frac(?![A-Za-z])/g, '\\frac')
         .replace(/\{,\}/g, '.')
         .replace(/\\(?:q?quad|displaystyle|textstyle)(?![A-Za-z])|\\[,;:! ]|~|(?<!\\)&/g, ' ');
