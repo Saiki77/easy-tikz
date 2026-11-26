@@ -361,9 +361,9 @@ function isTextEditing(el: Element | null): boolean {
     return (el as HTMLElement).isContentEditable === true;
 }
 
-/** 6.2.1: the empty Start a chart field of an empty chart (the Build tab), where a pasted chart opens as a chart. */
+/** 6.2.1: the empty Start a chart field of an empty chart (the Build tab), where a pasted chart opens as a chart. 6.2.2: a text area. */
 function isEmptyStartField(el: Element | null): boolean {
-    return !!el && el.tagName === 'INPUT' && !!el.closest('.etz-build-start') && (el as HTMLInputElement).value.trim() === '';
+    return !!el && el.tagName === 'TEXTAREA' && !!el.closest('.etz-build-start') && (el as HTMLTextAreaElement).value.trim() === '';
 }
 
 /** Decimals that resolve `step` (0.02 -> 2, 5 -> 0), clamped to 0..10. */

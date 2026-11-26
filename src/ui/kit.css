@@ -323,12 +323,12 @@ input.etz-input.etz-number {
 }
 
 input.etz-input.is-error,
-.etz-expr.is-error input.etz-input {
+.etz-expr.is-error .etz-input {
     border-color: var(--text-error);
 }
 
 input.etz-input.is-error:focus,
-.etz-expr.is-error input.etz-input:focus {
+.etz-expr.is-error .etz-input:focus {
     border-color: var(--text-error);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-error) 30%, transparent);
 }
@@ -350,12 +350,137 @@ select.etz-select.is-missing {
 
 /* --------------------------------------------------- expression input */
 
+/* 6.2.2: the field is a text area of one line that grows with a long
+   formula (exprInput sets --etz-expr-h from its mirror). One line is as
+   tall as the other controls; the mirror over it has the same font,
+   padding and border, so it wraps at the same places. */
 .etz-expr {
+    --etz-expr-h1: var(--etz-control-h);
+    --etz-expr-lh: 18px;
+    --etz-expr-pad-x: 8px;
+    --etz-expr-pad-y: calc((var(--etz-expr-h1) - var(--etz-expr-lh)) / 2 - var(--input-border-width, 1px));
+    --etz-expr-font: var(--etz-font-mono);
     display: flex;
     flex-direction: column;
     gap: 4px;
     min-width: 0;
     width: 100%;
+}
+
+.etz-expr-box {
+    position: relative;
+    min-width: 0;
+}
+
+textarea.etz-input.etz-expr-input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: var(--etz-expr-h, var(--etz-expr-h1));
+    min-height: var(--etz-expr-h1);
+    box-sizing: border-box;
+    margin: 0;
+    padding: var(--etz-expr-pad-y) var(--etz-expr-pad-x);
+    font-family: var(--font-monospace);
+    font-size: var(--etz-expr-font);
+    line-height: var(--etz-expr-lh);
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    overflow: hidden;
+    resize: none;
+}
+
+/* A placeholder longer than the field ends at its edge, on the one line. */
+textarea.etz-input.etz-expr-input::placeholder {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.etz-expr.is-scrolling textarea.etz-input.etz-expr-input {
+    overflow-y: auto;
+}
+
+textarea.etz-input.etz-expr-input:focus,
+textarea.etz-input.etz-expr-input:focus-visible {
+    border-color: var(--background-modifier-border-focus);
+    box-shadow: var(--etz-focus-ring);
+}
+
+.etz-expr.is-error textarea.etz-input.etz-expr-input:focus {
+    border-color: var(--text-error);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-error) 30%, transparent);
+}
+
+.etz-expr-layer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.etz-expr-mirror {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    box-sizing: border-box;
+    padding: var(--etz-expr-pad-y) calc(var(--etz-expr-pad-x) + var(--etz-expr-bar, 0px)) var(--etz-expr-pad-y) var(--etz-expr-pad-x);
+    border-color: transparent;
+    border-style: solid;
+    border-width: var(--etz-expr-bw, var(--input-border-width, 1px));
+    color: transparent;
+    font-family: var(--font-monospace);
+    font-size: var(--etz-expr-font);
+    line-height: var(--etz-expr-lh);
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    transform: translateY(var(--etz-expr-scroll, 0px));
+    user-select: none;
+}
+
+/* The bracket at the caret and the one that matches it. */
+.etz-expr-pair {
+    border-radius: 2px;
+    background-color: color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--interactive-accent) 60%, transparent);
+}
+
+/* The typeset formula under a long one: small, muted, no focus, no clicks. */
+.etz-expr-math {
+    min-width: 0;
+    padding: 0 calc(var(--etz-expr-pad-x) + var(--input-border-width, 1px));
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: var(--etz-font-small);
+    line-height: 1.25;
+    pointer-events: none;
+    user-select: none;
+}
+
+.etz-expr-math.is-stale {
+    opacity: 0.45;
+}
+
+/* Wider than the field even when shrunk: it scrolls sideways (the focus stays in the field). */
+.etz-expr-math.is-wide {
+    overflow-x: auto;
+    pointer-events: auto;
+    scrollbar-width: thin;
+}
+
+.etz-expr-math-inner {
+    width: max-content;
+    zoom: var(--etz-expr-math-zoom, 1);
+}
+
+.etz-expr-math mjx-container {
+    margin: 0;
 }
 
 .etz-expr-msg {

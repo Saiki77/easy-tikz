@@ -288,6 +288,8 @@ interface ExprFieldOptions {
     locals?: readonly string[];
     /** Optional (5.0): validation of its own, instead of the math context's for `kind`. */
     check?(src: string): ValidateResult;
+    /** 6.2.2: a long formula shows typeset under the field (equations, conditions). */
+    preview?: boolean;
 }
 
 interface SelectFieldOptions {
@@ -547,6 +549,7 @@ abstract class BaseCard implements LayerCardHandle {
                 this.host.addParameter(name);
             },
             onErrorChange: () => this.syncError(),
+            preview: o.preview ? (src: string) => this.host.math().previewTex(src) : undefined,
         });
         this.register(o.id, {
             el: h.el,
@@ -797,7 +800,7 @@ abstract class BaseCard implements LayerCardHandle {
         if (this.destroyed) return;
         for (const { h, get } of this.exprs.values()) {
             const v = get();
-            if (h.input.value !== v) h.input.value = v;
+            if (h.getValue() !== v) h.setText(v);
         }
         this.shell.setSummary(this.summary());
     }
@@ -1142,6 +1145,7 @@ class RegionCard extends ToolCard<RegionTool> {
             id: `condition:${i}`,
             label: t('build.region.condition', { n: i + 1 }),
             kind: 'condition',
+            preview: true,
             placeholder: t(i === 0 ? 'build.region.conditionPlaceholder' : 'build.region.conditionPlaceholderNext'),
             get: () => tool.conditions[i] ?? '',
             set: (v) => {
@@ -1276,6 +1280,7 @@ class CurveCard extends ToolCard<CurveTool> {
             label: t('build.curve.equation'),
             kind: 'equation',
             required: true,
+            preview: true,
             placeholder: t('build.curve.equationPlaceholder'),
             get: () => tool.equation,
             set: (v) => {

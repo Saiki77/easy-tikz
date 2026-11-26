@@ -26,9 +26,11 @@
  *   numberInput(parent, {value, label, step?, min?, max?, onCommit, onInput?})
  *                                           Arrow Up/Down = step, Shift x10, Alt x0.1; commits on blur / Enter
  *   textInput(parent, {value, label?, placeholder?, onInput?, onCommit?, onEnter?, monospace?})
- *   exprInput(parent, {value, label, validate, onInput, onRewrite?, onAddParameter?, ...})
+ *   exprInput(parent, {value, label, validate, onInput, onRewrite?, onAddParameter?, preview?, ...})
  *                                           monospace; message after 600 ms idle or on blur; quick-fix button
- *                                           from Issue.fix; handle.validate() / focus(selectText) match FieldHandle
+ *                                           from Issue.fix; handle.validate() / focus(selectText) match FieldHandle;
+ *                                           6.2.2: one line that wraps and grows (Enter never adds a line),
+ *                                           bracket at the caret matched, typeset preview of a long formula
  *   dropdown(parent, {label, options, value, onChange})
  *                                           native <select class="dropdown">; a missing value stays visible
  *   swatchPicker(parent, keys, {value, onChange})
@@ -57,10 +59,12 @@
  * registers its own Escape handler first, so registering Escape on
  * host.scope is not enough: trapEscape pushes a child scope on top instead.
  */
-import { App, Menu, Modal, Scope, setIcon } from 'obsidian';
+import { App, Menu, Modal, Scope, finishRenderMath, renderMath, setIcon } from 'obsidian';
 import { COLOR_MAP, COLOR_OPTIONS, THICKNESS_MAP, THICKNESS_OPTIONS } from '../colors';
 import type { Issue, IssueFix, ValidateResult } from '../mathcontext';
+import { ensureMathJax } from '../mathlabel';
 import { t } from '../i18n';
+import { bracketPair, oneLine, wantsPreview } from './exprText';
 
 /** What keyboard-aware components need from the host (PanelHost satisfies it). */
 export interface KeyContext {
@@ -729,7 +733,7 @@ export function textInput(parent: HTMLElement, opts: TextInputOptions): TextInpu
 }
 
 /** Focus an input and select `selectText` (identifier-bounded match first), all text for `true`, else caret at end. */
-function focusInput(el: HTMLInputElement, selectText?: string | boolean): void {
+function focusInput(el: HTMLInputElement | HTMLTextAreaElement, selectText?: string | boolean): void {
     el.focus();
     if (selectText === true) {
         el.select();
@@ -766,16 +770,25 @@ export interface ExprInputOptions {
     onAddParameter?: (name: string) => void;
     /** Called when the shown error state flips (card header dots, tab dots). */
     onErrorChange?: (hasError: boolean) => void;
+    /**
+     * 6.2.2: typeset preview under a long or nested formula (wantsPreview):
+     * the LaTeX of the text, or null while it does not read as a formula
+     * (usually (src) => host.math().previewTex(src)). Without it no preview.
+     */
+    preview?: (src: string) => string | null;
     placeholder?: string;
     cls?: string;
 }
 
 export interface ExprInputHandle {
     el: HTMLElement;
-    input: HTMLInputElement;
+    /** 6.2.2: a one-line text area that wraps (it was an input). */
+    input: HTMLTextAreaElement;
     getValue(): string;
     /** Replace the text (no onInput) and show the new validation result at once. */
     setValue(value: string): void;
+    /** 6.2.2: replace the text only (no callbacks, no validation): a preview drag writes the field every frame. */
+    setText(value: string): void;
     /** Re-run validate() and update the message now (FieldHandle.validate). */
     validate(): void;
     /** Show an issue from elsewhere (scene, render) while the text itself is valid; null clears it. */
@@ -785,26 +798,49 @@ export interface ExprInputHandle {
     /** True while an error message is shown. */
     hasError(): boolean;
     setDisabled(disabled: boolean): void;
-    /** Clear the idle timer. */
+    /** Clear the timers and stop watching the field's size. */
     destroy(): void;
 }
+
+/** 6.2.2: lines a formula field grows to before it scrolls. */
+const EXPR_MAX_LINES = 6;
+
+/** 6.2.2: the typeset preview follows typing (and a drag) at most this often. */
+const PREVIEW_MS = 120;
+
+/** 6.2.2: the preview shrinks to fit its field down to this zoom; a wider one scrolls sideways. */
+const PREVIEW_MIN_ZOOM = 0.7;
 
 /**
  * Monospace expression field with inline validation. Validation runs on
  * every keystroke, but a new message only appears after MESSAGE_IDLE_MS
  * without typing (or on blur), so half-typed input never flashes red.
  * Fixing the text clears a shown message at once.
+ *
+ * 6.2.2: a text area of one line that grows with a long formula (it wraps
+ * at spaces, up to EXPR_MAX_LINES lines, then scrolls) and shrinks back.
+ * The keys stay those of a one-line field: Enter commits and never adds a
+ * line, a pasted line break becomes a space, Tab moves on. A mirror of the
+ * text over the field (same font, padding and wrapping, text transparent)
+ * measures the height and marks the bracket that matches the one at the
+ * caret. With `preview`, a long or nested formula shows typeset under the
+ * field, small and muted; it takes no focus and no clicks.
  */
 export function exprInput(parent: HTMLElement, opts: ExprInputOptions): ExprInputHandle {
     const el = parent.createDiv({ cls: ['etz-expr'].concat(opts.cls ? [opts.cls] : []) });
-    const input = el.createEl('input', {
+    const box = el.createDiv({ cls: 'etz-expr-box' });
+    const input = box.createEl('textarea', {
         cls: ['etz-input', 'mod-mono', 'etz-expr-input'],
-        type: 'text',
-        attr: { autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' },
+        // One line for screen readers too: Enter commits, as in an input.
+        attr: { rows: 1, wrap: 'soft', 'aria-multiline': 'false', enterkeyhint: 'done', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' },
     });
-    input.value = opts.value;
+    input.value = oneLine(opts.value);
     if (opts.placeholder) input.placeholder = opts.placeholder;
     nameBy(input, el, opts.label);
+    // The mirror: the same text in the same box, transparent; only the bracket marks show.
+    const layer = box.createDiv({ cls: 'etz-expr-layer', attr: { 'aria-hidden': 'true' } });
+    const mirror = layer.createDiv({ cls: 'etz-expr-mirror' });
+    const mathEl = opts.preview ? el.createDiv({ cls: ['etz-expr-math', 'tikz-hidden'], attr: { 'aria-hidden': 'true' } }) : null;
     const msgEl = el.createDiv({ cls: ['etz-expr-msg', 'tikz-hidden'], attr: { 'aria-live': 'polite' } });
     const msgText = msgEl.createSpan({ cls: 'etz-expr-msg-text' });
     msgText.id = uniqueId('msg');
@@ -816,7 +852,203 @@ export function exprInput(parent: HTMLElement, opts: ExprInputOptions): ExprInpu
     let external: Issue | null = null;
     let fix: IssueFix | null = null;
     let timer: number | null = null;
-    let committed = opts.value;
+    let committed = input.value;
+
+    // ---- growing with the text
+    let height = 0;
+    let scrolling = false;
+    let pair: [number, number] | null = null;
+    let pairTimer: number | null = null;
+    const renderMirror = () => {
+        const text = input.value;
+        mirror.empty();
+        if (pair && pair[1] < text.length) {
+            const [a, b] = pair;
+            mirror.appendText(text.slice(0, a));
+            mirror.createSpan({ cls: 'etz-expr-pair', text: text[a] });
+            mirror.appendText(text.slice(a + 1, b));
+            mirror.createSpan({ cls: 'etz-expr-pair', text: text[b] });
+            mirror.appendText(text.slice(b + 1));
+        } else mirror.appendText(text);
+        // A last empty line still has a height (and the mirror one line when the field is empty).
+        mirror.appendText('​');
+    };
+    /** The field's own border widths on the mirror (phones and themes draw fields without one). True when they changed. */
+    let border = '';
+    const syncBorder = (): boolean => {
+        const ics = getComputedStyle(input);
+        const next = `${ics.borderTopWidth} ${ics.borderRightWidth} ${ics.borderBottomWidth} ${ics.borderLeftWidth}`;
+        if (next === border) return false;
+        border = next;
+        mirror.setCssProps({ '--etz-expr-bw': next });
+        return true;
+    };
+    /**
+     * Height for the mirror's lines (up to EXPR_MAX_LINES), and the scroll state past them. From the size
+     * watcher, a border change waits for the next frame: the mirror's new size would come back to it in this one.
+     */
+    const fit = (watched = false) => {
+        const outer = mirror.offsetHeight;
+        // Hidden (a collapsed card): the size watcher fits it once it shows.
+        if (!outer) return;
+        if (watched) {
+            window.requestAnimationFrame(() => {
+                if (syncBorder()) fit();
+            });
+        } else if (syncBorder()) {
+            fit();
+            return;
+        }
+        const cs = getComputedStyle(mirror);
+        const lineH = parseFloat(cs.lineHeight) || 18;
+        const frame = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+        const lines = Math.max(1, Math.round((outer - frame) / lineH));
+        let next = Math.round(Math.min(lines, EXPR_MAX_LINES) * lineH + frame);
+        if (next !== height) {
+            height = next;
+            input.setCssProps({ '--etz-expr-h': `${next}px` });
+        }
+        const over = lines > EXPR_MAX_LINES;
+        if (over !== scrolling) {
+            scrolling = over;
+            el.toggleClass('is-scrolling', over);
+            // A scroll bar that takes room narrows the text: the mirror wraps at the same width. Set in the
+            // next frame, as the mirror's new size would come back to the size watcher in this one.
+            window.requestAnimationFrame(() => {
+                const bar = scrolling ? Math.max(0, input.offsetWidth - input.clientWidth - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth)) : 0;
+                mirror.setCssProps({ '--etz-expr-bar': `${bar}px` });
+            });
+        }
+        el.toggleClass('is-wrapped', lines > 1);
+        // The field's own text wraps a little differently somewhere (a font or WebView quirk): grow to what it needs.
+        if (!over && input.scrollHeight > input.clientHeight + 1) {
+            next = Math.min(Math.round(EXPR_MAX_LINES * lineH + frame), height + input.scrollHeight - input.clientHeight);
+            if (next !== height) {
+                height = next;
+                input.setCssProps({ '--etz-expr-h': `${next}px` });
+            }
+        }
+    };
+    const syncScroll = () => mirror.setCssProps({ '--etz-expr-scroll': `${-input.scrollTop}px` });
+    // The mirror changes size with the text and the panel's width (and from 0 when a hidden card opens);
+    // the preview's width with the panel's (it shrinks a wide formula to fit, in the next frame).
+    let mathWidth = -1;
+    const watcher =
+        typeof ResizeObserver !== 'undefined'
+            ? new ResizeObserver((entries) => {
+                  for (const entry of entries) {
+                      if (entry.target === mirror) fit(true);
+                      else if (entry.target === mathEl && mathEl.clientWidth !== mathWidth) {
+                          mathWidth = mathEl.clientWidth;
+                          window.requestAnimationFrame(() => {
+                              const inner = mathEl.querySelector<HTMLElement>('.etz-expr-math-inner');
+                              if (inner) fitMath(inner);
+                          });
+                      }
+                  }
+              })
+            : null;
+
+    /** The bracket pair at the caret, shown while the field has the focus and no selection. */
+    const syncPair = () => {
+        const active = el.ownerDocument.activeElement === input && input.selectionStart === input.selectionEnd;
+        const next = active ? bracketPair(input.value, input.selectionStart ?? 0) : null;
+        if ((next ? next.join() : '') === (pair ? pair.join() : '')) return;
+        pair = next;
+        renderMirror();
+    };
+    const schedulePair = () => {
+        if (pairTimer !== null) return;
+        pairTimer = window.requestAnimationFrame(() => {
+            pairTimer = null;
+            syncPair();
+        });
+    };
+
+    // ---- typeset preview
+    let mathTex = '';
+    let mathTimer: number | null = null;
+    let mathWanted = false;
+    const syncMathShown = () => {
+        if (mathEl) mathEl.toggleClass('tikz-hidden', !mathWanted || !!shown);
+    };
+    const drawMath = () => {
+        if (!mathEl || !opts.preview) return;
+        const src = input.value;
+        mathWanted = wantsPreview(src);
+        if (!mathWanted) {
+            syncMathShown();
+            return;
+        }
+        let tex: string | null = null;
+        try {
+            tex = opts.preview(src);
+        } catch {
+            tex = null;
+        }
+        // Half typed: the last formula stays, faded, so the field below does not jump.
+        mathEl.toggleClass('is-stale', tex === null);
+        if (tex === null) {
+            mathWanted = mathTex !== '';
+            syncMathShown();
+            return;
+        }
+        syncMathShown();
+        if (tex === mathTex) return;
+        let node: HTMLElement;
+        try {
+            node = renderMath(`\\displaystyle ${tex}`, false);
+        } catch {
+            // Obsidian loads MathJax on first use: draw once it is there.
+            void ensureMathJax().then((loaded) => {
+                if (loaded && mathEl.isConnected) drawMath();
+            });
+            return;
+        }
+        mathTex = tex;
+        mathEl.empty();
+        const inner = mathEl.createDiv({ cls: 'etz-expr-math-inner' });
+        inner.appendChild(node);
+        void finishRenderMath().then(() => fitMath(inner));
+        fitMath(inner);
+    };
+    /** Shrink a wide formula to the field's width (down to PREVIEW_MIN_ZOOM); wider still, it scrolls. */
+    const fitMath = (inner: HTMLElement) => {
+        if (!mathEl || !inner.isConnected) return;
+        inner.setCssProps({ '--etz-expr-math-zoom': '1' });
+        const room = mathEl.clientWidth;
+        const need = inner.scrollWidth;
+        const zoom = room > 0 && need > room ? Math.max(PREVIEW_MIN_ZOOM, room / need) : 1;
+        inner.setCssProps({ '--etz-expr-math-zoom': String(Math.round(zoom * 1000) / 1000) });
+        mathEl.toggleClass('is-wide', need * zoom > room + 1);
+    };
+    const scheduleMath = () => {
+        if (!mathEl || mathTimer !== null) return;
+        mathTimer = window.setTimeout(() => {
+            mathTimer = null;
+            drawMath();
+        }, PREVIEW_MS);
+    };
+    // A wide preview scrolls sideways under the pointer; it never takes the focus from the field.
+    if (mathEl) mathEl.addEventListener('mousedown', (e) => e.preventDefault());
+
+    /** After any change of the text: mirror, height, bracket marks, preview. */
+    const textChanged = (now: boolean) => {
+        pair = null;
+        renderMirror();
+        fit();
+        syncScroll();
+        if (el.ownerDocument.activeElement === input) schedulePair();
+        if (now) drawMath();
+        else {
+            // A formula that became short drops its preview at once; a new one is typeset after a pause.
+            if (mathWanted && !wantsPreview(input.value)) {
+                mathWanted = false;
+                syncMathShown();
+            }
+            scheduleMath();
+        }
+    };
 
     const run = (): Issue | null => {
         let result: ValidateResult;
@@ -838,6 +1070,8 @@ export function exprInput(parent: HTMLElement, opts: ExprInputOptions): ExprInpu
         fix = issue && issue.fix && (issue.fix.rewrite !== undefined || (issue.fix.addParameter && opts.onAddParameter)) ? issue.fix : null;
         fixBtn.toggleClass('tikz-hidden', !fix);
         fixBtn.setText(fix ? fix.label : '');
+        // The message takes the preview's place.
+        syncMathShown();
         if (had !== !!issue && opts.onErrorChange) opts.onErrorChange(!!issue);
     };
     const cancelTimer = () => {
@@ -850,6 +1084,12 @@ export function exprInput(parent: HTMLElement, opts: ExprInputOptions): ExprInpu
     };
 
     input.addEventListener('input', () => {
+        // One line: a pasted or dropped line break becomes a space (the caret stays where it was).
+        if (/[\r\n]/.test(input.value)) {
+            const caret = oneLine(input.value.slice(0, input.selectionStart ?? input.value.length)).length;
+            input.value = oneLine(input.value);
+            input.setSelectionRange(caret, caret);
+        }
         opts.onInput(input.value);
         cancelTimer();
         // A scene issue belongs to the old text; the next render reports it again if it still applies.
@@ -861,45 +1101,76 @@ export function exprInput(parent: HTMLElement, opts: ExprInputOptions): ExprInpu
             timer = null;
             show(run());
         }, MESSAGE_IDLE_MS);
+        textChanged(false);
     });
     const commit = () => {
         if (input.value === committed) return;
         committed = input.value;
         if (opts.onCommit) opts.onCommit(committed);
     };
-    input.addEventListener('blur', () => {
-        commit();
-        refresh();
-    });
-    input.addEventListener('keydown', (e: KeyboardEvent) => {
-        if (e.key !== 'Enter' || e.isComposing) return;
-        e.preventDefault();
+    const enter = () => {
         commit();
         refresh();
         if (opts.onEnter) opts.onEnter(input.value);
+    };
+    input.addEventListener('blur', () => {
+        commit();
+        refresh();
+        syncPair();
     });
+    input.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key !== 'Enter' || e.isComposing) {
+            // Arrow keys, Home, End: the caret moves after this event.
+            schedulePair();
+            return;
+        }
+        e.preventDefault();
+        enter();
+    });
+    // Touch keyboards may send no Enter key, only the line break it would type.
+    input.addEventListener('beforeinput', (e: InputEvent) => {
+        if (e.inputType !== 'insertLineBreak' && e.inputType !== 'insertParagraph') return;
+        e.preventDefault();
+        enter();
+    });
+    for (const type of ['focus', 'keyup', 'pointerup', 'select', 'selectionchange']) input.addEventListener(type, schedulePair);
+    input.addEventListener('scroll', syncScroll);
     fixBtn.addEventListener('click', () => {
         const applied = fix;
         if (!applied) return;
         if (applied.rewrite !== undefined) {
-            input.value = applied.rewrite;
-            committed = applied.rewrite;
+            input.value = oneLine(applied.rewrite);
+            committed = input.value;
             (opts.onRewrite ?? opts.onInput)(applied.rewrite);
+            textChanged(true);
         }
         if (applied.addParameter && opts.onAddParameter) opts.onAddParameter(applied.addParameter);
         refresh();
         input.focus();
     });
 
+    if (watcher) {
+        watcher.observe(mirror);
+        if (mathEl) watcher.observe(mathEl);
+    }
+    renderMirror();
     show(run());
+    drawMath();
     return {
         el,
         input,
         getValue: () => input.value,
         setValue: (v) => {
-            input.value = v;
-            committed = v;
+            input.value = oneLine(v);
+            committed = input.value;
             refresh();
+            textChanged(true);
+        },
+        setText: (v) => {
+            const next = oneLine(v);
+            if (input.value === next) return;
+            input.value = next;
+            textChanged(false);
         },
         validate: refresh,
         setIssue: (issue) => {
@@ -912,7 +1183,14 @@ export function exprInput(parent: HTMLElement, opts: ExprInputOptions): ExprInpu
         setDisabled: (disabled) => {
             input.disabled = disabled;
         },
-        destroy: cancelTimer,
+        destroy: () => {
+            cancelTimer();
+            if (mathTimer !== null) window.clearTimeout(mathTimer);
+            mathTimer = null;
+            if (pairTimer !== null) window.cancelAnimationFrame(pairTimer);
+            pairTimer = null;
+            if (watcher) watcher.disconnect();
+        },
     };
 }
 

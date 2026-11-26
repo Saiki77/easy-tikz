@@ -102,7 +102,7 @@ function tools(obs, film) {
         /** The rectangle of the first visible input of the editor whose value matches `pattern` (a RegExp source). */
         inputMatching: (pattern) =>
             obs.call((p) => {
-                const el = Array.from(document.querySelectorAll('.modal.tikz-modal input')).find((e) => e.getClientRects().length && new RegExp(p).test(e.value));
+                const el = Array.from(document.querySelectorAll('.modal.tikz-modal input, .modal.tikz-modal textarea')).find((e) => e.getClientRects().length && new RegExp(p).test(e.value));
                 if (!el) return null;
                 const r = el.getBoundingClientRect();
                 return { x: r.left, y: r.top, width: r.width, height: r.height };
@@ -221,7 +221,7 @@ const parts = [
             await film.tick(24);
             const at = Number(
                 await obs.call(() => {
-                    const i = Array.from(document.querySelectorAll('.modal.tikz-modal input.etz-input')).find((e) => e.getClientRects().length && (e.getAttribute('placeholder') || '').startsWith('e.g. 1, a'));
+                    const i = Array.from(document.querySelectorAll('.modal.tikz-modal .etz-input')).find((e) => e.getClientRects().length && (e.getAttribute('placeholder') || '').startsWith('e.g. 1, a'));
                     return i ? i.value : 'NaN';
                 }),
             );
@@ -240,7 +240,7 @@ const parts = [
             along.push([top.x, top.y]);
             await t.fineDrag(along, 3.0);
             const tangentAt = await obs.call(() => {
-                const i = Array.from(document.querySelectorAll('.modal.tikz-modal input.etz-input')).find((e) => e.getClientRects().length && (e.getAttribute('placeholder') || '').startsWith('e.g. 1, a'));
+                const i = Array.from(document.querySelectorAll('.modal.tikz-modal .etz-input')).find((e) => e.getClientRects().length && (e.getAttribute('placeholder') || '').startsWith('e.g. 1, a'));
                 return i ? i.value : '';
             });
             if (Number(tangentAt) !== TANGENT_AT) say(`build: the tangent ended at ${tangentAt}, not at ${TANGENT_AT}`);

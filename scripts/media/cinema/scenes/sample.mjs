@@ -70,7 +70,7 @@ export default {
             const M = window.__etzMedia;
             const m = M.editor();
             const card = Array.from(m.modalEl.querySelectorAll('.etz-card')).find((node) => ((node.querySelector('.etz-card-name') || {}).textContent || '').trim() === wanted);
-            const input = card ? Array.from(card.querySelectorAll('input.etz-expr-input')).filter(M.visible)[n] : null;
+            const input = card ? Array.from(card.querySelectorAll('.etz-expr-input')).filter(M.visible)[n] : null;
             return input ? { card: M.rect(card), input: M.rect(input), value: input.value } : null;
         }, name, index);
 
