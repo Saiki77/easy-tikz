@@ -512,6 +512,9 @@ function pageHooks(modalFields) {
         if (m) {
             if (m.frameRaf != null || m.fullTimer != null || m.updateTimer != null || m.statusTimer != null) return false;
             if (m.activeTab === 'code' && m.codeTimer != null) return false;
+            // 6.2.2: the plot's room easing after a pan or zoom: all of it, or under the film clock (film/kit.mjs) the frame of its time.
+            const room = m.roomHold;
+            if (room && typeof room.pending === 'function' && room.pending(window.__film ? window.__film.now : undefined)) return false;
             if (!m.chartEl || !m.chartEl.firstElementChild) return false;
         }
         const root = M.noteEl();
