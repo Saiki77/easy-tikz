@@ -143,11 +143,11 @@ export function linearHoverCard(tex: string, defs: Map<string, string>): LinearH
 
 /** 6.2.2: the card of a parse of this part, with the note's matrices and vectors (name to LaTeX); null when it has none. */
 export function buildLinear(p: LinearParse, defs: ReadonlyMap<string, string>): LinearHoverCard | null {
-    // The matrix the formula writes (a matrix, a det of a written matrix), else its name.
-    const entries = p.kind === 'matrix' ? p.entries : p.kind === 'det' ? p.entries : undefined;
-    const written = entries ? matrixTex(entries) : undefined;
+    // The matrix the formula writes (a matrix, maybe a multiple of one; a det, a product or an eigen equation of a written matrix), else its name.
+    let written = p.entries ? matrixTex(p.entries) : undefined;
     if (written === null) return null;
-    const named = p.kind === 'matrix' ? p.name ?? 'A' : p.kind === 'det' ? p.matrix ?? 'A' : p.matrix;
+    if (written && p.kind === 'matrix' && p.factor?.trim()) written = `${p.factor.trim()} \\cdot ${written}`;
+    const named = p.kind === 'matrix' ? p.name ?? 'A' : p.matrix ?? 'A';
     // A name that is the slider's: the card calls it A.
     const name = named === S ? 'A' : named;
     let example = false;
@@ -173,8 +173,11 @@ export function buildLinear(p: LinearParse, defs: ReadonlyMap<string, string>): 
             return card(['draw the grid', 'draw the basis vectors', moving, `draw the eigenvectors of ${name}, labelled`]);
         case 'product': {
             // 6.2.1: a vector named x, y, z or t (A\vec x) is v in the chart: those names are the axes'.
-            const v = p.vector !== S && p.vector !== name && !/^[xyzt]$/.test(p.vector) ? p.vector : 'v';
-            let vector = defs.get(p.vector);
+            const own = p.vector ?? 'v';
+            const v = own !== S && own !== name && !/^[xyzt]$/.test(own) && /^[a-z]$/.test(own) ? own : 'v';
+            // 6.2.2: a written vector (its entries), else the note's.
+            if (p.components && p.components.length !== dim) return null;
+            let vector = p.components ? `(${p.components.map((c) => c.trim()).join(', ')})` : p.vector ? defs.get(p.vector) : undefined;
             if (!vector) {
                 vector = EXAMPLE_VECTOR;
                 example = true;

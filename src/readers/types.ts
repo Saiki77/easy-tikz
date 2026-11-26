@@ -224,8 +224,8 @@ export interface EpigraphParse {
 // ------------------------------------------------------------------ linear algebra (src/linear/hover.ts)
 
 /**
- * matrix: a written 2 x 2 or 3 x 3 matrix, maybe named. A = \begin{pmatrix} 2 & 1 \\ 0 & 1 \end{pmatrix}.
- * JSON: {"kind":"matrix","name":"A","entries":[["2","1"],["0","1"]]}
+ * matrix: a written 2 x 2 or 3 x 3 matrix, maybe named. A = \begin{pmatrix} 2 & 1 \\ 0 & 1 \end{pmatrix}, P = \tfrac12 \begin{pmatrix} 1 & 1 \\ 1 & 1 \end{pmatrix}.
+ * JSON: {"kind":"matrix","name":"A","entries":[["2","1"],["0","1"]]}   {"kind":"matrix","name":"P","factor":"\\frac{1}{2}","entries":[["1","1"],["1","1"]]}
  */
 export interface MatrixParse {
     kind: 'matrix';
@@ -233,18 +233,25 @@ export interface MatrixParse {
     name?: string;
     /** The entries, row by row: square, 2 x 2 or 3 x 3. */
     entries: Tex[][];
+    /** A number written before the matrix (\tfrac12): the matrix is that multiple. */
+    factor?: Tex;
 }
 
 /**
- * product: a matrix applied to a vector, by name. A v, A\vec{v}, A \cdot x.
+ * product: a matrix applied to a vector. A v, A\vec{v}, A \cdot x, \begin{pmatrix} 2 & 1 \\ 1 & 2 \end{pmatrix} \begin{pmatrix} 1 \\ 0 \end{pmatrix}.
  * JSON: {"kind":"product","matrix":"A","vector":"v"}
+ *       {"kind":"product","entries":[["2","1"],["1","2"]],"components":["1","0"]}
  */
 export interface ProductParse {
     kind: 'product';
-    /** The matrix's name (a capital letter); its value comes from the note (else an example). */
-    matrix: string;
-    /** The vector's name (a small letter, no arrow); its value comes from the note (else an example). */
-    vector: string;
+    /** The matrix's name (a capital letter); its value comes from the note (else an example). Without entries: needed. */
+    matrix?: string;
+    /** The written matrix (square, 2 x 2), when the formula writes it. */
+    entries?: Tex[][];
+    /** The vector's name (a small letter, no arrow); its value comes from the note (else an example). Without components: needed. */
+    vector?: string;
+    /** The written vector's entries ((1, 0), a column), when the formula writes it. */
+    components?: Tex[];
 }
 
 /**
@@ -265,7 +272,11 @@ export interface DetParse {
  */
 export interface EigenParse {
     kind: 'eigen';
-    matrix: string;
+    /** The matrix's name; its value comes from the note (else an example). Without entries: needed. */
+    matrix?: string;
+    /** The written matrix (square, 2 x 2), when the formula writes it (\begin{pmatrix} 2 & 1 \\ 1 & 2 \end{pmatrix} v = 3 v). */
+    entries?: Tex[][];
+    /** The eigenvector's name (v). */
     vector: string;
 }
 
