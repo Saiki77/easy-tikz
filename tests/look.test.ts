@@ -323,6 +323,12 @@ test('no axes: no axis lines, numbers or names on screen and in the export; no a
     // A chart with axes keeps them; `no axes` with an explicit grid keeps the grid.
     withLook('clean', () => assert.equal(settings('plot f(x) = x^2').toRendererConfig().showAxis, true));
     withLook('clean', () => assert.equal(settings('no axes\nwith a grid\nplot f(x) = x^2').resolvedLook().gridMajor, true));
+    // 6.2.1: in the export too: invisible axes keep the grid (hide axis would drop it), and no axis names.
+    for (const look of ['clean', 'classic'] as ChartLook[]) {
+        const code = tikz('show x from -2 to 2 and y from -1 to 3\nno axes\nwith a grid\nxlabel t\nplot f(x) = x^2', look);
+        assert.ok(!code.includes('hide axis') && code.includes('axis line style={draw=none}') && /grid=/.test(code), `${look}: grid kept:\n${code}`);
+        assert.ok(!/xlabel=\{/.test(code), `${look}: no axis names`);
+    }
 });
 
 test('no axes in 3D: no box, ticks, numbers or names in the export; the grid only when the chart asks; the line survives words and Full LaTeX (6.2.1)', () => {

@@ -636,14 +636,17 @@ function tikz2D(settings: SettingsManager, ctx: MathContext, config: RendererCon
     fitBudget(paths, view);
     const anyFill = paths.some((p) => p.fill && p.parts.length > 0);
 
-    const opts = commonOptions(config, ctx, sizeOption(settings.paperSize()));
+    // 6.2.1: `no axes` names no axes either (as in 3D).
+    const opts = commonOptions(config.showAxis === false ? { ...config, showAxisLabels: false } : config, ctx, sizeOption(settings.paperSize()));
     opts.push(`xmin=${fmtNum(view.xmin)}, xmax=${fmtNum(view.xmax)}, ymin=${fmtNum(view.ymin)}, ymax=${fmtNum(view.ymax)}`);
     // Middle axes: the labels sit just beyond the arrow tips (x right of its
     // tip, y above its tip), where they cannot collide with the plot, as in
     // the preview. pgfplots' default puts them inside the plot next to the tips.
     if (config.showAxis === false) {
-        // 6.2: `no axes`: no axis lines, numbers or names, as the preview draws it.
-        opts.push('hide axis');
+        // 6.2: `no axes`: no axis lines, numbers or names, as the preview draws it. 6.2.1: `hide axis` drops the
+        // grid too, so a chart that asks for a grid keeps invisible axes and its grid.
+        if (!config.gridMajor && !config.gridMinor) opts.push('hide axis');
+        else opts.push('axis line style={draw=none}', 'major tick length=0pt, minor tick length=0pt', 'xticklabels={}, yticklabels={}', ...gridOptions(config));
     } else if (cleanNow) {
         // 6.1: the clean look's axes, grid and numbers.
         opts.push(...cleanOptions(config, ctx, view, settings.paperSize(), items, colors));
