@@ -42,7 +42,7 @@ import { IterateHoverCard, IterateHoverKind, iterateHoverCard } from '../iterate
 // 6.2: formula recognition, the network that decides which card a formula opens (src/notes6/recognize).
 import { recognizeCached } from '../notes6/recognize';
 import { NoteContext, formulaContext, noteFacts } from '../notes6/recognize/context';
-import { groupOf } from '../notes6/recognize/adapt';
+import { definedFunctions, groupOf } from '../notes6/recognize/adapt';
 import { ChartCard, RecognitionMode, chartCard, rulesMark, smartChart, smartIterate, smartLinear, smartMark, smartNotes6 } from '../notes6/recognize/decide';
 
 export interface FormulaHoverHost {
@@ -444,7 +444,8 @@ export class FormulaHover {
                 if (this.pop && this.target === math) this.scheduleClose();
                 return;
             case 'chart': {
-                const card = smartChart(found.tex, pick, tex, label);
+                // 6.2.1: with the note's functions (a letter before a bracket that is none is a product).
+                const card = smartChart(found.tex, pick, tex, label, definedFunctions(found.ctx?.defs));
                 if (card) this.showChart(at, found, card);
                 else fallBack();
                 return;
@@ -835,7 +836,8 @@ function markMath(math: HTMLElement, tex: string | null, ctx: NoteContext | unde
         math.dataset.etzMark = '0';
         return;
     }
-    const has = (row: number | undefined, rowTex: string) => (mode === 'rules' ? rulesMark(tex, row, rowTex) : smartMark(tex, row, rowTex, recognizeCached(rowTex, ctx ?? {}, ctx?.key ?? '')));
+    const functions = mode === 'rules' ? undefined : definedFunctions(ctx?.defs); // 6.2.1
+    const has = (row: number | undefined, rowTex: string) => (mode === 'rules' ? rulesMark(tex, row, rowTex) : smartMark(tex, row, rowTex, recognizeCached(rowTex, ctx ?? {}, ctx?.key ?? ''), functions));
     const rows = formulaRows(tex);
     const drawn = rows.length > 1 ? rowsOf(math) : [];
     if (rows.length > 1 && drawn.length === rows.length) {

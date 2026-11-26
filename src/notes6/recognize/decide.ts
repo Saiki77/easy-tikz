@@ -12,9 +12,12 @@
  *           when the network and the rules both say "a card", and then the
  *           card the rules open. Otherwise no card.
  *
- * The kind a builder builds may differ from the network's within the same
- * builder (formulaLines draws f(x) = ... in x and y as a surface): the
- * builder's kind shows. Pure: no DOM, no Obsidian.
+ * 6.2.1: the card is of the network's kind whenever the builder builds one
+ * of that kind for the formula or a spelling of it (a = x \cdot y labelled
+ * surface is the surface z = x y, not the curve the formula as written
+ * draws). Only when it builds none of that kind may the kind differ within
+ * the same builder (formulaLines draws f(x) = ... in x and y as a surface):
+ * the builder's kind shows. Pure: no DOM, no Obsidian.
  */
 import { FormulaKind, chartable, formulaChart, formulaLines } from '../../formula';
 import { parseChartText } from '../../text/parse';
@@ -56,51 +59,79 @@ export function chartCard(tex: string, row?: number, axisName?: string): ChartCa
     return parses(lines) ? { kind: formula.kind, lines, axis: formula.axis } : null;
 }
 
-/** Smart, for a chart label (function, surface, polar, implicit, region): the chart of the formula or of one of its spellings. */
-export function smartChart(tex: string, row: number | undefined, rowTex: string, label: Label): ChartCard | null {
-    const own = chartCard(tex, row);
-    if (own) return own;
-    for (const s of spellings(rowTex, label).slice(1)) {
-        const card = chartCard(s.tex, undefined, s.axis);
-        if (card) return card;
-    }
-    return null;
+/** 6.2.1: is a card of this kind the label's own? implicit is formulaLines' equation; det is also the matrix card (shown as det). */
+function ofLabel(kind: string, label: Label): boolean {
+    if (label === 'implicit') return kind === 'equation';
+    if (label === 'det') return kind === 'det' || kind === 'matrix';
+    return kind === label;
 }
 
-/** Smart, for recurrence, sum and domain: the card of src/iterate/hover.ts for the formula or a spelling of it. */
+/**
+ * 6.2.1: the card of the network's kind. The candidates are the builder's
+ * cards for the formula as written and for each of its spellings, in that
+ * order; the first card of the label's kind wins, so a = x \cdot y
+ * labelled surface opens the surface z = x y, not the curve x y = a of the
+ * formula as written. Without one, the first card the builder built (its
+ * kind shows: f(x) = ... in x and y is a surface).
+ */
+function ofKind<T extends { kind: string }>(candidates: Iterable<T | null>, label: Label): T | null {
+    let first: T | null = null;
+    for (const card of candidates) {
+        if (!card) continue;
+        if (ofLabel(card.kind, label)) return card;
+        first ??= card;
+    }
+    return first;
+}
+
+/** Smart, for a chart label (function, surface, polar, implicit, region): the chart of the formula or of one of its spellings, of the label's kind first; 6.2.1: `functions`, the note's functions (their calls are no products). */
+export function smartChart(tex: string, row: number | undefined, rowTex: string, label: Label, functions?: ReadonlySet<string>): ChartCard | null {
+    function* cards(): Generator<ChartCard | null> {
+        yield chartCard(tex, row);
+        for (const s of spellings(rowTex, label, functions).slice(1)) yield chartCard(s.tex, undefined, s.axis);
+    }
+    return ofKind(cards(), label);
+}
+
+/** Smart, for recurrence, sum and domain: the card of src/iterate/hover.ts for the formula or a spelling of it, of the label's kind first. */
 export function smartIterate(rowTex: string, label: Label): IterateHoverCard | null {
-    for (const s of spellings(rowTex, label)) {
-        const card = iterateHoverCard(s.tex);
-        if (card && parses(card.lines)) return card;
-    }
-    return null;
-}
-
-/** Smart, for set, map, condition, interval, jensen and epigraph: the card of src/notes6/hover.ts with the note's definitions. */
-export function smartNotes6(rowTex: string, label: Label, defs: Map<string, NoteDefinition>): HoverCard | null {
-    for (const s of spellings(rowTex, label)) {
-        const card = hoverCard(s.tex, defs);
-        if (card && parses(card.lines) && (!card.lines2 || parses(card.lines2))) return card;
-    }
-    return null;
-}
-
-/** Smart, for matrix, product, det and eigen: the card of src/linear/hover.ts with the note's matrices and vectors. */
-export function smartLinear(rowTex: string, label: Label, values: Map<string, string>): LinearHoverCard | null {
-    for (const s of spellings(rowTex, label)) {
-        const card = linearHoverCard(s.tex, values);
-        if (card && parses(card.lines)) {
-            // det of a written matrix: its card is the matrix's (the unit square and its area), named as a determinant.
-            return label === 'det' && card.kind === 'matrix' ? { ...card, kind: 'det' } : card;
+    function* cards(): Generator<IterateHoverCard | null> {
+        for (const s of spellings(rowTex, label)) {
+            const card = iterateHoverCard(s.tex);
+            yield card && parses(card.lines) ? card : null;
         }
     }
-    return null;
+    return ofKind(cards(), label);
+}
+
+/** Smart, for set, map, condition, interval, jensen and epigraph: the card of src/notes6/hover.ts with the note's definitions, of the label's kind first. */
+export function smartNotes6(rowTex: string, label: Label, defs: Map<string, NoteDefinition>): HoverCard | null {
+    function* cards(): Generator<HoverCard | null> {
+        for (const s of spellings(rowTex, label)) {
+            const card = hoverCard(s.tex, defs);
+            yield card && parses(card.lines) && (!card.lines2 || parses(card.lines2)) ? card : null;
+        }
+    }
+    return ofKind(cards(), label);
+}
+
+/** Smart, for matrix, product, det and eigen: the card of src/linear/hover.ts with the note's matrices and vectors, of the label's kind first. */
+export function smartLinear(rowTex: string, label: Label, values: Map<string, string>): LinearHoverCard | null {
+    function* cards(): Generator<LinearHoverCard | null> {
+        for (const s of spellings(rowTex, label)) {
+            const card = linearHoverCard(s.tex, values);
+            yield card && parses(card.lines) ? card : null;
+        }
+    }
+    const card = ofKind(cards(), label);
+    // det of a written matrix: its card is the matrix's (the unit square and its area), named as a determinant.
+    return card && label === 'det' && card.kind === 'matrix' ? { ...card, kind: 'det' } : card;
 }
 
 /** Does any spelling of the formula pass the label's builder's own quick check (as the dotted mark asks, without parse checks)? */
-function quick(tex: string, row: number | undefined, rowTex: string, label: Label): boolean {
+function quick(tex: string, row: number | undefined, rowTex: string, label: Label, functions?: ReadonlySet<string>): boolean {
     const group = groupOf(label);
-    const all: Spelling[] = spellings(rowTex, label);
+    const all: Spelling[] = spellings(rowTex, label, functions);
     switch (group) {
         case 'chart':
             return chartable(tex, row) || all.slice(1).some((s) => chartable(s.tex));
@@ -115,9 +146,9 @@ function quick(tex: string, row: number | undefined, rowTex: string, label: Labe
     }
 }
 
-/** Smart: does a formula (or row `row` of it, rowTex) whose label the network gave carry the dotted mark? */
-export function smartMark(tex: string, row: number | undefined, rowTex: string, label: Label): boolean {
+/** Smart: does a formula (or row `row` of it, rowTex) whose label the network gave carry the dotted mark? 6.2.1: `functions` as for smartChart. */
+export function smartMark(tex: string, row: number | undefined, rowTex: string, label: Label, functions?: ReadonlySet<string>): boolean {
     if (label === 'none') return false;
     // Its own builder, or (the fallback of open) a card of the rules.
-    return quick(tex, row, rowTex, label) || rulesMark(tex, row, rowTex);
+    return quick(tex, row, rowTex, label, functions) || rulesMark(tex, row, rowTex);
 }
