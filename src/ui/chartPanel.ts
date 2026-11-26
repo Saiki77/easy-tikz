@@ -15,9 +15,11 @@ import {
     ChipHandle,
     ExprInputHandle,
     LiveSliderHandle,
+    DropdownHandle,
     SegmentedHandle,
     TextInputHandle,
     chip,
+    dropdown,
     exprInput,
     field,
     formatDecimals,
@@ -271,6 +273,8 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
             { value: 'axes', text: t('panels.chart.styleAxes') },
         ];
         let axisNames: ChipHandle | null = null;
+        const own: Array<DropdownHandle<string>> = []; // 6.2.1
+        let ownNames: DropdownHandle<string> | null = null;
         axisStyle = segmented(styleField.controlEl, {
             label: t('panels.chart.axisStyle'),
             value: styleValue(),
@@ -280,6 +284,8 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
                 settings.setValue('showAxis', value !== 'none');
                 if (value !== 'none' && !host.is3D()) settings.setValue('axis_style', value);
                 axisNames?.setDisabled(value === 'none');
+                for (const d of own) d.setDisabled(value === 'none'); // 6.2.1
+                ownNames?.setDisabled(value === 'none' || settings.getValue('show_axis_label') === false);
                 // The look's grid follows the style (a box or no axes: none unless the chart asks for one).
                 gridMajor?.setValue(settings.resolvedLook().gridMajor);
                 host.requestUpdate();
@@ -287,12 +293,40 @@ export function createChartPanel(parent: HTMLElement, host: PanelHost, opts: Cha
         });
         styleField.bind(axisStyle.el);
 
+        // 6.2.1: this chart's own axis lines, arrows, names and number size; As the default: the settings under Chart look.
+        const ownRow = (key: string, label: MessageKey, options: Array<[string, MessageKey]>): DropdownHandle<string> => {
+            const f = field(g.body, { label: t(label), layout: 'inline' });
+            const stored = settings.getValue(key);
+            const value = stored === true ? 'on' : stored === false ? 'off' : typeof stored === 'string' && options.some(([v]) => v === stored) ? stored : 'auto';
+            const d = dropdown<string>(f.controlEl, {
+                label: t(label),
+                value,
+                options: [{ value: 'auto', text: t('panels.chart.asTheDefault') }, ...options.map(([v, text]) => ({ value: v, text: t(text) }))],
+                onChange: (v) => {
+                    settings.setValue(key, v);
+                    host.requestUpdate();
+                },
+            });
+            f.bind(d.el);
+            d.setDisabled(styleValue() === 'none');
+            own.push(d);
+            return d;
+        };
+        ownRow('axis_lines', 'plugin.settings.axisLines.name', [['thin', 'plugin.settings.axisLines.thin'], ['thick', 'plugin.settings.axisLines.thick']]);
+        // A 3D box has no arrowheads.
+        if (!host.is3D()) ownRow('axis_arrows', 'plugin.settings.axisArrows.name', [['on', 'plugin.settings.axisArrows.on'], ['off', 'plugin.settings.axisArrows.off']]);
+        ownNames = ownRow('axis_names', 'plugin.settings.axisNames.name', [['always', 'plugin.settings.axisNames.always'], ['named', 'plugin.settings.axisNames.named']]);
+        ownNames.setDisabled(styleValue() === 'none' || settings.getValue('show_axis_label') === false);
+        ownRow('axis_numbers', 'plugin.settings.axisNumbers.name', [['small', 'plugin.settings.axisNumbers.small'], ['large', 'plugin.settings.axisNumbers.large']]);
+        g.body.createDiv({ cls: 'etz-chart-hint', text: t('panels.chart.asTheDefaultHint') });
+
         const chips = g.body.createDiv({ cls: 'etz-chip-row' });
         axisNames = chip(chips, {
             label: t('panels.chart.axisLabels'),
             value: settings.getValue('show_axis_label') !== false,
             onChange: (on) => {
                 settings.setValue('show_axis_label', on);
+                ownNames?.setDisabled(!on || styleValue() === 'none'); // 6.2.1
                 host.requestUpdate();
             },
         });

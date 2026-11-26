@@ -151,6 +151,11 @@ export interface PluginData {
     chartColours: 'theme' | 'export';
     /** 6.1: Chart look: Clean (default, the 6.0 film's look) or Classic (6.0's). src/look.ts. */
     chartLook: 'clean' | 'classic';
+    /** 6.2.1: the settings under Chart look, each 'look' (As the look) by default (src/look.ts AxisSettings). */
+    axisLines: 'look' | 'thin' | 'thick';
+    axisArrows: 'look' | 'on' | 'off';
+    axisNames: 'look' | 'always' | 'named';
+    axisNumbers: 'look' | 'small' | 'large';
     /** Copy PNG and Copy SVG: no background and the theme's colours, or white with the light theme's colours. */
     imageBackground: 'transparent' | 'white';
     /** Every chart also as an SVG file in the attachment folder, white background (5.0). */
@@ -183,6 +188,10 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     chartWords: { words: {}, bundles: [], write: 'yours' },
     chartColours: 'theme',
     chartLook: 'clean',
+    axisLines: 'look',
+    axisArrows: 'look',
+    axisNames: 'look',
+    axisNumbers: 'look',
     imageBackground: 'transparent',
     svgFiles: false,
     interfaceLanguage: 'auto',

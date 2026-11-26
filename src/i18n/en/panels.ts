@@ -45,6 +45,9 @@ export const panels = {
     'panels.chart.styleAxes': 'Axes',
     'panels.chart.styleNone': 'None',
     'panels.chart.axisLabels': 'Axis labels',
+    // 6.2.1: the chart's own axis lines, arrows, names and number size.
+    'panels.chart.asTheDefault': 'As the default',
+    'panels.chart.asTheDefaultHint': 'As the default: the settings under Chart look decide. A choice here is this chart\'s own (a line such as thick axes in its text).',
     'panels.chart.equalScale': 'Equal scale',
     'panels.chart.equalScalePolar': 'Equal scale (always on in polar)',
     'panels.chart.axisLabel': '{axis} label',

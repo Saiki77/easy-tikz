@@ -15,7 +15,7 @@ import { exportsFrames, framesTikz } from './motion6/frames'; // 6.0 C
 import { FIT_Y, followY } from './notes6/yfit';
 import { pythonAxes, pythonView } from './python/scene'; // 6.0 P
 // 6.1 clean look
-import { AUTO, ChartLook, lookOf, resolveLook, settleLook } from './look';
+import { AUTO, AxisLook, ChartLook, lookOf, resolveAxes, resolveLook, settleLook } from './look';
 
 /** The six axis range keys. */
 export type RangeKey = 'xmin' | 'xmax' | 'ymin' | 'ymax' | 'zmin' | 'zmax';
@@ -92,6 +92,13 @@ function defaultValues(): Record<string, unknown> {
         // 6.1: the chart's own look ('clean' or 'classic'), else the setting Chart look. Its presence also
         // tells a JSON block of 6.1 from an older complete dump (settleLook).
         look: AUTO,
+        // 6.2.1: the chart's own axis lines ('thin', 'thick'), arrows ('on', 'off'), names ('always', 'named') and
+        // number size ('small', 'large'): `thick axes`, `axes with arrows`, `with axis names`, `small numbers` and their
+        // opposites, or the Chart tab. Else ('auto') the settings under Chart look and the look (src/look.ts).
+        axis_lines: AUTO,
+        axis_arrows: AUTO,
+        axis_names: AUTO,
+        axis_numbers: AUTO,
         // Polar treats function expressions as r(theta).
         coordinateSystem: 'cartesian',
         // Separate axis labels for polar mode so toggling Cartesian <-> Polar
@@ -398,11 +405,16 @@ export class SettingsManager {
             if (axes && xLabel === 'x' && axes.xlabel) xLabel = axes.xlabel;
             if (axes && yLabel === 'y' && axes.ylabel) yLabel = axes.ylabel;
         }
-        // 6.1: the clean look writes no axis letters x and y, only names the chart gives its axes.
+        // 6.1: the clean look writes no axis letters x and y, only names the chart gives its axes. 6.2.1: or the setting
+        // Axis names, or the chart's own axis_names; in 3D the letter z too.
         const look = this.resolvedLook();
-        if (look.look === 'clean') {
+        const axes = this.resolvedAxes(look.look);
+        const is3D = this.getValue('dimension') === true;
+        let zLabel = stringValue(this.getValue('axis_label_z'), '') || 'z';
+        if (axes.names === 'named') {
             if (xLabel.trim() === 'x') xLabel = '';
             if (yLabel.trim() === 'y') yLabel = '';
+            if (zLabel.trim() === 'z') zLabel = '';
         }
         return {
             width,
@@ -420,6 +432,7 @@ export class SettingsManager {
             axisStyle: look.axisStyle, // 6.1: or the look's, when the chart leaves it open
             gridMajor: look.gridMajor,
             look: look.look, // 6.1
+            axes, // 6.2.1
             gridMinor: this.getValue('showSmallGrid') === true,
             gridOpacity: opacityValue(this.getValue('gridOpacity'), GRID_OPACITY),
             numbers: { x: this.axisNumbers('x'), y: this.axisNumbers('y'), z: this.axisNumbers('z') },
@@ -431,10 +444,10 @@ export class SettingsManager {
             parameters: this.parameters(),
             variables: stringValue(this.getValue('variables'), 'x, y') || 'x, y',
             equalScale: this.getValue('equalScale') === true,
-            is3D: this.getValue('dimension') === true,
+            is3D,
             zmin: view.zmin,
             zmax: view.zmax,
-            zLabel: stringValue(this.getValue('axis_label_z'), '') || 'z',
+            zLabel, // 6.2.1: or none for Axis names: Only when the chart names them
             rotationX: numberValue(this.getValue('rotationX'), 30),
             rotationZ: numberValue(this.getValue('rotationZ'), 45),
             zoom3D: numberValue(this.getValue('zoom3D'), 1),
@@ -459,6 +472,20 @@ export class SettingsManager {
             polar: this.getValue('coordinateSystem') === 'polar',
             is3D: this.getValue('dimension') === true,
             showAxis: this.getValue('showAxis') !== false,
+        });
+    }
+
+    /**
+     * 6.2.1: the axes of this chart in `look` (the look it is drawn in): its
+     * own axis_lines, axis_arrows, axis_names and axis_numbers, else the
+     * settings under Chart look, else the look's (src/look.ts).
+     */
+    resolvedAxes(look: ChartLook = this.resolvedLook().look): AxisLook {
+        return resolveAxes(look, {
+            line: this.getValue('axis_lines'),
+            arrows: this.getValue('axis_arrows'),
+            names: this.getValue('axis_names'),
+            numbers: this.getValue('axis_numbers'),
         });
     }
 

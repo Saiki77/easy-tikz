@@ -16,6 +16,8 @@ import { themedColor, traceFraction } from './motion6/liveprims';
 // 6.0 entrances: the objects of a step that comes in enter by kind (a surface rises from the floor).
 import { EntranceKind, StepEntrance, labelStart, popDelay, riseAt, rippleOpacity, toolKind } from './motion6/entrances';
 import type { Tool } from './types';
+// 6.2.1: the axes, one by one (Axis lines, Axis numbers)
+import { CLEAN_COLOURS, CLEAN_VARS, NUMBER_PT } from './look';
 
 
 const PADDING_TOP = 40;
@@ -39,6 +41,10 @@ const TICK_FONT_SIZE = 10;
 const TICK_CHAR_WIDTH = 6;
 const TICK_LABEL_HEIGHT = 11;
 const TICK_LABEL_GAP = 3.5;
+/** 6.2.1: small numbers (the setting Axis numbers) are this much of the large ones, as 7 pt to 10 pt in 2D and the export. */
+const SMALL_TICKS = NUMBER_PT.small / NUMBER_PT.large;
+/** 6.2.1: the opacity of the front and the back edges of the box in thin lines (the clean look's light grey, full at the front). */
+const THIN_EDGE_OPACITY = { front: 1, back: 0.55 };
 
 /**
  * Planes are split into PLANE_CELLS x PLANE_CELLS cells that are depth
@@ -408,11 +414,12 @@ export class SVG3DRenderer {
     private zTickEdge: TickEdge | null = null;
 
     /** Resolved theme colors, refreshed per render so theme switches repaint. */
-    private themeColors: { textNormal: string; textMuted: string; bgPrimary: string; border: string } = {
+    private themeColors: { textNormal: string; textMuted: string; bgPrimary: string; border: string; thinAxis: string } = {
         textNormal: '#000',
         textMuted: '#666',
         bgPrimary: '#fff',
         border: '#ddd',
+        thinAxis: CLEAN_COLOURS.axis, // 6.2.1
     };
 
     /** Theme text font for canvas text (`--font-text` resolved), and the raw value it came from. */
@@ -911,6 +918,8 @@ export class SVG3DRenderer {
         this.themeColors.bgPrimary = cs.getPropertyValue('--background-primary').trim() || '#fff';
         // The grid takes the colour of the 2D grid (renderer.ts BORDER).
         this.themeColors.border = cs.getPropertyValue('--background-modifier-border').trim() || '#ddd';
+        // 6.2.1: thin axis lines take the clean look's light grey (styles.css).
+        this.themeColors.thinAxis = cs.getPropertyValue('--etz-clean-axis').trim() || CLEAN_COLOURS.axis;
         // Canvas `font` does not understand var(): an invalid font string is
         // silently ignored and the previous (10px) font stays. Resolve the
         // theme's text font once and keep it only if the canvas accepts it.
@@ -1716,7 +1725,8 @@ export class SVG3DRenderer {
     private drawBoxToSvg(layer: 'back' | 'front') {
         const cfg = this.requireConfig();
         const axisGroup = layer === 'back' ? this.backAxesGroup : this.frontAxesGroup;
-        const axisColor = 'var(--text-muted)';
+        const thin = this.thinBox(); // 6.2.1
+        const axisColor = thin ? CLEAN_VARS.axis : 'var(--text-muted)';
 
         // The grid on the floor and the back walls, under the back edges (see drawGridToCanvas).
         if (layer === 'back' && cfg.gridOpacity > 0) {
@@ -1730,7 +1740,7 @@ export class SVG3DRenderer {
             if (edge.layer !== layer) continue;
             const c1 = this.boxCorners[edge.p1Idx];
             const c2 = this.boxCorners[edge.p2Idx];
-            this.svgLine(axisGroup, c1.sx, c1.sy, c2.sx, c2.sy, axisColor, '1', layer === 'back' ? 0.4 : 0.85);
+            this.svgLine(axisGroup, c1.sx, c1.sy, c2.sx, c2.sy, axisColor, '1', thin ? THIN_EDGE_OPACITY[layer] : layer === 'back' ? 0.4 : 0.85);
         }
 
         // Tick marks, tick labels, and axis-name labels live in the front
@@ -1770,7 +1780,20 @@ export class SVG3DRenderer {
         return cfg.majorTickNum ? Math.max(2, Math.round(cfg.majorTickNum * 0.6)) : DEFAULT_TARGET_TICKS;
     }
 
+    /** 6.2.1: the size of the tick numbers, 1 for large ones (Axis numbers). */
+    private tickScale(): number {
+        return this.requireConfig().axes?.numbers === 'small' ? SMALL_TICKS : 1;
+    }
+
+    /** 6.2.1: the box in thin lines, the clean look's light grey (Axis lines: Thin, or the chart's axis_lines). */
+    private thinBox(): boolean {
+        return this.requireConfig().axes?.line === 'thin';
+    }
+
     private tickPlan(): TickMark[] {
+        // 6.2.1: small numbers sit closer to their tick marks and take less room.
+        const k = this.tickScale();
+        const labelOffset = TICK_LENGTH + (TICK_LABEL_OFFSET - TICK_LENGTH) * k;
         const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
         const marks: TickMark[] = [];
         const axes: Array<['x' | 'y' | 'z', TickEdge | null]> = [
@@ -1792,8 +1815,8 @@ export class SVG3DRenderer {
                     y1: p.sy,
                     x2: p.sx + edge.outwardX * TICK_LENGTH,
                     y2: p.sy + edge.outwardY * TICK_LENGTH,
-                    labelX: p.sx + edge.outwardX * TICK_LABEL_OFFSET,
-                    labelY: p.sy + edge.outwardY * TICK_LABEL_OFFSET,
+                    labelX: p.sx + edge.outwardX * labelOffset,
+                    labelY: p.sy + edge.outwardY * labelOffset,
                     // The user's label as plain text (`$a$` shows as a), a multiple of π, or the number.
                     text: tick.label !== undefined ? stripLatex(tick.label) : tick.text,
                 });
@@ -1803,8 +1826,8 @@ export class SVG3DRenderer {
             for (const i of order) {
                 const mark = own[i];
                 const text = mark.text || '';
-                const halfW = (text.length * TICK_CHAR_WIDTH) / 2 + TICK_LABEL_GAP;
-                const halfH = TICK_LABEL_HEIGHT / 2;
+                const halfW = (text.length * TICK_CHAR_WIDTH * k) / 2 + TICK_LABEL_GAP;
+                const halfH = (TICK_LABEL_HEIGHT * k) / 2;
                 const box = { x0: mark.labelX - halfW, y0: mark.labelY - halfH, x1: mark.labelX + halfW, y1: mark.labelY + halfH };
                 if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) mark.text = null;
                 else placed.push(box);
@@ -1816,8 +1839,9 @@ export class SVG3DRenderer {
 
     private drawTicksToSvg(group: SVGElement) {
         const tickColor = 'var(--text-muted)';
+        const markColor = this.thinBox() ? CLEAN_VARS.axis : tickColor; // 6.2.1
         for (const mark of this.tickPlan()) {
-            this.svgLine(group, mark.x1, mark.y1, mark.x2, mark.y2, tickColor, '1');
+            this.svgLine(group, mark.x1, mark.y1, mark.x2, mark.y2, markColor, '1');
             if (mark.text === null) continue;
             const label = createSvg('text');
             label.setAttribute('x', String(mark.labelX));
@@ -1825,7 +1849,7 @@ export class SVG3DRenderer {
             label.setAttribute('text-anchor', 'middle');
             label.setAttribute('dominant-baseline', 'central');
             label.setAttribute('fill', tickColor);
-            label.setAttribute('font-size', String(TICK_FONT_SIZE));
+            label.setAttribute('font-size', String(TICK_FONT_SIZE * this.tickScale())); // 6.2.1
             label.setAttribute('font-family', 'var(--font-text)');
             label.textContent = mark.text;
             group.appendChild(label);
@@ -2076,10 +2100,11 @@ export class SVG3DRenderer {
     private drawBoxToCanvas(layer: 'back' | 'front') {
         const ctx = this.ctx;
         const cfg = this.requireConfig();
-        const axisColor = this.themeColors.textMuted;
+        const thin = this.thinBox(); // 6.2.1
+        const axisColor = thin ? this.themeColors.thinAxis : this.themeColors.textMuted;
         ctx.strokeStyle = axisColor;
         ctx.lineWidth = 1;
-        ctx.globalAlpha = layer === 'back' ? 0.4 : 0.85;
+        ctx.globalAlpha = thin ? THIN_EDGE_OPACITY[layer] : layer === 'back' ? 0.4 : 0.85;
         for (const edge of this.boxEdges) {
             if (edge.layer !== layer) continue;
             const c1 = this.boxCorners[edge.p1Idx];
@@ -2099,10 +2124,10 @@ export class SVG3DRenderer {
 
     private drawTicksToCanvas() {
         const ctx = this.ctx;
-        ctx.strokeStyle = this.themeColors.textMuted;
+        ctx.strokeStyle = this.thinBox() ? this.themeColors.thinAxis : this.themeColors.textMuted; // 6.2.1
         ctx.fillStyle = this.themeColors.textMuted;
         ctx.lineWidth = 1;
-        ctx.font = this.canvasFont(TICK_FONT_SIZE);
+        ctx.font = this.canvasFont(TICK_FONT_SIZE * this.tickScale()); // 6.2.1
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         for (const mark of this.tickPlan()) {

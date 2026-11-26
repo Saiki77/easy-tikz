@@ -41,7 +41,7 @@ import { sampleCurve, tickValues } from './util';
 import { boxFactors } from './box3d';
 import { AxisTicks, Tick, TickAxis, autoTickSteps, axisTicks, tickOptions } from './ticks';
 // 6.1 clean look
-import { AxisPlace, CLEAN_COLOURS, CLEAN_GRID_ALPHA, CLEAN_LINE_TIKZ, CLEAN_TICK_PT, CleanAxisFrame, TickObstacles, axisPlace, cleanTickSpots } from './look';
+import { AxisLook, AxisPlace, CLEAN_COLOURS, CLEAN_GRID_ALPHA, CLEAN_LINE_TIKZ, CleanAxisFrame, LOOK_AXES, NUMBER_PT, TickObstacles, axisPlace, cleanTickSpots } from './look';
 import { stillFrame } from './motion6/clock'; // 6.0 C
 import { legendCorner, legendLabelOf, legendObstacles } from './legend'; // 6.2.1
 import { pixelsTikz } from './iterate/export'; // 6.0 E
@@ -664,6 +664,7 @@ function tikz2D(settings: SettingsManager, ctx: MathContext, config: RendererCon
             const titled = !!labelText(ctx.formatTemplate(String(config.title ?? '')));
             if (titled && config.showAxisLabels && labelText(String(config.yLabel ?? ''))) opts.push(`title style={yshift=${MIDDLE_TITLE_LIFT_PT}pt}`);
         } else if (config.axisStyle === 'axes') opts.push('axis lines=left');
+        opts.push(...axisLookOptions(config.axes ?? LOOK_AXES.classic, LOOK_AXES.classic, colors, config.axisStyle === 'box')); // 6.2.1
         opts.push(...gridOptions(config));
         opts.push(...numbersOptions(config, ctx, [['x', view.xmin, view.xmax], ['y', view.ymin, view.ymax]]));
     }
@@ -686,13 +687,34 @@ function tikz2D(settings: SettingsManager, ctx: MathContext, config: RendererCon
             if (f && f.showLegend && !info.hidden && !info.error && !info.domainError && String(f.expression ?? '').trim()) labels.push(legendLabelOf(info, f, ctx));
         }
         const metrics = labelMetricsFor(paperCm.w, paperCm.h);
-        const input = { functions: config.functions || [], annotations: config.annotations, axisStyle: config.axisStyle, clean: cleanNow };
+        const input = { functions: config.functions || [], annotations: config.annotations, axisStyle: config.axisStyle, clean: cleanNow, numberPt: NUMBER_PT[(config.axes ?? LOOK_AXES[cleanNow ? 'clean' : 'classic']).numbers] }; // 6.2.1: numberPt
         const corner = legendCorner(labels, legendObstacles(input, ctx, items, view, metrics), metrics);
         opts.push(`legend pos=${corner}, legend cell align=left, legend style={font=${LEGEND_FONT}}`);
     }
 
     const picture = ['\\begin{tikzpicture}', ...pythonComments(config.tools) /* 6.0 P */, ...colors.lines(), ...layers.boxes, ...axisBlock(opts), ...pictures, ...layers.render(view), '\\end{axis}', '\\end{tikzpicture}']; // pictures: 6.0 E
     return wrap(settings.isStandalone(), libs, picture);
+}
+
+// ----------------------------------------------------------------- 6.2.1 the axes, one by one
+
+/** 6.2.1: the line width of thin axis lines in pt (the preview's CLEAN_AXIS_PX at its usual scale). */
+const THIN_AXIS_LINE = '0.45pt';
+
+/**
+ * 6.2.1: the axis options of a Classic or 3D picture where its axes differ
+ * from those of its look (`base`): thin lines in the clean look's light grey,
+ * no arrowheads (pgfplots gives axes that are no box -stealth tips), small
+ * numbers. Nothing when they are the look's, so Classic writes what 6.0 wrote.
+ */
+function axisLookOptions(axes: AxisLook, base: AxisLook, colors: ColorSet, box: boolean): string[] {
+    const opts: string[] = [];
+    const line: string[] = [];
+    if (axes.line === 'thin' && base.line !== 'thin') line.push(`draw=${colors.named('etzAxis', CLEAN_COLOURS.axis.slice(1))}`, `line width=${THIN_AXIS_LINE}`);
+    if (!box && !axes.arrows && base.arrows) line.push('-');
+    if (line.length) opts.push(`axis line style={${line.join(', ')}}`);
+    if (axes.numbers === 'small' && base.numbers !== 'small') opts.push('tick label style={font=\\scriptsize}');
+    return opts;
 }
 
 // ----------------------------------------------------------------- 6.1 clean look
@@ -719,12 +741,16 @@ const Y_LINE: Record<AxisPlace, string> = { zero: 'middle', low: 'left', high: '
 function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, paper: { w: number; h: number }, items: SceneItem2D[], colors: ColorSet): string[] {
     const opts: string[] = [];
     const place = config.axisStyle === 'axes' ? { x: 'low' as const, y: 'low' as const } : { x: axisPlace(view.ymin, view.ymax), y: axisPlace(view.xmin, view.xmax) };
-    const axis = colors.named('etzAxis', CLEAN_COLOURS.axis.slice(1));
+    // 6.2.1: thin or thick lines (thick: Classic's, pgfplots' own), with or without arrowheads, small or large numbers.
+    const axes = config.axes ?? LOOK_AXES.clean;
+    const numberPt = NUMBER_PT[axes.numbers];
     const tick = colors.named('etzTick', CLEAN_COLOURS.tick.slice(1));
     opts.push(`axis x line=${X_LINE[place.x]}, axis y line=${Y_LINE[place.y]}`);
-    opts.push(`axis line style={draw=${axis}, line width=0.45pt, -}`);
+    const line = axes.line === 'thin' ? [`draw=${colors.named('etzAxis', CLEAN_COLOURS.axis.slice(1))}`, `line width=${THIN_AXIS_LINE}`] : [];
+    if (!axes.arrows) line.push('-');
+    if (line.length) opts.push(`axis line style={${line.join(', ')}}`);
     opts.push('major tick length=0pt, minor tick length=0pt');
-    opts.push(`tick label style={font=\\scriptsize, text=${tick}}`);
+    opts.push(axes.numbers === 'small' ? `tick label style={font=\\scriptsize, text=${tick}}` : `tick label style={text=${tick}}`);
     // The names beyond the ends of the axes, where the axes lie.
     const fx = place.y === 'low' ? 0 : place.y === 'high' ? 1 : (0 - view.xmin) / (view.xmax - view.xmin);
     const fy = place.x === 'low' ? 0 : place.x === 'high' ? 1 : (0 - view.ymin) / (view.ymax - view.ymin);
@@ -732,7 +758,9 @@ function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, pape
     const yNamed = config.showAxisLabels && !!labelText(String(config.yLabel ?? ''));
     if (place.x === 'zero' && config.showAxisLabels && labelText(String(config.xLabel ?? ''))) opts.push(`xlabel style={at={(axis description cs:1,${fmtNum(fy)})}, anchor=west, xshift=3pt}`);
     if (place.y === 'zero' && yNamed) {
-        opts.push(`ylabel style={at={(axis description cs:${fmtNum(fx)},1)}, anchor=south, rotate=-90, yshift=3pt}`);
+        // 6.2.1: upright, as in the preview: pgfplots does not turn the name of an axis through the middle (up to 6.2.0 a
+        // rotate=-90 here laid it on its side).
+        opts.push(`ylabel style={at={(axis description cs:${fmtNum(fx)},1)}, anchor=south, yshift=3pt}`);
         if (labelText(ctx.formatTemplate(String(config.title ?? '')))) opts.push(`title style={yshift=${MIDDLE_TITLE_LIFT_PT}pt}`);
     }
     // The grid: the light ink at the chart's grid opacity.
@@ -754,7 +782,7 @@ function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, pape
         ox: place.y === 'low' ? 0 : place.y === 'high' ? W : sx(0),
         oy: place.x === 'low' ? H : place.x === 'high' ? 0 : sy(0),
         place,
-        fs: CLEAN_TICK_PT,
+        fs: numberPt, // 6.2.1: or large
         gap: CLEAN_GAP_PT,
         charEm: NUMBER_CHAR_EM,
     };
@@ -765,7 +793,7 @@ function cleanOptions(config: RendererConfig, ctx: MathContext, view: View, pape
         compact: false,
         plotW: paper.w * PT_PER_CM * 0.85,
         plotH: paper.h * PT_PER_CM * 0.8,
-        fs: CLEAN_TICK_PT,
+        fs: numberPt,
         yRatio: (paper.h * 0.8) / (paper.w * 0.85),
     });
     for (const [a, lo, hi, step] of [['x', view.xmin, view.xmax, stepX], ['y', view.ymin, view.ymax, stepY]] as const) {
@@ -1378,8 +1406,9 @@ export function generateTikz3D(settings: SettingsManager, ctx: MathContext): str
     // pgfplots draws the grid on the back planes of the box, under the surfaces.
     opts.push(...gridOptions(config));
     opts.push(...numbersOptions(config, ctx, [['x', box.xmin, box.xmax], ['y', box.ymin, box.ymax], ['z', box.zmin, box.zmax]]));
-    // 6.2.1: `no axes`, as the preview draws it.
+    // 6.2.1: `no axes`, as the preview draws it. Else the box in thin lines and small numbers when the settings or the chart say so.
     if (config.showAxis === false) opts.push(...noAxes3D(config));
+    else opts.push(...axisLookOptions(config.axes ?? LOOK_AXES.classic, LOOK_AXES.classic, colors, true));
     opts.push('trig format plots=rad');
     opts.push('unbounded coords=jump');
     opts.push(restrict('z', box.zmin, box.zmax));

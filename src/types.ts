@@ -1,5 +1,5 @@
 import type { AxisNumbers, TickAxis } from './ticks';
-import type { ChartLook } from './look';
+import type { AxisLook, ChartLook } from './look';
 
 export type FillPattern =
     | 'solid'
@@ -960,6 +960,9 @@ export interface RendererConfig {
     // 6.1
     /** The look it is drawn in (src/look.ts); absent: Classic. axisStyle and gridMajor are already the look's where the chart leaves them open. */
     look?: ChartLook;
+    // 6.2.1
+    /** The axes: lines, arrows, names and number size (src/look.ts resolveAxes); absent: those of `look`. xLabel, yLabel and zLabel already leave out the letters `names` drops. */
+    axes?: AxisLook;
 }
 
 // 6.0 C

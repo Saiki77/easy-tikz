@@ -2601,6 +2601,11 @@ function exampleChart(overrides: Record<string, unknown>): Record<string, unknow
         zmax: '5',
         axis_style: 'auto', // 6.1: the chart look decides
         look: 'auto',
+        // 6.2.1: the settings under Chart look decide.
+        axis_lines: 'auto',
+        axis_arrows: 'auto',
+        axis_names: 'auto',
+        axis_numbers: 'auto',
         coordinateSystem: 'cartesian',
         axis_label_x_polar: '',
         axis_label_y_polar: '',

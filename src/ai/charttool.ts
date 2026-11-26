@@ -292,6 +292,11 @@ function allowed(key: string): string {
         color: Object.keys(COLOR_MAP),
         thickness: Object.keys(THICKNESS_MAP),
         axis_style: ['box', 'middle', 'axes', 'auto'], // 6.1: auto, the chart look decides
+        // 6.2.1: auto, the settings under Chart look decide
+        axis_lines: ['thin', 'thick', 'auto'],
+        axis_arrows: ['on', 'off', 'auto'],
+        axis_names: ['always', 'named', 'auto'],
+        axis_numbers: ['small', 'large', 'auto'],
         coordinateSystem: ['cartesian', 'polar'],
         fillPattern: ['solid', 'horizontal', 'vertical', 'crosshatch', 'dots', 'north-east', 'north-west'],
         outline: ['none', 'solid', 'dashed'],
