@@ -1,7 +1,9 @@
 /*
  * The input encoding of formula recognition (a port of the frozen
- * features.mjs of round 3, hover-ml designed3; the logic is the same line by
- * line). The front end (normalize.ts) writes the formula in canonical TeX;
+ * features.mjs of round 4, hover-ml designed4; the logic is the same line by
+ * line). Round 4 adds what the context line says (contextFormulas,
+ * noteContext: role words, program facts, switches, names), parameters as
+ * sliders (paramExpr), and the blocks marked round 4, C1, P2 in partFeatures. The front end (normalize.ts) writes the formula in canonical TeX;
  * it is cut into parts (\qquad, \Rightarrow, \iff, a word such as für, a
  * list of statements, a remark in brackets at the end, a chain f(x) = A = B),
  * and every part becomes one 0/1 vector of token-level features. No decision is taken here: each feature
@@ -60,6 +62,8 @@ interface Item {
     arrow?: number;
     /** A number with an arrow (\vec 0) as a vector element. */
     num?: number;
+    /** Round 4: a bold capital (\mathbf{A}) is a matrix name, not an arrow. */
+    bold?: number;
 }
 
 /** The answers about one part: a name to a value; a true value sets the feature. */
@@ -74,7 +78,7 @@ export function tokenize(tex: string): string[] {
 }
 
 const set = (s: string) => new Set(s.split(' '));
-const DROP = set('\\left \\right \\big \\Big \\bigg \\Bigg \\bigl \\bigr \\Bigl \\Bigr \\biggl \\biggr \\displaystyle \\textstyle \\limits \\nolimits \\! \\mathstrut \\, \\: \\> $ \\phantom \\hphantom');
+const DROP = set('\\left \\right \\big \\Big \\bigg \\Bigg \\bigl \\bigr \\Bigl \\Bigr \\biggl \\biggr \\displaystyle \\textstyle \\limits \\nolimits \\! \\mathstrut \\, \\: \\> $ \\phantom \\hphantom ✓ ✔ \\checkmark');
 const SP = new Set(['\\;', '\\ ', '~']);
 const MAP: Record<string, string> = {
     '\\dfrac': '\\frac', '\\tfrac': '\\frac', '\\leq': '\\le', '\\geq': '\\ge', '\\neq': '\\ne', '\\leqslant': '\\le', '\\geqslant': '\\ge',
@@ -89,7 +93,7 @@ const FN = set('\\sin \\cos \\tan \\cot \\exp \\ln \\log \\lg \\sqrt \\arctan \\
 const FNWORD = set('sin cos tan exp ln log sgn sign abs sinh cosh tanh arctan si sinc erf');
 const BIG: Record<string, string> = { '\\sum': 'sum', '\\prod': 'prod', '\\int': 'int', '\\oint': 'int', '\\iint': 'int', '\\lim': 'lim', '\\max': 'max', '\\min': 'min', '\\sup': 'max', '\\inf': 'min', '\\argmax': 'max', '\\argmin': 'min', '\\limsup': 'lim', '\\liminf': 'lim' };
 const DECO: Record<string, Deco | ''> = { '\\hat': 'hat', '\\widehat': 'hat', '\\bar': 'bar', '\\overline': 'bar', '\\tilde': 'hat', '\\widetilde': 'hat', '\\vec': 'vec', '\\mathbf': 'vec', '\\boldsymbol': 'vec', '\\bm': 'vec', '\\dot': 'dot', '\\ddot': 'dot', '\\mathit': '', '\\mathsf': '', '\\underline': '', '\\overrightarrow': 'vec', '\\vv': 'vec', '\\underrightarrow': 'vec' };
-const REL: Record<string, string> = { '=': 'eq', '<': 'lt', '>': 'gt', '\\le': 'le', '\\ge': 'ge', '\\ne': 'ne', '\\in': 'in', '\\to': 'to', '\\mapsto': 'mapsto', '\\approx': 'approx', '\\sim': 'sim', '\\equiv': 'equiv', '\\leftarrow': 'larrow', '\\propto': 'sim', '\\subset': 'sub', '\\subseteq': 'sub', '\\notin': 'in', '\\ll': 'other', '\\gg': 'other', '\\perp': 'other', '\\simeq': 'approx', '\\cong': 'equiv', ':': 'colon', '\\mid': 'mid', '\\nmid': 'mid' };
+const REL: Record<string, string> = { '=': 'eq', '<': 'lt', '>': 'gt', '\\le': 'le', '\\ge': 'ge', '\\ne': 'ne', '\\in': 'in', '\\to': 'to', '\\mapsto': 'mapsto', '\\approx': 'approx', '\\sim': 'sim', '\\equiv': 'equiv', '\\leftarrow': 'larrow', '\\propto': 'sim', '\\subset': 'sub', '\\subseteq': 'sub', '\\notin': 'in', '\\ll': 'other', '\\gg': 'other', '\\perp': 'other', '\\simeq': 'approx', '\\cong': 'equiv', ':': 'colon', '\\mid': 'mid', '\\nmid': 'mid', '\\prec': 'other', '\\succ': 'other', '\\preceq': 'other', '\\succeq': 'other', '\\succsim': 'other', '\\precsim': 'other' };
 const JOIN = set('\\Rightarrow \\iff \\Leftarrow \\quad \\qquad');
 const BB: Record<string, string> = { R: 'ℝ', C: 'ℂ', N: 'ℕ', Z: 'ℤ', Q: 'ℚ', E: '𝔼', P: 'ℙ', D: '𝔻', K: '𝕂', 1: '𝟙' };
 const MATENV = set('pmatrix bmatrix Bmatrix matrix vmatrix Vmatrix smallmatrix array');
@@ -154,9 +158,11 @@ function parse(tIn: string[]): Item[] {
     let deco: Deco | null = null;
     const last = (): Item | undefined => items[items.length - 1];
     let delta = false;
+    let boldDeco = false;
     const push = (it: Item) => {
         if (deco && it.t === 'atom') {
-            it[deco] = 1;
+            if (deco === 'vec' && boldDeco && /^[A-Z]$|^(Sigma|Lambda|Phi|Pi|Gamma|Theta|Omega)$/.test(String(it.base))) it.bold = 1;
+            else it[deco] = 1;
             deco = null;
         }
         if (delta && it.t === 'atom') {
@@ -282,6 +288,7 @@ function parse(tIn: string[]): Item[] {
             if (mark) {
                 deco = mark;
                 decoAt = i + 1;
+                boldDeco = k === '\\mathbf' || k === '\\boldsymbol' || k === '\\bm';
             }
             if (t[i + 1] === '{') {
                 const [u, j] = unit(t, i + 1);
@@ -780,6 +787,23 @@ const isNumLike = (its: Item[]) =>
     ) &&
     its.some((x) => x.t === 'num' || x.t === 'inf' || (x.t === 'atom' && x.base === 'pi'));
 const INT = set('i j k l m n N');
+// round 4: an expression in parameters only (U, b + M, 2c): the letters the chart reads as sliders
+const NOPARAM = /^(x|y|z|t|s|i|j|k|l|m|n|N|ell|u|e|d)$/;
+function paramExpr(p: Item[], bin: ReadonlySet<string> | null | undefined): boolean {
+    let atoms = 0;
+    for (const x of p) {
+        if (x.t === 'atom') {
+            const b = String(x.base);
+            if (!/^[a-zA-Z]$/.test(b) || NOPARAM.test(b) || x.star || x.prime || x.vec || x.hat || x.bar || (x.sub && !/^[0-9]$/.test(x.sub)) || (bin && bin.has(b))) return false;
+            atoms++;
+            continue;
+        }
+        if (x.t === 'num' || x.t === 'frac' || x.t === 'lb' || x.t === 'rb') continue;
+        if (x.t === 'sym' && /^(\+|-|cdot|\/)$/.test(String(x.v))) continue;
+        return false;
+    }
+    return atoms > 0;
+}
 const IDX = set('n k t m i j');
 
 /** Split a list of items at its top-level relations. */
@@ -872,6 +896,8 @@ interface VecLit {
     stoch: boolean;
     /** How many entries hold a letter. */
     withLetter: number;
+    /** Round 4: the entries as numbers (NaN where an entry is no single number). */
+    vals: number[];
 }
 
 /** One element of a side read as a vector expression. */
@@ -934,7 +960,7 @@ function vecLiteral(its: Item[], i: number): VecLit | null {
         const zero = vals.every((v) => v === 0);
         const stoch = vals.every((v) => v >= 0 && v < 1) && Math.abs(vals.reduce((a, b) => a + b, 0) - 1) < 1e-9;
         const withLetter = entries.filter((e) => (entryLetters(e)?.size ?? 0) > 0).length;
-        return { end, n: entries.length, letters, definite, kind, zero, stoch, withLetter };
+        return { end, n: entries.length, letters, definite, kind, zero, stoch, withLetter, vals };
     };
     if (x.t === 'env') {
         const rows = x.rows ?? [];
@@ -1067,6 +1093,8 @@ function vecSide(its: Item[]): VecEl[] | null {
         if (x.t === 'atom' && !x.star && !x.prime && !x.top && !x.inv) {
             els.push({ k: 'atom', a: x });
             i++;
+            // round 4: an iterate's index (v^{(1)}) belongs to its name
+            if (its[i] && its[i].t === 'layer') i++;
             continue;
         }
         // a unit after a number is a label (3 N e_x); \circ between vectors is the dot product
@@ -1135,6 +1163,11 @@ function vectorFacts(parts0: Item[][], rels0: string[], defs: DefNames): Answers
         parts = parts.slice(0, -1);
         rels = rels.slice(0, -1);
     }
+    // a dot product of written vectors that ends in "\ne 0"
+    if (rels.length >= 2 && rels[rels.length - 1] === 'ne' && isNumLike(parts[parts.length - 1])) {
+        parts = parts.slice(0, -1);
+        rels = rels.slice(0, -1);
+    }
     if (!rels.every((r) => r === 'eq' || r === 'approx')) return f;
     parts = parts.filter((p) => !(p.length === 1 && p[0].t === 'sym' && p[0].v === '\\dots'));
     if (!parts.length || parts.some((p) => !p.length)) return f;
@@ -1179,7 +1212,31 @@ function vectorFacts(parts0: Item[][], rels0: string[], defs: DefNames): Answers
     const rest = headed ? cls.slice(1) : cls;
     // the first side must be a name or a vector expression; a letter times a written vector anywhere is a line
     // (an operator name with letters is a name too: \operatorname{proj}_a b = ...)
-    const opHead = parts.length >= 2 && parts[0][0].t === 'name' && parts[0].slice(1).every((x) => x.t === 'atom');
+    // a numeric gradient (\nabla f = (3, 2), \nabla f(x^*) = (2, 2)) is a name with a value: an arrow only when the text says so
+    const nablaHead = parts.length === 2 && parts[0][0].t === 'sym' && parts[0][0].v === 'nabla';
+    const opHead = nablaHead || (parts.length >= 2 && parts[0][0].t === 'name' && parts[0].slice(1).every((x) => x.t === 'atom'));
+    // any expression of small letters = one written tuple (x^* - x^{(0)} = (3, 1)): an arrow only when the text says so
+    if (
+        !headed &&
+        !opHead &&
+        cls[0].c === 'unknown' &&
+        parts.length === 2 &&
+        cls[1].c === 'lit' &&
+        !parts[0].some((x) => x.t === 'env' || x.t === 'big' || x.t === 'open' || x.t === 'top' || (x.t === 'sym' && x.v === 'nabla') || (x.t === 'atom' && /^[A-Z]/.test(String(x.base)))) &&
+        parts[0].filter((x) => x.t === 'atom').length >= 2
+    ) {
+        const before = f.tupleSide;
+        conclude(litsOf(cls[1]), false, false);
+        f.vecLit = false;
+        f.vecAnyHead = !!f.vecPlain || litsOf(cls[1])[0].definite;
+        f.vecPlain = false;
+        f.tupleSide = before;
+        if (f.vecAnyHead) {
+            f.vecPlain = true;
+            f.vecHeadData = true;
+        }
+        return f;
+    }
     if (!headed && !opHead && (cls[0].c === 'unknown' || cls[0].c === 'other' || cls[0].c === 'num')) return f;
     // V10: a capital times something on the first side is a matrix product, never a vector calculation
     if (cls.some((s) => s.c === 'param') || (cls[0].c === 'namefactor' && atomsOf(cls[0]).some((x) => /^[A-Z]$/.test(String(x.base)) && !x.vec))) return f;
@@ -1189,8 +1246,14 @@ function vectorFacts(parts0: Item[][], rels0: string[], defs: DefNames): Answers
         hasProd = conc.some((s) => s.c === 'prod');
         const numSide = rest.some((s) => s.c === 'num');
         // the spelling is sure: a product, a sum or a multiple of written vectors, or a side of arrow names next to the tuple
-        const sure = hasProd || conc.some((s) => s.c === 'comb') || rest.some((s) => (s.c === 'names' || s.c === 'nameprod') && atomsOf(s).every((x) => x.vec));
-        if (!numSide || hasProd) conclude(conc.flatMap(litsOf), sure, false);
+        const sure = hasProd || conc.some((s) => s.c === 'comb') || rest.some((s) => (s.c === 'names' || s.c === 'nameprod') && atomsOf(s).every((x) => x.vec || x.bold));
+        if (!numSide || hasProd) conclude(conc.flatMap(litsOf), sure && !nablaHead, false);
+        if (nablaHead) {
+            f.vecNabla = !!(f.vecLit || f.vecPlain);
+            f.vecLit = false;
+            f.vecPlain = false;
+            f.vecSoft = false;
+        }
     } else {
         // a sum, a difference or a multiple of names
         const side = rest.find((s) => s.c === 'names' && (atomsOf(s).length >= 2 || s.scalar));
@@ -1208,14 +1271,19 @@ function vectorFacts(parts0: Item[][], rels0: string[], defs: DefNames): Answers
     }
     if (head) {
         const base = String(head.base);
-        f.vecHeadDeco = !!head.vec || (!!head.hat && /^[a-z]$/.test(base));
-        f.vecHeadKnown = defs.sure.has(dkey(head)) || defs.deco.has(base);
-        f.vecHeadCap = /^[A-Z]$/.test(base) && !head.vec && !hasProd;
+        f.vecHeadDeco = !!head.vec || !!head.bold || (!!head.hat && /^[a-z]$/.test(base));
+        // known as a vector: an arrow elsewhere, a matrix applied to it in a formula nearby (A v), a basis vector e_1, e_2, e_3
+        f.vecHeadKnown = defs.sure.has(dkey(head)) || defs.deco.has(base) || (defs.applied.has(base) && !/^[xyz]$/.test(base)) || (base === 'e' && /^[123]$/.test(head.sub ?? ''));
+        f.vecHeadName = base + (head.sub ? '_' + head.sub : '');
+        // T3: d is the search direction of a method in a note on optimisation
+        f.vecHeadD = base === 'd' && !head.sub;
+        f.vecHeadCap = /^[A-Z]$/.test(base) && !head.vec && !head.bold && !hasProd;
         // x, y, z, b: the letters of a linear system and of data points; pi, mu, nu: distributions
         f.vecHeadSys = /^[xyz]$/.test(base) || (base === 'b' && !head.vec);
+        f.vecHeadIter = !!head.layer && !/^[uvwd]$/.test(base);
         // in a note on learning only a weight or normal vector without an index is an arrow (V7)
         f.vecHeadData = !(/^[wn]$/.test(base) && !head.sub);
-        f.vecProb = /^(pi|mu|nu)$/.test(base);
+        f.vecProb = /^(pi|mu|nu|lambda)$/.test(base);
     }
     if (!head) f.vecHeadData = true;
     return f;
@@ -1352,7 +1420,11 @@ ctxML ctxComplex ctxSignal ctxProb ctxSeq ctxPoint ctxInterval ctxVec
 paramPair anyLogic anyVec anyPm afterWord genericProgram laterEval bodyHasInit
 prose rowCont unreadable ctxLine c_lhsCtxVar ivHasInf laterSolve pointCoords
 vecLit vecPlain vecNamesDef vecBasis vecBasisPlain vecHeadDeco vecHeadKnown vecHeadCap ctxVecWord ctxPointWord ctxTable
-hcRandom vecHeadSys vecHeadData vecProb vecZero vecStoch vecSoft noteVec ctxSolveWord ctxDim ivDef ivImage setCallBad tupleSide matAlone prodWritten prodMixed prodEval prodMap matKnown setCondRel setSpace setText setEmpty mapRuleLater`.split(/\s+/);
+hcRandom vecHeadSys vecHeadData vecProb vecZero vecStoch vecSoft noteVec ctxSolveWord ctxDim ivDef ivImage setCallBad tupleSide matAlone prodWritten prodMixed prodEval prodMap matKnown setCondRel setSpace setText setEmpty mapRuleLater
+setAbstract c_lhsXY c_midX12 c_midXY c_symVar bigM binVar bodyOnlyXk recMatStep ivLowHead
+ctxProg2 ctxX3 ctxXVec ctxXScalar afterIndicator supName eqvForms ctxPlaneName argPair
+ha_x1 ha_x2 setEqCall ivNoIv c_rhsParam c_endsPar lin2 extraVar nlOne vecBound ctxPairNear vecNabla ctxVecAfter vecHeadIter ctxIndicator ctxNumRow ha_u ctxProgWord
+runOne hasOp lagr detPoly lin2eq ctxCountNoun vecHeadD runZ hasUnit`.split(/\s+/);
 const INDEX = new Map(FEATURES.map((n, i) => [n, i]));
 const at = (name: string): number => {
     const k = INDEX.get(name);
@@ -1360,8 +1432,38 @@ const at = (name: string): number => {
     return k;
 };
 
-/** Key words of the note's name and of the words around the formula. */
-function noteContext(ctx: RecognizeContext | undefined): Answers {
+/** The other formulas of a context line. The window of 10 words may cut a formula, so the dollars are paired from [F] outwards. */
+export function contextFormulas(context: string | null | undefined): string[] {
+    const c = String(context ?? '');
+    const k = c.indexOf('[F]');
+    const out: string[] = [];
+    const b = (k >= 0 ? c.slice(0, k) : c).split('$');
+    const a = k >= 0 ? c.slice(k + 3).split('$') : [];
+    for (let i = b.length - 2; i >= 0; i -= 2) if (b[i].trim()) out.unshift(b[i]);
+    for (let i = 1; i < a.length - 1; i += 2) if (a[i].trim()) out.push(a[i]);
+    return out;
+}
+
+/** Round 4: what the words and the other formulas of the context line say about the note (no features themselves). */
+interface ContextFacts {
+    /** Letters a matrix is applied to in the formulas nearby (A v, Tv = 2v). */
+    applied: Set<string>;
+    /** The text right after the formula calls it a square or a power. */
+    powWord: boolean;
+    /** A formula nearby treats x as a number. */
+    xScalarCtx: boolean;
+    /** The binary letters (switches) of the note. */
+    bin: Set<string>;
+    /** A binary word stands nearby and names no letter. */
+    binAll: boolean;
+    /** The other formulas of the context line. */
+    others: string[];
+    /** x_1 and x_2 are two arguments of one function, not the coordinates of a plane. */
+    argPair: boolean;
+}
+
+/** Key words of the note's name and of the words around the formula; round 4: the role words, the program facts and the switches. */
+function noteContext(ctx: RecognizeContext | undefined): { f: Answers; facts: ContextFacts } {
     const note = String(ctx?.note ?? '').toLowerCase();
     const c = String(ctx?.context ?? '');
     const f: Answers = {};
@@ -1371,35 +1473,108 @@ function noteContext(ctx: RecognizeContext | undefined): Answers {
     f.ctxSignal = /signal|regelung|control|laplace|systemtheorie/.test(note) || /Übertragungsfunktion|transfer function|Laplace|z-Transform|Regler|Strecke|Kreis\b|Glied/.test(c);
     f.ctxProb = /wahrschein|stochast|statisti|probab|zeitreihen|okonometrie|econometr/.test(note);
     f.ctxSeq = /analysis-i\b|analysis-1|folgen|sequences/.test(note) || /\bFolge\b|sequence|Grenzwert|\bexplizit\b/.test(c);
-    f.ctxPoint = /Punkt|[Pp]oint|Kante|[Ee]dge|bei \[F\]|at \[F\]|Kandidat|Lösung|Optimum|Nullen|Tupel|Kruskal|Scheitel|Ecke|Tangent|Bsp\.? \d|Max |Min /.test(c);
+    f.ctxPoint = /[Pp]unkt|[Pp]oint|Kante|[Ee]dge|bei \[F\]|at \[F\]|Kandidat|Lösung|Optimum|Nullen|Tupel|Kruskal|Scheitel|Ecke|Tangent|Bsp\.? \d|Max |Min /.test(c);
     f.ctxInterval = /Intervall|[Ii]nterval|auf \[F\]|on \[F\]|in \[F\]|into|segment|[Bb]ereich|to \[F\]/.test(c) || /\\to\s*$/.test(c.split('[F]')[0].replace(/\$\s*$/, ''));
     f.ctxVec = /optimi|ganzzahlig|operations-research/.test(note) || /\\mathbb\{[RZ]\}\^n|\bLP\b|Relaxation|Ax \\le|Ax =/.test(c);
-    f.ctxLine = /(Gerade|[Ll]ine|Linie|Parallele)\b[^.$]{0,12}\$?\s*\[F\]/.test(c);
+    f.ctxLine =
+        /(Gerade|[Ll]ine|Linie|Parallele)\b[^.$]{0,12}\$?\s*\[F\]/.test(c) ||
+        /(senkrecht|waagerecht|vertikal|vertical|horizontal)\w*\s+(bei|at)\s+\$?\s*\[F\]/i.test(c) ||
+        /\[F\]\s*\$?\s*(is |ist )?(tight|active|aktiv|bindend)\b/i.test(c);
     f.ctxPoint = f.ctxPoint || /(durch|through|[Ss]palten|columns?|entry|Eintrag|Punkte?n?|points?|[Vv]ektor(en)?|vectors?)\b[^.$]{0,25}\$?\s*\[F\]/.test(c);
     // words right before the formula (rubric_r3.md V1, V2); other formulas may stand in between, a sentence end may not
-    const GAP = '(?:(?!\\.\\s)[^\\n]){0,45}\\[F\\]';
     const before = c.split('[F]')[0];
+    // round 4: the role word NEAREST before the formula decides (vector, point, value); words of round 3 plus
+    // words other writers use. The position of the last word of each class in the 45 (30) characters before the formula.
+    const lastAt = (re: RegExp, n: number) => {
+        let t = before.slice(-n);
+        const cut = t.search(/[.?!]\s(?![^]*[.?!]\s)/);
+        if (cut >= 0) t = t.slice(cut + 1);
+        let pos = -1;
+        for (const m of t.matchAll(re)) pos = before.length - t.length + (m.index ?? 0);
+        return pos;
+    };
+    const VECW =
+        /vektor|vector|pfeil|arrow|richtung|direction|verschiebung|displacement|translation|kraft|kräfte|force|geschwindigkeit|velocity|beschleunigung|acceleration|impuls|momentum|normale|\bnormals?\b|spalte|column|skalarprodukt|scalar product|dot product|kreuzprodukt|cross product|orthogonal|senkrecht|perpendicular|kollinear|collinear|parallel|projiz|projekt|project|spanned|\bspans?\b|aufgespannt|spannen|orthonormal|basis|linear unabhängig|linearly independent|linearkombination|linear combination|eigenraum|eigenspace|eigenwert|eigenvalue|\bkern\b|kernel|null ?space/gi;
+    const POINTW = /punkt|point|ecke|eckpunkt|corner|vertex|vertices|koordinaten|coordinates?|scheitel|zentrum|cent(er|re)\b|ursprung|origin\b|(durch|through|bei|at|in)\s+\$?\s*$/gi;
+    const SOLVEW =
+        /lösung|solution|löst|lösen|solve[sd]?|gleichungssystem|linear system|\bLGS\b|optim|least squares|kleinste[nr]? quadrate|fixpunkt|fixed point|startwert|start value|iterat|homogen|verteilung|distribution|wahrscheinlichkeit|probabilit|data point|datenpunkt|minimi[sz]er|maximi[sz]er|strateg|payoff|auszahlung|preis|price|bündel|bundle|schranke|bounds?\b|anteil|shares?\b|liste\b|list\b|tupel|tuple|farbe|colou?r|rgb/gi;
+    const decoAt = (() => {
+        const t = before.slice(-90);
+        let pos = -1;
+        for (const m of t.matchAll(/\\(vec|overrightarrow)(?![a-zA-Z])/g)) pos = before.length - t.length + (m.index ?? 0);
+        return pos;
+    })();
+    const vecAt = Math.max(lastAt(VECW, 45), decoAt);
+    const pointAt = lastAt(POINTW, 45);
+    const solveAt = lastAt(SOLVEW, 30);
+    const eigenNear = lastAt(/eigenve[ck]tor/gi, 45) >= 0;
+    const gradientNormal = /(der|the) Gradient\s*\$?\s*$/.test(before) && /senkrecht|perpendicular|orthogonal|normal/i.test(before);
     f.ctxVecWord =
-        new RegExp(
-            '(vektor|vector|pfeil|arrow|richtung|direction|verschiebung|displacement|kraft|kräfte|force|geschwindigkeit|velocity|beschleunigung|acceleration|normale|\\bnormals?\\b|spalte|column|skalarprodukt|scalar product|dot product|kreuzprodukt|cross product|orthogonal|senkrecht|perpendicular|kollinear|collinear|parallel|projiz|projekt|project|spanned|aufgespannt|orthonormal|basis)' +
-                GAP,
-            'i'
-        ).test(c) ||
-        // the text right there writes letters with arrows, or the formula stands in a table row next to a matrix
-        /\\(vec|overrightarrow)(?![a-zA-Z])/.test(before.slice(-90)) ||
+        (vecAt >= 0 && vecAt >= pointAt && vecAt >= solveAt) ||
+        eigenNear ||
+        // "[F] is a vector", or the formula stands in a table row next to a matrix
         /\[F\]\s*(is |ist )?(a|ein|als|as a)\s+(vektor|vector)/i.test(c) ||
+        /\[F\]\s*,?\s*(is|ist)\s[^.$|]{0,24}?(vektor|vector|richtung|direction)/i.test(c) ||
+        gradientNormal ||
         (/\s\|\s/.test(c) && /\\(begin|end)\{[pbB]?matrix\}/.test(c));
-    f.ctxPointWord = new RegExp('(punkt|point|ecke|eckpunkt|corner|vertex|vertices|koordinaten|coordinates?)\\w*\\b' + GAP, 'i').test(c);
-    f.ctxSolveWord = new RegExp(
-        '(lösung|solution|löst|lösen|solve[sd]?|gleichungssystem|linear system|\\bLGS\\b|optim|least squares|kleinste[nr]? quadrate|fixpunkt|fixed point|startwert|start value|iterat|homogen|verteilung|distribution|wahrscheinlichkeit|probabilit|data point|datenpunkt)' +
-            GAP.replace('45', '30'),
-        'i'
-    ).test(c);
+    f.ctxVecAfter = /\[F\]\s*,?\s*(is|ist)\s[^.$|]{0,24}?(vektor|vector|richtung|direction)/i.test(c) || gradientNormal;
+    // a constraint that holds only when a switch is set: "[F] nur wenn $y = 1$", "[F] if $y = 0$"
+    f.ctxIndicator = /\[F\]\s*(nur |only )?(wenn|falls|if|when)\s*\$\s*\\?[a-z]+(_\{?\w\}?)?\s*=\s*[01]\s*\$/i.test(c);
+    f.ctxPointWord = pointAt >= 0;
+    f.ctxSolveWord = solveAt >= 0;
+    // round 4: what the formulas next to this one say about the note's program
+    const others = contextFormulas(c);
+    // words of a program right there (for constraints in decision variables with other names)
+    f.ctxProgWord = /nebenbedingung|restriktion|constraint|subject to|s\.\s?t\.|kapazit|capacity|grenze|ressource|resource|maschine|machine|zulässig|feasible/i.test(c);
+    // C2: a count of objects (m + 1 variables, m - 1 dimensional)
+    const [beforeF, afterF] = [c.split('[F]')[0], c.split('[F]')[1] ?? ''];
+    f.ctxCountNoun =
+        /^\s*\$?\s*-?\s*(dimensional|variables?\b|variablen|unknowns?\b|unbekannte|equations?\b|gleichungen|steps?\b|schritte|elements?\b|elemente|points?\b|punkte|nodes?\b|knoten|edges?\b|kanten|constraints?\b|nebenbedingungen|rows?\b|columns?\b|zeilen|spalten|terms?\b|summanden|entries|einträge|parameters?\b|times\b|mal\b|stück|items?\b|samples?\b|freiheitsgrade|degrees|stellen|digits?\b|bits?\b|bytes?\b|permutation|operation|vergleiche|comparisons?\b|multiplikation|additionen|blätter|leaves|ebenen|levels?\b|kinder|children|floats?\b|zahlen|numbers?\b|werte|values?\b)/i.test(afterF) ||
+        /(tiefe|depth|höhe\b|height|freiheitsgrade|degrees of freedom|kanten|edges|kinder|children|eltern|parents?|anzahl|number of|index|indizes|position)\b[^.$|]{0,30}(\|\s*)?\$?\s*$/i.test(beforeF) ||
+        (/(durch|by|mit|with)\s*\$?\s*$/i.test(beforeF) && /^\s*\$?\s*(ersetz|teil|dividier|replace|divide|multipli)/i.test(afterF));
+    // a table row whose other cells are numbers: "| D | [F] | $1600$ |"
+    f.ctxNumRow = /^\s*\|?\s*([^|$]{0,12}\|)?\s*\[F\]\s*(\|\s*\$?\s*-?[0-9][^|a-zA-Z]*\$?\s*)+\|?\s*$/.test(c);
+    const lone = (ch: string) => new RegExp('(^|[^a-zA-Z\\\\])' + ch + '(?![a-zA-Z_])');
+    const INEQW = /\\le|\\ge|<|>|≤|≥|\\max|\\min/;
+    // a program in the plane: a formula there holds x and y (or x_1 and x_2) with an inequality or a goal
+    f.ctxProg2 = others.some((o) => INEQW.test(o) && lone('x').test(o) && lone('y').test(o));
+    // another bare pair of numbers next to this one: points in a list
+    f.ctxPairNear = others.some((o) => /^\s*\(\s*-?[0-9][0-9.{},]*\s*[,;|]\s*-?[0-9][0-9.{},]*\s*\)\s*$/.test(o));
+    // letters a matrix is applied to in the formulas nearby (A v, Tv = 2v)
+    const applied = new Set<string>();
+    for (const o of others) for (const m of o.matchAll(/(?:^|[^a-zA-Z\\])[A-Z]\s*(?:\\,|\\cdot)?\s*([a-z])(?![a-zA-Z(_^{'])/g)) applied.add(m[1]);
+    const powWord = /^\s*(\*\*)?\s*(is|ist|for|für|ohne|als)\b[^.$|]{0,24}?(quadrat|square|parab|potenz|power)/i.test(afterF);
+    f.ctxX3 = others.some((o) => /x_\{?([3-9ijnk]|[1-9][0-9])\}?/.test(o) || /\\mathbb\{?[RZ]\}?\^\{?([3-9nmdk])/.test(o));
+    f.ctxXVec = others.some((o) => /\\mathbb\{?[RZNB]\}?(_\{?[^}^]*\}?)?\^\{?([2-9nmdk])|\\\{0,\s*1\\\}\^|[A-Z]\s*x(?![a-zA-Z_^])|(\\top|\^T|\^\{T\})\s*x(?![a-zA-Z_])|x_\{?[0-9ijnk]|\\(mathbf|vec|boldsymbol)\{?\s*x/.test(o));
+    const xScalarCtx = others.some((o) => lone('x').test(o) && /x\s*\^|\\(frac|sqrt|ln|exp|sin|cos|lvert)|\|\s*x|e\^|[a-zA-Z]\(x\)/.test(o));
+    // binary variables: letters declared in {0, 1}, or named next to a word (binär, binary, Big-M, indicator)
+    const bin = new Set<string>();
+    const binWord = /bin[aä]r|binar(y|ies)|\b0-1\b|0\/1|boole|indi[ck]ator|big-?\s?m\b|schalt|\bswitch(es)?\b|either-or|entweder-oder/i.test(c);
+    // a note on mixed-integer programs: y, z and delta are its switches
+    if (/milp|big-m|ganzzahl|integer|binaer|binar/.test(note)) for (const q of ['y', 'z', 'delta']) bin.add(q);
+    for (const o of others) {
+        const m = /^(.*?)\\in\s*\\\{\s*0\s*,\s*1\s*\\\}/.exec(o);
+        if (m) for (const q of m[1].matchAll(/\\?([a-zA-Z]+)(?![a-zA-Z])/g)) if (!/^(in|quad|text|mathbb|dots|ldots|cdots)$/.test(q[1])) bin.add(q[1]);
+        if (binWord) {
+            const q = /^\s*\\?([a-zA-Z]+)(_\{?\w+\}?)?\s*$/.exec(o);
+            if (q) bin.add(q[1]);
+        }
+    }
+    const binAll = binWord && bin.size === 0;
+    // "the [F]-plane", "the [F]-axis": the formula is a name
+    f.ctxPlaneName = /\[F\]\s*-(Ebene|plane|Achse|axis|Richtung|direction|Koordinate|coordinate)/i.test(c);
+    // x_1 and x_2 are two arguments of one function (f(x_1) = f(x_2), injective, monotone), not the coordinates of a plane
+    const argPair = others.some((o) => /[a-zA-Z]\(x_\{?[12]\}?\)/.test(o)) || /injektiv|injective|monoton/i.test(c);
+    f.ctxPoint = f.ctxPoint || /[Mm]inim|[Mm]axim|[Ee]xtrem|[Ss]attel|[Ss]addle|[Ss]tation[aä]r|[Kk]ritisch|[Cc]ritical|[Ss]chnitt|[Ii]ntersect/.test(beforeF.slice(-40));
     // a general dimension in the text or in the formula: R^n, m x n (a generic matrix, no concrete map)
     f.ctxDim = /\\mathbb\{?R\}?\^\{?[nmdk]|[mn]\s*\\times\s*[nmk]/.test(c);
-    f.ctxTable = /(kostenmatrix|cost matrix|kostentabelle|payoff|auszahlung|tabelle|table\b|zuordnung|assignment|ungarisch|hungarian|transport|distanz|distance|entfernung|adjazenz|adjacency|datenmatrix|data matrix|tableau|zeilenminim|spaltenminim|row minim|column minim)/i.test(c);
+    f.ctxTable =
+        /(kostenmatrix|cost matrix|kostentabelle|\bkosten\b|\bcosts?\b|payoff|auszahlung|(?<![a-zäöü])spiel|summenspiel|matrixspiel|\bgames?\b|bimatrix|confusion|konfusion|kontingenz|contingency|häufigkeit|frequenc|tabelle|table\b|zuordnung|assignment|ungarisch|hungarian|transport|distanz|distance|entfernung|adjazenz|adjacency|datenmatrix|data matrix|tableau|zeilenminim|spaltenminim|row minim|column minim)/i.test(
+            c
+        );
+    if (/game-theory|spieltheorie|matrixspiel/.test(note)) f.ctxTable = true;
     f.ctxSubst = /(Subst\w*|[Ss]etze|Sei|Let|Mit|With|with|where|wobei|mit)\s*\$?\s*\[F\]/.test(c);
-    return f;
+    return { f, facts: { applied, powWord, xScalarCtx, bin, binAll, others, argPair } };
 }
 
 /**
@@ -1418,10 +1593,16 @@ interface DefNames {
     deco: Set<string>;
     doms: Set<string>;
     ctxDim?: boolean;
+    /** Round 4: the note's switches (binary letters), a binary word without a letter, a {0, 1} declaration in the span itself. */
+    bin: Set<string>;
+    binAll: boolean;
+    spanBin: boolean;
+    /** Round 4: the letters a matrix is applied to in the formulas nearby. */
+    applied: Set<string>;
 }
 
 function defNames(defs: unknown): DefNames {
-    const out: DefNames = { names: new Set(), mats: new Set(), vecs: new Set(), sure: new Set(), nmats: new Set(), mats3: new Set(), deco: new Set(), doms: new Set() };
+    const out: DefNames = { names: new Set(), mats: new Set(), vecs: new Set(), sure: new Set(), nmats: new Set(), mats3: new Set(), deco: new Set(), doms: new Set(), bin: new Set(), binAll: false, spanBin: false, applied: new Set() };
     for (const d of Array.isArray(defs) ? (defs as unknown[]) : []) {
         const m = /^\s*(\\?[A-Za-z]+)\s*\(\s*[a-z]\s*\)\s*:?=/.exec(String(d));
         if (m) out.names.add(m[1].replace('\\', ''));
@@ -1444,10 +1625,7 @@ function noteValues(dn: DefNames, ctx: RecognizeContext | undefined): DefNames {
     };
     for (const d of Array.isArray(ctx?.defs) ? ctx.defs : []) take(d);
     const c = String(ctx?.context ?? '');
-    if (c.includes('$'))
-        c.split('$').forEach((piece, i) => {
-            if (i % 2 === 1 && piece.length > 2 && piece !== '[F]') take(piece);
-        });
+    if (c.includes('$')) for (const piece of contextFormulas(c)) if (piece.length > 2) take(piece);
     return dn;
 }
 
@@ -1461,6 +1639,8 @@ interface Product {
     m: Item;
     v: Item[];
     big: boolean;
+    /** Round 4: the matrix is named with numbers in brackets (R(90°) v): its value is known. */
+    viaCall?: boolean;
 }
 
 /** The features of one part, its head's name, and the name of a map (f: D \to \mathbb{R}) it defines. */
@@ -1527,6 +1707,8 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
     f.op_sum = bigs.some((b) => b.name === 'sum');
     f.op_prod = bigs.some((b) => b.name === 'prod');
     f.op_nabla = has((x) => x.t === 'sym' && x.v === 'nabla');
+    // round 4: \Omega(n) of a running time
+    const bigOmega = all.some((x, i) => x.t === 'atom' && x.base === 'Omega' && !x.sub && all[i + 1] && all[i + 1].t === 'open' && all[i + 1].v === '(' && all.slice(i + 2).some((y) => y.t === 'atom' && /^[nmk]$/.test(String(y.base))));
     let ddx = has((x) => x.t === 'sym' && x.v === 'partial') || atoms.some((a) => a.dot || a.dd);
     for (let i = 0; i + 1 < n; i++) {
         if (all[i].t === 'atom' && all[i].base === 'd' && !all[i].sub && all[i + 1].t === 'atom' && (i === 0 || all[i - 1].t === 'lb' || (all[i - 1].t === 'sym' && all[i - 1].v === '/') || all[i - 1].t === 'frac')) {
@@ -1538,6 +1720,7 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
     }
     f.op_ddx = ddx;
     f.op_bigO =
+        bigOmega ||
         has((x) => x.t === 'bigO') ||
         all.some(
             (x, i) =>
@@ -1578,7 +1761,7 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
     f.hasInf = has((x) => x.t === 'inf');
     f.hasStar = atoms.some((a) => a.star) || has((x) => x.t === 'star');
     f.hasTop = has((x) => x.t === 'top');
-    f.hasVec = atoms.some((a) => a.vec);
+    f.hasVec = atoms.some((a) => a.vec || a.bold);
     f.hasNorm = has((x) => x.t === 'sym' && x.v === '\\|');
     f.hasAngle = has((x) => x.t === 'sym' && x.v === 'angle');
     f.hasSetOps = has((x) => x.t === 'sym' && /^\\(cup|cap|setminus|emptyset|varnothing|times|circ|otimes|oplus)$/.test(String(x.v))) || has((x) => x.t === 'sym' && x.v === 'times');
@@ -1699,6 +1882,90 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
         });
         nl = first.size;
     }
+    {
+        const ks = [...letters.keys()];
+        // C1, C3 (final text): the note's real variable (x, t, q, x_1, x_2) with parameters as sliders, or ONE other letter alone
+        const T1 = /^(x|t|q|x_1|x_2)$/;
+        const CNT = /^(n|k|i|j|m)$/;
+        const SECOND = /^(y|z|s|u|v|w|j|l|theta|varphi|omega)(_.*)?$|^x_(?!1$|2$).+$/;
+        const t1 = ks.filter((k) => T1.test(k));
+        let run: string | null = null;
+        let ok = false;
+        if (t1.length === 1) {
+            run = t1[0];
+            const others = ks.filter((k) => k !== run);
+            ok =
+                others.length <= 3 &&
+                others.every((k) => {
+                    const a = letters.get(k);
+                    return !!a && !SECOND.test(k) && !a.vec && !a.bold && !a.star && !a.hat && !a.bar && !a.cal && !defs.names.has(String(a.base)) && !defs.mats.has(String(a.base));
+                });
+            // a count in an exponent next to the variable (x^k) is a second running letter
+            if (ok && others.some((k) => CNT.test(k))) {
+                for (let i = 0; i < body.length && ok; i++)
+                    if (body[i].t === 'pow') {
+                        let dd = 0;
+                        for (let j = i + 1; j < body.length; j++) {
+                            if (body[j].t === 'lb') dd++;
+                            else if (body[j].t === 'rb' && --dd === 0) break;
+                            else if (body[j].t === 'atom' && CNT.test(key(body[j]))) ok = false;
+                        }
+                    }
+            }
+        } else if (t1.length === 0 && ks.length === 1) {
+            // ONE letter alone, also a parameter (p(1-p), 1/\lambda, 4d^2, T - 1); not y, z, s (variables of other cards), no vector,
+            // matrix or random variable, and no standard name written with an operation (\sigma^2, R^2, S^2, C^1, A^{-1}, 1 - \alpha, 1 - \beta)
+            const a = letters.get(ks[0]);
+            if (a) {
+                const b = String(a.base);
+                const pw = body.findIndex((x) => x.t === 'pow');
+                const stdName =
+                    (body.length <= 6 && pw === 1 && body[0] === a && (/^(sigma|R|S|s|C|r|a)$/.test(b) || (/^[A-Z]$/.test(b) && body.some((x) => x.t === 'sym' && x.v === '-')))) ||
+                    (/^(alpha|beta)$/.test(b) && body.length === 3 && body[0].t === 'num' && body[0].v === '1') ||
+                    (/^(alpha|beta|gamma|tau|delta|varepsilon|mu|omega|theta|varphi|pi|rho|eta)$/.test(b) && !body.some((x) => x.t === 'fn' || x.t === 'pow'));
+                // (small Latin letters and lambda, sigma, phi, xi, theta only; no index: capitals and indexed letters are names far too often)
+                if (
+                    /^([a-z]|lambda|sigma|varphi|xi|theta)$/.test(b) &&
+                    !a.sub &&
+                    !defs.vecs.has(b) &&
+                    !/^(y|z|s|e|d|o|l|f|g|h)$/.test(b) &&
+                    !a.vec &&
+                    !a.bold &&
+                    !a.star &&
+                    !a.prime &&
+                    !a.hat &&
+                    !a.bar &&
+                    !a.cal &&
+                    !a.top &&
+                    !a.inv &&
+                    !defs.mats.has(b) &&
+                    !defs.names.has(b) &&
+                    !stdName
+                ) {
+                    run = ks[0];
+                    ok = true;
+                }
+            }
+        }
+        if (ok && all.some((x) => x.t === 'sym' && x.v === '.')) ok = false; // v2.3.1 is a version, no formula
+        // z alone (the level of a family of lines): only in a note on optimisation (elsewhere z is complex or a coordinate)
+        f.runZ = ks.length === 1 && ks[0] === 'z';
+        // x^0 is the name of the constant term
+        if (ok && body.some((x, i) => x.t === 'pow' && body[i + 2] && body[i + 2].t === 'num' && body[i + 2].v === '0' && body[i + 3] && body[i + 3].t === 'rb')) ok = false;
+        if (ok && body.some((x, i) => x.t === 'atom' && key(x) !== run && (/^[A-Z]/.test(String(x.base)) || !!x.sub) && body[i + 1] && body[i + 1].t === 'open' && body[i + 1].v === '(')) ok = false;
+        f.runOne = ok;
+        f.runKey = ok ? run : null;
+        // at least one operation (a number as a factor, a sum, a power, a fraction, a root, a function, a minus in front)
+        f.hasOp = (n >= 2 && all.some((x) => x.t === 'num' || x.t === 'pow' || x.t === 'frac' || x.t === 'fn' || (x.t === 'sym' && /^(\+|-|\/|\|)$/.test(String(x.v))))) || (!!f.fnMaxMin && n >= 4);
+        // G3: a Lagrangian L = body in one variable and its multiplier
+        f.lagr =
+            !!head &&
+            ((head.kind === 'atom' && /^(L|calL)$/.test(String(head.a.base))) || (head.kind === 'call' && /^(L|calL)$/.test(head.name.base ?? ''))) &&
+            t1.length === 1 &&
+            ks.includes('lambda') &&
+            ks.every((k) => k === t1[0] || k === 'lambda' || !/^(y|z|s|u|v|w|j|l|theta|varphi|omega)(_.*)?$/.test(k)) &&
+            ks.length <= 4;
+    }
     f.let0 = nl === 0;
     f.let1 = nl === 1;
     f.let2 = nl === 2;
@@ -1708,7 +1975,7 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
     f.let6p = nl >= 6;
     f.let7p = nl >= 7;
     f.capsOnly = nl > 0 && [...letters.values()].every((a) => /^[A-Z]/.test(String(a.base)));
-    f.idxSubs = [...letters.values()].some((a) => /^(i|j|ij|ji|ik|kj)$/.test(String(a.sub)));
+    f.idxSubs = [...letters.values()].some((a) => /^(i|j|ij|ji|ik|kj)$|^[ij][0-9]$|^[0-9][ij]$/.test(String(a.sub)));
     // products of two variables (x y, x_1 x_2)
     const isVar = (x: Item | undefined) => !!x && x.t === 'atom' && /^(x|y)$/.test(String(x.base)) && (!x.sub || x.sub === '1' || x.sub === '2');
     f.varProduct = body.some(
@@ -1796,12 +2063,17 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
             f.ha_prime = !!a.prime;
             const idx = IDX.has(a.sub ?? '') ? (a.sub ?? '') : null;
             f.ha_subIdx = !!idx;
+            f.ha_u = /^[uU]$/.test(String(a.base)) && !a.star && !a.prime;
             f.ha_subNum = /^[0-9]+$/.test(a.sub ?? '') || /^(min|max|eff|ges|kin|pot)$/.test(a.sub ?? '');
             f.bodyHasIdx = !!idx && L(idx);
             f.bodyHasInit = [...letters.values()].some((x) => x.base === a.base && (x.sub === '0' || x.sub === '1'));
             if (a.base === 'y' && !a.sub) f.ha_y = true;
             else if (a.base === 'x' && !a.sub) f.ha_x = true;
-            else if (a.base === 'x' && (a.sub === '1' || a.sub === '2')) f.ha_xsub = true;
+            else if (a.base === 'x' && (a.sub === '1' || a.sub === '2')) {
+                f.ha_xsub = true;
+                if (a.sub === '1') f.ha_x1 = true;
+                else f.ha_x2 = true;
+            }
             else if (a.base === 'z' && !a.sub) f.ha_z = true;
             else if (a.base === 'r' && !a.sub) f.ha_r = true;
             else if (/^(f|g|h|F|L|H|C|R)$/.test(String(a.base))) f.ha_fname = true;
@@ -1860,6 +2132,26 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
                 (!inR && el[0].t === 'atom' && /^(Omega|omega|n|k|v|z|i|j|m|N)$/.test(String(el[0].base))) ||
                 (el[0].t === 'atom' && /^[A-Z]$/.test(String(el[0].base))) ||
                 el.some((x, i) => x.t === 'atom' && x.base === 'C' && el[i + 1] && (el[i + 1].t === 'open' || el[i + 1].t === 'pow'));
+            {
+                // round 4: the element is a pair, or a letter with a real carrier, or x, y, t, u, theta, xi alone
+                const inAt = el.findIndex((x) => x.t === 'rel' && x.v === 'in');
+                const carrier = inAt >= 0 ? el.slice(inAt + 1) : null;
+                const eh = (inAt >= 0 ? el.slice(0, inAt) : el).filter((x) => x.t !== 'sp' && !(x.t === 'sym' && x.v === ';'));
+                const carrierOk = !carrier || carrier.some((x) => x.t === 'bb' || x.t === 'open' || (x.t === 'name' && x.name === 'dom')) || (carrier.length === 1 && carrier[0].t === 'atom' && !carrier[0].cal && defs.doms.has(String(carrier[0].base)));
+                const headOk = !!f.setTuple || (eh.length === 1 && eh[0].t === 'atom' && (!!carrier || /^(x|y|t|u|theta|xi)$/.test(String(eh[0].base))));
+                // the element given by a formula in other letters (x = \lambda a + (1 - \lambda) b): a set in parameter form
+                const c0 = commaSplit(cond)[0] ?? [];
+                const r0 = relSplit(c0);
+                const paramForm =
+                    eh.length === 1 &&
+                    eh[0].t === 'atom' &&
+                    r0.rels[0] === 'eq' &&
+                    r0.parts[0].length === 1 &&
+                    r0.parts[0][0].t === 'atom' &&
+                    key(r0.parts[0][0]) === key(eh[0]) &&
+                    r0.parts[1].some((x) => x.t === 'atom' && !((x.base === 'pi' || x.base === 'e') && !x.sub));
+                f.setAbstract = !carrierOk || !headOk || paramForm;
+            }
             const cr = relSplit(cond);
             const isC = (p: Item[]) => {
                 const c = asCall(p);
@@ -1869,6 +2161,7 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
             f.setRhsCall = cr.parts.length > 1 && isC(cr.parts[cr.parts.length - 1]);
             f.setLe = cr.rels.includes('le') || cr.rels.includes('lt');
             f.setGe = cr.rels.includes('ge') || cr.rels.includes('gt');
+            f.setEqCall = cr.rels.length > 0 && cr.rels.every((r) => r === 'eq') && (!!f.setLhsCall || !!f.setRhsCall) && !f.setTuple;
             f.setCondRel = cr.rels.some((r) => r === 'lt' || r === 'le' || r === 'gt' || r === 'ge' || r === 'eq' || r === 'ne' || r === 'approx');
             // words inside the set other than und / and / oder / or
             f.setCallBad = calls(cond).some((c) => !(c.inner.length === 1 && c.inner[0].t === 'atom' && c.inner[0].base === 'x' && !c.inner[0].sub) && !(c.name.t === 'name' && FNWORD.has(String(c.name.name))) && !(c.name.t === 'atom' && c.name.cal));
@@ -1904,6 +2197,8 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
         } else if (rels[0] === 'eq' && rels.length === 1 && plainAtom(P0)) {
             s = all.slice(P0.length + 1);
             f.ivNamed = true;
+            // round 4: a small letter = a round pair is never a named interval
+            f.ivLowHead = /^[a-z]$|^ell$/.test(String(P0[0].base));
         } else if (rels[0] === 'eq' && parts[1].length && parts[1][0].t === 'sopen' && P0.length >= 5 && P0[0].t === 'open') {
             s = P0;
             f.ivDef = true;
@@ -1948,11 +2243,22 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
                     const str = (p: Item[]) => p.map((x) => x.v ?? x.t).join('');
                     f.ivHasInf = A.some((x) => x.t === 'inf') || B.some((x) => x.t === 'inf');
                     if (f.ivImage && !(f.ivSquare || f.ivHasInf || f.ivSetName)) f.ivImage = false;
+                    {
+                        // round 4: no interval when a >= b, or when its ends are variable letters
+                        const val = (p: Item[]) => {
+                            const q = p[0] && p[0].t === 'sym' && p[0].v === '-' ? p.slice(1) : p;
+                            return q.length === 1 && q[0].t === 'num' ? (q === p ? 1 : -1) * Number(q[0].v) : NaN;
+                        };
+                        const va = val(A);
+                        const vb = val(B);
+                        f.ivNoIv = (!!f.ivRound && va >= vb) || (!!f.ivRound && [A, B].some((p) => plainAtom(p) && /^[xyzt]$/.test(String(p[0].base))) && [A, B].every((p) => plainAtom(p)));
+                    }
                     f.ivZeroSym = f.ivEndsNum && str(A) !== str(B) && (str(A) === '0' || str(A) === '-' + str(B) || A.some((x) => x.t === 'inf') || B.some((x) => x.t === 'inf'));
                 } else if (seps.length >= 2) f.list3 = true;
             }
         }
         if (f.iv) f.numeric = false;
+        if (!f.iv || !f.ivRound) f.ivLowHead = false;
         if (!f.iv) {
             f.ivApprox = false;
             f.ivMember = false;
@@ -2019,11 +2325,18 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
         };
         /** [matrix][vector] over all of a side: which of the two is written out; big: a 3 x 3 matrix or a vector in space (no card) */
         const prodOf = (p0: Item[]): Product | null => {
-            const p = noDots(p0);
+            let p = noDots(p0);
+            // a number in front of the written matrix belongs to it: \tfrac12 (matrix)(vector)
+            const e0 = p.findIndex((x) => x.t === 'env');
+            if (e0 > 0) {
+                const pre = vecSide(p0.slice(0, p0.indexOf(p[e0])));
+                if (pre && pre.every((e) => e.k === 'num' || e.k === 'dot' || e.k === 'pm')) p = p.slice(e0);
+            }
             if (p.length < 2) return null;
             let mEnd = 1;
             let M: 'lit' | 'name';
             let big = false;
+            let viaCall = false;
             if (p[0].t === 'env') {
                 if (!matLit(p[0])) return null;
                 M = 'lit';
@@ -2034,11 +2347,25 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
                 const direct = lit2(p, 1);
                 if (direct && direct.end === p.length) {
                     // the bracket is the vector
-                } else if (p[1].t === 'open' && p[1].v === '(') {
+                } else if (
+                    cap(p[1]) &&
+                    !p[1].vec &&
+                    !p[1].top &&
+                    !p[1].inv &&
+                    !/^[XWZ]$/.test(String(p[0].base) + String(p[1].base)) &&
+                    (() => {
+                        const l2 = lit2(p, 2);
+                        return !!l2 && l2.end === p.length;
+                    })()
+                )
+                    mEnd = 2;
+                else if (p[1].t === 'open' && p[1].v === '(') {
                     let j = 2;
                     while (j < p.length && (p[j].t === 'num' || p[j].t === 'unit' || (p[j].t === 'sym' && /^[,;-]$/.test(String(p[j].v))))) j++;
-                    if (j > 2 && j < p.length && p[j].t === 'close') mEnd = j + 1;
-                    else return null;
+                    if (j > 2 && j < p.length && p[j].t === 'close') {
+                        mEnd = j + 1;
+                        viaCall = true;
+                    } else return null;
                 }
                 // a product of two numeric matrices of the note as the matrix: BA (1, 1)^T
                 if (mEnd === 1 && cap(p[1]) && !p[1].vec && defs.nmats.has(String(p[0].base)) && defs.nmats.has(String(p[1].base))) mEnd = 2;
@@ -2047,7 +2374,9 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
             const l = lit2(p, mEnd);
             if (l && l.end === p.length) return { M, V: 'lit', m: p[0], v: p.slice(mEnd), big: big || l.n !== 2 };
             const v = p[mEnd];
-            if (v && p.length === mEnd + 1 && ((low(v) && !v.top) || (v.t === 'num' && v.vec))) return { M, V: 'name', m: p[0], v: [v], big };
+            if (v && p.length === mEnd + 1 && ((low(v) && !v.top) || (v.t === 'num' && v.vec))) return { M, V: 'name', m: p[0], v: [v], big, viaCall };
+            // round 4: an iterate as the vector (A v^{(1)})
+            if (v && p.length === mEnd + 2 && p[mEnd + 1].t === 'layer' && low(v) && !v.top) return { M, V: 'name', m: p[0], v: [v, p[mEnd + 1]], big, viaCall };
             return null;
         };
         // alone: between the relations and commas around it there is only the matrix, with a number as a factor at most
@@ -2092,6 +2421,19 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
             f.vmatNumeric = mi.square && mi.letters.size === 0 && mi.nums && parts.some((p, q) => p[0] === vm[0] && shortHead(q));
         }
         f.detAny = has((x) => x.t === 'det');
+        {
+            // E1: det(head) = ... = a polynomial in lambda
+            const lam = (p: Item[]) => p.filter((x) => x.t === 'atom' && !((x.base === 'pi' || x.base === 'e') && !x.sub));
+            const tail = parts.slice(1);
+            f.detPoly =
+                P0.length > 1 &&
+                P0[0].t === 'det' &&
+                rels.length >= 1 &&
+                rels.every((r) => r === 'eq') &&
+                tail.every((p) => p.length > 0 && !p.some((x) => x.t === 'env' || x.t === 'det') && lam(p).every((x) => x.base === 'lambda' && !x.sub)) &&
+                lam(tail[tail.length - 1]).length > 0 &&
+                P0.some((x) => (x.t === 'atom' && x.base === 'lambda') || (x.t === 'env' && (x.rows ?? []).flat().some((c) => c.includes('\\lambda'))));
+        }
         const absDet = n >= 4 && all[0].t === 'sym' && all[0].v === '|' && all[n - 1].t === 'sym' && all[n - 1].v === '|' && all[1].t === 'det';
         if (all[0].t === 'det' || absDet) {
             f.detLead = true;
@@ -2122,15 +2464,24 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
                 if (M === 'name' && V === 'name') {
                     if (v.t === 'atom' && !/^[XWZ]$/.test(String(m.base))) {
                         f.prodVec = !!v.vec;
-                        f.prodAv = /^[ABMSTQUP]$/.test(String(m.base)) && !m.sub && /^[vxuw]$/.test(String(v.base));
+                        f.prodAv = (/^[ABMSTQUP]$/.test(String(m.base)) && !m.sub && /^[vxuw]$/.test(String(v.base))) || (defs.nmats.has(String(m.base)) && !m.sub && /^[a-z]$/.test(String(v.base)) && !v.top);
                     } else if (v.t === 'num') f.prodVec = true;
                 } else if (M === 'lit' && V === 'lit') f.prodWritten = true;
                 else if (M === 'name' || v.vec || /^[vxuw]$/.test(String(v.base))) f.prodMixed = true;
             } else if (eqOnly || rels[0] === 'mapsto') {
                 const after = parts.slice(kp + 1).filter((p) => !isDots(p));
-                const resultOk = after.every((p) => {
+                const vec2 = (p: Item[]) => {
                     const l = vecLiteral(p, 0);
-                    return !!l && l.end === p.length && l.n === 2;
+                    if (l && l.end === p.length) return l.n === 2;
+                    const q = vecSide(p);
+                    if (!q || !q.length) return false;
+                    const c = sideClass(q);
+                    return (c.c === 'lit' || c.c === 'comb') && (c.lits ?? []).every((x) => x.n === 2 && x.definite);
+                };
+                const resultOk = after.every((p) => {
+                    if (vec2(p)) return true;
+                    const o = prodOf(p);
+                    return !!o && !o.big && o.V === 'lit';
                 });
                 const c0 = kp === 1 ? asCall(parts[0]) : null;
                 const mapHead =
@@ -2140,8 +2491,13 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
                     ((rels[0] === 'mapsto' && anyAtom(parts[0]) && parts[0][0].base === v.base) || (!!c0 && c0.args.length === 1 && anyAtom(c0.args[0]) && c0.args[0][0].base === v.base));
                 if (mapHead && after.length === 0) {
                     f.prodMap = true;
-                    f.matKnown = M === 'lit' || (defs.nmats.has(String(m.base)) && !ctxDimHere);
-                } else if (eqOnly && resultOk && after.length > 0 && parts.slice(0, kp).every((p) => p.length <= 3 && p.every((x) => x.t === 'atom'))) {
+                    f.matKnown = M === 'lit' || !!pk.viaCall || (defs.nmats.has(String(m.base)) && !ctxDimHere);
+                } else if (
+                    eqOnly &&
+                    resultOk &&
+                    after.length > 0 &&
+                    parts.slice(0, kp).every((p) => (p.length <= 3 && p.every((x) => x.t === 'atom')) || (M === 'lit' && V === 'lit' && p.length <= 8 && !p.some((x) => x.t === 'env' || x.t === 'open')))
+                ) {
                     if (M === 'lit' && V === 'lit') f.prodWritten = true;
                     else if (V === 'lit' || (M === 'lit' && known)) f.prodMixed = true;
                     else if (known) f.prodEval = true;
@@ -2154,17 +2510,66 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
         if (rels.length >= 1 && eqOnly) {
             const same = (a: Item[], b: Item[]) => a.length === b.length && a.every((x, i) => (x.t === 'atom' ? b[i].t === 'atom' && dkey(x) === dkey(b[i]) : JSON.stringify(x) === JSON.stringify(b[i])));
             const sc = (x: Item | undefined) => !!x && (x.t === 'num' || (x.t === 'atom' && !low(x) && !cap(x)));
+            // round 4: any scalar expression in front (\tfrac12 v, (1 - \lambda) v, -v)
+            const scItem = (x: Item) => sc(x) || x.t === 'frac' || x.t === 'lb' || x.t === 'rb' || x.t === 'pow' || (x.t === 'fn' && x.name === 'sqrt') || (x.t === 'sym' && /^(\+|-|\/)$/.test(String(x.v))) || x.t === 'open' || x.t === 'close';
             const scaled = (p0: Item[], v: Item[]) => {
-                let p = noDots(p0);
-                if (p[0] && p[0].t === 'sym' && p[0].v === '-') p = p.slice(1);
-                return p.length === v.length + 1 && sc(p[0]) && same(p.slice(1), v);
+                const p = noDots(p0);
+                const k = p.length - v.length;
+                if (k < 1 || !same(p.slice(k), v)) return false;
+                const pre = p.slice(0, k);
+                if (pre.length === 1 && pre[0].t === 'sym' && pre[0].v === '-') return true;
+                return pre.every(scItem) && pre.some((x) => sc(x)) && depths(pre).every((q) => q >= 0) && pre.filter((x) => x.t === 'open').length === pre.filter((x) => x.t === 'close').length;
             };
-            const A = P[0];
+            const A0 = P[0];
             const Z = P[P.length - 1];
+            // no card with 3 entries
+            const has3 = parts.some((p) => {
+                for (let q = 0; q < p.length; q++) {
+                    const l = vecLiteral(p, q);
+                    if (l && l.n >= 3) return true;
+                }
+                return false;
+            });
+            const A = has3 ? null : A0;
+            // a side that is a multiple of a written pair: its entries and the factor
+            const litAt = (p: Item[]): { vals: number[]; s: number } | null => {
+                const q = noDots(p);
+                for (let k = 0; k < q.length && k < 3; k++) {
+                    const l = vecLiteral(q, k);
+                    if (l && l.end === q.length && l.n === 2) {
+                        const pre = q.slice(0, k);
+                        const neg = !!pre[0] && pre[0].t === 'sym' && pre[0].v === '-';
+                        const pp = neg ? pre.slice(1) : pre;
+                        const sv = pp.length === 0 ? 1 : pp.length === 1 && pp[0].t === 'num' ? Number(pp[0].v) : NaN;
+                        return { vals: l.vals, s: neg ? -sv : sv };
+                    }
+                }
+                return null;
+            };
+            // a chain whose result is a multiple in numbers: M w = (3, 3) = 3 (1, 1)
+            const numCheck = () => {
+                if (!A || parts.length < 3) return false;
+                const w = litAt(parts[parts.length - 1]);
+                if (!w || Number.isNaN(w.s) || w.vals.some((v) => Number.isNaN(v)) || w.vals.every((v) => v === 0)) return false;
+                return parts.slice(1, -1).some((p) => {
+                    const r = litAt(p);
+                    return !!r && r.s === 1 && r.vals.every((v, i) => Math.abs(v - w.s * w.vals[i]) < 1e-9);
+                });
+            };
             if (A && !A.big && scaled(parts[parts.length - 1], A.v)) f.eig1 = true;
+            else if (A && !A.big && parts.length >= 3 && same(noDots(parts[parts.length - 1]), A.v) && A.V === 'lit') f.eig1 = true;
+            else if (A && !A.big && numCheck()) f.eig1 = true;
             else if (Z && !Z.big && rels.length === 1 && scaled(parts[0], Z.v)) f.eig1 = true;
             // M v = v, written or named (eigenvalue 1, L7): P \mathbf{1} = \mathbf{1}, H_x(2) (1, 0)^T = (1, 0)^T
             else if (A && !A.big && rels.length === 1 && same(noDots(parts[1]), A.v)) f.eig1 = true;
+            // M v - s v = 0
+            else if (rels.length === 1 && parts[1].length === 1 && parts[1][0].t === 'num' && parts[1][0].v === '0') {
+                const p = parts[0];
+                const dp = depths(p);
+                const cutAt = p.findIndex((x, i) => i > 0 && dp[i] === 0 && x.t === 'sym' && x.v === '-');
+                const Lp = cutAt > 0 ? prodOf(p.slice(0, cutAt)) : null;
+                if (Lp && !Lp.big && scaled(p.slice(cutAt + 1), Lp.v)) f.eig1 = true;
+            }
             if (rels.length === 1) {
                 // transposed forms: P^T pi^T = pi^T, (P^T - I) pi^T = 0 (the signs are dropped, the vector may be a Greek letter)
                 const hadTop = all.some((x) => x.t === 'top');
@@ -2231,7 +2636,21 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
             f.c_lhsT = only('t') && lcl.length === 0;
             const c = asCall(lhs);
             f.c_lhsCallX = !!c && c.name.t === 'atom' && c.args.length === 1 && plainAtom(c.args[0]) && c.args[0][0].base === 'x' && !c.name.prime && !c.name.sub && /^[fgh]$/.test(String(c.name.base));
-            f.c_lhsX12 = anyAtom(lhs) && lhs[0].base === 'x' && (lhs[0].sub === '1' || lhs[0].sub === '2');
+            // one coordinate alone on the left (x_1, 6x_1 + 8, |x_1|): a strip or half plane
+            f.c_lhsX12 = lset.length === 1 && (lset[0] === 'x_1' || lset[0] === 'x_2') && lcl.length === 0 && !lhs.some((x) => x.star || x.prime || x.top);
+            f.c_rhsParam = paramExpr(rhs, defs.bin);
+            // a linear constraint in two decision variables with other names (2a + b <= 100)
+            {
+                const lv = lhs.filter((x) => x.t === 'atom');
+                const names = new Set(lv.map(key));
+                f.lin2 =
+                    isNumLike(rhs) &&
+                    names.size === 2 &&
+                    (lv.every((x) => /^[a-df-hp-su-w]$/.test(String(x.base))) || lv.every((x) => /^[KL]$/.test(String(x.base)))) &&
+                    lv.every((x) => !x.sub && !x.star && !x.prime && !x.vec && !x.hat && !x.bar) &&
+                    lhs.every((x) => x.t === 'atom' || x.t === 'num' || (x.t === 'sym' && /^(\+|-|cdot|,)$/.test(String(x.v))));
+            }
+            f.c_lhsXY = plainAtom(lhs) && /^[xy]$/.test(String(lhs[0].base));
             f.c_lhsHasZL = lhs.some((x) => x.t === 'atom' && (x.base === 'lambda' || x.base === 'z'));
             f.c_lhsOmegaZ = plainAtom(lhs) && (lhs[0].base === 'omega' || lhs[0].base === 'z');
             f.c_lhsCtxVar = plainAtom(lhs) && !!ctxVars && ctxVars.has(String(lhs[0].base)) && !INT.has(String(lhs[0].base));
@@ -2241,15 +2660,100 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
             f.c_less = rels[0] === 'lt' || rels[0] === 'le';
         } else if (ineqs.length === 2) {
             const mid = parts[1];
-            f.c_midAtom = plainAtom(mid);
+            f.c_midAtom = plainAtom(mid) || (anyAtom(mid) && !!mid[0].sub && mid[0].base !== 'x' && !mid[0].star && !mid[0].prime && !mid[0].cal && !mid[0].vec && /^[a-zA-Z0-9]$/.test(mid[0].sub));
             f.c_midIdx = anyAtom(mid) && INT.has(String(mid[0].base));
             const end = parts[2];
             f.c_endsNum = isNumLike(parts[0]) && (isNumLike(end) || (end.length > 0 && end.every((x) => x.t !== 'atom' || x.base === 'pi') && end.some((x) => x.t === 'num')));
             f.c_midY = plainAtom(mid) && mid[0].base === 'y';
+            f.c_midX12 = anyAtom(mid) && mid[0].base === 'x' && (mid[0].sub === '1' || mid[0].sub === '2') && !mid[0].star && !mid[0].prime;
+            f.c_midXY = plainAtom(mid) && /^[xy]$/.test(String(mid[0].base));
+            {
+                // a <= x <= b with parameters: a piece with sliders
+                const PARAM = /^(x|y|z|t|s|i|j|k|l|m|n|N|ell|u|e|d|M)$/;
+                const par = (p: Item[]) => plainAtom(p) && /^[a-zA-Z]$/.test(String(p[0].base)) && !PARAM.test(String(p[0].base));
+                const e0 = parts[0];
+                const e2 = parts[2];
+                f.c_endsPar = plainAtom(mid) && /^[xt]$/.test(String(mid[0].base)) && (par(e0) || isNumLike(e0)) && (par(e2) || isNumLike(e2)) && (par(e0) || par(e2)) && rels.every((r) => r === 'lt' || r === 'le');
+            }
+            // -c <= x <= c: the variable between plus and minus one parameter
+            f.c_symVar =
+                plainAtom(mid) &&
+                /^[xt]$/.test(String(mid[0].base)) &&
+                plainAtom(end) &&
+                /^[a-zA-Z]$/.test(String(end[0].base)) &&
+                parts[0].length === 2 &&
+                parts[0][0].t === 'sym' &&
+                parts[0][0].v === '-' &&
+                plainAtom([parts[0][1]]) &&
+                parts[0][1].base === end[0].base &&
+                rels.every((r) => r === 'lt' || r === 'le');
             f.c_endsHaveX = [...parts[0], ...parts[2]].some((x) => x.t === 'atom' && x.base === 'x' && !x.sub);
             f.c_less = rels[0] === 'lt' || rels[0] === 'le';
         }
     }
+    // round 4: a constraint with the big constant M or with a binary variable of the note
+    // the big constant M times a letter, or a factor times (1 - letter): the letter is a switch
+    f.bigM =
+        ineqs.length > 0 &&
+        all.some((x, i) => {
+            const isM = x.t === 'atom' && x.base === 'M' && !x.cal;
+            let j = i + 1;
+            if (all[j] && all[j].t === 'sym' && all[j].v === 'cdot') j++;
+            if (isM && all[j] && all[j].t === 'atom' && /^[a-z]$|^delta$/.test(String(all[j].base))) return true;
+            if (
+                (isM || x.t === 'num') &&
+                all[j] &&
+                all[j].t === 'open' &&
+                all[j + 1] &&
+                all[j + 1].t === 'num' &&
+                all[j + 1].v === '1' &&
+                all[j + 2] &&
+                all[j + 2].t === 'sym' &&
+                all[j + 2].v === '-' &&
+                all[j + 3] &&
+                all[j + 3].t === 'atom' &&
+                all[j + 4] &&
+                all[j + 4].t === 'close'
+            )
+                return true;
+            return false;
+        });
+    // a variable of its own next to the two coordinates (a slack s_1): three variables
+    f.extraVar =
+        atoms.some(
+            (a) =>
+                a.base !== 'x' &&
+                /^[0-9]$/.test(a.sub ?? '') &&
+                (() => {
+                    const i = all.indexOf(a);
+                    const nb = (y: Item | undefined) => !!y && y.t === 'atom' && y.base === 'x';
+                    return !nb(all[i - 1]) && !nb(all[i + 1]) && !(all[i - 1] && all[i - 1].t === 'sym' && all[i - 1].v === 'cdot') && !(all[i + 1] && all[i + 1].t === 'sym' && all[i + 1].v === 'cdot');
+                })()
+        ) &&
+        atoms.some((a) => a.base === 'x' && a.sub === '1') &&
+        atoms.some((a) => a.base === 'x' && a.sub === '2');
+    f.nlOne = !!(f.hasPow || f.hasFn || f.hasAbs || f.fnMaxMin);
+    // (P4: a bound on the real variable alone, by numbers or parameters, is not a constraint with a switch)
+    const boundAlone = !!(f.c_rhsNum || f.c_rhsParam || f.c_endsNum || f.c_endsPar);
+    f.binVar = rels.length > 0 && ((defs.spanBin && ineqs.length > 0) || (defs.binAll && ineqs.length > 0 && !boundAlone) || atoms.some((a) => defs.bin.has(String(a.base))));
+    // P3: a relaxed binary between two numbers (0 <= y <= 1) is a piece of its axis
+    if (f.binVar && ineqs.length === 2 && rels.length === 2 && f.c_endsNum && anyAtom(parts[1])) f.binVar = false;
+    // P2: an equation that is linear in two decision variables with other names
+    if (rels.length === 1 && rels[0] === 'eq') {
+        const lv = all.filter((x) => x.t === 'atom');
+        const names = new Set(lv.map(key));
+        f.lin2eq =
+            isNumLike(parts[1]) &&
+            names.size === 2 &&
+            (lv.every((x) => /^[a-df-hp-su-w]$/.test(String(x.base))) || lv.every((x) => /^[KL]$/.test(String(x.base)))) &&
+            lv.every((x) => !x.sub && !x.star && !x.prime && !x.vec && !x.hat && !x.bar) &&
+            parts[0].length >= 3 &&
+            parts[0].every((x) => x.t === 'atom' || x.t === 'num' || (x.t === 'sym' && /^(\+|-|cdot)$/.test(String(x.v))));
+    }
+    f.bodyOnlyXk = letters.size === 1 && (L('x_1') || L('x_2'));
+    f.recMatStep =
+        !!headBase &&
+        body.some((x, i) => x.t === 'atom' && /^[AMPTB]$/.test(String(x.base)) && !x.sub && ((body[i + 1] && body[i + 1].t === 'atom' && body[i + 1].base === headBase) || (body[i - 1] && body[i - 1].t === 'atom' && body[i - 1].base === headBase)));
     Object.assign(f, vectorFacts(parts, rels, defs));
     f.polarR = all.some((x) => x.t === 'atom' && x.base === 'r' && !x.sub) && all.some((x) => x.t === 'atom' && (x.base === 'theta' || x.base === 'varphi') && !x.sub) && nEq === 1;
     // (A built-in as the name, \ln: ..., has no base: undefined, as in the frozen code, matches no head.)
@@ -2259,12 +2763,88 @@ function partFeatures(its: Item[], defs: DefNames, ctxVars: Set<string>): { f: A
 /** The feature vectors of the parts of a formula, in order. Throws on a formula it cannot read. */
 export function encode(tex: string, ctx?: RecognizeContext): Float32Array[] {
     const norm = normalize(tex, ctx);
-    const items = parse(clean(norm.tex));
+    let items = parse(clean(norm.tex));
+    // a label word with a colon in front names the formula (\text{Niveaulinie:} ...)
+    if (items.length > 2 && (items[0].t === 'text' || items[0].t === 'name') && /:␣*$/.test(String(items[0].v ?? items[0].name))) {
+        items = items.slice(1);
+        while (items.length && (items[0].t === 'sp' || items[0].t === 'join')) items = items.slice(1);
+    }
     const first = segments(items);
-    const cf = noteContext(ctx);
+    {
+        // round 4: the value of a bound after it, and the name of a constraint's function before it
+        const isI = (r: string) => r === 'lt' || r === 'le' || r === 'gt' || r === 'ge';
+        first.segs = first.segs.map((sg) => {
+            const { parts, rels } = relSplit(sg);
+            const dd = depths(sg);
+            const relAt: number[] = [];
+            sg.forEach((x, i) => {
+                if (dd[i] === 0 && x.t === 'rel' && x.v !== 'mid') relAt.push(i);
+            });
+            const n = rels.length;
+            // the value of a bound after it: x \le -2 + 6 = 4, x > 500/12 \approx 41.7
+            const pn = (p: Item[]) => isNumLike(p) || paramExpr(p.filter((x) => !(x.t === 'num')).length ? p : [], null) || (p.some((x) => x.t === 'atom') && paramExpr(p, null));
+            if (n >= 2 && (rels[n - 1] === 'eq' || rels[n - 1] === 'approx') && rels.slice(0, -1).every(isI) && pn(parts[n]) && pn(parts[n - 1])) return sg.slice(0, relAt[n - 1]);
+            // a constraint written with the name of its function: g(x) = 2 - x_1 - x_2 \le 0
+            if (n === 2 && rels[0] === 'eq' && isI(rels[1]) && parts[2].length === 1 && parts[2][0].t === 'num' && parts[2][0].v === '0') {
+                const c = asCall(parts[0]);
+                if (c && c.name.t === 'atom' && !c.name.prime && (/^[gh]$/.test(String(c.name.base)) || (c.name.base === 'f' && /^[0-9ij]$/.test(c.name.sub ?? '')))) return sg.slice(relAt[0] + 1);
+            }
+            return sg;
+        });
+    }
+    const { f: cf, facts } = noteContext(ctx);
     const dn = noteValues(defNames(ctx?.defs), ctx);
     dn.ctxDim = !!cf.ctxDim || /\\mathbb\{?R\}?\^\{?[nmdk]|[mn]\s*\\times\s*[nmk]/.test(String(tex));
     cf.noteVec = dn.deco.size > 0;
+    dn.bin = facts.bin;
+    dn.binAll = facts.binAll;
+    dn.applied = facts.applied;
+    // a variable declared in {0, 1} in the span itself
+    for (const m of String(norm.tex).matchAll(/\\in\s*\\\{\s*0\s*,\s*1\s*\\\}/g)) {
+        const at0 = m.index ?? 0;
+        const pre = /((?:\\?[a-zA-Z]+(?:_\{?\w{1,3}\}?)?\s*,\s*){0,3}\\?[a-zA-Z]+(?:_\{?\w{1,3}\}?)?)\s*$/.exec(String(norm.tex).slice(Math.max(0, at0 - 30), at0));
+        if (pre)
+            for (const q of pre[1].matchAll(/\\?([a-zA-Z]+)(?![a-zA-Z])/g))
+                if (!/^(quad|qquad|text|in)$/.test(q[1])) {
+                    dn.bin.add(q[1]);
+                    dn.spanBin = true;
+                }
+    }
+    // x is the scalar variable of the note: a function f(x) with a body in numbers is defined, or a formula nearby treats x as a number
+    const xDef = (Array.isArray(ctx?.defs) ? ctx.defs : []).some((q) => /^\s*\\?[A-Za-z]+(_\{?\w+\}?)?\s*\(\s*x\s*\)\s*:?=/.test(String(q)) && !/\\top|\^T|\\\||\\lVert|x_\{?[0-9ijn]|[A-Z]\s*x(?![a-zA-Z_^])|\\sum/.test(String(q)));
+    cf.ctxXScalar = !cf.ctxXVec && (xDef || facts.xScalarCtx);
+    // names with a superscript index (x^1, x^2, ... as options, iterates): the lone formula letter^digit
+    const core = String(norm.tex).replace(/(\\[,;:! ]|[\s.,;])+$/, '');
+    const supM = /^\s*\\?([a-zA-Z]+)\s*\^\s*\{?\s*([0-9])\s*\}?\s*$/.exec(core);
+    const context = String(ctx?.context ?? '');
+    // a list of one letter with superscripts (x^1, x^2, \dots, x^7; x^4, x^6, x^7) is a list of names
+    if (/^\s*([a-zA-Z])\s*\^\s*\{?\s*\w\s*\}?(\s*,\s*(\\[lc]?dots|([a-zA-Z])\s*\^\s*\{?\s*\w\s*\}?))+\s*$/.test(core)) {
+        const ls = [...String(norm.tex).matchAll(/([a-zA-Z])\s*\^/g)].map((q) => q[1]);
+        if (new Set(ls).size === 1) cf.supName = true;
+    }
+    // a superscript letter next to dominance words (x^a dominates x^b)
+    if (/^\s*[a-zA-Z]\s*\^\s*\{?\s*[a-z]\s*\}?\s*$/.test(core) && /dominat|dominier|pareto/i.test(context)) cf.supName = true;
+    if (supM) {
+        const digits = new Set<number>();
+        for (const o of facts.others) {
+            const q = /^\s*\\?([a-zA-Z]+)\s*\^\s*\{?\s*([0-9])\s*\}?\s*$/.exec(o);
+            if (q && q[1] === supM[1]) digits.add(Number(q[2]));
+        }
+        const listed = [...context.matchAll(new RegExp('(?:^|[^a-zA-Z\\\\])' + supM[1] + '\\^\\{?([0-9])', 'g'))].map((q) => Number(q[1]));
+        for (const v of listed) digits.add(v);
+        const own = Number(supM[2]);
+        const all4 = new Set([...digits, own]);
+        let run = 1;
+        for (let v = own - 1; all4.has(v); v--) run++;
+        for (let v = own + 1; all4.has(v); v++) run++;
+        const before = context.split('[F]')[0];
+        const itemWord = /(alternativ\w*|options?|lösung(en)?|solutions?|punkte?|points?|szenari\w*|scenarios?|kandidat\w*|candidates?|iterierte|iterates?|vektor\w*|vectors?)\s*\$?\s*$/i.test(before);
+        // the label of a table row whose other cells are numbers
+        const rowLabel = /^\s*\|\s*\[F\]\s*(\|\s*\$?-?[0-9][0-9.,{}]*\$?\s*)+\|?\s*$/.test(context);
+        cf.supName = own === 1 || rowLabel || digits.has(1) || (run >= 4 && /\s\|\s/.test(context)) || itemWord || (digits.size > 0 && /dominat|dominier|pareto|effizient|efficient/i.test(context));
+        // the text calls it a square or a power right there
+        if (facts.powWord && own !== 1) cf.supName = false;
+    }
     // the variable letters of the functions around the formula: K(q) = ... makes q a variable
     const ctxVars = new Set<string>();
     for (const src of [String(ctx?.context ?? ''), ...(Array.isArray(ctx?.defs) ? ctx.defs.map(String) : [])]) for (const m of src.matchAll(/[A-Za-z}']\s*\(\s*(\\?[a-zA-Z]+)\s*\)\s*(?::?=|\\approx)/g)) ctxVars.add(m[1].replace('\\', ''));
@@ -2291,7 +2871,7 @@ export function encode(tex: string, ctx?: RecognizeContext): Float32Array[] {
         });
     });
     const raw = segs.map((s) => partFeatures(s, dn, ctxVars));
-    const prog = raw.some((q) => q.f.opt && (q.f.unkCall || q.f.hasTop || q.f.capMul));
+    const prog = raw.some((q) => q.f.opt && (q.f.hasTop || q.f.capMul)) || (raw.some((q) => q.f.opt) && raw.some((q) => q.f.idxSubs));
     const out: Float32Array[] = [];
     const heads = raw.map((r) => r.headBase);
     // a pair of heads x(t), y(t) is a parametric curve
@@ -2308,6 +2888,9 @@ export function encode(tex: string, ctx?: RecognizeContext): Float32Array[] {
         anyVec: anyOf('hasTop') || anyOf('capMul') || anyOf('hasVec'),
         genericProgram: prog,
     };
+    // P6: a concrete first form decides; a generic one has unknown calls and gets no card by itself (eqvForms stays 0)
+    // C2: a letter that is a vector in the note is no running letter
+    for (const q of raw) if (q.f.runOne && q.f.runKey === 'x' && cf.ctxXVec) q.f.runOne = false;
     const put = (v: Float32Array, obj: Answers) => {
         for (const name in obj)
             if (obj[name]) {
@@ -2322,6 +2905,14 @@ export function encode(tex: string, ctx?: RecognizeContext): Float32Array[] {
         put(v, whole);
         if (side[i]) v[at('afterWord')] = 1;
         if (curveAt.has(i)) v[at('ctxLine')] = 1;
+        // round 4: a vector whose name a constraint of the span bounds (x = (1, 2), x \ge 0)
+        const headName = raw[i].f.vecHeadName;
+        if (typeof headName === 'string' && raw.some((q, k) => k !== i && (q.f.ineq1 || q.f.ineq2) && segs[k].some((x) => x.t === 'atom' && String(x.base) + (x.sub ? '_' + x.sub : '') === headName))) v[at('vecBound')] = 1;
+        if (facts.argPair && (raw[i].f.ha_xsub || (raw[i].f.has_x1 && raw[i].f.has_x2)) && !raw[i].f.hc) v[at('argPair')] = 1;
+        // y = 1 => x <= b: a constraint that holds only when a switch is set
+        // (every part after the arrow belongs to the switch)
+        for (let k = 1; k <= i; k++)
+            if (joins[k - 1] === '\\Rightarrow' && segs[k - 1].length === 3 && segs[k - 1][0].t === 'atom' && segs[k - 1][1].t === 'rel' && segs[k - 1][1].v === 'eq' && segs[k - 1][2].t === 'num' && /^[01]$/.test(String(segs[k - 1][2].v))) v[at('afterIndicator')] = 1;
         // a map whose rule follows in the same span: the rule decides
         if (raw[i].f.mapForm && raw.slice(i + 1).some((q) => q.f.hc && q.headBase === raw[i].mapName)) v[at('mapRuleLater')] = 1;
         if (i < raw.length - 1 && joins.includes('\\Rightarrow') && raw.slice(i + 1).some((q) => q.f.hcArgNum || q.f.hcArgExpr || q.f.hcArgMarked)) v[at('laterEval')] = 1;

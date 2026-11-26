@@ -6,22 +6,26 @@
  * region), src/notes6/hover.ts (set, map, condition, interval, jensen,
  * epigraph), src/linear/hover.ts (matrix, product, det, eigen),
  * src/iterate/hover.ts (recurrence, sum, domain) or, 6.2.1,
- * src/linear/vector.ts (vector). The network of round 3 of the design
- * (hover-ml designed3, the circuit best.mjs), ported line by line:
+ * src/linear/vector.ts (vector). 6.2.4: the network of round 4 of the design
+ * (hover-ml designed4, the circuit best.mjs), ported line by line:
  *
  *   normalize.ts  the front end: canonical TeX (layout commands, comments, Unicode, sloppy spellings, a unit at the end,
  *                 v⃗, \R, ^\mathsf{T}, [[1, 2], [3, 4]]), and the flags prose, unreadable, rowCont
- *   features.ts   the encoder: tokens, items, parts, 259 features of 0 or 1 per part; round 3 reads written vectors
+ *   features.ts   the encoder: tokens, items, parts, 305 features of 0 or 1 per part; round 3 reads written vectors
  *                 (columns, transposed tuples, \binom, angle brackets), set builders with ; : \middle| and words, a set
- *                 of pairs with one equation as that equation (a curve), and the note's vectors, matrices and domains
- *   net.ts        the generic forward pass (three hidden layers of clipped sums, a linear output)
- *   weights.ts    the weights as named units (data)
+ *                 of pairs with one equation as that equation (a curve), and the note's vectors, matrices and domains;
+ *                 round 4 reads the context line: the role word nearest before the formula (vector, point, value), the
+ *                 other formulas there as facts about the note's program (x and y in a constraint, x a vector, x_3),
+ *                 switches (letters in {0, 1}, Big-M), names with indices (x^1 to x^7), and the developer's rule C1 to
+ *                 C3 (a bare expression in one small letter is a function)
+ *   net.ts        the generic forward pass (four hidden layers of clipped sums, a linear output)
+ *   weights.ts    the weights as named units (data): 134 units
  *
  * A formula is cut into parts (\qquad, \Rightarrow, a word such as für, a
  * list of statements, a chain f(x) = A = B): the first part that earns a
  * card decides; a side part (after für, in a bracket at the end) never
  * gives a card when a main part stands before it; all parts none, none.
- * About 0.05 ms per formula. Pure: no DOM, no Obsidian.
+ * About 0.08 ms per formula. Pure: no DOM, no Obsidian.
  */
 import { FEATURES, RecognizeContext, encode } from './features';
 import { LABELS, Label, argmax, compile, forward } from './net';

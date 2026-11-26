@@ -7,8 +7,9 @@
  *
  * Nothing in here knows a feature or a label: all of that is in the matrices,
  * which compile() builds from the named units of weights.ts. A port of the
- * frozen net.mjs (hover-ml, designed3: round 3, with the label vector): the
- * same Float32 arithmetic, so it gives the same labels. Pure: no DOM, no Obsidian.
+ * frozen net.mjs (hover-ml, designed3: round 3, with the label vector; round 4
+ * keeps it unchanged, with four hidden layers): the same Float32 arithmetic, so
+ * it gives the same labels. Pure: no DOM, no Obsidian.
  */
 
 export const LABELS = ['none', 'function', 'surface', 'polar', 'implicit', 'region', 'set', 'map', 'condition', 'interval', 'jensen', 'epigraph', 'matrix', 'product', 'det', 'eigen', 'recurrence', 'sum', 'domain', 'vector'] as const;

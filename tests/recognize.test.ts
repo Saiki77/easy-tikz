@@ -11,10 +11,10 @@ interface Case extends RecognizeContext {
     label: Label;
 }
 
-test('recognize: the TypeScript port gives the frozen round 3 network\'s label on the committed fixture (about 250 formulas)', () => {
-    // tests/recognize-fixture.json: formulas of train and dev with what is around them, and the frozen network's label.
+test('recognize: the TypeScript port gives the frozen round 4 network\'s label on the committed fixture (about 270 formulas)', () => {
+    // tests/recognize-fixture.json: formulas of train and dev (and, round 4, of r4_dev) with what is around them, and the frozen network's label.
     const cases = JSON.parse(fs.readFileSync('tests/recognize-fixture.json', 'utf8')) as Case[];
-    assert.ok(cases.length >= 240, `${cases.length} cases`);
+    assert.ok(cases.length >= 270, `${cases.length} cases`);
     const wrong = cases.filter((c) => recognize(c.tex, { defs: c.defs, context: c.context, note: c.note }) !== c.label);
     assert.deepEqual(
         wrong.map((c) => `${c.tex} (${c.label})`),
@@ -26,8 +26,8 @@ test('recognize: the TypeScript port gives the frozen round 3 network\'s label o
 
 // The experiment's corpus and the frozen network (hover-ml): only on the machine that has them, so CI without them passes.
 const SCRATCH = '/private/tmp/claude-501/-Users-justus-PycharmProjects-tikz-graph-help/d7060021-8494-476b-bf42-b1974d650603/scratchpad/hover-ml';
-const FROZEN = `${SCRATCH}/designed3-frozen/best.mjs`;
-const SUITE = `${SCRATCH}/designed3-frozen/suite.jsonl`;
+const FROZEN = `${SCRATCH}/designed4-frozen/best.mjs`;
+const SUITE = `${SCRATCH}/designed4-frozen/suite.jsonl`;
 const DATA = `${SCRATCH}/data`;
 
 type Frozen = { predict: (tex: string, ctx: RecognizeContext) => string };
@@ -39,7 +39,7 @@ const readLines = (file: string) =>
         .map((l) => JSON.parse(l) as Case & { id: string });
 const ctxOf = (it: RecognizeContext): RecognizeContext => ({ defs: it.defs ?? [], context: it.context ?? '', note: it.note ?? null });
 
-test('recognize: the port gives the frozen round 3 network\'s label (best.mjs) on every formula of every data file (skipped without the corpus)', async () => {
+test('recognize: the port gives the frozen round 4 network\'s label (best.mjs) on every formula of every data file (skipped without the corpus)', async () => {
     if (!fs.existsSync(FROZEN) || !fs.existsSync(DATA)) {
         console.log('    (skipped: the hover-ml corpus is not on this machine)');
         return;
@@ -56,11 +56,11 @@ test('recognize: the port gives the frozen round 3 network\'s label (best.mjs) o
         }
     }
     console.log(`    ${n} formulas of ${files.length} files, ${wrong.length} with another label`);
-    assert.ok(n > 16000, `${n} formulas`);
+    assert.ok(n > 27000, `${n} formulas`);
     assert.deepEqual(wrong, []);
 });
 
-test('recognize: the port gives the frozen network\'s label on a fuzz set: the robustness suite of round 3 and cut, unbalanced spellings (skipped without the corpus)', async () => {
+test('recognize: the port gives the frozen network\'s label on a fuzz set: the robustness suite of round 4 and cut, unbalanced spellings (skipped without the corpus)', async () => {
     if (!fs.existsSync(FROZEN) || !fs.existsSync(SUITE) || !fs.existsSync(DATA)) {
         console.log('    (skipped: the hover-ml corpus is not on this machine)');
         return;
@@ -78,10 +78,10 @@ test('recognize: the port gives the frozen network\'s label on a fuzz set: the r
         }
         if (recognize(tex, ctx) !== a && wrong.length < 20) wrong.push(JSON.stringify(tex));
     };
-    // 49 851 variants of the suite, each with its context.
+    // 79 366 variants of the suite, each with its context.
     for (const it of readLines(SUITE)) same(it.tex, ctxOf(it));
-    // Every formula of the round 3 files cut in four places: the head, the tail, a brace or a backslash too many.
-    for (const split of ['train_r3', 'dev_r3', 'hard_dev_r3', 'r3_dev']) {
+    // Every formula of the round 4 files cut in four places: the head, the tail, a brace or a backslash too many.
+    for (const split of ['train_r4', 'dev_r4', 'hard_dev_r4', 'r3_dev_r4', 'r4_dev']) {
         for (const it of readLines(`${DATA}/${split}.jsonl`)) {
             const t = it.tex;
             const ctx = ctxOf(it);
@@ -91,7 +91,7 @@ test('recognize: the port gives the frozen network\'s label on a fuzz set: the r
         }
     }
     console.log(`    ${n} variants, ${wrong.length} with another label`);
-    assert.ok(n > 150000, `${n} variants`);
+    assert.ok(n > 300000, `${n} variants`);
     assert.deepEqual(wrong, []);
 });
 
@@ -110,7 +110,8 @@ test('recognize: a formula it cannot read, and broken TeX, get no card and never
 
 test('recognize: the examples of the 6.2 notes (statistics, growth, signals, matrices)', () => {
     const stats: RecognizeContext = { note: 'uni/statistik-zusammenfassung', context: 'Die Stichprobenvarianz teilt durch [F] statt durch $1/m$.' };
-    assert.equal(recognize('\\frac{1}{m-1}', stats), 'none');
+    // Round 4, rubric_r4 C1: a bare expression in one small letter with an operation is a function (round 3: none).
+    assert.equal(recognize('\\frac{1}{m-1}', stats), 'function');
     assert.equal(recognize('x(t) = x_0 e^{at}', { note: 'uni/wachstum', context: 'Exponentielles Wachstum: [F] mit Startwert $x_0$.' }), 'function');
     assert.equal(recognize('y = +1', { context: 'Die Klasse ist [F] oder $y = -1$.' }), 'none');
     assert.equal(recognize('\\lVert w\\rVert', { context: 'Der Abstand ist [F] im Nenner.' }), 'none');
