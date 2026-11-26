@@ -1401,7 +1401,7 @@ test('every 2D example renders without issues', () => {
         const s = scene(c);
         assert.deepEqual(s.issues, [], ex.id);
         // 6.2.1: an example of functions only ('t-formula') draws them outside the scene.
-        assert.ok(s.items.length > 0 || c.functions.length > 0, ex.id);
+        assert.ok(s.items.length > 0 || (c.functions ?? []).length > 0, ex.id);
     }
 });
 
