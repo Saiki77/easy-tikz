@@ -102,8 +102,24 @@ function objective(tex: string): string {
  */
 function axesOf(tex: string): string | null {
     if (/x_\s*\{?\s*[3-9]/.test(tex)) return null;
-    return tex.replace(/x_\s*\{\s*1\s*\}|x_\s*1(?![0-9])/g, 'x').replace(/x_\s*\{\s*2\s*\}|x_\s*2(?![0-9])/g, 'y');
+    return tex.replace(X1, 'x').replace(X2, 'y');
 }
+const X1 = /x_\s*\{\s*1\s*\}|x_\s*1(?![0-9])/g;
+const X2 = /x_\s*\{\s*2\s*\}|x_\s*2(?![0-9])/g;
+
+/** 6.2.1: the names of the axes of a formula in x_1, x_2: the x-axis is x_1 where x_1 became x, the y-axis x_2 where x_2 became y. */
+function axisNamesOf(tex: string): { x?: string; y?: string } {
+    return { ...(tex.search(X1) >= 0 ? { x: 'x_1' } : {}), ...(tex.search(X2) >= 0 ? { y: 'x_2' } : {}) };
+}
+
+/**
+ * 6.2.1: a goal written after the objective, (x-1)^2 + 2 \to \min: the
+ * objective alone (\to, \rightarrow, \longrightarrow or an arrow sign; min
+ * or max, also as \text{min}, maybe with a subscript).
+ */
+const GOAL = new RegExp(
+    String.raw`\s*(?:\\(?:to|rightarrow|longrightarrow)(?![A-Za-z])|→|⟶)\s*(?:\\(?:min|max)(?![A-Za-z])|\\(?:text|mathrm|operatorname)\s*\{\s*(?:min|max)\s*\}|(?:min|max)(?![A-Za-z]))(?:\s*_\s*(?:${GROUP}|[A-Za-z0-9]))?\s*[.,;!]?\s*$`
+);
 
 /** The names of a formula after it reads as the plain syntax. */
 function namesOf(tex: string): Set<string> {
@@ -141,8 +157,9 @@ function inX(tex: string, letter: string): string {
 }
 
 /** One formula of a note made ready to chart: its objective, its axes x and y, ax^2 as a x^2. Null: it has no chart. */
-function prepared(part: string): { tex: string; vector: boolean; axis?: string } | null {
-    const signs = plainSigns(part);
+function prepared(part: string): { tex: string; vector: boolean; axis?: string; axisNames?: { x?: string; y?: string } } | null {
+    // 6.2.1: a goal after the objective (\to \min) is no part of it.
+    const signs = plainSigns(part.replace(GOAL, ''));
     if (signs === null) return null;
     const tex = clean(objective(clean(signs)));
     if (!tex || NOT_A_CHART.test(tex)) return null;
@@ -152,7 +169,7 @@ function prepared(part: string): { tex: string; vector: boolean; axis?: string }
     const names = namesOf(split);
     // i alone is the imaginary unit (e^{ix}): no chart of real numbers.
     if (names.has('i')) return null;
-    if (names.has('x') || names.has('y') || names.has('theta')) return { tex: split, vector: axes !== tex };
+    if (names.has('x') || names.has('y') || names.has('theta')) return { tex: split, vector: axes !== tex, axisNames: axisNamesOf(tex) };
     // No x and no y (\frac{2n^2 + n + 1}{3n^2 + 2}, s(t) = ...): n, t or k, or the only letter, is the variable.
     const letters = [...names].filter((n) => /^[A-Za-df-hj-qs-z]$/.test(n));
     const variable = OTHER_VARIABLES.find((l) => names.has(l)) ?? (letters.length === 1 ? letters[0] : null);
@@ -241,15 +258,21 @@ export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; 
         // A list of definitions in one line: f(x) = ..., g(x) = ...
         .flatMap((part) => part.split(/[,;]\s*(?=[A-Za-z][A-Za-z0-9_]*\s*'*\s*\(\s*x(?:_\{?1\}?)?\s*\)\s*=)/))
         .map((part) => prepared(part))
-        .map((p) => (p ? { tex: p.tex, axis: p.axis, found: kindOf(p.tex, p.vector) } : null))
+        .map((p) => (p ? { tex: p.tex, axis: p.axis, axisNames: p.axisNames, found: kindOf(p.tex, p.vector) } : null))
         // n = 5 gives a value, not a curve: an equation in another variable has no chart.
-        .filter((x): x is { tex: string; axis: string | undefined; found: { kind: FormulaKind; body: string; name?: string } } => !!x && !!x.found && !(x.axis && x.found.kind === 'equation'));
+        .filter(
+            (x): x is { tex: string; axis: string | undefined; axisNames: { x?: string; y?: string } | undefined; found: { kind: FormulaKind; body: string; name?: string } } =>
+                !!x && !!x.found && !(x.axis && x.found.kind === 'equation')
+        );
     if (!parts.length) return null;
     const first = parts[0].found;
     const axis = parts[0].axis;
-    // The axis keeps the formula's own letter.
-    const label = axis ? [`xlabel ${axis}`] : [];
     const kind = first.kind;
+    // The axis keeps the formula's own letter; 6.2.1: x_1 and x_2 name the axes they became (as math).
+    const named = parts[0].axisNames ?? {};
+    const xName = axis ? `xlabel ${axis}` : named.x ? `xlabel $${named.x}$` : null;
+    const yName = named.y && kind !== 'polar' ? `ylabel $${named.y}$` : null;
+    const label = [xName, yName].filter((l): l is string => !!l);
     const fns = kind === 'function' ? parts.filter((p) => p.found.kind === 'function').slice(0, COLOURS.length) : [];
     const bodies = kind === 'function' ? fns.map((p) => p.found.body) : [first.body];
     const free = Array.from(new Set(bodies.flatMap((b) => freeNames(b))));
@@ -269,13 +292,13 @@ export function formulaLines(texIn: string, row?: number): { kind: FormulaKind; 
             return { kind, axis, lines: [...label, ...sliders, ...bodies.map((b, i) => `plot $${names[i]}(x) = ${b}$ in ${COLOURS[i]}, thick`)] };
         }
         case 'surface':
-            return { kind, lines: ['3d', 'cube', ...sliders, `plot $z = ${body}$ in viridis`] };
+            return { kind, lines: ['3d', 'cube', ...label, ...sliders, `plot $z = ${body}$ in viridis`] };
         case 'polar':
             return { kind, lines: [...sliders, `plot $r(\\theta) = ${body}$ in blue, thick`] };
         case 'region':
-            return { kind, lines: [...sliders, `shade where $${body}$`] };
+            return { kind, lines: [...label, ...sliders, `shade where $${body}$`] };
         default:
-            return { kind, lines: [...sliders, `draw $${body}$ in blue, thick`] };
+            return { kind, lines: [...label, ...sliders, `draw $${body}$ in blue, thick`] };
     }
 }
 
