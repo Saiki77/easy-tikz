@@ -2,15 +2,19 @@
  * Every formula in a note is a chart (5.0): rest the pointer on a `$...$`
  * or `$$...$$` formula, in Reading view or Live Preview (also in callouts,
  * lists and tables), and a card with its chart opens next to it: the
- * formula on top, the chart in the look of the default chart for formulas
- * (a setting), a slider for every letter (a setting too), and the buttons
- * Open in the editor and Insert chart. On a phone a tap opens it. The
+ * chart in the look of the default chart for formulas (a setting), a slider
+ * for every letter (a setting too), and the buttons Open in the editor and
+ * Insert chart, small at the bottom. 6.0.1, clean look: no header (the note
+ * already highlights the formula); a close button shows on hover or focus
+ * (always on touch screens); a function's chart is framed on its roots,
+ * extrema and y-intercept, with dots on the roots (pink) and extrema
+ * (violet) (src/notes6/frame.ts). On a phone a tap opens it. The
  * formula's TeX comes from the note's text: Reading view marks each
  * rendered formula (tag), Live Preview asks the editor where it sits.
  * Formulas that have a chart carry data-etz-mark="1": with the setting
  * Highlight formulas in notes, a dotted line goes under them (formula.css).
  */
-import { App, MarkdownPostProcessorContext, TFile, finishRenderMath, renderMath, setIcon } from 'obsidian';
+import { App, MarkdownPostProcessorContext, Platform, TFile, finishRenderMath, renderMath, setIcon } from 'obsidian';
 import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import type { Extension, Text } from '@codemirror/state';
 import { FormulaKind, applyFormulaDefault, chartable, formulaChart, formulaLines, formulaRows, formulasIn } from '../formula';
@@ -21,10 +25,12 @@ import { SVGRenderer } from '../renderer';
 import { SVG3DRenderer } from '../renderer3d';
 import { Parameter } from '../types';
 import { cloneData } from '../util';
-import { liveSlider, textButton } from './kit';
+import { liveSlider, textButton, uniqueId, visuallyHidden } from './kit';
 import { MessageKey, t } from '../i18n';
 // 6.0 B: sets, maps, conditions, intervals, Jensen and epigraphs (src/notes6/hover.ts).
-import { HoverCard, HoverKind, hoverCard, hoverKind, noteDefinitions, variableName } from '../notes6/hover';
+import { HoverCard, HoverKind, hoverCard, hoverKind, noteDefinitions } from '../notes6/hover';
+// 6.0.1, clean look: the view framed on what matters, and the dots of roots and extrema.
+import { frameChart, keyDots } from '../notes6/frame';
 // 6.0 D: matrices, A v, det A and A v = λ v (src/linear/hover.ts).
 import { LinearHoverKind, linearHoverCard, linearHoverKind, noteValues } from '../linear/hover';
 // 6.0 E: recurrences, sums and functions of z (src/iterate/hover.ts).
@@ -52,10 +58,20 @@ interface Found {
     note(): Promise<string>;
 }
 
-/** 6.0 B: what a card of src/notes6/hover.ts shows besides its chart: where g comes from, the n = 2 chart. */
+/** 6.0 B: what a card shows besides its chart: one grey line (where g comes from, or what to move), the n = 2 chart. */
 interface CardExtra {
     note: string;
     two: Record<string, unknown> | null;
+    /** 6.0.1: where g comes from, as one line with the formula in math: g(x) = x^2 - 4, from this note. */
+    from?: { name: string; body: string; example: boolean };
+    /** 6.0.1: the line under it while n = 2 shows: what n = 2 means. */
+    plane?: string;
+}
+
+/** 6.0.1: what a card draws besides its chart's own lines. */
+interface CardDraw {
+    /** The dots of the roots and extrema (function cards). */
+    dots?: boolean;
 }
 
 const NOTES6_KIND: Record<HoverKind, MessageKey> = {
@@ -82,13 +98,33 @@ const ITERATE_KIND: Record<IterateHoverKind, MessageKey> = {
     domain: 'iterate.hover.domain',
 };
 
-/** The note under a card of this part: where its function comes from, what n = 2 means, what the x-axis is. */
-function cardNote(card: HoverCard): string {
-    const out: string[] = [];
-    if (card.fn) out.push(t(card.fn.from === 'note' ? 'notes6.hover.fromNote' : 'notes6.hover.example', { name: card.fn.name, body: card.fn.body }));
-    if (card.variable && card.kind !== 'jensen') out.push(t('notes6.hover.variable', { variable: variableName(card.variable) }));
-    if (card.lines2 && card.fn) out.push(t('notes6.hover.plane', { name: card.fn.name }));
-    return out.join(' ');
+/** 6.0.1: the grey line of a card of this part: where its function comes from; what n = 2 means while n = 2 shows. (The x-axis names its letter itself.) */
+function cardExtra(card: HoverCard): Pick<CardExtra, 'from' | 'plane'> {
+    return {
+        ...(card.fn ? { from: { name: card.fn.name, body: card.fn.body, example: card.fn.from === 'example' } } : {}),
+        ...(card.lines2 && card.fn ? { plane: t('notes6.hover.plane', { name: card.fn.name }) } : {}),
+    };
+}
+
+/** The index letters of formulaLines (n, k): their charts start at 0 as sequences do, and keep their view. */
+const INDEX_AXES = new Set(['n', 'k']);
+
+/** 6.0.1: a card of these kinds draws a function over the x-axis: its view is framed as a function's. */
+const FRAMED_NOTES6: ReadonlySet<HoverKind> = new Set(['set', 'condition']);
+
+/** A template with one formula in it, as text with the formula drawn by MathJax (plain text before MathJax loads). */
+function lineWithMath(el: HTMLElement, template: (formula: string) => string, tex: string): void {
+    const mark = '\u0001';
+    const [before, after = ''] = template(mark).split(mark);
+    if (before) el.appendText(before);
+    const math = el.createSpan({ cls: 'etz-formula-from-math' });
+    try {
+        math.appendChild(renderMath(tex, false));
+        void finishRenderMath();
+    } catch {
+        math.setText(tex);
+    }
+    if (after) el.appendText(after);
 }
 
 /** How long the pointer rests on a formula before its chart opens, and the grace to move onto the card. */
@@ -301,7 +337,7 @@ export class FormulaHover {
             if (found && iterate) {
                 const parsed = parseChartText(iterate.lines.join('\n'));
                 if (!parsed.problems.length) {
-                    this.show(math, row, pick, drawnRows, found, tex, t(ITERATE_KIND[iterate.kind]), parsed.data, { note: t(iterate.note), two: null });
+                    this.show(math, row, pick, drawnRows, found, t(ITERATE_KIND[iterate.kind]), parsed.data, { note: t(iterate.note), two: null });
                     return;
                 }
             }
@@ -318,12 +354,16 @@ export class FormulaHover {
             if (this.pop && this.target === math) this.scheduleClose();
             return;
         }
-        const kind = formulaLines(found.tex, pick)?.kind;
+        const formula = formulaLines(found.tex, pick);
+        const kind = formula?.kind;
         const lines = formulaChart(found.tex, pick);
         if (!lines || !kind) return;
         const parsed = parseChartText(lines.join('\n'));
         if (parsed.problems.length) return;
-        this.show(math, row, pick, drawnRows, found, pick !== undefined ? rows[pick] : found.tex, t(KIND_LABEL[kind]), parsed.data, null);
+        // 6.0.1: a function's card is framed on its roots, extrema and y-intercept, with their dots (not a sequence: it keeps 0 to 20).
+        const fn = kind === 'function' && !(formula?.axis && INDEX_AXES.has(formula.axis));
+        const chart = (fn ? frameChart(parsed.data) : null) ?? parsed.data;
+        this.show(math, row, pick, drawnRows, found, t(KIND_LABEL[kind]), chart, null, { dots: fn });
     }
 
     /** 6.0 B: the card of a formula of src/notes6/hover.ts, once the note is read. */
@@ -343,9 +383,11 @@ export class FormulaHover {
             const parsed = parseChartText(lines.join('\n'));
             return parsed.problems.length ? null : parsed.data;
         };
-        const one = read(card.lines);
-        if (!one) return;
-        this.show(math, row, pick, drawnRows, found, tex, t(NOTES6_KIND[card.kind]), one, { note: cardNote(card), two: card.lines2 ? read(card.lines2) : null });
+        const read1 = read(card.lines);
+        if (!read1) return;
+        // 6.0.1: a set or a condition over the graph of g is framed as g's card is (no dots: the set has its own ends).
+        const one = (FRAMED_NOTES6.has(card.kind) && card.fn ? frameChart(read1) : null) ?? read1;
+        this.show(math, row, pick, drawnRows, found, t(NOTES6_KIND[card.kind]), one, { note: '', two: card.lines2 ? read(card.lines2) : null, ...cardExtra(card) });
     }
 
     /** 6.0 D: the card of a formula of src/linear/hover.ts, with the note's matrices and vectors. */
@@ -362,18 +404,31 @@ export class FormulaHover {
         const parsed = parseChartText(card.lines.join('\n'));
         if (parsed.problems.length) return;
         const text = [card.example ? t('linear.hover.note.example', { name: card.name }) : '', t('linear.hover.note.t', { name: card.name })].filter((x) => x).join(' ');
-        this.show(math, row, pick, drawnRows, found, tex, t(LINEAR_KIND[card.kind]), parsed.data, { note: text, two: null });
+        this.show(math, row, pick, drawnRows, found, t(LINEAR_KIND[card.kind]), parsed.data, { note: text, two: null });
     }
 
-    /** The card: the formula, what it is, its chart with sliders, and Open in the editor and Insert chart. */
-    private show(math: HTMLElement, row: number | undefined, pick: number | undefined, drawnRows: HTMLElement[], found: Found, shown: string, kindText: string, chart: Record<string, unknown>, extra: CardExtra | null) {
+    /**
+     * The card (6.0.1, clean look): its chart with sliders, then one grey
+     * line (where g comes from, or what to move) with the n = 1 / n = 2
+     * switch, and Open in the editor and Insert chart, small at the bottom.
+     * No header: the note highlights the formula already. Close (x) shows
+     * on hover or focus, always on touch screens. Every control is a button
+     * named for screen readers by its text or a hidden label, never by
+     * aria-label (Obsidian would show it as a tooltip over the card).
+     */
+    private show(math: HTMLElement, row: number | undefined, pick: number | undefined, drawnRows: HTMLElement[], found: Found, kindText: string, chart: Record<string, unknown>, extra: CardExtra | null, opts: CardDraw = {}) {
         this.close();
         this.target = math;
         this.row = row;
         this.lit = (pick !== undefined ? drawnRows[pick] : undefined) ?? math;
         this.lit.addClass('etz-formula-open');
         const doc = math.ownerDocument;
-        const pop = doc.body.createDiv({ cls: 'etz-formula-pop etz-tokens', attr: { role: 'dialog', 'aria-label': t('plugin.formula.dialog') } });
+        const pop = doc.body.createDiv({ cls: 'etz-formula-pop etz-tokens', attr: { role: 'dialog' } });
+        // Phones and tablets: no hover, so close always shows (with the (hover: none) rule of formula.css).
+        if (Platform.isMobile) pop.addClass('is-touch');
+        const name = visuallyHidden(pop, t('plugin.formula.dialogKind', { kind: kindText }));
+        name.id = uniqueId('formula-pop');
+        pop.setAttr('aria-labelledby', name.id);
         this.pop = pop;
         pop.addEventListener('mouseleave', () => this.scheduleClose());
         // A drag or a slider often ends outside the card: once used, the card stays open.
@@ -384,19 +439,12 @@ export class FormulaHover {
         const data = applyFormulaDefault(cloneData(chart), this.host.formulaDefault());
         const is3D = data.dimension === true;
         const params = (Array.isArray(data.parameters) ? data.parameters : []) as Parameter[];
+        // The dots of the roots and extrema belong to the first chart (a switch to n = 2 drops them).
+        let dots = !!opts.dots && !is3D;
 
-        // Head: the formula as the note shows it, what it is, and close.
-        const head = pop.createDiv({ cls: 'etz-formula-head' });
-        const texEl = head.createDiv({ cls: 'etz-formula-tex' });
-        try {
-            texEl.appendChild(renderMath(shown, false));
-            void finishRenderMath();
-        } catch {
-            texEl.setText(shown);
-        }
-        head.createSpan({ cls: 'etz-formula-kind', text: kindText });
-        const close = head.createEl('button', { cls: 'etz-formula-close clickable-icon', attr: { type: 'button', 'aria-label': t('common.close') } });
-        setIcon(close, 'x');
+        const close = pop.createEl('button', { cls: 'etz-formula-close', attr: { type: 'button' } });
+        setIcon(close.createSpan({ cls: 'etz-formula-close-icon', attr: { 'aria-hidden': 'true' } }), 'x');
+        visuallyHidden(close, t('common.close'));
         close.addEventListener('click', () => this.close());
 
         const chartBox = pop.createDiv({ cls: 'etz-formula-chart' });
@@ -408,6 +456,11 @@ export class FormulaHover {
             chartBox.empty();
             const view = cloneData(data);
             Object.assign(view, { previewSize: 340, parameters: params, size_x_cm: 8, size_y_cm: is3D ? 6 : 5.5 });
+            // 6.0.1: the roots and extrema of the view at the slider values now, as dots (the card only: Insert chart leaves them out).
+            if (dots) {
+                const own: unknown[] = Array.isArray(view.tools) ? (view.tools as unknown[]) : [];
+                view.tools = [...own, ...keyDots(view)];
+            }
             const settings = SettingsManager.fromJSON(view);
             const ctx = settings.createMathContext({ memo: false });
             ctx.setParams(params);
@@ -431,33 +484,12 @@ export class FormulaHover {
         draw();
         this.movable(chartBox, data, is3D, draw);
 
-        // 6.0 B: where the function comes from, and n = 1 / n = 2 for a formula in R^n.
-        if (extra) {
-            const two = extra.two;
-            if (two) {
-                const one = cloneData(data);
-                const second = applyFormulaDefault(cloneData(two), this.host.formulaDefault());
-                const bar = pop.createDiv({ cls: 'etz-formula-switch', attr: { role: 'group', 'aria-label': t('notes6.hover.dimension') } });
-                const buttons = [t('notes6.hover.n1'), t('notes6.hover.n2')].map((text, i) => {
-                    const b = bar.createEl('button', { cls: 'etz-formula-n', text, attr: { type: 'button', 'aria-pressed': i === 0 ? 'true' : 'false' } });
-                    b.addEventListener('click', () => {
-                        for (const k of Object.keys(data)) delete data[k];
-                        Object.assign(data, cloneData(i === 0 ? one : second));
-                        buttons.forEach((x, k) => x.setAttr('aria-pressed', k === i ? 'true' : 'false'));
-                        draw();
-                    });
-                    return b;
-                });
-            }
-            if (extra.note) pop.createEl('p', { cls: 'etz-formula-note', text: extra.note });
-        }
-
         // A slider for every letter of the formula (the setting may hide them): the chart follows.
         if (params.length && this.host.sliders()) {
             const sliders = pop.createDiv({ cls: 'etz-formula-sliders' });
             for (const p of params) {
                 const row = sliders.createDiv({ cls: 'etz-formula-slider' });
-                row.createSpan({ cls: 'etz-formula-name', text: p.name });
+                row.createSpan({ cls: 'etz-formula-name', text: p.name, attr: { 'aria-hidden': 'true' } });
                 liveSlider(row, {
                     min: Number(p.min),
                     max: Number(p.max),
@@ -472,22 +504,57 @@ export class FormulaHover {
             }
         }
 
-        const foot = pop.createDiv({ cls: 'etz-formula-foot' });
+        // 6.0 B: n = 1 / n = 2 for a formula in R^n (bottom left), and one grey line: where g comes from, or what to move.
+        if (extra && (extra.two || extra.note || extra.from)) {
+            const foot = pop.createDiv({ cls: 'etz-formula-foot' });
+            const two = extra.two;
+            let plane: HTMLElement | null = null;
+            if (two) {
+                const one = cloneData(data);
+                const second = applyFormulaDefault(cloneData(two), this.host.formulaDefault());
+                const bar = foot.createDiv({ cls: 'etz-formula-switch', attr: { role: 'group' } });
+                const label = visuallyHidden(bar, t('notes6.hover.dimension'));
+                label.id = uniqueId('formula-n');
+                bar.setAttr('aria-labelledby', label.id);
+                const buttons = [t('notes6.hover.n1'), t('notes6.hover.n2')].map((text, i) => {
+                    const b = bar.createEl('button', { cls: 'etz-formula-n', text, attr: { type: 'button', 'aria-pressed': i === 0 ? 'true' : 'false' } });
+                    b.addEventListener('click', () => {
+                        for (const k of Object.keys(data)) delete data[k];
+                        Object.assign(data, cloneData(i === 0 ? one : second));
+                        dots = false;
+                        buttons.forEach((x, k) => x.setAttr('aria-pressed', k === i ? 'true' : 'false'));
+                        plane?.toggleClass('tikz-hidden', i === 0);
+                        draw();
+                    });
+                    return b;
+                });
+            }
+            const from = extra.from;
+            if (from) {
+                const line = foot.createDiv({ cls: 'etz-formula-from' });
+                lineWithMath(line, (formula) => (from.example ? t('notes6.hover.exampleLine', { formula, name: from.name }) : t('notes6.hover.fromLine', { formula })), `${from.name}(x) = ${from.body}`);
+            } else if (extra.note) foot.createDiv({ cls: 'etz-formula-from', text: extra.note });
+            if (extra.plane && two) plane = foot.createDiv({ cls: 'etz-formula-from etz-formula-plane tikz-hidden', text: extra.plane });
+        }
+
+        // Open in the editor and Insert chart: always there, small at the bottom right.
+        const acts = pop.createDiv({ cls: 'etz-formula-acts' });
         const withValues = () => ({ ...data, parameters: params.map((p) => ({ ...p })) });
-        textButton(foot, {
+        textButton(acts, {
             text: t('plugin.formula.open'),
-            icon: 'pencil',
+            variant: 'ghost',
             size: 'sm',
+            cls: 'etz-formula-open-btn',
             onClick: () => {
                 this.close();
                 this.host.openChart(withValues(), found.file);
             },
         });
-        textButton(foot, {
+        textButton(acts, {
             text: t('plugin.formula.insert'),
-            icon: 'plus',
             variant: 'cta',
             size: 'sm',
+            cls: 'etz-formula-insert-btn',
             onClick: () => {
                 this.close();
                 void found.insert(['```easy-tikz', printChartText(withValues()), '```'].join('\n'));

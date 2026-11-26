@@ -145,6 +145,8 @@ export interface PluginData {
     chartWords: ChartWords;
     /** Chart colours: the theme's own (default) or the fixed colours of the LaTeX export. */
     chartColours: 'theme' | 'export';
+    /** 6.1: Chart look: Clean (default, the 6.0 film's look) or Classic (6.0's). src/look.ts. */
+    chartLook: 'clean' | 'classic';
     /** Copy PNG and Copy SVG: no background and the theme's colours, or white with the light theme's colours. */
     imageBackground: 'transparent' | 'white';
     /** Every chart also as an SVG file in the attachment folder, white background (5.0). */
@@ -174,6 +176,7 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
     liveChart: true,
     chartWords: { words: {}, bundles: [], write: 'yours' },
     chartColours: 'theme',
+    chartLook: 'clean',
     imageBackground: 'transparent',
     svgFiles: false,
     interfaceLanguage: 'auto',

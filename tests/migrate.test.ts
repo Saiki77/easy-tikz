@@ -854,7 +854,8 @@ test('migrateSettings never throws on garbage', () => {
         assert.deepEqual(migrateSettings(clone(out)), out);
     }
     const coerced = migrateSettings({ v: 4, functions: [{ expression: 5, domain: 3, name: 7, fillOpacity: '0.5' }] }).functions as FunctionParameters[];
-    assert.deepEqual(coerced, [v4Function({ expression: '5', domain: '3', name: 'f_7', fillOpacity: 0.5 })]);
+    // 6.1: a function without a thickness leaves it open (the chart look draws it; Classic: thin).
+    assert.deepEqual(coerced, [v4Function({ expression: '5', domain: '3', name: 'f_7', fillOpacity: 0.5, thickness: '' })]);
     const regions = migrateSettings({ v: 4, tools: [{ type: 'region', conditions: 'x <= 1', conditionLabels: [1, 2, 3] }] }).tools as Tool[];
     assert.ok(regions[0].type === 'region');
     if (regions[0].type === 'region') {
@@ -921,7 +922,8 @@ test('normalizeFunctions completes missing fields and keeps optional ones', () =
     ]);
     assert.deepEqual(functions, [
         {
-            ...v4Function({ expression: 'x^2', name: 'f1', domain: '', fillOpacity: 1 }),
+            // 6.1: an unknown thickness leaves it open, as a missing one does.
+            ...v4Function({ expression: 'x^2', name: 'f1', domain: '', fillOpacity: 1, thickness: '' }),
             legendLabel: 'Parabola',
             hidden: true,
         },

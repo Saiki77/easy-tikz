@@ -1300,7 +1300,7 @@ export class TikzModal extends Modal implements PanelHost {
         this.gridBtn = iconButton(this.pill2D, {
             icon: 'grid',
             label: t('editor.preview.majorGrid'),
-            pressed: this.settings.getValue('showLargeGrid') === true,
+            pressed: this.settings.resolvedLook().gridMajor, // 6.1: or the look's grid
             tooltipPosition: 'top',
             onClick: () => this.toggleGrid(),
         });
@@ -3472,7 +3472,7 @@ export class TikzModal extends Modal implements PanelHost {
     // ================================================================ action pill
 
     private updatePill() {
-        this.gridBtn?.setPressed(this.settings.getValue('showLargeGrid') === true);
+        this.gridBtn?.setPressed(this.settings.resolvedLook().gridMajor); // 6.1
         this.dragToggle?.setPressed(this.dragEditOn());
         const lock = this.lockBtn;
         if (!lock) return;
@@ -3488,8 +3488,9 @@ export class TikzModal extends Modal implements PanelHost {
     }
 
     private toggleGrid() {
-        this.settings.setValue('showLargeGrid', this.settings.getValue('showLargeGrid') !== true);
-        this.gridBtn?.setPressed(this.settings.getValue('showLargeGrid') === true);
+        // 6.1: on or off from the grid drawn now (the look's, when the chart leaves it open).
+        this.settings.setValue('showLargeGrid', !this.settings.resolvedLook().gridMajor);
+        this.gridBtn?.setPressed(this.settings.resolvedLook().gridMajor);
         this.chartPanel?.syncView();
         this.requestUpdate();
     }

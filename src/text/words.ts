@@ -44,6 +44,7 @@ export const PIECES: readonly Piece[] = [
     piece('no-axes', 'no axes', 'lines', 'panels.words.what.noAxes'),
     piece('with-a-grid', 'with a grid', 'lines', 'panels.words.what.withAGrid'),
     piece('with-a-fine-grid', 'with a fine grid', 'lines', 'panels.words.what.withAFineGrid'),
+    piece('no-grid', 'no grid', 'lines', 'panels.words.what.noGrid'), // 6.1
     piece('grid-opacity', 'grid opacity', 'lines', 'panels.words.what.gridOpacity'),
     piece('numbers', 'numbers', 'phrases', 'panels.words.what.numbers'),
     piece('equal-scale', 'equal scale', 'lines', 'panels.words.what.equalScale'),

@@ -1,4 +1,5 @@
 import type { AxisNumbers, TickAxis } from './ticks';
+import type { ChartLook } from './look';
 
 export type FillPattern =
     | 'solid'
@@ -954,6 +955,9 @@ export interface RendererConfig {
     // 6.0 F4
     /** Degrees the 3D view has turned by itself (chart line `turning`), added to rotationZ in notes and the editor; absent: 0. */
     turn?: number;
+    // 6.1
+    /** The look it is drawn in (src/look.ts); absent: Classic. axisStyle and gridMajor are already the look's where the chart leaves them open. */
+    look?: ChartLook;
 }
 
 // 6.0 C

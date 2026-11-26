@@ -1067,7 +1067,9 @@ function statement(b: Builder, line: string) {
             return axes(b, rest);
         case 'no':
             if (/^axes$/i.test(rest.text.trim())) b.chart.showAxis = false;
-            else b.problem(body.at, msg('problems.text.didYouMean', { phrase: 'no axes' }));
+            // 6.1: no grid, also where the chart look draws one.
+            else if (/^grid$/i.test(rest.text.trim())) b.chart.showLargeGrid = false;
+            else b.problem(body.at, msg('problems.text.didYouMean', { phrase: /^g/i.test(rest.text.trim()) ? 'no grid' : 'no axes' }));
             return;
         case 'with':
             return withLine(b, rest);

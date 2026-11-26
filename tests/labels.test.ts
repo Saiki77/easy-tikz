@@ -24,6 +24,7 @@ import { LabelMetrics, Scene2D, SceneCache, SceneInput2D, TextPrim, computeScene
 import { SettingsManager } from '../src/settings';
 import { Parameter, RendererConfig, Tool } from '../src/types';
 import { previewCamera3D } from '../src/export';
+import { setChartLook } from '../src/look';
 import { marchingGrid, sampleCurve } from '../src/util';
 
 // ----------------------------------------------------------------- helpers
@@ -551,6 +552,16 @@ test('the export writes the placer\'s shift as xshift / yshift, so the PDF match
 });
 
 test('centred axes: the exported title is lifted over the y label above the axis tip', () => {
+    // 6.1: the Classic look (the clean look writes no axis letter y; its lift is checked in tests/look.test.ts).
+    setChartLook('classic');
+    try {
+        centredTitleLift();
+    } finally {
+        setChartLook('clean');
+    }
+});
+
+function centredTitleLift(): void {
     // Tangent explorer: the y axis is in the middle of the plot, so its label "y" and the title share one spot in pgfplots.
     const code = SettingsManager.fromJSON(example('tangent')).generateTikzCode();
     assert.ok(code.includes('title={slope at x = 0.5: -2.25}'), 'the title prints the slope');
@@ -566,7 +577,7 @@ test('centred axes: the exported title is lifted over the y label above the axis
     assert.equal(lifted((c) => (c.show_axis_label = false)), false);
     assert.equal(lifted((c) => (c.axis_style = 'box')), false);
     assert.equal(lifted((c) => (c.axis_style = 'axes')), false);
-});
+}
 
 // ---------------------------------------------------------------------- 3D
 

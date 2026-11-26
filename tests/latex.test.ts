@@ -5,7 +5,8 @@
  * a patterned region with a hole, parametric, polar, 3D surfaces at the
  * memory budget, surfaces cut at planes, every colour map by height,
  * mesh lines off and at full strength, a faint grid in 2D and 3D, turned
- * cameras, extreme 3D ranges, CSS colour names, snippet mode).
+ * cameras, extreme 3D ranges, CSS colour names, snippet mode), and the
+ * clean look of 6.1 (the default, so every case above is in it too).
  * Skipped with a message when pdflatex is not on PATH.
  *
  * ETZ_LATEX_KEEP=<dir> keeps the .tex / .pdf / .log files in <dir>.
@@ -732,6 +733,24 @@ const LINEAR: Record<string, string> = {
     space: ['3d', 'show x from -3 to 3 and y from -3 to 3', 'let B = [[1, 0.5, 0], [0, 1, 0], [0, 0.5, 1.5]]', 'draw the grid from -1 to 1', 'draw the basis vectors', 'shade the unit cube, labelled', 'transform space by B', 'draw the eigenvectors of B, labelled'].join('\n'),
 };
 
+// ------------------------------------------------------------- clean look (6.1)
+
+/**
+ * The clean look (the default): axes through 0 or at the near edge with
+ * their numbers, the light grid, numbers left empty where they would sit on
+ * a dot or a curve, value pills, named axes with a title, explicit numbers.
+ * Every other case above compiles in the clean look too (it is the default).
+ */
+const CLEAN: Record<string, { text: string; table?: NoteTable | null }> = {
+    parabola: { text: ['show x from -4 to 4 and y from -5 to 5', 'slider a from 0.5 to 2, starting at 1', 'plot f(x) = a x^2 - 4 in blue, with its extrema', 'mark where $f(x) = 0$ on the x-axis, labelled'].join('\n') },
+    tableData: { text: ['show x from 0.5 to 6.5 and y from 40 to 75', 'use the table above', 'mark the data', 'draw its regression line in red, labelled'].join('\n'), table: SCORES },
+    tangentArea: {
+        text: ['show x from -3 to 3 and y from -4 to 4', 'slider a from -1.1 to 1.1, starting at 1', 'plot f(x) = x^3 - 3x in blue', 'plot g(x) = f(a) + (3a^2 - 3)(x - a) in red', 'P: mark where f and g cross, with coordinates', 'shade between f and g from x = P_x to P_x2 in orange'].join('\n'),
+    },
+    negative: { text: ['show x from -9 to -1 and y from -8 to -2', 'title Below and left of 0', 'xlabel time', 'ylabel height', 'plot f(x) = x/2 - 3, thin', 'x numbers every 2', 'with a minor grid'].join('\n') },
+    noGrid: { text: ['show x from -2 to 2 and y from -1 to 3', 'no grid', 'axes on the edges', 'plot $f(x) = e^x$, thick', 'y numbers at 1 "one", 2'].join('\n') },
+};
+
 // --------------------------------------------------------------- compile
 
 /** The block's export as a complete document. Snippets are wrapped using their own `% Needs:` lines. */
@@ -839,6 +858,7 @@ if (!hasLatex) {
     for (const [k, text] of Object.entries(ITERATE)) cases.push({ name: `iterate-${k}`, data: parseChartText(text).data }); // 6.0 E
     for (const [k, text] of Object.entries(GEOGEBRA)) cases.push({ name: `geogebra-${k}`, data: parseChartText(text).data }); // 6.0 G
     for (const [k, text] of Object.entries(PYTHON)) cases.push({ name: `python-${k}`, data: parseChartText(text).data }); // 6.0 P
+    for (const [k, c] of Object.entries(CLEAN)) cases.push({ name: `clean-${k}`, data: parseChartText(c.text).data, table: c.table }); // 6.1
 
     const jobs = pool(
         cases.map((c) => ({

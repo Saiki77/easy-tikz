@@ -16,6 +16,7 @@ import { BUILTIN_FUNCTION_NAMES, CONSTANT_NAMES } from './expr';
 import { latexToPlain, splitLetterRuns } from './latex';
 // 6.0 B
 import { RESERVED_NAMES } from './migrate';
+import { settleLook } from './look'; // 6.1
 
 /** The inline formula `$...$` around column `ch` of a line: its TeX and where it sits (dollars included). */
 export function formulaAt(line: string, ch: number): { tex: string; from: number; to: number } | null {
@@ -340,8 +341,10 @@ const copy = <T>(v: T): T => (v === undefined ? v : (JSON.parse(JSON.stringify(v
  * and 3D view, and the style of its first function and surface. What the
  * formula draws and the fitted view stay the formula's.
  */
-export function applyFormulaDefault(data: Rec, def: Rec | null | undefined): Rec {
-    if (!def) return data;
+export function applyFormulaDefault(data: Rec, stored: Rec | null | undefined): Rec {
+    if (!stored) return data;
+    // 6.1: a default saved before the chart look holds every field, the defaults too: those leave the look open.
+    const def = settleLook(stored);
     const out = copy(data);
     for (const k of DEFAULT_CHART_KEYS) {
         // A 2D default holds the 3D view untouched (its stored Proportional box made surfaces thin columns):

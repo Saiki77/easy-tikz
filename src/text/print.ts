@@ -616,6 +616,8 @@ const CHART_STATEMENTS: Array<{ keys: string[]; print(min: Data, full: Data): st
             if (large === true && small === true) return ['with a fine grid'];
             const out: string[] = [];
             if (large === true) out.push('with a grid');
+            // 6.1: no grid, also where the chart look draws one.
+            else if (large === false) out.push('no grid');
             else if ('showLargeGrid' in m) out.push(`set showLargeGrid = ${JSON.stringify(large)}`);
             if (small === true) out.push('with a minor grid');
             else if ('showSmallGrid' in m) out.push(`set showSmallGrid = ${JSON.stringify(small)}`);

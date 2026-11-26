@@ -40,6 +40,7 @@ import type { Extension } from '@codemirror/state';
 import { MotionPlayer } from './src/motion6/player';
 import { playerFor } from './src/motion6/host';
 import { setStepEntrances } from './src/motion6/entrances'; // 6.0 entrances
+import { lookSetting, setChartLook } from './src/look'; // 6.1 clean look
 import { atStep } from './src/motion6/steps';
 // 6.0 F4: the live canvas of a moving 2D chart, the turn of a turning 3D chart.
 import { LiveLayer } from './src/motion6/live';
@@ -358,6 +359,7 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
             chartWords: clean(stored?.chartWords ?? NO_WORDS),
             chartLanguage: stored?.chartLanguage === 'full' ? 'full' : 'words',
             interfaceLanguage: languageSetting(stored?.interfaceLanguage),
+            chartLook: lookSetting(stored?.chartLook), // 6.1
         };
         // The interface in the reader's language (src/i18n): Obsidian's, unless the setting fixes one. Set before
         // anything is built, so every text the plugin makes from here on is in it.
@@ -372,6 +374,9 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         // 6.0 entrances: the objects of a step enter by kind, unless the setting turns it off for every chart.
         setStepEntrances(this.data.stepEntrances !== false);
         this.register(() => setStepEntrances(true));
+        // 6.1: the chart look (src/look.ts): Clean or Classic, for what a chart leaves open.
+        setChartLook(this.data.chartLook);
+        this.register(() => setChartLook('clean'));
 
         this.addRibbonIcon('square-function', 'Easy Graphs Charts and TikZ', () => {
             new TikzModal(this.app, this).open();
@@ -839,6 +844,15 @@ export default class EasyTikzPlugin extends Plugin implements PluginHost {
         await this.saveSettings();
         this.redrawNotes();
         await this.rewordVault(before, after);
+    }
+
+    /** 6.1: every chart on screen draws again (the setting Chart look changed): reading views, and charts in Live Preview. */
+    redrawCharts() {
+        this.redrawNotes();
+        for (const chart of liveCharts) {
+            if (chart.onPage()) chart.redraw();
+            else liveCharts.delete(chart);
+        }
     }
 
     /** Charts in open notes in reading view draw again (with new chart words). */
@@ -2144,6 +2158,17 @@ class EasyTikzSettingTab extends PluginSettingTab {
                 },
             },
             {
+                name: t('plugin.settings.look.name'),
+                desc: t('plugin.settings.look.desc'),
+                aliases: ['look', 'style', 'clean', 'classic', 'axes', 'grid', '見た目', 'スタイル', 'クラシック', '軸', 'グリッド'],
+                control: {
+                    type: 'dropdown',
+                    key: 'chartLook',
+                    options: { clean: t('plugin.settings.look.clean'), classic: t('plugin.settings.look.classic') },
+                    defaultValue: 'clean',
+                },
+            },
+            {
                 name: t('plugin.settings.imageBackground.name'),
                 desc: t('plugin.settings.imageBackground.desc'),
                 aliases: ['background', 'white', 'png', 'svg', 'copy', '背景', '白', '画像'],
@@ -2469,6 +2494,11 @@ class EasyTikzSettingTab extends PluginSettingTab {
             case 'chartColours':
                 this.plugin.data.chartColours = value === 'export' ? 'export' : 'theme';
                 this.plugin.applyChartColours();
+                break;
+            case 'chartLook': // 6.1
+                this.plugin.data.chartLook = lookSetting(value);
+                setChartLook(this.plugin.data.chartLook);
+                this.plugin.redrawCharts();
                 break;
             case 'interfaceLanguage':
                 this.plugin.data.interfaceLanguage = languageSetting(value);

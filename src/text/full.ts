@@ -875,7 +875,7 @@ const GRID: Record<string, string[]> = {
     major: ['with a grid'],
     minor: ['with a minor grid'],
     both: ['with a fine grid'],
-    none: ['set showLargeGrid = false', 'set showSmallGrid = false'],
+    none: ['no grid'], // 6.1: also where the chart look draws one
 };
 
 /** A bound `show` can hold: no comma, `..`, ` to ` or ` and ` of its own. */
@@ -1585,6 +1585,7 @@ function axisFull(fields: string[], chart: Data): string[] {
     const large = has('showLargeGrid') ? chart.showLargeGrid : undefined;
     const small = has('showSmallGrid') ? chart.showSmallGrid : undefined;
     if (large === true && small === true) opts.push('grid=both');
+    else if (large === false && small !== true) opts.push('grid=none'); // 6.1
     else {
         if (large === true) opts.push('grid=major');
         else if (large !== undefined) generic('showLargeGrid');

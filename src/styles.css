@@ -210,6 +210,24 @@ body.etz-export-colours {
     --etz-magenta: #d63384;
 }
 
+/* 6.1: the clean chart look (src/look.ts): the grid's ink (drawn at a low
+   opacity, about #eceef3 on white), the axis lines, the numbers and the
+   line around value pills, in the light and the dark theme. The export
+   uses the light values. */
+body {
+    --etz-clean-grid: #61719b;
+    --etz-clean-axis: #b4b7c2;
+    --etz-clean-tick: #8b8d98;
+    --etz-clean-pill-line: #e3e4ea;
+}
+
+body.theme-dark {
+    --etz-clean-grid: #aab4d2;
+    --etz-clean-axis: #5d606b;
+    --etz-clean-tick: #8d909c;
+    --etz-clean-pill-line: #3c3e45;
+}
+
 /* Turns any CSS colour into rgb() for 3D shading (resolveCssColor). */
 .etz-color-probe {
     display: none;
